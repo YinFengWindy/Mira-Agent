@@ -6,12 +6,13 @@ from typing import Any
 from agent.prompting import PromptSectionRender
 from core.roles import RoleStore
 from core.roles.profile_models import RoleProfile
-from core.roles.role_prompt_compiler import RolePromptCompiler
+from core.roles.role_prompt_compiler import RoleKnowledgeMatcher, RolePromptCompiler
 
 def build_role_system_section(
     *,
     workspace: Path,
     session_metadata: dict[str, Any] | None,
+    current_message: str = "",
 ) -> PromptSectionRender | None:
     metadata = session_metadata if isinstance(session_metadata, dict) else {}
     role_id = str(metadata.get("role_id") or "").strip()
@@ -35,6 +36,10 @@ def build_role_system_section(
         )
     prompt = RolePromptCompiler().compile(
         profile,
+        matched_knowledge_entries=RoleKnowledgeMatcher().match(
+            profile.knowledge_base,
+            current_message,
+        ),
         runtime_context=role.runtime_config,
     ).content.strip()
     if not prompt:

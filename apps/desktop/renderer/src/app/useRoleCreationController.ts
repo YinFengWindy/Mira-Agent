@@ -91,7 +91,7 @@ export async function runRoleCreation(
 ): Promise<boolean> {
   const name = form.name.trim();
   const systemPrompt = form.systemPrompt.trim();
-  if (!name || !systemPrompt) {
+  if (!name || (!form.importId && !systemPrompt)) {
     const message = "角色名称和系统提示词不能为空。";
     setError(message);
     setWorkspaceFeedback({ tone: "error", message: `角色创建失败：${message}` });
@@ -209,6 +209,9 @@ export function useRoleCreationController({
   }
 
   function resetNewRoleForm(): void {
+    if (roleCardImport.status === "ready") {
+      void cancelRoleCardImport();
+    }
     resetRoleCreationForm({ updateNewRoleForm, setWorkspaceFeedback, openRoleWorkspace });
   }
 
@@ -247,12 +250,18 @@ export function useRoleCreationController({
       setRoleCardImport({ status: "error", preview: null, error: response.error.message });
       return;
     }
-    const importId = typeof response.payload.import_id === "string" ? response.payload.import_id : "";
+    const nestedPreview = response.payload.preview && typeof response.payload.preview === "object" && !Array.isArray(response.payload.preview)
+      ? response.payload.preview as Record<string, unknown>
+      : null;
+    const importId = typeof response.payload.import_id === "string"
+      ? response.payload.import_id
+      : typeof nestedPreview?.import_id === "string" ? nestedPreview.import_id : "";
     if (!importId) {
       setRoleCardImport({ status: "error", preview: null, error: "导入预览未返回 import_id" });
       return;
     }
-    setRoleCardImport({ status: "ready", preview: response.payload as unknown as RoleCardImportPreview, error: "" });
+    const preview = { ...(nestedPreview ?? response.payload), import_id: importId } as unknown as RoleCardImportPreview;
+    setRoleCardImport({ status: "ready", preview, error: "" });
     updateNewRoleForm((current) => ({
       ...current,
       importId,
@@ -272,6 +281,9 @@ export function useRoleCreationController({
   }
 
   function cancelCreateRole(): void {
+    if (roleCardImport.status === "ready") {
+      void cancelRoleCardImport();
+    }
     cancelRoleCreation({
       creating,
       updateNewRoleForm,
