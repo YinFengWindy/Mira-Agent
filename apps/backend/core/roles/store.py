@@ -90,6 +90,7 @@ class RoleStore:
         background: str = "",
         runtime_config: dict[str, Any] | None = None,
         role_id: str | None = None,
+        profile: RoleProfile | dict[str, Any] | None = None,
         avatar_source: str | Path | None = None,
         illustration_sources: Sequence[str | Path] | None = None,
     ) -> RoleRecord:
@@ -139,9 +140,15 @@ class RoleStore:
                 selected_pet_package_id=None,
                 desktop_pet_enabled=False,
             )
-            record.profile = RoleProfile.from_legacy(
-                system_prompt=clean_prompt,
-                background=str(background),
+            record.profile = (
+                profile
+                if isinstance(profile, RoleProfile)
+                else RoleProfile.from_dict(profile)
+                if isinstance(profile, dict)
+                else RoleProfile.from_legacy(
+                    system_prompt=clean_prompt,
+                    background=str(background),
+                )
             )
             if avatar_source is not None:
                 record.avatar = self.import_asset(
@@ -169,6 +176,7 @@ class RoleStore:
         description: str | None = None,
         system_prompt: str | None = None,
         background: str | None = None,
+        profile: RoleProfile | dict[str, Any] | None = None,
         runtime_config: dict[str, Any] | None = None,
         channel_bindings: list[RoleChannelBindingConfig | dict[str, Any]] | None = None,
         proactive: RoleProactiveConfig | dict[str, Any] | None = None,
@@ -197,6 +205,7 @@ class RoleStore:
                     description=description,
                     system_prompt=system_prompt,
                     background=background,
+                    profile=profile,
                     runtime_config=runtime_config,
                     memory_init_state=memory_init_state,
                 )
@@ -283,6 +292,7 @@ class RoleStore:
         description: str | None,
         system_prompt: str | None,
         background: str | None,
+        profile: RoleProfile | dict[str, Any] | None,
         runtime_config: dict[str, Any] | None,
         memory_init_state: dict[str, Any] | None,
     ) -> None:
@@ -302,6 +312,16 @@ class RoleStore:
         if background is not None:
             role.background = str(background)
             role.profile.character.profile = str(background).strip()
+        if profile is not None:
+            role.profile = (
+                profile
+                if isinstance(profile, RoleProfile)
+                else RoleProfile.from_dict(profile)
+            )
+            role.system_prompt = role.profile.character.behavior_rules.strip()
+            if not role.system_prompt:
+                role.system_prompt = role.profile.character.profile.strip()
+            role.background = role.profile.character.profile
         if runtime_config is not None:
             role.runtime_config = dict(runtime_config)
         if memory_init_state is not None:
