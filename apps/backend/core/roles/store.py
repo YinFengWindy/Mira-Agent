@@ -20,6 +20,7 @@ from .models import (
     now_iso,
 )
 from .pet_state import RolePetStateStore
+from .profile_models import RoleProfile
 
 
 class RoleStore:
@@ -137,6 +138,10 @@ class RoleStore:
                 pet_packages=[],
                 selected_pet_package_id=None,
                 desktop_pet_enabled=False,
+            )
+            record.profile = RoleProfile.from_legacy(
+                system_prompt=clean_prompt,
+                background=str(background),
             )
             if avatar_source is not None:
                 record.avatar = self.import_asset(
@@ -293,8 +298,10 @@ class RoleStore:
             if not clean_prompt:
                 raise ValueError("role.system_prompt 不能为空")
             role.system_prompt = clean_prompt
+            role.profile.character.behavior_rules = clean_prompt
         if background is not None:
             role.background = str(background)
+            role.profile.character.profile = str(background).strip()
         if runtime_config is not None:
             role.runtime_config = dict(runtime_config)
         if memory_init_state is not None:

@@ -23,6 +23,19 @@ from .models import (
     RoleProactiveConfig,
     RoleRecord,
 )
+from .profile_models import (
+    ImportProvenance,
+    RoleCharacterDefinition,
+    RoleGreetings,
+    RoleKnowledgeBase,
+    RoleKnowledgeEntry,
+    RoleProfile,
+)
+from .role_prompt_compiler import (
+    CompiledRolePrompt,
+    RoleKnowledgeMatcher,
+    RolePromptCompiler,
+)
 from .store import RoleStore
 from .pet_packages import RolePetPackageService
 from .role_runtime import RoleExecutionContext, RoleRuntime, RoleRuntimeRegistry
@@ -51,6 +64,15 @@ __all__ = [
     "RelationshipSnapshotOptimizer",
     "RoleSessionService",
     "RoleStore",
+    "CompiledRolePrompt",
+    "ImportProvenance",
+    "RoleCharacterDefinition",
+    "RoleGreetings",
+    "RoleKnowledgeBase",
+    "RoleKnowledgeEntry",
+    "RoleKnowledgeMatcher",
+    "RoleProfile",
+    "RolePromptCompiler",
     "RoleRuntime",
     "RoleRuntimeRegistry",
     "route_inbound_by_role",

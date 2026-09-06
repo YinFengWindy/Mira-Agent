@@ -5,6 +5,8 @@ from typing import Any
 
 from agent.prompting import PromptSectionRender
 from core.roles import RoleStore
+from core.roles.profile_models import RoleProfile
+from core.roles.role_prompt_compiler import RolePromptCompiler
 
 def build_role_system_section(
     *,
@@ -21,18 +23,25 @@ def build_role_system_section(
         raise ValueError(f"role not found for user-visible prompt: {role_id}")
 
     role_name = role.name.strip() or role_id
-    prompt = role.system_prompt.strip()
+    profile = role.profile
+    if not (
+        profile.character.profile
+        or profile.character.personality
+        or profile.character.behavior_rules
+    ):
+        profile = RoleProfile.from_legacy(
+            system_prompt=role.system_prompt,
+            background=role.background,
+        )
+    prompt = RolePromptCompiler().compile(
+        profile,
+        runtime_context=role.runtime_config,
+    ).content.strip()
     if not prompt:
         raise ValueError(f"role.system_prompt required: {role_id}")
-    runtime_config = role.runtime_config if isinstance(role.runtime_config, dict) else {}
-    mood_contract = _build_role_mood_output_contract(runtime_config)
-    merged_prompt = prompt
-    if mood_contract:
-        merged_prompt += f"\n\n{mood_contract}"
-
     return PromptSectionRender(
         name="active_role",
-        content=f"## Active Role: {role_name}\n{merged_prompt}",
+        content=f"## Active Role: {role_name}\n{prompt}",
         is_static=False,
     )
 
@@ -59,8 +68,9 @@ def build_role_cache_prefix_section(
     ]
 
     blocks: list[str] = [f"role_id={role_id}"]
-    if role.background.strip():
-        blocks.append(f"[role_background]\n{role.background.strip()}")
+    background = role.profile.character.profile.strip() or role.background.strip()
+    if background:
+        blocks.append(f"[role_background]\n{background}")
     if config_lines:
         blocks.append("[role_runtime_config]\n" + "\n".join(config_lines))
 

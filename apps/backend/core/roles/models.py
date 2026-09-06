@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from .profile_models import RoleProfile
+
 DEFAULT_ASSET_CATEGORY_ID = "default"
 
 
@@ -218,6 +220,7 @@ class RoleRecord:
     pet_packages: list[RolePetPackage] = field(default_factory=list)
     selected_pet_package_id: str | None = None
     desktop_pet_enabled: bool = False
+    profile: RoleProfile = field(default_factory=RoleProfile)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -237,6 +240,7 @@ class RoleRecord:
         payload["pet_packages"] = [package.to_dict() for package in self.pet_packages]
         payload["selected_pet_package_id"] = self.selected_pet_package_id
         payload["desktop_pet_enabled"] = self.desktop_pet_enabled
+        payload["profile"] = self.profile.to_dict()
         return payload
 
     @classmethod
@@ -275,6 +279,15 @@ class RoleRecord:
         )
         if selected_pet_package_id not in {package.id for package in pet_packages}:
             selected_pet_package_id = None
+        profile_payload = payload.get("profile")
+        profile = (
+            RoleProfile.from_dict(profile_payload)
+            if isinstance(profile_payload, dict)
+            else RoleProfile.from_legacy(
+                system_prompt=str(payload.get("system_prompt") or ""),
+                background=str(payload.get("background") or ""),
+            )
+        )
         return cls(
             id=str(payload.get("id") or "").strip(),
             name=str(payload.get("name") or "").strip(),
@@ -299,4 +312,5 @@ class RoleRecord:
             pet_packages=pet_packages,
             selected_pet_package_id=selected_pet_package_id,
             desktop_pet_enabled=bool(payload.get("desktop_pet_enabled", False)),
+            profile=profile,
         )
