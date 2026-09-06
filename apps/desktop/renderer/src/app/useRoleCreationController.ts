@@ -262,12 +262,13 @@ export function useRoleCreationController({
     }
     const preview = { ...(nestedPreview ?? response.payload), import_id: importId } as unknown as RoleCardImportPreview;
     setRoleCardImport({ status: "ready", preview, error: "" });
+    const previewPayload = nestedPreview ?? response.payload;
     updateNewRoleForm((current) => ({
       ...current,
       importId,
-      name: typeof response.payload.name === "string" ? response.payload.name : current.name,
-      description: typeof response.payload.description === "string" ? response.payload.description : current.description,
-      systemPrompt: typeof response.payload.system_prompt === "string" ? response.payload.system_prompt : current.systemPrompt,
+      name: typeof previewPayload.name === "string" ? previewPayload.name : current.name,
+      description: typeof previewPayload.description === "string" ? previewPayload.description : current.description,
+      systemPrompt: typeof previewPayload.system_prompt === "string" ? previewPayload.system_prompt : current.systemPrompt,
     }));
   }
 
