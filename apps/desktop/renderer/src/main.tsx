@@ -668,6 +668,9 @@ function App(): React.ReactElement {
       onCreateNewRole={() => void roleCreation.createRole()}
       onResetNewRoleForm={roleCreation.resetNewRoleForm}
       onUpdateNewRoleForm={roleCreation.updateNewRoleForm}
+      roleCardImport={roleCreation.roleCardImport}
+      onPreviewRoleCard={() => void roleCreation.previewRoleCard()}
+      onCancelRoleCardImport={() => void roleCreation.cancelRoleCardImport()}
       detailRoleId={detailRoleId}
       activeIllustration={activeIllustration}
       previewAvatar={previewAvatar}

@@ -1,9 +1,10 @@
 import { cx } from "../shared/styles";
 
-export type RoleDetailTabId = "profile" | "capabilities" | "delivery";
+export type RoleDetailTabId = "profile" | "knowledge" | "capabilities" | "delivery";
 
 const tabs: Array<{ id: RoleDetailTabId; label: string }> = [
   { id: "profile", label: "资料" },
+  { id: "knowledge", label: "知识库" },
   { id: "capabilities", label: "能力" },
   { id: "delivery", label: "渠道与主动推送" },
 ];

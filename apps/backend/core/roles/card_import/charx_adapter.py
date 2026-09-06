@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import zipfile
 from pathlib import Path
@@ -26,8 +27,15 @@ def adapt_charx(source: str | Path) -> RoleCardImportPreview:
         raise FileNotFoundError(f"角色卡包不存在: {path}")
     if path.stat().st_size > MAX_SOURCE_BYTES:
         raise ValueError("角色卡包超过大小限制")
+    return adapt_charx_bytes(path.read_bytes())
+
+
+def adapt_charx_bytes(data: bytes) -> RoleCardImportPreview:
+    """Parse a CHARX ZIP from memory with the same limits as the file adapter."""
+    if len(data) > MAX_SOURCE_BYTES:
+        raise ValueError("角色卡包超过大小限制")
     try:
-        archive = zipfile.ZipFile(path)
+        archive = zipfile.ZipFile(io.BytesIO(data))
     except (OSError, zipfile.BadZipFile) as error:
         raise ValueError("角色卡包不是有效 ZIP") from error
     with archive:

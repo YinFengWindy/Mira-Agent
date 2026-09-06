@@ -9,6 +9,7 @@ import { RoleChannelBindingsPanel } from "./RoleChannelBindingsPanel";
 import { captureRoleDetailScrollTop, restoreRoleDetailScrollTop } from "./roleDetailScrollState";
 import { RoleDetailTabs, type RoleDetailTabId } from "./RoleDetailTabs";
 import { RoleProfilePanel } from "./RoleProfilePanel";
+import { RoleKnowledgePanel } from "./RoleKnowledgePanel";
 import { RoleProactiveSettingsPanel } from "./RoleProactiveSettingsPanel";
 
 type RoleDetailPageProps = {
@@ -59,6 +60,8 @@ export function RoleDetailPage({
 
   const content = activeTab === "profile" ? (
     <RoleProfilePanel activeRole={activeRole} previewAvatar={previewAvatar} roleForm={roleForm} onOpenAssetsPage={onOpenAssetsPage} onUpdate={updateRoleForm} />
+  ) : activeTab === "knowledge" ? (
+    <RoleKnowledgePanel activeRole={activeRole} bridgeReady={bridgeReady} />
   ) : activeTab === "capabilities" ? (
     <RoleCapabilitiesPanel activeRole={activeRole} bridgeReady={bridgeReady} roleForm={roleForm} onUpdate={updateRoleForm} />
   ) : (

@@ -35,6 +35,11 @@ export type RoleRecord = {
   name: string;
   description: string;
   system_prompt: string;
+  profile?: {
+    character?: { profile?: string; personality?: string; behavior_rules?: string };
+    greetings?: { default?: string; alternates?: string[] };
+    knowledge_base?: RoleKnowledgeBase;
+  };
   runtime_config: Record<string, unknown>;
   channel_bindings?: RoleChannelBinding[];
   proactive?: RoleProactiveConfig;
@@ -297,6 +302,32 @@ export type NewRoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  /** Server-owned staging import id; never a renderer filesystem path. */
+  importId?: string;
+};
+
+export type RoleKnowledgeEntry = {
+  id?: string;
+  name?: string;
+  content?: string;
+  keywords?: string[];
+  enabled?: boolean;
+  constant?: boolean;
+  case_sensitive?: boolean;
+  priority?: number;
+};
+
+export type RoleKnowledgeBase = {
+  enabled?: boolean;
+  token_budget?: number;
+  entries?: RoleKnowledgeEntry[];
+};
+
+export type RoleCardImportPreview = {
+  import_id: string;
+  profile?: Record<string, unknown>;
+  report?: Record<string, unknown>;
+  assets?: Array<Record<string, unknown>>;
 };
 
 /** Pending role card action shown directly in the role list. */

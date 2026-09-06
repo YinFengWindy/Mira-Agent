@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import inspect
 from typing import Any
 
 from core.roles import RoleAggregateService, RolePetPackageService, RoleStore
@@ -22,6 +23,7 @@ class DesktopRoleRequestHandler:
         role_differences: RoleDifferenceGenerationService,
         role_presenter: DesktopRolePresenter,
         voice_handler: DesktopVoiceHandler,
+        card_import_service: Any | None = None,
         publish_event: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> None:
         self._role_service = role_service
@@ -30,6 +32,7 @@ class DesktopRoleRequestHandler:
         self._role_differences = role_differences
         self._role_presenter = role_presenter
         self._voice_handler = voice_handler
+        self._card_import_service = card_import_service
         self._publish_event = publish_event
 
     async def handle(
@@ -56,16 +59,39 @@ class DesktopRoleRequestHandler:
                 ),
             )
             return {"role": self._role_presenter.serialize(aggregate.role)}
+        if method in {"roles.cardImport.preview", "roles.cardImport.commit", "roles.cardImport.cancel"}:
+            service = self._card_import_service
+            if service is None:
+                raise RuntimeError("role card import service unavailable")
+            operation = {
+                "roles.cardImport.preview": "preview",
+                "roles.cardImport.commit": "commit",
+                "roles.cardImport.cancel": "cancel",
+            }[method]
+            handler = getattr(service, operation, None)
+            if not callable(handler):
+                raise RuntimeError(f"role card import service lacks {operation} operation")
+            result = handler(dict(payload))
+            if inspect.isawaitable(result):
+                result = await result
+            if not isinstance(result, dict):
+                raise RuntimeError(f"role card import {operation} returned invalid payload")
+            return result
         if method == "roles.update":
             role_id = str(payload.get("role_id") or "")
             previous = self._role_service.repository.get_required(role_id)
+            update_kwargs: dict[str, Any] = {
+                "name": payload.get("name"),
+                "description": payload.get("description"),
+                "system_prompt": payload.get("system_prompt"),
+                "background": payload.get("background"),
+                "runtime_config": self._dict_payload(payload, "runtime_config"),
+            }
+            if "profile" in inspect.signature(self._role_service.update_role_async).parameters:
+                update_kwargs["profile"] = self._dict_payload(payload, "profile")
             aggregate = await self._role_service.update_role_async(
                 role_id,
-                name=payload.get("name"),
-                description=payload.get("description"),
-                system_prompt=payload.get("system_prompt"),
-                background=payload.get("background"),
-                runtime_config=self._dict_payload(payload, "runtime_config"),
+                **update_kwargs,
                 channel_bindings=self._list_payload(payload, "channel_bindings"),
                 proactive=self._dict_payload(payload, "proactive"),
                 avatar_source=str(payload.get("avatar_source") or "").strip() or None,

@@ -44,6 +44,10 @@ const api: DesktopApi = {
     return (ipcRenderer.invoke("desktop:pick-images", options) as Promise<LocalAssetTransport<string[]>>)
       .then((transport) => localAssets.consume(transport));
   },
+  pickRoleCard() {
+    return (ipcRenderer.invoke("desktop:pick-role-card") as Promise<LocalAssetTransport<string[]>>)
+      .then((transport) => localAssets.consume(transport)[0] ?? null);
+  },
   pickChatAttachments(options) {
     return (ipcRenderer.invoke("desktop:pick-chat-attachments", options) as Promise<LocalAssetTransport<string[]>>)
       .then((transport) => localAssets.consume(transport));

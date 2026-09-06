@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { ResetIcon, SaveIcon } from "../shared/icons";
 import { cx, inputClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
+import type { RoleCardImportState } from "../app/useRoleCreationController";
 
 type RoleCreatePageProps = {
   bridgeReady: boolean;
@@ -11,6 +12,9 @@ type RoleCreatePageProps = {
   onCreateRole: () => void;
   onResetForm: () => void;
   onUpdateForm: React.Dispatch<React.SetStateAction<NewRoleFormState>>;
+  roleCardImport: RoleCardImportState;
+  onPreviewRoleCard: () => void;
+  onCancelRoleCardImport: () => void;
 };
 
 /** Renders the standalone create-role subpage inside role management. */
@@ -22,6 +26,9 @@ export function RoleCreatePage({
   onCreateRole,
   onResetForm,
   onUpdateForm,
+  roleCardImport,
+  onPreviewRoleCard,
+  onCancelRoleCardImport,
 }: RoleCreatePageProps) {
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const backIcon = (
@@ -82,6 +89,27 @@ export function RoleCreatePage({
         <div className="p-2">
           <div className="grid gap-5 rounded-[28px] border border-white/65 bg-white/72 p-8 shadow-[0_18px_48px_rgba(31,41,55,0.08)] backdrop-blur-[6px]">
             <div className="grid gap-4">
+              <div className="flex items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4">
+                <div>
+                  <h2 className="text-sm font-medium text-[#111827]">从角色卡导入</h2>
+                  <p className="mt-1 text-xs text-[#6B7280]">预览确认后才会创建角色和复制素材</p>
+                </div>
+                {roleCardImport.status === "ready" ? (
+                  <button type="button" className="rounded-md border border-[#D8DCE2] px-3 py-2 text-xs text-[#374151] hover:bg-[#F8FAFC]" onClick={onCancelRoleCardImport}>取消导入</button>
+                ) : (
+                  <button type="button" className="rounded-md border border-[#D8DCE2] px-3 py-2 text-xs text-[#374151] hover:bg-[#F8FAFC]" onClick={onPreviewRoleCard} disabled={roleCardImport.status === "previewing"}>选择角色卡</button>
+                )}
+              </div>
+              {roleCardImport.status === "previewing" ? <p className="text-xs text-[#6B7280]">正在读取角色卡...</p> : null}
+              {roleCardImport.status === "error" ? <p className="text-xs text-[#B42318]">{roleCardImport.error}</p> : null}
+              {roleCardImport.preview ? (
+                <div className="grid gap-2 rounded-md border border-[#D8DCE2] bg-[#F8FAFC] p-3 text-xs text-[#4B5563]" data-testid="role-card-import-preview">
+                  <span className="font-medium text-[#111827]">已生成导入预览</span>
+                  <span>确认创建后才会写入角色清单。</span>
+                  {Array.isArray(roleCardImport.preview.report?.adapted_fields) ? <span>已适配字段：{roleCardImport.preview.report?.adapted_fields.length}</span> : null}
+                  {Array.isArray(roleCardImport.preview.report?.discarded_fields) ? <span>已舍弃字段：{roleCardImport.preview.report?.discarded_fields.length}</span> : null}
+                </div>
+              ) : null}
               <label className="grid gap-1.5 text-xs text-[#6b7280]">
                 <span>名称</span>
                 <input

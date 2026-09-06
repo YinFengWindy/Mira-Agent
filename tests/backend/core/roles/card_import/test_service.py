@@ -80,6 +80,17 @@ def test_png_prefers_ccv3_metadata(tmp_path):
     assert preview.assets[0].data
 
 
+def test_preview_bytes_supports_png_and_charx(tmp_path):
+    png = _png(metadata={"chara": base64.b64encode(json.dumps(_card()).encode()).decode()})
+    service = RoleCardImportService()
+    assert service.preview_bytes(png, filename="card.png").name == "小诗"
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as writer:
+        writer.writestr("card.json", json.dumps(_card()))
+    assert service.preview_bytes(archive.getvalue(), filename="card.charx").name == "小诗"
+
+
 def test_charx_requires_root_card_json_and_maps_images(tmp_path):
     source = tmp_path / "card.charx"
     with zipfile.ZipFile(source, "w") as archive:

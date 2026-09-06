@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type React from "react";
 import { createEmptyNewRoleForm, createPendingRoleRecord, waitForMinimumRoleCardBusy } from "./appState";
-import type { AppMainView, NewRoleFormState, PendingRoleCardAction, RoleRecord } from "../shared/types";
+import type { AppMainView, NewRoleFormState, PendingRoleCardAction, RoleCardImportPreview, RoleRecord } from "../shared/types";
 import type { NavigationEntry } from "./appState";
 import { useLatestRef } from "../shared/useLatestRef";
 import type { BridgeResponse } from "../../../src/bridge/shared";
@@ -31,6 +31,12 @@ export type RoleCreationWorkflowArgs = RoleCreationControllerArgs & {
   invoke: (request: { method: string; payload: Record<string, unknown> }) => Promise<BridgeResponse>;
   waitForBusy?: (startedAt: number) => Promise<void>;
   createPendingRoleId?: () => string;
+};
+
+export type RoleCardImportState = {
+  status: "idle" | "previewing" | "ready" | "error";
+  preview: RoleCardImportPreview | null;
+  error: string;
 };
 
 type RoleCreationFormActionArgs = {
@@ -90,6 +96,35 @@ export async function runRoleCreation(
     setError(message);
     setWorkspaceFeedback({ tone: "error", message: `角色创建失败：${message}` });
     return false;
+  }
+
+  if (form.importId) {
+    setCreating(true);
+    setError("");
+    setWorkspaceFeedback(null);
+    const response = await invoke({
+      method: "roles.cardImport.commit",
+      payload: {
+        import_id: form.importId,
+        overrides: { name, description: form.description, system_prompt: systemPrompt },
+      },
+    });
+    setCreating(false);
+    if (response.error) {
+      setError(response.error.message);
+      setWorkspaceFeedback({ tone: "error", message: `角色卡导入失败：${response.error.message}` });
+      return false;
+    }
+    const role = response.payload.role as RoleRecord;
+    activeRoleIdRef.current = role.id;
+    setActiveRoleId(role.id);
+    setRoles((current) => [role, ...current.filter((item) => item.id !== role.id)]);
+    applyRoleSnapshot(role);
+    await openRole(role.id, role, { recordHistory: false });
+    openRoleWorkspace({ kind: "roles-list" }, { recordHistory: false });
+    replaceNavigationEntry(buildNavigationEntry({ kind: "roles-list" }, role.id));
+    setWorkspaceFeedback({ tone: "success", message: "角色卡导入成功。" });
+    return true;
   }
 
   const pendingRoleId = createPendingRoleId();
@@ -162,6 +197,7 @@ export function useRoleCreationController({
 }: RoleCreationControllerArgs) {
   const [newRoleForm, setNewRoleForm] = useState(createEmptyNewRoleForm);
   const [creating, setCreating] = useState(false);
+  const [roleCardImport, setRoleCardImport] = useState<RoleCardImportState>({ status: "idle", preview: null, error: "" });
   const newRoleFormRef = useLatestRef(newRoleForm);
 
   function updateNewRoleForm(next: React.SetStateAction<NewRoleFormState>): void {
@@ -195,7 +231,44 @@ export function useRoleCreationController({
     });
     if (created) {
       updateNewRoleForm(createEmptyNewRoleForm());
+      setRoleCardImport({ status: "idle", preview: null, error: "" });
     }
+  }
+
+  async function previewRoleCard(): Promise<void> {
+    const source = await window.miraDesktop.pickRoleCard();
+    if (!source) return;
+    setRoleCardImport({ status: "previewing", preview: null, error: "" });
+    const response = await window.miraDesktop.invoke({
+      method: "roles.cardImport.preview",
+      payload: { source },
+    });
+    if (response.error) {
+      setRoleCardImport({ status: "error", preview: null, error: response.error.message });
+      return;
+    }
+    const importId = typeof response.payload.import_id === "string" ? response.payload.import_id : "";
+    if (!importId) {
+      setRoleCardImport({ status: "error", preview: null, error: "导入预览未返回 import_id" });
+      return;
+    }
+    setRoleCardImport({ status: "ready", preview: response.payload as unknown as RoleCardImportPreview, error: "" });
+    updateNewRoleForm((current) => ({
+      ...current,
+      importId,
+      name: typeof response.payload.name === "string" ? response.payload.name : current.name,
+      description: typeof response.payload.description === "string" ? response.payload.description : current.description,
+      systemPrompt: typeof response.payload.system_prompt === "string" ? response.payload.system_prompt : current.systemPrompt,
+    }));
+  }
+
+  async function cancelRoleCardImport(): Promise<void> {
+    const importId = roleCardImport.preview?.import_id;
+    if (importId) {
+      await window.miraDesktop.invoke({ method: "roles.cardImport.cancel", payload: { import_id: importId } });
+    }
+    setRoleCardImport({ status: "idle", preview: null, error: "" });
+    updateNewRoleForm((current) => ({ ...current, importId: undefined }));
   }
 
   function cancelCreateRole(): void {
@@ -207,5 +280,5 @@ export function useRoleCreationController({
     });
   }
 
-  return { creating, newRoleForm, updateNewRoleForm, resetNewRoleForm, cancelCreateRole, createRole };
+  return { creating, newRoleForm, updateNewRoleForm, resetNewRoleForm, cancelCreateRole, createRole, roleCardImport, previewRoleCard, cancelRoleCardImport };
 }

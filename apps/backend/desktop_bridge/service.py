@@ -100,6 +100,7 @@ class DesktopBridgeService:
         story_director: Any | None = None,
         image_tool: Any | None = None,
         memory_engine: Any | None = None,
+        card_import_service: Any | None = None,
     ) -> None:
         self.workspace = workspace
         self.role_store = role_store
@@ -211,6 +212,7 @@ class DesktopBridgeService:
                 role_differences=self.role_difference_service,
                 role_presenter=self.role_presenter,
                 voice_handler=self.voice_handler,
+                card_import_service=card_import_service,
                 publish_event=self._broadcast_event,
             ),
             sessions_and_tasks=DesktopSessionTaskRequestHandler(

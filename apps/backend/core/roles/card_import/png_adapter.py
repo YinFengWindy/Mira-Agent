@@ -22,7 +22,11 @@ def adapt_png(source: str | Path) -> RoleCardImportPreview:
     path = Path(source).expanduser()
     if not path.is_file():
         raise FileNotFoundError(f"角色卡不存在: {path}")
-    data = path.read_bytes()
+    return adapt_png_bytes(path.read_bytes(), source_name=path.name)
+
+
+def adapt_png_bytes(data: bytes, *, source_name: str = "card.png") -> RoleCardImportPreview:
+    """Parse PNG/APNG bytes without creating a staging file."""
     image_format, media_type = validate_image(data, name="角色卡图片")
     try:
         with Image.open(io.BytesIO(data)) as image:
@@ -37,8 +41,8 @@ def adapt_png(source: str | Path) -> RoleCardImportPreview:
                 break
     if payload is None:
         raise ValueError("角色卡图片缺少 chara 或 ccv3 metadata")
-    preview = adapt_json(payload, source_name=path.name, format_name="apng" if image_format == "PNG" and _is_animated(data) else "png")
-    asset = RoleCardAsset(kind="avatar", path=path.name, data=data, media_type=media_type)
+    preview = adapt_json(payload, source_name=source_name, format_name="apng" if image_format == "PNG" and _is_animated(data) else "png")
+    asset = RoleCardAsset(kind="avatar", path=source_name, data=data, media_type=media_type)
     return RoleCardImportPreview(
         name=preview.name,
         description=preview.description,
@@ -84,4 +88,3 @@ def _is_animated(data: bytes) -> bool:
             return bool(getattr(image, "n_frames", 1) > 1)
     except OSError:
         return False
-

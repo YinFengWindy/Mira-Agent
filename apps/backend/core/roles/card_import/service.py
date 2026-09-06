@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .charx_adapter import adapt_charx
+from .charx_adapter import adapt_charx, adapt_charx_bytes
 from .json_adapter import adapt_json
 from .models import RoleCardImportPreview
-from .png_adapter import adapt_png
+from .png_adapter import adapt_png, adapt_png_bytes
 from .safety import MAX_SOURCE_BYTES
 
 
@@ -45,4 +45,8 @@ class RoleCardImportService:
             except (UnicodeDecodeError, json.JSONDecodeError) as error:
                 raise ValueError("角色卡 JSON 无效") from error
             return adapt_json(payload, source_name=filename)
-        raise ValueError("preview_bytes 仅支持 JSON；PNG/CHARX 请使用受控临时文件")
+        if suffix in {".png", ".apng"}:
+            return adapt_png_bytes(data, source_name=filename)
+        if suffix == ".charx":
+            return adapt_charx_bytes(data)
+        raise ValueError("不支持的角色卡格式")
