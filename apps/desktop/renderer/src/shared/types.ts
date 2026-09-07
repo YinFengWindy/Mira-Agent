@@ -311,8 +311,10 @@ export type RoleKnowledgeEntry = {
   name?: string;
   content?: string;
   keywords?: string[];
+  primary_keys?: string[];
+  secondary_keys?: string[];
   enabled?: boolean;
-  constant?: boolean;
+  always_active?: boolean;
   case_sensitive?: boolean;
   priority?: number;
 };
@@ -325,9 +327,22 @@ export type RoleKnowledgeBase = {
 
 export type RoleCardImportPreview = {
   import_id: string;
-  profile?: Record<string, unknown>;
-  report?: Record<string, unknown>;
-  assets?: Array<Record<string, unknown>>;
+  name?: string;
+  description?: string;
+  profile?: {
+    character?: { profile?: string; personality?: string; behavior_rules?: string };
+    greetings?: { default?: string; alternates?: string[] };
+    knowledge_base?: RoleKnowledgeBase;
+  };
+  report?: {
+    adapted_fields?: string[];
+    discarded_fields?: string[];
+    unsupported_macros?: string[];
+    unsupported_resources?: string[];
+    unsupported_rules?: string[];
+  };
+  assets?: Array<{ kind?: string; name?: string | null; path?: string; media_type?: string | null; size?: number }>;
+  provenance?: { format?: string; card_version?: string | null } | null;
 };
 
 /** Pending role card action shown directly in the role list. */

@@ -79,6 +79,17 @@ class DesktopRoleRequestHandler:
                 result = result.to_dict()
             if not isinstance(result, dict):
                 raise RuntimeError(f"role card import {operation} returned invalid payload")
+            if operation == "commit":
+                role = result.get("role")
+                role_id = str(role.get("id") or "").strip() if isinstance(role, dict) else ""
+                if not role_id:
+                    raise RuntimeError("role card import commit returned no role")
+                result = {
+                    **result,
+                    "role": self._role_presenter.serialize(
+                        self._role_service.repository.get_required(role_id)
+                    ),
+                }
             return result
         if method == "roles.update":
             role_id = str(payload.get("role_id") or "")

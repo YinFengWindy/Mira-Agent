@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from PIL import Image, PngImagePlugin
 
 from bus.event_bus import EventBus
 from core.roles import RoleAggregateService, RoleStore
@@ -47,6 +50,18 @@ def _stage_card(tmp_path, payload: dict[str, object]):
     source = tmp_path / "private_runtime" / "imports" / "role-cards" / "card.json"
     source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     return source
+
+
+def _png_role_card(payload: dict[str, object]) -> bytes:
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text(
+        "chara",
+        base64.b64encode(json.dumps(payload, ensure_ascii=False).encode("utf-8")).decode(),
+    )
+    image = Image.new("RGBA", (8, 8), (255, 0, 0, 255))
+    output = io.BytesIO()
+    image.save(output, format="PNG", pnginfo=metadata)
+    return output.getvalue()
 
 
 @pytest.mark.asyncio
@@ -130,4 +145,42 @@ async def test_default_desktop_bridge_service_exposes_role_card_preview(tmp_path
     assert response.error is None
     assert response.payload["name"] == "小诗"
     assert response.payload["import_id"]
+    await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_commit_keeps_png_card_as_avatar_and_imported_asset(tmp_path) -> None:
+    role_store = RoleStore(tmp_path)
+    service = DesktopBridgeService(
+        workspace=tmp_path,
+        role_store=role_store,
+        session_manager=SessionManager(tmp_path),
+        agent_loop=SimpleNamespace(process_direct=AsyncMock()),
+        event_bus=EventBus(),
+    )
+    source = tmp_path / "private_runtime" / "imports" / "role-cards" / "card.png"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(_png_role_card(_card()))
+
+    preview = await service.handle(
+        {"id": "preview", "method": "roles.cardImport.preview", "payload": {"source": str(source)}},
+        emit_event=lambda _payload: None,
+    )
+    committed = await service.handle(
+        {
+            "id": "commit",
+            "method": "roles.cardImport.commit",
+            "payload": {"import_id": preview.payload["import_id"]},
+        },
+        emit_event=lambda _payload: None,
+    )
+
+    assert committed.error is None
+    role = committed.payload["role"]
+    assert role["avatar"]
+    assert role["avatar_abs"]
+    assert len(role["illustrations"]) == 1
+    category = next(item for item in role["asset_categories"] if item["id"] == "imported-role-card")
+    assert category["name"] == "导入角色卡"
+    assert role["asset_category_bindings"][role["illustrations"][0]] == category["id"]
     await service.aclose()

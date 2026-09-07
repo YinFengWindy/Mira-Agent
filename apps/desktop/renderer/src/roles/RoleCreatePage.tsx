@@ -3,6 +3,7 @@ import { ResetIcon, SaveIcon, UploadIcon } from "../shared/icons";
 import { cx, inputClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
 import type { RoleCardImportState } from "../app/useRoleCreationController";
+import { RoleCardImportPreviewPanel } from "./RoleCardImportPreview";
 
 type RoleCreatePageProps = {
   bridgeReady: boolean;
@@ -14,6 +15,7 @@ type RoleCreatePageProps = {
   onUpdateForm: React.Dispatch<React.SetStateAction<NewRoleFormState>>;
   roleCardImport: RoleCardImportState;
   onPreviewRoleCard: () => void;
+  onCancelRoleCardImport: () => void;
 };
 
 /** Renders the standalone create-role subpage inside role management. */
@@ -27,6 +29,7 @@ export function RoleCreatePage({
   onUpdateForm,
   roleCardImport,
   onPreviewRoleCard,
+  onCancelRoleCardImport,
 }: RoleCreatePageProps) {
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const backIcon = (
@@ -95,6 +98,13 @@ export function RoleCreatePage({
             </button>
           </div>
         </div>
+        {roleCardImport.preview ? (
+          <RoleCardImportPreviewPanel
+            preview={roleCardImport.preview}
+            sourceUrl={roleCardImport.source ? window.miraDesktop.localAssetUrl(roleCardImport.source) : ""}
+            onCancel={onCancelRoleCardImport}
+          />
+        ) : null}
         <div className="p-2">
           <div className="grid gap-5 rounded-[28px] border border-white/65 bg-white/72 p-8 shadow-[0_18px_48px_rgba(31,41,55,0.08)] backdrop-blur-[6px]">
             <div className="grid gap-4">

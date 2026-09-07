@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from core.roles import RoleAggregateService, RoleStore
+from core.roles import RoleAggregateService, RoleAssetCategory, RoleStore
 from core.roles.card_import import RoleCardImportService
 
 
@@ -70,7 +70,7 @@ class DesktopRoleCardImportService:
         temporary_files: list[Path] = []
         try:
             avatar_source: Path | None = None
-            illustrations: list[Path] = []
+            imported_assets: list[tuple[str, str | None, Path]] = []
             for index, asset in enumerate(preview.assets):
                 if asset.data is None:
                     continue
@@ -87,8 +87,8 @@ class DesktopRoleCardImportService:
                 temporary_files.append(temporary_path)
                 if asset.kind == "avatar" and avatar_source is None:
                     avatar_source = temporary_path
-                elif asset.kind in {"emotion", "background", "asset"}:
-                    illustrations.append(temporary_path)
+                if asset.kind in {"avatar", "emotion", "background", "asset"}:
+                    imported_assets.append((asset.kind, asset.name, temporary_path))
 
             aggregate = await self._role_service.create_role_async(
                 name=name,
@@ -96,13 +96,61 @@ class DesktopRoleCardImportService:
                 system_prompt=system_prompt,
                 profile=profile,
                 avatar_source=avatar_source,
-                illustration_sources=illustrations,
+                illustration_sources=[path for _, _, path in imported_assets],
             )
+            if imported_assets:
+                aggregate = await self._apply_imported_asset_metadata(
+                    aggregate.role.id,
+                    aggregate.role.illustrations,
+                    imported_assets,
+                )
             return {"role": aggregate.role.to_dict()}
         finally:
             self._imports.pop(import_id, None)
             for temporary_path in temporary_files:
                 temporary_path.unlink(missing_ok=True)
+
+    async def _apply_imported_asset_metadata(
+        self,
+        role_id: str,
+        illustration_paths: list[str],
+        imported_assets: list[tuple[str, str | None, Path]],
+    ) -> Any:
+        category = RoleAssetCategory(
+            id="imported-role-card",
+            name="导入角色卡",
+            allow_role_send=False,
+        )
+        bindings = {path: category.id for path in illustration_paths}
+        background_path = next(
+            (
+                illustration_paths[index]
+                for index, (kind, _name, _path) in enumerate(imported_assets)
+                if kind == "background"
+            ),
+            None,
+        )
+        mood_bindings = {
+            name.strip(): illustration_paths[index]
+            for index, (kind, name, _path) in enumerate(imported_assets)
+            if kind == "emotion" and name and name.strip()
+        }
+        current = self._role_service.repository.get_required(role_id)
+        runtime_config = dict(current.runtime_config)
+        if mood_bindings:
+            existing_bindings = dict(runtime_config.get("mood_illustration_bindings") or {})
+            existing_bindings.update(mood_bindings)
+            runtime_config["mood_illustration_bindings"] = existing_bindings
+            runtime_config["mood_catalog"] = list(existing_bindings)
+            if "neutral" in mood_bindings:
+                runtime_config["default_mood"] = "neutral"
+        return await self._role_service.update_role_async(
+            role_id,
+            runtime_config=runtime_config,
+            chat_background=background_path,
+            asset_categories=[*current.asset_categories, category],
+            asset_category_bindings=bindings,
+        )
 
     async def cancel(self, payload: dict[str, Any]) -> dict[str, Any]:
         import_id = str(payload.get("import_id") or "").strip()

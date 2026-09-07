@@ -40,6 +40,7 @@ function createForm(overrides: Partial<NewRoleFormState> = {}): NewRoleFormState
     name: overrides.name ?? "  Mira  ",
     description: overrides.description ?? "A role",
     systemPrompt: overrides.systemPrompt ?? "  Be helpful  ",
+    importId: overrides.importId,
   };
 }
 
@@ -160,6 +161,31 @@ describe("runRoleCreation", () => {
     assert.equal(harness.state.feedback?.message, "角色创建失败：保存失败");
     assert.deepEqual(harness.state.views.map((view) => view.kind), ["roles-list", "role-create"]);
     assert.equal(harness.state.navigationEntries.at(-1)?.view.kind, "role-create");
+  });
+
+  it("commits a staged role card and opens its detail page", async () => {
+    const importedRole = createRole({ id: "imported-role", name: "Imported" });
+    const harness = createHarness({
+      invoke: async (request) => {
+        assert.deepEqual(request, {
+          method: "roles.cardImport.commit",
+          payload: {
+            import_id: "staged-card",
+            overrides: { name: "Imported", description: "A role", system_prompt: "Be helpful" },
+          },
+        });
+        return createResponse({ role: importedRole });
+      },
+    });
+
+    const created = await runRoleCreation(
+      createForm({ name: "Imported", importId: "staged-card" }),
+      harness.args,
+    );
+
+    assert.equal(created, true);
+    assert.deepEqual(harness.state.views, [{ kind: "role-detail", roleId: "imported-role" }]);
+    assert.deepEqual(harness.state.navigationEntries.at(-1)?.view, { kind: "role-detail", roleId: "imported-role" });
   });
 });
 
