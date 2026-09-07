@@ -90,9 +90,9 @@ export function RoleCardImportPreviewDialog({
           <div className="grid gap-4">
             <div className="grid gap-3">
               <section className="grid gap-2 rounded-md border border-[#E3E8EE] bg-white p-3">
-                <h4 className="text-xs font-medium text-[#344054]">角色资料</h4>
+                <h4 className="text-xs font-medium text-[#344054]">角色设定</h4>
                 <dl className="grid gap-2 text-xs leading-5 text-[#667085]">
-                  <div><dt className="text-[#98A2B3]">资料</dt><dd className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[#475467]">{character?.profile || preview.description || "无"}</dd></div>
+                  <div><dt className="text-[#98A2B3]">设定</dt><dd className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[#475467]">{character?.profile || preview.description || "无"}</dd></div>
                   <div><dt className="text-[#98A2B3]">性格</dt><dd className="whitespace-pre-wrap text-[#475467]">{character?.personality || "无"}</dd></div>
                   <div><dt className="text-[#98A2B3]">规则</dt><dd className="whitespace-pre-wrap text-[#475467]">{character?.behavior_rules || "无"}</dd></div>
                 </dl>

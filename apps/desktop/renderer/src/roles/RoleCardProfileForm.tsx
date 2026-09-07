@@ -27,8 +27,8 @@ export function RoleCardProfileForm({
     <div className="grid gap-5 border-t border-[#E5E7EB] pt-5">
       <div className="grid gap-4">
         <label className="grid gap-2 text-xs text-[#6B7280]">
-          <span>角色资料</span>
-          <textarea className={`${inputClass} min-h-56 resize-y`} value={character.profile ?? ""} onChange={(event) => updateCharacter("profile", event.target.value)} />
+          <span>角色设定</span>
+          <textarea className={`${inputClass} min-h-56 resize-y`} value={character.profile ?? ""} onChange={(event) => updateCharacter("profile", event.target.value)} placeholder="外貌、身份、背景、关系设定" />
         </label>
         <div className="grid gap-4 lg:grid-cols-2">
           <label className="grid gap-2 text-xs text-[#6B7280]">
@@ -37,7 +37,7 @@ export function RoleCardProfileForm({
           </label>
           <label className="grid gap-2 text-xs text-[#6B7280]">
             <span>执行规则</span>
-            <textarea className={`${inputClass} min-h-32 resize-y`} value={character.behavior_rules ?? ""} onChange={(event) => updateCharacter("behavior_rules", event.target.value)} />
+            <textarea className={`${inputClass} min-h-32 resize-y`} value={character.behavior_rules ?? ""} onChange={(event) => updateCharacter("behavior_rules", event.target.value)} placeholder="行为边界、输出要求、禁止事项" />
           </label>
         </div>
       </div>

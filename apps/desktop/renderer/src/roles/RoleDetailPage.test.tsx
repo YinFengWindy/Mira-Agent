@@ -40,7 +40,7 @@ describe("RoleDetailPage", () => {
     assert.match(markup, /能力/);
     assert.match(markup, /渠道与主动推送/);
     assert.match(markup, /aria-current="page"[^>]*>.*资料/);
-    assert.match(markup, /角色资料/);
+    assert.match(markup, /角色设定/);
     assert.match(markup, /性格/);
     assert.match(markup, /执行规则/);
     assert.doesNotMatch(markup, /data-testid="role-card-profile-knowledge"/);
