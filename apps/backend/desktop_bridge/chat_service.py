@@ -59,6 +59,8 @@ class ChatTurnCancelResult:
     session_key: str
     turn_id: str
     message: str
+    session: Session | None = None
+    interrupted_message: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -186,7 +188,7 @@ class DesktopChatService:
         if active_turn is not None:
             await self._await_turn_cleanup(normalized_session_key, active_turn)
         if result.status == "interrupted" and isinstance(interrupt_state, TurnInterruptState):
-            await self._persist_interrupted_turn(
+            interrupted_message = await self._persist_interrupted_turn(
                 session_key=normalized_session_key,
                 turn_id=normalized_turn_id,
                 state=interrupt_state,
@@ -194,6 +196,14 @@ class DesktopChatService:
             discard = getattr(self._agent_loop, "discard_interrupt_state", None)
             if callable(discard):
                 discard(normalized_session_key, interrupt_state)
+            if interrupted_message is not None:
+                # The renderer must swap its transient trace for the persisted
+                # message, or the next turn sorts around an id-less bubble.
+                result = replace(
+                    result,
+                    session=self._session_manager.get_or_create(normalized_session_key),
+                    interrupted_message=interrupted_message,
+                )
         return result
 
     async def _persist_and_discard_interrupted_turn(
@@ -309,12 +319,12 @@ class DesktopChatService:
         session_key: str,
         turn_id: str,
         state: TurnInterruptState,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         """Persists one cancelled desktop reply before its session can be reused."""
 
         session = self._session_manager.get_or_create(session_key)
         if self._has_completed_turn(session, turn_id):
-            return
+            return None
         has_trace = bool(
             state.partial_reply
             or state.partial_thinking
@@ -350,6 +360,7 @@ class DesktopChatService:
         role_id = self._role_id_from_session_key(session_key)
         if role_id:
             self._sync_desktop_session_thread(session, role_id=role_id)
+        return assistant_message
 
     @staticmethod
     def _has_completed_turn(session: Session, turn_id: str) -> bool:

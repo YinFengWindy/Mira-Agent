@@ -179,6 +179,13 @@ function preserveInterruptedAssistantTrace(
       return;
     }
     if (findIncomingMessageIndex(message, incomingSession) >= 0) return;
+    // Incrementally merged sessions retain the id-less interrupted trace itself;
+    // re-inserting it would duplicate the bubble and displace the new user turn.
+    if (incomingSession.messages.some((incomingMessage) => (
+      areEquivalentMessagesIgnoringMissingIds(message, incomingMessage)
+    ))) {
+      return;
+    }
     const anchorIndex = findNextIncomingMessageIndex(currentSession.messages, index, incomingSession);
     const targetIndex = anchorIndex >= 0 ? anchorIndex : incomingUserIndex;
     const anchoredMessages = interruptedMessagesByIncomingIndex.get(targetIndex) ?? [];

@@ -650,6 +650,19 @@ export function useDesktopSessionState({
           ? finalizeChatCancellation(current, status as "interrupted" | "idle")
           : current);
         completeChatTurn(sessionKey, turnId);
+        // Swap the transient interrupted trace for its persisted form so the
+        // next turn's seq ordering does not sort around an id-less bubble.
+        const update = parseSessionMessageUpdatePayload({
+          session: res.payload.session,
+          message: res.payload.message_payload,
+        });
+        if (update?.message && update.session.key === sessionKey) {
+          commitActiveSession(mergeSessionSummaryAndMessage(
+            activeSessionRef.current,
+            update.session,
+            update.message,
+          ));
+        }
       }
       return true;
     } catch (error) {
