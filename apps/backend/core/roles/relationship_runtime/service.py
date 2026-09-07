@@ -56,6 +56,11 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         self._presence = presence
         self._scene_followup = SceneFollowupRuntime(workspace)
 
+    @property
+    def role_store(self) -> RoleStore:
+        """Returns the shared role store backing relationship snapshots."""
+        return self._role_store
+
     def current_loneliness_runtime(self, role_id: str, *, now: datetime | None = None) -> dict[str, Any] | None:
         """Returns the latest loneliness runtime, catching up elapsed time when possible."""
         runtime = self.recompute_loneliness(role_id, now=now)

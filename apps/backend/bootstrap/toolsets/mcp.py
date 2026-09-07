@@ -5,7 +5,7 @@ from pathlib import Path
 from agent.mcp.manage_tools import McpAddTool, McpListTool, McpRemoveTool
 from agent.mcp.registry import McpServerRegistry
 from agent.tools.registry import ToolRegistry
-from bootstrap.runtime_construction import track_build_resource
+from bootstrap.runtime.construction import track_build_resource
 from bootstrap.toolsets.protocol import (
     ToolsetDeps,
     ToolsetProvider,

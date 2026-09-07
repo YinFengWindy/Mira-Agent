@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from bootstrap.runtime_events import RuntimeEventBus
+from bootstrap.runtime.events import RuntimeEventBus
 from bus.event_bus import EventBus
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime
 from core.roles.model_runtime import RoleModelSnapshot, _current_snapshot
 

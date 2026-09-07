@@ -3,8 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from core.common.task_collector import TaskCollector
 from infra.channels.contract import Channel, ChannelContext
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,10 @@ class ChannelHandoverError(RuntimeError):
         return {"failure": asdict(self.failure), "degraded": [asdict(item) for item in self.degraded]}
 
 
+def _failure(name: str, phase: str, error: BaseException) -> ChannelFailure:
+    return ChannelFailure(name, phase, type(error).__name__, str(error))
+
+
 class ChannelHost:
     def __init__(
         self,
@@ -47,7 +52,7 @@ class ChannelHost:
         self._configurations: dict[str, object] = {}
         self._transport_lock = transport_lock or asyncio.Lock()
         self._retired_transports: dict[str, Channel] = {}
-        self._retirement_tasks: set[asyncio.Task[None]] = set()
+        self._retirements = TaskCollector("Channel retirement")
 
     def add(self, channel: Channel, *, configuration: object = None) -> None:
         """Registers one candidate without starting it or binding subscribers."""
@@ -93,15 +98,109 @@ class ChannelHost:
         retire_after: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Switches changed connections under the send barrier and rolls back failures."""
-        from bootstrap.channel_handover import handover_channels
         async with self._transport_lock:
-            parked = await handover_channels(self, candidate, commit=commit, retain_removed=retire_after is not None)
+            parked = await self.handover_channels(
+                candidate, commit=commit, retain_removed=retire_after is not None,
+            )
             if parked and retire_after is not None:
                 for channel in parked:
                     self._retired_transports[channel.name] = channel
                     self._ctx_factory(channel).push_tool.retire_channel(channel.name)
-                task = asyncio.create_task(self._retire_transports(parked, retire_after))
-                self._retirement_tasks.add(task)
+                self._retirements.spawn(
+                    self._retire_transports(parked, retire_after),
+                    name="channel-retire",
+                )
+
+    async def handover_channels(
+        self, candidate: ChannelHost, *, commit: Callable[[], None] | None = None,
+        retain_removed: bool = False,
+    ) -> list[Channel]:
+        """Transfers connection ownership; callers must hold the transport barrier."""
+        candidate_names = {channel.name for channel in candidate.channels}
+        retired_replaced = [channel for name, channel in self._retired_transports.items() if name in candidate_names]
+        removed = [channel for channel in self._channels if channel not in candidate.channels]
+        removed.extend(retired_replaced)
+        parked = [channel for channel in removed if retain_removed and channel.name not in candidate_names]
+        for channel in parked:
+            if not callable(getattr(channel, "pause_intake", None)) or not callable(getattr(channel, "resume_intake", None)):
+                raise ValueError(f"Channel {channel.name} does not support draining removal")
+        added = [channel for channel in candidate.channels if channel not in self._channels]
+        stopped = []
+        attempted = []
+        current_name = "configuration"
+        phase = "stop"
+        try:
+            for channel in reversed(removed):
+                current_name = channel.name
+                if channel in parked:
+                    channel.pause_intake()
+                    continue
+                await channel.stop()
+                stopped.append(channel)
+            phase = "start"
+            for channel in added:
+                current_name = channel.name
+                attempted.append(channel)
+                await channel.start(replace(candidate._ctx_factory(channel), intake_paused=True))
+            phase = "resume"
+            for channel in candidate.channels:
+                current_name = channel.name
+                channel.resume_intake()
+            # Intake callbacks cannot run on this loop between synchronous resume
+            # and publication; any activation failure still precedes persistence.
+            phase = "commit"
+            current_name = "configuration"
+            if commit is not None:
+                commit()
+        except BaseException as error:
+            failure = _failure(current_name, phase, error)
+            degraded = []
+            # Cancel admission scheduled by a pre-commit resume before cleanup yields.
+            for channel in attempted:
+                try:
+                    channel.pause_intake()
+                except BaseException as pause_error:
+                    degraded.append(_failure(channel.name, "candidate_pause", pause_error))
+            # A failed stop has uncertain external state; do not create a duplicate connection.
+            if phase == "stop":
+                degraded.append(failure)
+            for channel in reversed(attempted):
+                try:
+                    await channel.stop()
+                except BaseException as cleanup_error:
+                    degraded.append(_failure(channel.name, "candidate_cleanup", cleanup_error))
+            unsafe_names = {item.channel for item in degraded}
+            for channel in reversed(stopped):
+                if channel.name in unsafe_names:
+                    continue
+                try:
+                    await channel.start(self._ctx_factory(channel))
+                    if channel in retired_replaced:
+                        channel.pause_intake()
+                        self._ctx_factory(channel).push_tool.retire_channel(channel.name)
+                except BaseException as restore_error:
+                    degraded.append(_failure(channel.name, "restore", restore_error))
+            unsafe_names = {item.channel for item in degraded}
+            for channel in self._channels:
+                if channel.name in unsafe_names:
+                    continue
+                try:
+                    channel.resume_intake()
+                except BaseException as resume_error:
+                    degraded.append(_failure(channel.name, "resume", resume_error))
+            self._failures.extend(degraded)
+            if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                raise
+            if phase == "commit" and not degraded:
+                raise
+            raise ChannelHandoverError(failure, degraded) from error
+        self._channels = candidate.channels
+        self._configurations = dict(candidate._configurations)
+        self._ctx_factory = candidate._ctx_factory
+        self._failures = candidate.failures
+        for channel in retired_replaced:
+            self._retired_transports.pop(channel.name, None)
+        return parked
 
     async def _retire_transports(self, channels, ready) -> None:
         await ready()
@@ -138,10 +237,8 @@ class ChannelHost:
                 logger.error("渠道启动失败 %s: %s", channel.name, e)
 
     async def stop_all(self) -> None:
-        for task in self._retirement_tasks:
-            task.cancel()
-        if self._retirement_tasks:
-            await asyncio.gather(*self._retirement_tasks, return_exceptions=True)
+        self._retirements.cancel_all()
+        await self._retirements.drain()
         for channel in reversed([*self._channels, *self._retired_transports.values()]):
             try:
                 await channel.stop()

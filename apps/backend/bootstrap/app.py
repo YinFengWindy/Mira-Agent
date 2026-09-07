@@ -5,18 +5,19 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agent.config_models import Config
 from bootstrap.channel_host import ChannelHost
 from bootstrap.channels import start_channels
 from bootstrap.tools import CoreRuntime, build_core_runtime
-from bootstrap.runtime_dispatcher import RuntimeDispatcher
-from bootstrap.runtime_events import RuntimeEventBus
-from bootstrap.runtime_generations import RuntimeCandidate
-from bootstrap.runtime_reload import RuntimeReloadMixin
-from bootstrap.runtime_background import RuntimeBackgroundMixin
-from bootstrap.runtime_shutdown import RuntimeShutdownMixin
-from bootstrap.runtime_construction import prepare_core_runtime
+from bootstrap.runtime.dispatcher import RuntimeDispatcher
+from bootstrap.runtime.events import RuntimeEventBus
+from bootstrap.runtime.generations import GenerationManager, RuntimeCandidate
+from bootstrap.runtime.reload import RuntimeReloadMixin
+from bootstrap.runtime.background import RuntimeBackgroundMixin
+from bootstrap.runtime.shutdown import RuntimeShutdownMixin
+from bootstrap.runtime.construction import prepare_core_runtime
 from bus.event_bus import EventBus
 from core.common.workspace import resolve_default_workspace
 from core.roles import (
@@ -26,6 +27,19 @@ from core.net.http import (
     SharedHttpResources,
     configure_default_shared_http_resources,
 )
+
+if TYPE_CHECKING:
+    from agent.looping.core import AgentLoop
+    from agent.mcp.registry import McpServerRegistry
+    from agent.provider import LLMProvider
+    from agent.scheduler import SchedulerService
+    from agent.tools.message_push import MessagePushTool
+    from agent.tools.registry import ToolRegistry
+    from bus.queue import MessageBus
+    from core.memory.runtime import MemoryRuntime
+    from core.roles import RoleRelationshipRuntimeService
+    from proactive_v2.presence import PresenceStore
+    from session.manager import SessionManager
 
 def configure_logging_stream(stream) -> None:
     logging.basicConfig(
@@ -72,32 +86,69 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
         self.http_resources = SharedHttpResources()
         self.channel_host: ChannelHost | None = None
         self.core: CoreRuntime | None = None
-        self.agent_loop = None
-        self.bus = None
         self.event_bus: EventBus | None = None
-        self.tools = None
-        self.push_tool = None
-        self.session_manager = None
-        self.scheduler = None
-        self.provider = None
-        self.light_provider = None
-        self.mcp_registry = None
-        self.memory_runtime = None
-        self.presence = None
-        self.relationship_runtime = None
         self.proactive_loops = {}
         self._background_tasks: list[asyncio.Task[None]] = []
         self._memory_optimizer = None
         self._shutdown = False
         self._started = False
-        self._current: RuntimeCandidate | None = None
-        self._generations: list[RuntimeCandidate] = []
         self._dispatcher = RuntimeDispatcher(self)
         self._background_groups = {}
-        self._retirement_tasks: set[asyncio.Task[None]] = set()
         self._cleanup_errors: list[Exception] = []
-        self._admission_open = asyncio.Event()
-        self._admission_open.set()
+        self._generation_manager = GenerationManager()
+        self._generation_manager.on_closed = self._generation_closed
+
+    # The published generation owns these capabilities; tasks that must keep
+    # their starting configuration should read them through a pinned lease
+    # instead of this always-current view.
+
+    @property
+    def agent_loop(self) -> AgentLoop | None:
+        return self.core.loop if self.core is not None else None
+
+    @property
+    def bus(self) -> MessageBus | None:
+        return self.core.bus if self.core is not None else None
+
+    @property
+    def tools(self) -> ToolRegistry | None:
+        return self.core.tools if self.core is not None else None
+
+    @property
+    def push_tool(self) -> MessagePushTool | None:
+        return self.core.push_tool if self.core is not None else None
+
+    @property
+    def session_manager(self) -> SessionManager | None:
+        return self.core.session_manager if self.core is not None else None
+
+    @property
+    def scheduler(self) -> SchedulerService | None:
+        return self.core.scheduler if self.core is not None else None
+
+    @property
+    def provider(self) -> LLMProvider | None:
+        return self.core.provider if self.core is not None else None
+
+    @property
+    def light_provider(self) -> LLMProvider | None:
+        return self.core.light_provider if self.core is not None else None
+
+    @property
+    def mcp_registry(self) -> McpServerRegistry | None:
+        return self.core.mcp_registry if self.core is not None else None
+
+    @property
+    def memory_runtime(self) -> MemoryRuntime | None:
+        return self.core.memory_runtime if self.core is not None else None
+
+    @property
+    def presence(self) -> PresenceStore | None:
+        return self.core.presence if self.core is not None else None
+
+    @property
+    def relationship_runtime(self) -> RoleRelationshipRuntimeService | None:
+        return self.core.relationship_runtime if self.core is not None else None
 
     async def start(self) -> None:
         if self._started:
@@ -114,11 +165,10 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
                 event_outlet=self.event_bus,
                 agent_loop_provider=lambda: self._dispatcher,
             )
-            self._adopt_core(self.core)
             event_bus = self.event_bus
             await self.core.start()
-            self._current = RuntimeCandidate(1, self.core, self.config, published=True)
-            self._track_generation(self._current)
+            current = RuntimeCandidate(1, self.core, self.config, published=True)
+            self._generation_manager.start(current)
             self.bus.bind_runtime_admission(self.acquire)
 
             plugin_manager = getattr(self.core, "plugin_manager", None)
@@ -148,12 +198,12 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
                 ),
                 asyncio.create_task(self.scheduler.run(), name="scheduler"),
             ]
-            self._prepare_background(self._current)
-            self._publish_background(None, self._current)
+            self._prepare_background(current)
+            self._publish_background(None, current)
             if self.relationship_runtime is not None:
                 loneliness_loop = LonelinessHeartbeatLoop(
                     self.relationship_runtime,
-                    role_store=self.core.relationship_runtime._role_store,
+                    role_store=self.core.relationship_runtime.role_store,
                 )
                 self._background_tasks.extend(
                     [

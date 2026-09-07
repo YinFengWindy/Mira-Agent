@@ -254,6 +254,16 @@ class RoleRuntimeRegistry:
             shared_execution._execution_states if shared_execution else {}
         )
 
+    @property
+    def model_resolver(self) -> RoleModelRuntime | None:
+        """Returns this generation's model resolver for lifecycle and bridge wiring."""
+        return self._model_resolver
+
+    @property
+    def repository(self) -> RoleRepository:
+        """Returns the role repository shared across runtime generations."""
+        return self._repository
+
     async def get(self, role_id: str) -> RoleRuntime:
         """Returns the stable runtime for a role and refreshes its current configuration."""
 

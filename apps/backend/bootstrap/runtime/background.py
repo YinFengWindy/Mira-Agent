@@ -7,7 +7,7 @@ from collections.abc import Coroutine
 from typing import Any, Protocol
 
 from bootstrap.proactive import build_memory_optimizer_task, build_proactive_runtime
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime
 
 
@@ -107,6 +107,9 @@ class RuntimeBackgroundMixin:
 
     def _prepare_background(self, candidate: RuntimeCandidate) -> None:
         self._background_groups[candidate] = RuntimeBackground(self, candidate)
+
+    def _generation_closed(self, candidate: RuntimeCandidate) -> None:
+        self._background_groups.pop(candidate, None)
 
     def _publish_background(self, previous, candidate: RuntimeCandidate) -> None:
         old_group = self._background_groups.get(previous)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,9 @@ from bootstrap.app import AppRuntime
 from core.roles.model_updates import prepare_role_model_updates
 from core.roles.store import RoleStore
 from desktop_bridge.config_transaction import ConfigTransaction
+
+
+_RESULT_HISTORY_LIMIT = 64
 
 
 class RuntimeApplyError(ValueError):
@@ -34,7 +38,7 @@ class RuntimeSettingsApplication:
         self.transaction = ConfigTransaction(config_path, role_store.workspace)
         self.config_text = config_path.read_text(encoding="utf-8")
         self._lock = asyncio.Lock()
-        self._results: dict[str, tuple[str, dict[str, Any]]] = {}
+        self._results: OrderedDict[str, tuple[str, dict[str, Any]]] = OrderedDict()
 
     async def apply(
         self, payload: dict[str, Any], *, prepare_service: Callable,
@@ -72,7 +76,7 @@ class RuntimeSettingsApplication:
             raise RuntimeApplyError("runtime_config_invalid", str(exc)) from exc
         if config == self.app.config:
             try:
-                with self.roles._lock:
+                with self.roles.lock:
                     roles_payload = prepare_role_model_updates(
                         self.roles, updates, {item.id for item in config.model_registrations},
                     )
@@ -81,7 +85,7 @@ class RuntimeSettingsApplication:
                 raise RuntimeApplyError("runtime_commit_failed", str(exc)) from exc
             self.config_text = text
             result = {"generation": generation, "changed": bool(updates)}
-            self._results[operation_id] = fingerprint, result
+            self._remember(operation_id, fingerprint, result)
             return result
         candidate = None
         service = None
@@ -92,7 +96,7 @@ class RuntimeSettingsApplication:
             def commit() -> None:
                 # Read the current role records again after asynchronous preparation.
                 # Only model fields are merged, so intervening state is retained.
-                with self.roles._lock:
+                with self.roles.lock:
                     roles_payload = prepare_role_model_updates(
                         self.roles, updates, {item.id for item in config.model_registrations},
                     )
@@ -113,5 +117,12 @@ class RuntimeSettingsApplication:
         self.config_text = text
         publish_service(service)
         result = {"generation": self.app.generation, "changed": self.app.generation != generation}
-        self._results[operation_id] = fingerprint, result
+        self._remember(operation_id, fingerprint, result)
         return result
+
+    def _remember(self, operation_id: str, fingerprint: str, result: dict[str, Any]) -> None:
+        # Retries arrive shortly after the original attempt; a bounded window
+        # keeps idempotency without growing for the lifetime of the bridge.
+        self._results[operation_id] = fingerprint, result
+        while len(self._results) > _RESULT_HISTORY_LIMIT:
+            self._results.popitem(last=False)

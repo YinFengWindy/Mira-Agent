@@ -1,18 +1,16 @@
 """Generation-local handlers with one stable external event outlet."""
 
 import asyncio
-import logging
 from contextvars import Context, copy_context
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from bus.event_bus import EventBus
 from core.common.runtime_scope import bind_runtime, current_runtime_lease
-
-logger = logging.getLogger(__name__)
+from core.common.runtime_tasks import release_lease_in_background
 
 if TYPE_CHECKING:
-    from bootstrap.runtime_generations import RuntimeLease
+    from bootstrap.runtime.generations import RuntimeLease
 
 
 @dataclass
@@ -52,7 +50,7 @@ class RuntimeEventBus(EventBus):
             if event.lease is not None:
                 # A separate release task lets the queue mark its item complete
                 # before generation cleanup waits for that queue to drain.
-                task.add_done_callback(lambda _: _release_after_delivery(event.lease))
+                task.add_done_callback(lambda _: release_lease_in_background(event.lease))
             await task
             return
         await self._fanout_event(event)
@@ -68,13 +66,3 @@ class RuntimeEventBus(EventBus):
         parent = current_runtime_lease()
         lease = parent.retain() if parent is not None else None
         super().enqueue(_QueuedEvent(event, copy_context(), lease))
-
-
-def _release_after_delivery(lease) -> None:
-    task = asyncio.create_task(lease.release())
-
-    def report_failure(completed):
-        if not completed.cancelled() and (error := completed.exception()) is not None:
-            logger.error("Runtime event cleanup failed", exc_info=(type(error), error, error.__traceback__))
-
-    task.add_done_callback(report_failure)

@@ -1,6 +1,6 @@
 import pytest
 
-from bootstrap.runtime_cleanup import run_cleanup_steps
+from core.common.cleanup import run_cleanup_steps
 
 
 @pytest.mark.asyncio

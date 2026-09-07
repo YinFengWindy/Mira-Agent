@@ -74,8 +74,8 @@ async def inspect_modules(
 ) -> None:
     import logging
     from bootstrap.tools import build_core_runtime
-    from bootstrap.runtime_construction import prepare_core_runtime
-    from bootstrap.runtime_cleanup import run_cleanup_steps
+    from bootstrap.runtime.construction import prepare_core_runtime
+    from core.common.cleanup import run_cleanup_steps
 
     logging.getLogger().setLevel(logging.WARNING)
     config = Config.load(config_path)

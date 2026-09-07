@@ -11,7 +11,7 @@ from agent.policies.delegation import SpawnDecision, SpawnDecisionMeta
 from agent.provider import LLMResponse
 from bus.events import SpawnCompletionItem
 from bus.queue import MessageBus
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime
 
 

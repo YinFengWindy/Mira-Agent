@@ -32,8 +32,8 @@ from agent.scheduler import SchedulerService
 from agent.tools.message_push import MessagePushTool
 from agent.tools.observe_screen import ObserveScreenTool
 from agent.tools.registry import ToolRegistry
-from bootstrap.runtime_cleanup import run_cleanup_steps
-from bootstrap.runtime_construction import track_build_resource
+from core.common.cleanup import run_cleanup_steps
+from bootstrap.runtime.construction import track_build_resource
 from bootstrap.toolsets.meta import (
     build_readonly_tools,
 )
@@ -131,7 +131,7 @@ class CoreRuntime:
 
     async def inspect_modules(self) -> str:
         """Renders this generation\'s lifecycle module configuration."""
-        from bootstrap.runtime_inspection import inspect_core_modules
+        from bootstrap.runtime.inspection import inspect_core_modules
 
         return await inspect_core_modules(self)
 
@@ -150,7 +150,7 @@ class CoreRuntime:
             ("event_bus.aclose", self.event_bus.aclose),
             ("provider.aclose", self.provider.aclose),
         ])
-        resolver = self.role_runtime_registry._model_resolver
+        resolver = self.role_runtime_registry.model_resolver
         if resolver is not None:
             steps.append(("role_models.aclose", resolver.aclose))
         steps.extend((f"provider:{index}", provider.aclose) for index, provider in enumerate(self.additional_providers))
@@ -398,7 +398,7 @@ def build_core_runtime(
     default_registration_id = (
         config.model_registrations[0].id if config.model_registrations else ""
     )
-    role_store = shared.role_runtime_registry._repository.store if shared else RoleStore(
+    role_store = shared.role_runtime_registry.repository.store if shared else RoleStore(
         workspace,
         default_dialogue_registration_id=default_registration_id,
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from bootstrap.runtime_cleanup import run_cleanup_steps
+from core.common.cleanup import run_cleanup_steps
 
 import inspect
 import logging

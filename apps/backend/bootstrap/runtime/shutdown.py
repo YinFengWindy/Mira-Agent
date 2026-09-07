@@ -2,7 +2,7 @@
 
 import asyncio
 
-from bootstrap.runtime_cleanup import run_cleanup_steps
+from core.common.cleanup import run_cleanup_steps
 from core.net.http import clear_default_shared_http_resources
 
 
@@ -14,6 +14,7 @@ class RuntimeShutdownMixin:
         if self._shutdown:
             return
         self._shutdown = True
+        self._generation_manager.close()
         try:
             await run_cleanup_steps(
                 ("inbound.close", self._close_inbound),
@@ -47,27 +48,13 @@ class RuntimeShutdownMixin:
         self._background_tasks = [task for task in self._background_tasks if task not in controls]
 
     async def _close_generations(self) -> None:
-        generations = list(self._generations)
-        if not generations and self.core is not None:
+        if not self._generation_manager.tracked and self.core is not None:
             await run_cleanup_steps(
                 ("partial_core.stop", self.core.stop),
                 ("partial_memory.close", self.core.memory_runtime.aclose),
             )
             return
-        for generation in generations:
-            generation.retired = True
-
-        async def close(generation):
-            await generation.close_if_idle()
-            await generation.drained.wait()
-            await generation.close_if_idle()
-
-        outcomes = await asyncio.gather(*(close(generation) for generation in generations), return_exceptions=True)
-        errors = [error for error in outcomes if isinstance(error, Exception)]
-        if errors:
-            raise ExceptionGroup("Runtime generations failed to close", errors)
-        if self._retirement_tasks:
-            await asyncio.gather(*self._retirement_tasks, return_exceptions=True)
+        await self._generation_manager.close_all()
 
     async def _drain_outbound(self) -> None:
         if self.bus is not None:
@@ -93,5 +80,6 @@ class RuntimeShutdownMixin:
             await self.event_bus.aclose()
 
     async def _report_cleanup_errors(self) -> None:
-        if self._cleanup_errors:
-            raise ExceptionGroup("Retired runtime cleanup failed", self._cleanup_errors)
+        errors = [*self._cleanup_errors, *self._generation_manager.retirement_errors]
+        if errors:
+            raise ExceptionGroup("Retired runtime cleanup failed", errors)

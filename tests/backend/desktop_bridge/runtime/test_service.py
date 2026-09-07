@@ -10,8 +10,8 @@ from agent.config import load_config_text
 from agent.provider import LLMProvider, LLMResponse
 from bootstrap.app import AppRuntime, RuntimeFeatures
 from core.roles.store import RoleStore
-from desktop_bridge.runtime_service import ReloadableDesktopService
-from desktop_bridge.runtime_service import _ServiceGeneration
+from desktop_bridge.runtime.service import ReloadableDesktopService
+from desktop_bridge.runtime.service import _ServiceGeneration
 
 _REGISTRATION = "00000000-0000-4000-a000-000000000001"
 

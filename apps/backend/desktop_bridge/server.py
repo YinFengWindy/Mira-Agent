@@ -13,7 +13,7 @@ from bootstrap.tools import CoreRuntime
 from core.roles import RoleStore
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
-from desktop_bridge.runtime_service_factory import build_desktop_service
+from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.stream_writer import BridgeStreamWriter
 from bus.events_lifecycle import DesktopPetActionRequested
 
@@ -29,13 +29,17 @@ class DesktopBridgeServer:
     def __init__(self, runtime: CoreRuntime, *, app: AppRuntime | None = None,
                  config_path: Path | None = None) -> None:
         self.runtime = runtime
-        repository = getattr(getattr(runtime, "role_runtime_registry", None), "_repository", None)
-        self.role_store = repository.store if repository is not None else RoleStore(runtime.session_manager.workspace)
+        registry = runtime.role_runtime_registry
+        repository = registry.repository if registry is not None else None
+        self.role_store = (
+            repository.store if repository is not None
+            else RoleStore(runtime.session_manager.workspace)
+        )
         self._event_bus = runtime.event_bus if app is None else app.event_bus
         if app is not None:
             if config_path is None:
                 raise ValueError("config_path required for runtime reload")
-            from desktop_bridge.runtime_service import ReloadableDesktopService
+            from desktop_bridge.runtime.service import ReloadableDesktopService
 
             self.service = ReloadableDesktopService(app, config_path, self.role_store)
         else:

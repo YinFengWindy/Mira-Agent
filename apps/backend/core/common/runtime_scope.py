@@ -7,7 +7,7 @@ from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bootstrap.runtime_generations import RuntimeLease
+    from bootstrap.runtime.generations import RuntimeLease
 
 _current: ContextVar[RuntimeLease | None] = ContextVar("runtime_task_lease", default=None)
 

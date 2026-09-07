@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from bootstrap.runtime_construction import prepare_core_runtime, track_build_resource
+from bootstrap.runtime.construction import prepare_core_runtime, track_build_resource
 
 
 @pytest.mark.asyncio

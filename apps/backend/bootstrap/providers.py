@@ -3,7 +3,7 @@ from __future__ import annotations
 from agent.config_models import Config
 from infra.providers.llm_provider import LLMProvider
 from core.roles.model_errors import ModelConfigurationError, incomplete_registration_fields
-from bootstrap.runtime_construction import track_build_resource
+from bootstrap.runtime.construction import track_build_resource
 
 _MAIN_PROVIDER_TIMEOUT_S = 45.0
 _LIGHT_PROVIDER_TIMEOUT_S = 45.0

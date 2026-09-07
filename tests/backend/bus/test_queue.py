@@ -7,7 +7,7 @@ import pytest
 
 from bus.events import OutboundMessage, SpawnCompletionItem
 from bus.queue import MessageBus
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 
 
 @pytest.mark.asyncio
