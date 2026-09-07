@@ -34,9 +34,8 @@ export type RoleCreationWorkflowArgs = RoleCreationControllerArgs & {
 };
 
 export type RoleCardImportState = {
-  status: "idle" | "previewing" | "ready" | "error";
+  status: "idle" | "previewing" | "ready";
   preview: RoleCardImportPreview | null;
-  error: string;
 };
 
 type RoleCreationFormActionArgs = {
@@ -197,7 +196,7 @@ export function useRoleCreationController({
 }: RoleCreationControllerArgs) {
   const [newRoleForm, setNewRoleForm] = useState(createEmptyNewRoleForm);
   const [creating, setCreating] = useState(false);
-  const [roleCardImport, setRoleCardImport] = useState<RoleCardImportState>({ status: "idle", preview: null, error: "" });
+  const [roleCardImport, setRoleCardImport] = useState<RoleCardImportState>({ status: "idle", preview: null });
   const newRoleFormRef = useLatestRef(newRoleForm);
 
   function updateNewRoleForm(next: React.SetStateAction<NewRoleFormState>): void {
@@ -234,20 +233,21 @@ export function useRoleCreationController({
     });
     if (created) {
       updateNewRoleForm(createEmptyNewRoleForm());
-      setRoleCardImport({ status: "idle", preview: null, error: "" });
+      setRoleCardImport({ status: "idle", preview: null });
     }
   }
 
   async function previewRoleCard(): Promise<void> {
     const source = await window.miraDesktop.pickRoleCard();
     if (!source) return;
-    setRoleCardImport({ status: "previewing", preview: null, error: "" });
+    setRoleCardImport({ status: "previewing", preview: null });
     const response = await window.miraDesktop.invoke({
       method: "roles.cardImport.preview",
       payload: { source },
     });
     if (response.error) {
-      setRoleCardImport({ status: "error", preview: null, error: response.error.message });
+      setRoleCardImport({ status: "idle", preview: null });
+      setWorkspaceFeedback({ tone: "error", message: `角色导入失败：${response.error.message}` });
       return;
     }
     const nestedPreview = response.payload.preview && typeof response.payload.preview === "object" && !Array.isArray(response.payload.preview)
@@ -257,11 +257,12 @@ export function useRoleCreationController({
       ? response.payload.import_id
       : typeof nestedPreview?.import_id === "string" ? nestedPreview.import_id : "";
     if (!importId) {
-      setRoleCardImport({ status: "error", preview: null, error: "导入预览未返回 import_id" });
+      setRoleCardImport({ status: "idle", preview: null });
+      setWorkspaceFeedback({ tone: "error", message: "角色导入失败：导入预览未返回 import_id" });
       return;
     }
     const preview = { ...(nestedPreview ?? response.payload), import_id: importId } as unknown as RoleCardImportPreview;
-    setRoleCardImport({ status: "ready", preview, error: "" });
+    setRoleCardImport({ status: "ready", preview });
     const previewPayload = nestedPreview ?? response.payload;
     updateNewRoleForm((current) => ({
       ...current,
@@ -277,7 +278,7 @@ export function useRoleCreationController({
     if (importId) {
       await window.miraDesktop.invoke({ method: "roles.cardImport.cancel", payload: { import_id: importId } });
     }
-    setRoleCardImport({ status: "idle", preview: null, error: "" });
+    setRoleCardImport({ status: "idle", preview: null });
     updateNewRoleForm((current) => ({ ...current, importId: undefined }));
   }
 

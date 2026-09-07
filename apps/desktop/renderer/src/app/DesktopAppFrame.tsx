@@ -136,7 +136,6 @@ type DesktopAppFrameProps = {
   onUpdateNewRoleForm: React.Dispatch<React.SetStateAction<NewRoleFormState>>;
   roleCardImport: RoleCardImportState;
   onPreviewRoleCard: () => void;
-  onCancelRoleCardImport: () => void;
   detailRoleId: string;
   activeIllustration: string;
   previewAvatar: string | null;
@@ -269,7 +268,6 @@ export function DesktopAppFrame({
   onUpdateNewRoleForm,
   roleCardImport,
   onPreviewRoleCard,
-  onCancelRoleCardImport,
   detailRoleId,
   activeIllustration,
   previewAvatar,
@@ -529,7 +527,6 @@ export function DesktopAppFrame({
               onUpdateForm={onUpdateNewRoleForm}
               roleCardImport={roleCardImport}
               onPreviewRoleCard={onPreviewRoleCard}
-              onCancelRoleCardImport={onCancelRoleCardImport}
             />
           ) : null}
           {mainView.kind === "role-detail" ? (
