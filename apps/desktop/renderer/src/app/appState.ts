@@ -128,10 +128,6 @@ export function createEmptyNewRoleForm(): NewRoleFormState {
         personality: "",
         behavior_rules: "",
       },
-      greetings: {
-        default: "",
-        alternates: [],
-      },
       knowledge_base: {
         enabled: false,
         token_budget: 2000,

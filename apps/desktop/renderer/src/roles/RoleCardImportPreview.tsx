@@ -59,7 +59,6 @@ export function RoleCardImportPreviewDialog({
   if (!open) return null;
 
   const character = preview.profile?.character;
-  const greetings = preview.profile?.greetings;
   const knowledge = preview.profile?.knowledge_base;
   const assets = (preview.assets ?? []).filter((asset) => asset.size !== undefined);
   const entries = knowledge?.entries ?? [];
@@ -89,7 +88,7 @@ export function RoleCardImportPreviewDialog({
 
         <div className="role-card-import-dialog-content scrollbar-soft min-h-0 overflow-y-auto p-5">
           <div className="grid gap-4">
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3">
               <section className="grid gap-2 rounded-md border border-[#E3E8EE] bg-white p-3">
                 <h4 className="text-xs font-medium text-[#344054]">角色资料</h4>
                 <dl className="grid gap-2 text-xs leading-5 text-[#667085]">
@@ -97,11 +96,6 @@ export function RoleCardImportPreviewDialog({
                   <div><dt className="text-[#98A2B3]">性格</dt><dd className="whitespace-pre-wrap text-[#475467]">{character?.personality || "无"}</dd></div>
                   <div><dt className="text-[#98A2B3]">规则</dt><dd className="whitespace-pre-wrap text-[#475467]">{character?.behavior_rules || "无"}</dd></div>
                 </dl>
-              </section>
-              <section className="grid gap-2 rounded-md border border-[#E3E8EE] bg-white p-3">
-                <h4 className="text-xs font-medium text-[#344054]">开场白</h4>
-                <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-[#475467]">{greetings?.default || "无"}</p>
-                <p className="text-xs leading-5 text-[#667085]">备用：{fieldList(greetings?.alternates)}</p>
               </section>
             </div>
 

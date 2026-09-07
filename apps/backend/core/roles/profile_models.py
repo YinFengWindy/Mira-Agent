@@ -113,26 +113,6 @@ class RoleCharacterDefinition:
 
 
 @dataclass
-class RoleGreetings:
-    """Default and alternate greetings stored without mutating session history."""
-
-    default: str = ""
-    alternates: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"default": self.default, "alternates": list(self.alternates)}
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> "RoleGreetings":
-        data = payload if isinstance(payload, dict) else {}
-        raw = data.get("alternates", [])
-        return cls(
-            default=_text(data.get("default")),
-            alternates=[_text(item) for item in raw if _text(item)] if isinstance(raw, list) else [],
-        )
-
-
-@dataclass
 class ImportProvenance:
     """Minimal optional source marker; it never participates in prompt rendering."""
 
@@ -156,7 +136,6 @@ class RoleProfile:
 
     version: int = 1
     character: RoleCharacterDefinition = field(default_factory=RoleCharacterDefinition)
-    greetings: RoleGreetings = field(default_factory=RoleGreetings)
     knowledge_base: RoleKnowledgeBase = field(default_factory=RoleKnowledgeBase)
     import_provenance: ImportProvenance | None = None
 
@@ -164,7 +143,6 @@ class RoleProfile:
         payload: dict[str, Any] = {
             "version": int(self.version),
             "character": self.character.to_dict(),
-            "greetings": self.greetings.to_dict(),
             "knowledge_base": self.knowledge_base.to_dict(),
         }
         if self.import_provenance is not None:
@@ -177,7 +155,6 @@ class RoleProfile:
         return cls(
             version=max(1, int(data.get("version") or 1)),
             character=RoleCharacterDefinition.from_dict(data.get("character")),
-            greetings=RoleGreetings.from_dict(data.get("greetings")),
             knowledge_base=RoleKnowledgeBase.from_dict(data.get("knowledge_base")),
             import_provenance=ImportProvenance.from_dict(data.get("import_provenance")),
         )

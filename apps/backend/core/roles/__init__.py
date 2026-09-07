@@ -26,7 +26,6 @@ from .models import (
 from .profile_models import (
     ImportProvenance,
     RoleCharacterDefinition,
-    RoleGreetings,
     RoleKnowledgeBase,
     RoleKnowledgeEntry,
     RoleProfile,
@@ -67,7 +66,6 @@ __all__ = [
     "CompiledRolePrompt",
     "ImportProvenance",
     "RoleCharacterDefinition",
-    "RoleGreetings",
     "RoleKnowledgeBase",
     "RoleKnowledgeEntry",
     "RoleKnowledgeMatcher",

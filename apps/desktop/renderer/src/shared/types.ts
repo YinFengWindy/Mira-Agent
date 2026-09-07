@@ -37,7 +37,6 @@ export type RoleRecord = {
   system_prompt: string;
   profile?: {
     character?: { profile?: string; personality?: string; behavior_rules?: string };
-    greetings?: { default?: string; alternates?: string[] };
     knowledge_base?: RoleKnowledgeBase;
   };
   runtime_config: Record<string, unknown>;
@@ -329,7 +328,6 @@ export type RoleKnowledgeBase = {
 /** Editable structured role data shared by card import and role persistence. */
 export type RoleProfileDraft = {
   character?: { profile?: string; personality?: string; behavior_rules?: string };
-  greetings?: { default?: string; alternates?: string[] };
   knowledge_base?: RoleKnowledgeBase;
 };
 

@@ -8,14 +8,9 @@ type RoleCardProfileFormProps = {
   onUpdate: (next: RoleProfileDraft) => void;
 };
 
-function linesToItems(value: string): string[] {
-  return value.split("\n").map((item) => item.trim()).filter(Boolean);
-}
-
 /** Edits the fields imported from a character card without flattening its profile. */
 export function RoleCardProfileForm({ profile, onUpdate }: RoleCardProfileFormProps) {
   const character = profile.character ?? {};
-  const greetings = profile.greetings ?? {};
   const knowledge = profile.knowledge_base ?? {};
   const entries = knowledge.entries ?? [];
 
@@ -40,17 +35,6 @@ export function RoleCardProfileForm({ profile, onUpdate }: RoleCardProfileFormPr
             <textarea className={`${inputClass} min-h-32 resize-y`} value={character.behavior_rules ?? ""} onChange={(event) => updateCharacter("behavior_rules", event.target.value)} />
           </label>
         </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <label className="grid gap-2 text-xs text-[#6B7280]">
-          <span>默认开场白</span>
-          <textarea className={`${inputClass} min-h-32 resize-y`} value={greetings.default ?? ""} onChange={(event) => onUpdate({ ...profile, greetings: { ...greetings, default: event.target.value } })} />
-        </label>
-        <label className="grid gap-2 text-xs text-[#6B7280]">
-          <span>备用开场白</span>
-          <textarea className={`${inputClass} min-h-32 resize-y`} value={(greetings.alternates ?? []).join("\n")} onChange={(event) => onUpdate({ ...profile, greetings: { ...greetings, alternates: linesToItems(event.target.value) } })} />
-        </label>
       </div>
 
       <section className="grid gap-3 rounded-md border border-[#E5E7EB] p-4">

@@ -22,6 +22,7 @@ def test_role_profile_round_trips_runtime_fields_without_source_noise() -> None:
 
     serialized = profile.to_dict()
     assert serialized["character"]["behavior_rules"] == "回答简洁"
+    assert "greetings" not in serialized
     assert "source" not in serialized
     assert "compatibility" not in serialized
     assert "response_constraints" not in serialized

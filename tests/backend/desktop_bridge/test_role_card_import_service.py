@@ -94,7 +94,7 @@ async def test_commit_creates_role_only_after_preview_confirmation(tmp_path) -> 
     imported = store.list_roles()
     assert len(imported) == 1
     assert imported[0].profile.character.personality == "安静、细心"
-    assert imported[0].profile.greetings.default == "你好。"
+    assert "greetings" not in imported[0].profile.to_dict()
     with pytest.raises(ValueError, match="导入预览已失效"):
         await service.commit({"import_id": preview["import_id"]})
 

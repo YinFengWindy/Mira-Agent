@@ -24,10 +24,6 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
     description = _first_text(data, "description")
     personality = _first_text(data, "personality")
     rules = _join_text(data.get("system_prompt"), data.get("post_history_instructions"))
-    greetings = {
-        "default": _first_text(data, "first_mes", "first_message"),
-        "alternates": [item.strip() for item in _string_list(data.get("alternate_greetings")) if item.strip()],
-    }
     entries, lore_discarded = normalize_lorebook(data.get("character_book"))
     profile = {
         "version": 1,
@@ -36,21 +32,21 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
             "personality": personality,
             "behavior_rules": rules,
         },
-        "greetings": greetings,
         "knowledge_base": {
             "enabled": bool(entries),
             "token_budget": 2000,
             "entries": entries,
         },
     }
-    adapted = ["name", "description", "personality", "system_prompt", "first_mes"]
+    adapted = ["name", "description", "personality", "system_prompt"]
     if data.get("post_history_instructions"):
         adapted.append("post_history_instructions -> behavior_rules")
-    if data.get("alternate_greetings"):
-        adapted.append("alternate_greetings")
     if data.get("character_book"):
         adapted.append("character_book")
     discarded = list(lore_discarded)
+    for field in ("first_mes", "first_message", "alternate_greetings"):
+        if data.get(field):
+            discarded.append(field)
     for field in ("scenario", "mes_example", "example_dialogue"):
         if data.get(field):
             discarded.append(field)
@@ -103,10 +99,6 @@ def _first_text(data: dict[str, Any], *fields: str) -> str:
 
 def _join_text(*values: Any) -> str:
     return "\n\n".join(value.strip() for value in values if isinstance(value, str) and value.strip())
-
-
-def _string_list(value: Any) -> list[str]:
-    return value if isinstance(value, list) else []
 
 
 def _macros(value: Any) -> list[str]:

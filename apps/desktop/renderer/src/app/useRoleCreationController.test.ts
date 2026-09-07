@@ -152,7 +152,6 @@ describe("runRoleCreation", () => {
         personality: "Calm and precise.",
         behavior_rules: "Use concise answers and cite the archive.",
       },
-      greetings: { default: "Welcome back.", alternates: ["Good to see you."] },
       knowledge_base: { enabled: true, token_budget: 2000, entries: [] },
     };
     const createdRole = createRole({ id: "manual-role", name: "Mira" });
@@ -241,7 +240,6 @@ describe("role creation form actions", () => {
       systemPrompt: "",
       profile: {
         character: { profile: "", personality: "", behavior_rules: "" },
-        greetings: { default: "", alternates: [] },
         knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
       },
     });
@@ -267,7 +265,6 @@ describe("role creation form actions", () => {
       systemPrompt: "",
       profile: {
         character: { profile: "", personality: "", behavior_rules: "" },
-        greetings: { default: "", alternates: [] },
         knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
       },
     });

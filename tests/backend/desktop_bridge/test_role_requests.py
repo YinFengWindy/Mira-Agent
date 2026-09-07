@@ -73,7 +73,6 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
             "personality": "Calm and precise.",
             "behavior_rules": "Use concise answers and cite the archive.",
         },
-        "greetings": {"default": "Welcome back.", "alternates": []},
         "knowledge_base": {"enabled": True, "token_budget": 2000, "entries": []},
     }
 

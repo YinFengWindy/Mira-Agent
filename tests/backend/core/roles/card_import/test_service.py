@@ -52,8 +52,9 @@ def test_json_adapter_normalizes_profile_and_report(tmp_path):
 
     assert preview.name == "小诗"
     assert preview.profile["character"]["behavior_rules"] == "遵守边界\n\n保持角色口吻"
-    assert preview.profile["greetings"]["alternates"] == ["晚上好。"]
+    assert "greetings" not in preview.profile
     assert preview.profile["knowledge_base"]["entries"][0]["always_active"] is True
+    assert {"first_mes", "alternate_greetings"} <= set(preview.report.discarded_fields)
     assert "scenario" in preview.report.discarded_fields
     assert preview.provenance.card_version == "V2"
 
