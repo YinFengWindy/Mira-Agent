@@ -13,6 +13,7 @@ class RoleKnowledgeEntry:
     """One normalized Lorebook entry used by the role prompt compiler."""
 
     content: str
+    title: str = ""
     primary_keys: list[str] = field(default_factory=list)
     secondary_keys: list[str] = field(default_factory=list)
     enabled: bool = True
@@ -25,6 +26,7 @@ class RoleKnowledgeEntry:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "title": self.title,
             "content": self.content,
             "primary_keys": list(self.primary_keys),
             "secondary_keys": list(self.secondary_keys),
@@ -45,6 +47,7 @@ class RoleKnowledgeEntry:
 
         return cls(
             id=_text(payload.get("id")),
+            title=_text(payload.get("title") or payload.get("name")),
             content=_text(payload.get("content")),
             primary_keys=words("primary_keys"),
             secondary_keys=words("secondary_keys"),

@@ -1,5 +1,6 @@
 from core.roles.profile_models import (
     RoleKnowledgeBase,
+    RoleKnowledgeEntry,
     RoleProfile,
 )
 
@@ -34,3 +35,10 @@ def test_legacy_fields_are_mapped_to_profile() -> None:
     assert profile.character.profile == "背景"
     assert profile.character.behavior_rules == "规则"
     assert RoleKnowledgeBase.from_dict(None).enabled is True
+
+
+def test_knowledge_entry_round_trips_title_and_accepts_legacy_name() -> None:
+    entry = RoleKnowledgeEntry.from_dict({"name": "旧标题", "content": "内容"})
+
+    assert entry.title == "旧标题"
+    assert entry.to_dict()["title"] == "旧标题"

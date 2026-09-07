@@ -26,17 +26,26 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
         onClick={onToggle}
       >
         <span className="grid min-w-0 gap-1.5">
-          <span className="truncate text-sm font-medium text-[#182230]">{entry.name || entry.id || `条目 ${index + 1}`}</span>
+          <span className="truncate text-sm font-medium text-[#182230]">{entry.title || `条目 ${index + 1}`}</span>
           <span className="flex flex-wrap gap-1.5">
             {keywords.length
               ? keywords.map((keyword) => <span className={roleChipClass} key={keyword}>{keyword}</span>)
-              : <span className="text-[11px] leading-4 text-[#98A2B3]">未设置关键词</span>}
+              : null}
           </span>
         </span>
         <CaretDown className={cx("h-4 w-4 shrink-0 text-[#98A2B3] transition-transform", expanded && "rotate-180")} weight="bold" />
       </button>
       {expanded ? (
         <div className="grid gap-3 pb-4">
+          <label className="grid gap-1.5 text-xs text-[#667085]">
+            <span>标题</span>
+            <input
+              className={roleFieldClass}
+              value={entry.title ?? ""}
+              placeholder="输入条目标题"
+              onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value }))}
+            />
+          </label>
           <label className="grid gap-1.5 text-xs text-[#667085]">
             <span>关键词</span>
             <input

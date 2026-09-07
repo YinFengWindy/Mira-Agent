@@ -34,7 +34,7 @@ def _card(**overrides):
             "alternate_greetings": ["晚上好。"],
             "character_book": {
                 "entries": [
-                    {"keys": ["雨"], "content": "她喜欢听雨。", "constant": True, "priority": 2},
+                    {"name": "雨天", "keys": ["雨"], "content": "她喜欢听雨。", "constant": True, "priority": 2},
                 ]
             },
             "scenario": "discard me",
@@ -54,6 +54,7 @@ def test_json_adapter_normalizes_profile_and_report(tmp_path):
     assert preview.profile["character"]["behavior_rules"] == "遵守边界\n\n保持角色口吻"
     assert "greetings" not in preview.profile
     assert preview.profile["knowledge_base"]["entries"][0]["always_active"] is True
+    assert preview.profile["knowledge_base"]["entries"][0]["title"] == "雨天"
     assert {"first_mes", "alternate_greetings"} <= set(preview.report.discarded_fields)
     assert "scenario" in preview.report.discarded_fields
     assert preview.provenance.card_version == "V2"

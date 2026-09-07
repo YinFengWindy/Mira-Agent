@@ -11,7 +11,11 @@ describe("RoleKnowledgePanel", () => {
         roleForm={{
           ...createEmptyRoleForm(),
           profile: {
-            knowledge_base: { enabled: true, token_budget: 1800, entries: [] },
+            knowledge_base: {
+              enabled: true,
+              token_budget: 1800,
+              entries: [{ id: "entry-1", title: "雨天", content: "她喜欢听雨。", primary_keys: [] }],
+            },
           },
         }}
         onUpdate={() => undefined}
@@ -21,7 +25,9 @@ describe("RoleKnowledgePanel", () => {
     assert.match(markup, /data-testid="role-knowledge-panel"/);
     assert.match(markup, /data-testid="add-knowledge-entry-button"/);
     assert.match(markup, />添加条目</);
+    assert.match(markup, />雨天</);
     assert.match(markup, /value="1800"/);
+    assert.doesNotMatch(markup, /未设置关键词/);
     assert.doesNotMatch(markup, />保存</);
     assert.doesNotMatch(markup, /roles\.update/);
   });

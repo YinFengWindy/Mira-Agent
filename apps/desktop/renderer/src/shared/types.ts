@@ -309,7 +309,7 @@ export type NewRoleFormState = {
 
 export type RoleKnowledgeEntry = {
   id?: string;
-  name?: string;
+  title?: string;
   content?: string;
   keywords?: string[];
   primary_keys?: string[];
