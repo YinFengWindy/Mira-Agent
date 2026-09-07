@@ -17,10 +17,14 @@ if TYPE_CHECKING:
 
 
 class Channel(Protocol):
+    """A transport whose inbound admission can stop independently of outbound work."""
+
     name: str
 
     async def start(self, ctx: ChannelContext) -> None: ...
     async def stop(self) -> None: ...
+    def pause_intake(self) -> None: ...
+    def resume_intake(self) -> None: ...
 
 
 @dataclass
@@ -35,3 +39,4 @@ class ChannelContext:
     bot_commands: list[tuple[str, str]]
     log: logging.Logger
     channel_hub: "ChannelHub | None" = None
+    intake_paused: bool = False

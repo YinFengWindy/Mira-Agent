@@ -122,6 +122,8 @@ class ProactiveLoop:
     def _init_runtime_state(self, config: ProactiveConfig) -> None:
         from proactive_v2.mcp_sources import McpClientPool
         self._running = False
+        self._stop_requested = asyncio.Event()
+        self._poll_task: asyncio.Task[None] | None = None
         self._feed_poll_lock = asyncio.Lock()
         workspace = getattr(self._sessions, "workspace", None)
         self._mcp_pool = McpClientPool(Path(workspace) if workspace else None)
@@ -347,12 +349,14 @@ class ProactiveLoop:
     async def _poll_loop(self) -> None:
         """每配置间隔秒周期性触发 feed 轮询。"""
         while self._running:
-            await asyncio.sleep(max(1, int(self._cfg.feed_poller_interval_seconds)))
+            await self._wait_interval(max(1, int(self._cfg.feed_poller_interval_seconds)))
             if not self._running:
                 break
             await self._poll_feeds_once()
 
     async def run(self) -> None:
+        if self._stop_requested.is_set():
+            return
         self._running = True
         logger.info(
             f"ProactiveLoop 已启动  "
@@ -366,6 +370,10 @@ class ProactiveLoop:
         try:
             await self._run_loop()
         finally:
+            self.stop()
+            if self._poll_task is not None:
+                await self._poll_task
+                self._poll_task = None
             cancel_retries = getattr(
                 self._proactive_pipeline,
                 "cancel_pending_retries",
@@ -388,12 +396,14 @@ class ProactiveLoop:
         # 启动时先同步完成首次 feed 轮询,保证首次 tick 能拿到新鲜数据
         await self._poll_feeds_once()
         # 后台周期轮询
-        asyncio.create_task(self._poll_loop())
+        self._poll_task = asyncio.create_task(self._poll_loop())
         last_base_score: float | None = None
         while self._running:
             interval = self._next_interval(last_base_score)
             logger.info("[proactive] 下次 tick 间隔=%ds", interval)
-            await asyncio.sleep(interval)
+            await self._wait_interval(interval)
+            if not self._running:
+                break
             try:
                 last_base_score = await self._run_tick()
             except Exception:
@@ -444,7 +454,15 @@ class ProactiveLoop:
         return sense.target_session_key()
 
     def stop(self) -> None:
+        """Stops scheduling ticks while allowing an accepted tick to complete."""
         self._running = False
+        self._stop_requested.set()
+
+    async def _wait_interval(self, seconds: float) -> None:
+        try:
+            await asyncio.wait_for(self._stop_requested.wait(), timeout=seconds)
+        except TimeoutError:
+            pass
 
     def _sample_random_memory(self, n: int = 2) -> list[str]:
         """随机抽取 n 条记忆片段,无记忆时返回 []。"""

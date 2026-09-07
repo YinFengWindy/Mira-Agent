@@ -32,6 +32,7 @@ describe("prepareModelRegistrationRemoval", () => {
                     runtime_config: {
                       dialogue_model_registration_id: "registration-1",
                       visual_model_registration_id: "registration-1",
+                      unrelated_setting: "must remain owned by the role",
                     },
                   }],
                 },
@@ -53,16 +54,12 @@ describe("prepareModelRegistrationRemoval", () => {
         apiKey: "",
         effort: "none",
       },
-      [
-        { id: "registration-1", provider: "openai", model: "gpt-agent", baseUrl: "", apiKey: "", effort: "none" },
-        { id: "registration-2", provider: "openai", model: "gpt-next", baseUrl: "", apiKey: "", effort: "high" },
-      ],
     );
 
     assert.deepEqual(removable, [{
       roleId: "role-1",
       runtimeConfig: {
-        dialogue_model_registration_id: "registration-2",
+        dialogue_model_registration_id: "",
         visual_model_registration_id: "",
       },
     }]);

@@ -4,7 +4,8 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock
 
-from bootstrap.proactive import build_proactive_runtime, _build_role_prompt_resolver
+from agent.config_models import Config
+from bootstrap.proactive import build_memory_optimizer_task, build_proactive_runtime, _build_role_prompt_resolver
 from core.roles import RoleStore
 from agent.core.proactive_turn.gates import (
     ProactiveGateAdapter,
@@ -143,4 +144,63 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
     assert created[1]["event_bus"] is event_bus
     assert created[0]["proactive_gates"] == [proactive_gate]
     assert created[1]["proactive_gates"] == [proactive_gate]
+
+
+def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypatch, tmp_path):
+    config = Config(
+        provider="openai", model="m", api_key="", base_url="http://localhost:11434/v1",
+        proactive=ProactiveConfig(enabled=True), memory_optimizer_enabled=False,
+        memory_optimizer_interval_seconds=7200, max_tokens=128,
+    )
+    agent_loop = MagicMock(processing_state=None)
+    dependencies = {
+        "session_manager": MagicMock(), "provider": MagicMock(), "light_provider": None,
+        "push_tool": MagicMock(), "memory_store": None, "presence": MagicMock(),
+        "agent_loop": agent_loop,
+    }
+    tasks, loops = build_proactive_runtime(config, tmp_path, **dependencies)
+    assert tasks == [] and loops == {}
+
+    memory_store = MagicMock(memory_dir=tmp_path / "memory")
+    mem_tasks, optimizer = build_memory_optimizer_task(
+        config, provider=dependencies["provider"], memory_store=memory_store,
+    )
+    assert mem_tasks == [] and optimizer is None
+
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", role_id="mira", system_prompt="Role prompt")
+    store.update_role(
+        "mira", channel_bindings=[{"channel": "telegram", "chat_id": "42", "allow_from": ["42"]}],
+        proactive={"enabled": True, "target_channel": "telegram", "target_chat_id": "42"},
+    )
+    proactive_loop = MagicMock()
+    proactive_loop.run.return_value = "loop-task"
+    monkeypatch.setattr("bootstrap.proactive.ProactiveLoop", MagicMock(return_value=proactive_loop))
+    optimizer_loop = MagicMock()
+    optimizer_loop.run.return_value = "mem-task"
+    create_optimizer_loop = MagicMock(return_value=optimizer_loop)
+    monkeypatch.setattr("bootstrap.proactive.MemoryOptimizerLoop", create_optimizer_loop)
+    create_optimizer = MagicMock()
+    monkeypatch.setattr("bootstrap.proactive.MemoryOptimizer", create_optimizer)
+
+    config.memory_optimizer_enabled = True
+    agent_loop.processing_state = MagicMock()
+    dependencies["light_provider"] = MagicMock()
+    dependencies["memory_store"] = MagicMock()
+    tasks, loops = build_proactive_runtime(config, tmp_path, **dependencies)
+    assert tasks == ["loop-task"] and loops == {"mira": proactive_loop}
+    mem_tasks, optimizer = build_memory_optimizer_task(
+        config, provider=dependencies["provider"], memory_store=memory_store,
+    )
+    assert mem_tasks == ["mem-task"]
+    assert optimizer is create_optimizer.return_value
+    create_optimizer_loop.assert_called_once_with(optimizer, interval_seconds=7200)
+    assert create_optimizer.call_args.kwargs["memory"] is memory_store
+
+    config.model_registrations = []
+    mem_tasks, optimizer = build_memory_optimizer_task(
+        config, provider=dependencies["provider"], memory_store=memory_store,
+    )
+    assert mem_tasks == [] and optimizer is None
+    create_optimizer.assert_called_once()
 

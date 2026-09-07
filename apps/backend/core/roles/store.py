@@ -51,6 +51,10 @@ class RoleStore:
     def get_role(self, role_id: str) -> RoleRecord | None:
         return self._repository.get_role(role_id)
 
+    def set_default_dialogue_registration(self, registration_id: str) -> None:
+        """Updates the creation default after publishing a configuration generation."""
+        self._default_dialogue_registration_id = registration_id.strip()
+
     def migrate_model_selections(
         self,
         *,
@@ -64,9 +68,7 @@ class RoleStore:
             roles = self.list_roles()
             for role in roles:
                 runtime_config = dict(role.runtime_config)
-                if not str(
-                    runtime_config.get("dialogue_model_registration_id") or ""
-                ).strip():
+                if "dialogue_model_registration_id" not in runtime_config:
                     runtime_config["dialogue_model_registration_id"] = (
                         dialogue_registration_id
                     )
@@ -110,15 +112,12 @@ class RoleStore:
                 raise ValueError(f"role 已存在: {resolved_id}")
             now = now_iso()
             resolved_runtime_config = dict(runtime_config or {})
-            if self._default_dialogue_registration_id:
-                resolved_runtime_config.setdefault(
-                    "dialogue_model_registration_id",
-                    self._default_dialogue_registration_id,
-                )
-                resolved_runtime_config.setdefault(
-                    "visual_model_registration_id",
-                    "",
-                )
+            # Persist explicit absence so a later startup migration cannot bind it.
+            resolved_runtime_config.setdefault(
+                "dialogue_model_registration_id",
+                self._default_dialogue_registration_id,
+            )
+            resolved_runtime_config.setdefault("visual_model_registration_id", "")
             record = RoleRecord(
                 id=resolved_id,
                 name=clean_name,

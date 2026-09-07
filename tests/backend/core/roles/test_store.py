@@ -9,6 +9,34 @@ from core.roles import RoleStore
 from core.roles import assets as assets_module
 
 
+def test_new_unbound_role_remains_unbound_when_models_are_added(tmp_path):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    restarted = RoleStore(tmp_path, default_dialogue_registration_id="new-model")
+    assert restarted.migrate_model_selections(dialogue_registration_id="new-model") == 0
+    assert restarted.get_role("mira").runtime_config["dialogue_model_registration_id"] == ""
+
+
+def test_selection_migration_only_fills_missing_legacy_fields(tmp_path):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store.update_role("mira", runtime_config={"old_setting": True})
+    assert store.migrate_model_selections(dialogue_registration_id="first") == 2
+    assert store.migrate_model_selections(dialogue_registration_id="second") == 0
+    store.update_role("mira", runtime_config={"dialogue_model_registration_id": "deleted"})
+    store.migrate_model_selections(dialogue_registration_id="second")
+    assert store.get_role("mira").runtime_config["dialogue_model_registration_id"] == "deleted"
+
+
+def test_published_creation_default_does_not_rebind_existing_roles(tmp_path):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store.set_default_dialogue_registration("new-model")
+    next_role = store.create_role(name="Next", system_prompt="next")
+    assert next_role.runtime_config["dialogue_model_registration_id"] == "new-model"
+    assert store.get_role("mira").runtime_config["dialogue_model_registration_id"] == ""
+
+
 @pytest.mark.parametrize("failure_phase", ["copy", "manifest"])
 @pytest.mark.parametrize("preexisting_directory", [False, True])
 def test_failed_role_creation_cleans_only_its_own_imported_assets(

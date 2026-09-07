@@ -110,6 +110,9 @@ class _InboundMixin:
         return self._channel_hub.route_inbound(message)
 
     async def _publish_inbound(self, message: InboundMessage) -> None:
+        await self._intake.submit(message)
+
+    async def _accept_inbound(self, message: InboundMessage) -> None:
         if self._channel_hub is not None and not self._channel_hub.is_sender_allowed(
             channel=message.channel,
             chat_id=message.chat_id,

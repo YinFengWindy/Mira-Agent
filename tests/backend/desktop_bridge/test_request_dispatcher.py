@@ -8,6 +8,29 @@ from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
 
 
 @pytest.mark.asyncio
+async def test_runtime_transaction_does_not_block_control_or_new_request_responses():
+    dispatcher = BridgeRequestDispatcher(max_concurrency=1)
+    started = asyncio.Event()
+    release = asyncio.Event()
+    responses = asyncio.Queue()
+
+    async def apply():
+        started.set()
+        await release.wait()
+
+    dispatcher.submit({"method": "runtime.apply"}, apply)
+    try:
+        await asyncio.wait_for(started.wait(), 0.2)
+        for method in ("health", "chat.cancel", "chat.send"):
+            dispatcher.submit({"method": method}, lambda method=method: responses.put(method))
+        completed = [await asyncio.wait_for(responses.get(), 0.2) for _ in range(3)]
+        assert set(completed) == {"health", "chat.cancel", "chat.send"}
+    finally:
+        release.set()
+        await dispatcher.aclose()
+
+
+@pytest.mark.asyncio
 async def test_read_only_request_runs_while_mutation_lane_is_busy() -> None:
     dispatcher = BridgeRequestDispatcher(max_concurrency=2)
     mutation_started = asyncio.Event()

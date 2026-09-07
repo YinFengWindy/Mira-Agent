@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import type { RoleRecord } from "../shared/types";
 import type { SettingsFormData } from "../shared/types";
+import { saveImageSettings } from "./imageSettingsPersistence";
 import type {
   ImageGenerateResult,
   ImageHistoryRecord,
@@ -211,64 +212,25 @@ export function useImageStudioState({ active, activeRole, roles }: UseImageStudi
     }
   }
 
-  async function handleToggleNsfwEnabled(): Promise<void> {
+  async function persistImageSettings(patch: Partial<SettingsFormData["integrations"]>): Promise<void> {
     if (!settingsFormData) return;
-    const nextFormData: SettingsFormData = {
-      ...settingsFormData,
-      integrations: {
-        ...settingsFormData.integrations,
-        novelaiNsfwEnabled: !settingsFormData.integrations.novelaiNsfwEnabled,
-      },
-    };
-    setSettingsFormData(nextFormData);
     try {
-      await window.miraDesktop.saveSettings(nextFormData);
-      const refreshed = await window.miraDesktop.readSettings();
-      setSettingsFormData(refreshed.formData);
+      setSettingsFormData(await saveImageSettings(window.miraDesktop, patch));
     } catch (saveError) {
-      setSettingsFormData(settingsFormData);
       setError(saveError instanceof Error ? saveError.message : String(saveError));
     }
+  }
+
+  async function handleToggleNsfwEnabled(): Promise<void> {
+    await persistImageSettings({ novelaiNsfwEnabled: !nsfwEnabled });
   }
 
   async function handleToggleAddQualityTags(): Promise<void> {
-    if (!settingsFormData) return;
-    const nextFormData: SettingsFormData = {
-      ...settingsFormData,
-      integrations: {
-        ...settingsFormData.integrations,
-        novelaiAddQualityTags: !settingsFormData.integrations.novelaiAddQualityTags,
-      },
-    };
-    setSettingsFormData(nextFormData);
-    try {
-      await window.miraDesktop.saveSettings(nextFormData);
-      const refreshed = await window.miraDesktop.readSettings();
-      setSettingsFormData(refreshed.formData);
-    } catch (saveError) {
-      setSettingsFormData(settingsFormData);
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    }
+    await persistImageSettings({ novelaiAddQualityTags: !addQualityTags });
   }
 
   async function handleChangeUndesiredContentPreset(value: number): Promise<void> {
-    if (!settingsFormData) return;
-    const nextFormData: SettingsFormData = {
-      ...settingsFormData,
-      integrations: {
-        ...settingsFormData.integrations,
-        novelaiUndesiredContentPreset: value,
-      },
-    };
-    setSettingsFormData(nextFormData);
-    try {
-      await window.miraDesktop.saveSettings(nextFormData);
-      const refreshed = await window.miraDesktop.readSettings();
-      setSettingsFormData(refreshed.formData);
-    } catch (saveError) {
-      setSettingsFormData(settingsFormData);
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    }
+    await persistImageSettings({ novelaiUndesiredContentPreset: value });
   }
 
   return {

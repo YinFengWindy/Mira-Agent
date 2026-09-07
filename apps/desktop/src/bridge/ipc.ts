@@ -9,7 +9,7 @@ import type { DesktopBridgeClient } from "./bridgeClient.js";
 import { importLocalAssets } from "../assets/localAssetImport.js";
 import type { LocalAssetRegistry } from "../assets/localAssetRegistry.js";
 import { maxLocalAssetBytes } from "../assets/localAssetContract.js";
-import { loadSettingsData, saveSettings } from "../settings.js";
+import { applyRuntimeSettings, readRuntimeSettings } from "../settingsRuntime.js";
 import type { DesktopPetController } from "../pet/controller.js";
 import type { DesktopObservationController } from "../observation/controller.js";
 import type { BrowserVoiceRecorder } from "../voice/recorder.js";
@@ -24,6 +24,7 @@ import type {
   LocalAssetTransport,
   RendererDiagnosticPayload,
   SettingsFormData,
+  SettingsSaveOptions,
 } from "./shared.js";
 import type { WindowControlAction } from "./shared.js";
 
@@ -175,23 +176,11 @@ export function registerDesktopIpc({
     }
   });
   ipcMain.handle("desktop:settings-read", async () => {
-    return loadSettingsData();
+    return readRuntimeSettings(bridge);
   });
-  ipcMain.handle("desktop:settings-save", async (_event: IpcMainInvokeEvent, formData: SettingsFormData) => {
-    const result = await saveSettings(
-      formData,
-      async () => {
-        const health = await bridge.invoke({
-          method: "health",
-          payload: {},
-        });
-        return {
-          ok: !health.error,
-          message: health.error?.message ?? "ok",
-        };
-      },
-    );
-    onVoiceSettingsChanged?.();
+  ipcMain.handle("desktop:settings-save", async (_event: IpcMainInvokeEvent, formData: SettingsFormData, options?: SettingsSaveOptions) => {
+    const result = await applyRuntimeSettings(bridge, formData, options);
+    if (result.ok) onVoiceSettingsChanged?.();
     return result;
   });
   ipcMain.handle("desktop:window-control", (event: IpcMainInvokeEvent, action: WindowControlAction) => {

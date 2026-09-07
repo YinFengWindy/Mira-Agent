@@ -1,19 +1,25 @@
 import type { ModelRegistrationFormData, PendingRoleModelUpdate } from "../../../src/bridge/shared";
 import type { RoleRecord } from "../shared/types";
 
-/** Confirms a registration removal and migrates role references before deletion. */
+/** Confirms removal and stages unbinding without implicitly selecting another model. */
 export async function prepareModelRegistrationRemoval(
   registration: ModelRegistrationFormData,
-  registrations: ModelRegistrationFormData[],
+  pendingUpdates: PendingRoleModelUpdate[] = [],
 ): Promise<PendingRoleModelUpdate[] | null> {
-  if (registrations.length <= 1) return null;
   const response = await window.miraDesktop.invoke({ method: "roles.list", payload: {} });
   if (response.error) {
     window.alert(response.error.message);
     return null;
   }
   const roles = Array.isArray(response.payload.roles) ? response.payload.roles as RoleRecord[] : [];
-  const affectedRoles = roles.filter((role) => (
+  const effectiveRoles = roles.map((role) => ({
+    ...role,
+    runtime_config: {
+      ...role.runtime_config,
+      ...pendingUpdates.find((update) => update.roleId === role.id)?.runtimeConfig,
+    },
+  }));
+  const affectedRoles = effectiveRoles.filter((role) => (
     role.runtime_config.dialogue_model_registration_id === registration.id
     || role.runtime_config.visual_model_registration_id === registration.id
   ));
@@ -22,13 +28,11 @@ export async function prepareModelRegistrationRemoval(
     : "";
   if (!window.confirm(`删除模型注册“${registration.model}”？${impact}`)) return null;
 
-  const fallbackId = registrations.find((item) => item.id !== registration.id)?.id ?? "";
   return affectedRoles.map((role) => ({
     roleId: role.id,
     runtimeConfig: {
-      ...role.runtime_config,
       dialogue_model_registration_id: role.runtime_config.dialogue_model_registration_id === registration.id
-        ? fallbackId
+        ? ""
         : role.runtime_config.dialogue_model_registration_id,
       visual_model_registration_id: role.runtime_config.visual_model_registration_id === registration.id
         ? ""

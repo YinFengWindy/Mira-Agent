@@ -159,6 +159,8 @@ export class VoiceHotkeyController {
   private hotkey: ParsedHotkey | null = null;
   private registered = false;
   private pressed = false;
+  private pendingHotkey: string | null = null;
+  private stopAfterRelease = false;
 
   constructor(
     private readonly callbacks: VoiceHotkeyCallbacks,
@@ -168,13 +170,20 @@ export class VoiceHotkeyController {
   /** Sets the user-visible accelerator; an empty value disables it. */
   setHotkey(value: string): boolean {
     const parsed = parseHotkey(value);
+    const valid = parsed !== null || value.trim() === "";
+    if (this.pressed) {
+      this.pendingHotkey = value;
+      return valid;
+    }
+    if (JSON.stringify(parsed) === JSON.stringify(this.hotkey)) return valid;
     this.hotkey = parsed;
     if (this.registered) this.restartHook();
-    return parsed !== null || value.trim() === "";
+    return valid;
   }
 
   /** Registers the global hook only when a valid hotkey is configured. */
   start(): boolean {
+    this.stopAfterRelease = false;
     if (this.registered || !this.hotkey) return Boolean(this.hotkey);
     this.hook.on("keydown", this.onKeyDownBound).on("keyup", this.onKeyUpBound);
     this.hook.start();
@@ -190,13 +199,23 @@ export class VoiceHotkeyController {
     this.hook.stop();
     this.registered = false;
     this.pressed = false;
+    this.stopAfterRelease = false;
+    if (this.pendingHotkey !== null) {
+      const pending = this.pendingHotkey;
+      this.pendingHotkey = null;
+      this.setHotkey(pending);
+    }
+  }
+
+  /** Disables new gestures while allowing an already held recording to reach keyup. */
+  stopAfterCurrentPress(): void {
+    if (this.pressed) this.stopAfterRelease = true;
+    else this.stop();
   }
 
   private restartHook(): void {
     const wasRegistered = this.registered;
-    const wasPressed = this.pressed;
     this.stop();
-    if (wasPressed) this.callbacks.onCancel();
     if (wasRegistered) this.start();
   }
 
@@ -205,7 +224,7 @@ export class VoiceHotkeyController {
       this.callbacks.onCancel();
       return;
     }
-    if (!this.hotkey || this.pressed || !matchesHotkey(event, this.hotkey)) return;
+    if (!this.hotkey || this.pressed || this.stopAfterRelease || !matchesHotkey(event, this.hotkey)) return;
     this.pressed = true;
     this.callbacks.onPress("hotkey");
   }
@@ -214,6 +233,13 @@ export class VoiceHotkeyController {
     if (!this.hotkey || !this.pressed || event.keycode !== this.hotkey.keycode) return;
     this.pressed = false;
     this.callbacks.onRelease("hotkey");
+    if (this.stopAfterRelease) {
+      this.stop();
+    } else if (this.pendingHotkey !== null) {
+      const pending = this.pendingHotkey;
+      this.pendingHotkey = null;
+      this.setHotkey(pending);
+    }
   }
 }
 

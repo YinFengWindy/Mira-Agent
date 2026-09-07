@@ -6,13 +6,14 @@ import logging
 import sys
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
+from pathlib import Path
 
+from bootstrap.app import AppRuntime
 from bootstrap.tools import CoreRuntime
-from core.integrations.novelai.store import NovelAIStore
 from core.roles import RoleStore
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
-from desktop_bridge.service import DesktopBridgeService
+from desktop_bridge.runtime_service_factory import build_desktop_service
 from desktop_bridge.stream_writer import BridgeStreamWriter
 from bus.events_lifecycle import DesktopPetActionRequested
 
@@ -25,43 +26,22 @@ WritePayload = Callable[[dict[str, Any]], Awaitable[None]]
 class DesktopBridgeServer:
     """Serves the desktop JSON-lines bridge for one application runtime."""
 
-    def __init__(self, runtime: CoreRuntime) -> None:
+    def __init__(self, runtime: CoreRuntime, *, app: AppRuntime | None = None,
+                 config_path: Path | None = None) -> None:
         self.runtime = runtime
-        self.role_store = RoleStore(runtime.session_manager.workspace)
-        spawn_tool = (
-            runtime.tools.get_tool("spawn") if getattr(runtime, "tools", None) else None
-        )
-        image_tool = (
-            runtime.tools.get_tool("generate_image")
-            if getattr(runtime, "tools", None)
-            else None
-        )
-        observation_service = getattr(runtime, "screen_observation", None)
-        self.service = DesktopBridgeService(
-            workspace=runtime.session_manager.workspace,
-            role_store=self.role_store,
-            session_manager=runtime.session_manager,
-            agent_loop=runtime.loop,
-            event_bus=runtime.event_bus,
-            config=getattr(runtime, "config", None),
-            novelai_store=NovelAIStore(runtime.session_manager.workspace),
-            push_tool=getattr(runtime, "push_tool", None),
-            relationship_runtime=getattr(runtime, "relationship_runtime", None),
-            presence=getattr(runtime, "presence", None),
-            scheduler=getattr(runtime, "scheduler", None),
-            subagent_manager=getattr(spawn_tool, "manager", None),
-            memory_optimizer=getattr(runtime, "memory_optimizer", None),
-            observation_service=observation_service,
-            role_runtime_registry=getattr(runtime, "role_runtime_registry", None),
-            image_tool=image_tool,
-            memory_engine=getattr(
-                getattr(runtime, "memory_runtime", None),
-                "engine",
-                None,
-            ),
-        )
+        repository = getattr(getattr(runtime, "role_runtime_registry", None), "_repository", None)
+        self.role_store = repository.store if repository is not None else RoleStore(runtime.session_manager.workspace)
+        self._event_bus = runtime.event_bus if app is None else app.event_bus
+        if app is not None:
+            if config_path is None:
+                raise ValueError("config_path required for runtime reload")
+            from desktop_bridge.runtime_service import ReloadableDesktopService
+
+            self.service = ReloadableDesktopService(app, config_path, self.role_store)
+        else:
+            self.service = build_desktop_service(runtime, self.role_store)
         self._pet_action_handler = self._handle_pet_action
-        runtime.event_bus.on(DesktopPetActionRequested, self._pet_action_handler)
+        self._event_bus.on(DesktopPetActionRequested, self._pet_action_handler)
 
     async def serve_streams(
         self,
@@ -139,7 +119,7 @@ class DesktopBridgeServer:
                         continue
                 await writer.write(response.to_dict())
         finally:
-            self.runtime.event_bus.off(
+            self._event_bus.off(
                 DesktopPetActionRequested,
                 self._pet_action_handler,
             )

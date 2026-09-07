@@ -72,6 +72,7 @@ function createSettingsSnapshot(
 ): SettingsSnapshot {
   return {
     configPath: "D:\\Coding\\Shiori\\config.toml",
+    generation: 2,
     formData: createSettingsFormData(overrides),
   };
 }
@@ -104,24 +105,23 @@ describe("saveSettingsPageData", () => {
           calls.push("saveSettings");
           return {
             ok: true,
-            health: { ok: true, message: "ok" },
+            generation: 2,
           };
         },
         readSettings: async () => {
           calls.push("readSettings");
           return persistedSnapshot;
         },
-        invoke: async () => ({ id: "", type: "response", method: "roles.update", payload: {}, error: null }),
-      } satisfies Pick<DesktopApi, "readSettings" | "saveSettings" | "invoke">,
+      } satisfies Pick<DesktopApi, "readSettings" | "saveSettings">,
       createSettingsFormData({ registrations: [{ id: "00000000-0000-4000-a000-000000000001", provider: "openai", model: "draft-model", apiKey: "", baseUrl: "", effort: "none" }] }),
     );
 
     assert.deepEqual(calls, ["saveSettings", "readSettings"]);
-    assert.equal(result.snapshot.formData.models.registrations[0]?.model, "saved-model");
+    assert.equal(result.snapshot?.formData.models.registrations[0]?.model, "saved-model");
     assert.equal(result.nextDraft.channels.telegramToken, "");
   });
 
-  it("commits deferred role reference changes only after settings save", async () => {
+  it("commits deferred role reference changes in the same settings request", async () => {
     const calls: string[] = [];
     const draft = createSettingsFormData();
     draft.pendingRoleModelUpdates = [{
@@ -132,30 +132,26 @@ describe("saveSettingsPageData", () => {
     await saveSettingsPageData({
       saveSettings: async (value) => {
         calls.push(`save:${String("pendingRoleModelUpdates" in value)}`);
-        return { ok: true, health: { ok: true, message: "ok" } };
-      },
-      invoke: async (request) => {
-        calls.push(`${request.method}:${String(request.payload.role_id)}`);
-        return { id: "", type: "response", method: request.method, payload: {}, error: null };
+        assert.deepEqual(value.pendingRoleModelUpdates, draft.pendingRoleModelUpdates);
+        return { ok: true, generation: 2 };
       },
       readSettings: async () => snapshot,
     }, draft);
-    assert.deepEqual(calls, ["save:false", "roles.update:role-1"]);
+    assert.deepEqual(calls, ["save:true"]);
   });
 
-  it("keeps deferred role changes when the settings health check fails", async () => {
+  it("keeps the entire draft and bindings when apply fails without reading stale settings", async () => {
     const draft = createSettingsFormData();
     draft.pendingRoleModelUpdates = [{ roleId: "role-1", runtimeConfig: { dialogue_model_registration_id: "registration-2" } }];
+    draft.channels.telegramToken = "unsaved-token";
     const result = await saveSettingsPageData({
       saveSettings: async () => ({
         ok: false,
-        health: { ok: false, message: "bridge unavailable" },
+        error: { code: "runtime_apply_failed", message: "bridge unavailable" },
       }),
-      invoke: async () => {
-        throw new Error("role updates must wait for a healthy bridge");
-      },
-      readSettings: async () => createSettingsSnapshot(),
+      readSettings: async () => { throw new Error("failed apply must not reload settings"); },
     }, draft);
-    assert.deepEqual(result.nextDraft.pendingRoleModelUpdates, draft.pendingRoleModelUpdates);
+    assert.deepEqual(result.nextDraft, draft);
+    assert.equal(result.snapshot, null);
   });
 });

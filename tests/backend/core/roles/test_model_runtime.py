@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from agent.config_models import ModelRegistration
-from core.roles.model_runtime import RoleModelRuntime
+from core.roles.model_runtime import ModelConfigurationError, RoleModelRuntime
 from core.roles.store import RoleStore
 
 
@@ -14,6 +19,68 @@ def registration(identifier: str, model: str) -> ModelRegistration:
         model=model,
         effort="none",
     )
+
+
+def test_empty_runtime_keeps_roles_browsable_and_reports_missing_capability(tmp_path):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    runtime = RoleModelRuntime(role_store=store, registrations=[])
+    assert runtime.first_registration_id == ""
+    assert runtime.availability("mira")["reason"] == "no_models"
+    with pytest.raises(ModelConfigurationError) as caught:
+        runtime.resolve("mira", "chat")
+    assert caught.value.to_details()["role_id"] == "mira"
+    assert store.get_role("mira") is not None
+
+
+@pytest.mark.parametrize("binding,reason", [("", "role_unbound"), ("deleted", "registration_missing")])
+def test_runtime_reports_unbound_and_dangling_model_choices(tmp_path, binding, reason):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={
+        "dialogue_model_registration_id": binding,
+    })
+    runtime = RoleModelRuntime(role_store=store, registrations=[registration("model", "chat")])
+    assert runtime.availability("mira")["reason"] == reason
+
+
+def test_availability_does_not_construct_provider_and_reports_incomplete_fields(tmp_path):
+    store = RoleStore(tmp_path, default_dialogue_registration_id="model")
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    runtime = RoleModelRuntime(role_store=store, registrations=[replace(
+        registration("model", "chat"), api_key="${MISSING_KEY}", model="",
+    )])
+    with patch("core.roles.model_runtime.LLMProvider", side_effect=AssertionError("network client")):
+        availability = runtime.availability("mira")
+    assert availability["reason"] == "connection_incomplete"
+    assert availability["fields"] == ["model", "api_key"]
+
+
+def test_accepted_snapshot_is_retained_for_nested_activation(tmp_path):
+    store = RoleStore(tmp_path, default_dialogue_registration_id="first")
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
+    with runtime.activate("mira", "chat") as accepted:
+        store.update_role("mira", runtime_config={"dialogue_model_registration_id": ""})
+        with runtime.activate("mira", "chat") as nested:
+            assert nested is accepted
+    with pytest.raises(ModelConfigurationError):
+        runtime.resolve("mira", "chat")
+
+
+@pytest.mark.asyncio
+async def test_generation_reuses_provider_and_releases_it_once_on_close(tmp_path):
+    store = RoleStore(tmp_path, default_dialogue_registration_id="first")
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
+    with patch("core.roles.model_runtime.LLMProvider") as provider_class:
+        provider_class.return_value.aclose = AsyncMock()
+        first = runtime.resolve("mira", "chat")
+        second = runtime.resolve("mira", "chat")
+        assert first.provider is second.provider
+        provider_class.assert_called_once()
+        await runtime.aclose()
+        await runtime.aclose()
+        first.provider.aclose.assert_awaited_once()
 
 
 def test_runtime_resolves_dialogue_and_visual_fallback(tmp_path) -> None:

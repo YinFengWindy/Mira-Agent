@@ -11,7 +11,6 @@ import asyncio
 import hashlib
 import logging
 import re
-import sys
 import threading
 import traceback
 import types
@@ -22,6 +21,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from core.error_context import current_session_key as current_session_key
+from core.common.global_hook_stack import install_global_hooks, uninstall_global_hooks
 from .events import GlobalErrorTrace
 
 _SysExceptHook = Callable[[type[BaseException], BaseException, "types.TracebackType | None"], object]
@@ -90,14 +90,7 @@ class GlobalErrorCollector:
         self._installed = True
         # 1. root logging handler（level >= ERROR）
         handler = _CollectorLogHandler(self)
-        logging.getLogger().addHandler(handler)
         self._log_handler = handler
-        # 2. 同步未捕获异常
-        self._prev_excepthook = sys.excepthook
-        sys.excepthook = self._on_sys_except
-        # 3. 线程崩溃
-        self._prev_threadhook = threading.excepthook
-        threading.excepthook = self._on_thread_except
         # 4. asyncio 任务异常 + flush task
         try:
             loop = asyncio.get_running_loop()
@@ -105,9 +98,10 @@ class GlobalErrorCollector:
             loop = None
         if loop is not None:
             self._loop = loop
-            self._prev_loop_handler = loop.get_exception_handler()
-            loop.set_exception_handler(self._on_loop_except)
             self._flush_task = loop.create_task(self._flush_loop(), name="observe_error_flush")
+        self._prev_excepthook, self._prev_threadhook, self._prev_loop_handler = install_global_hooks(
+            self, handler, self._on_sys_except, self._on_thread_except, loop, self._on_loop_except,
+        )
         logger.info("global error collector installed")
 
     async def uninstall(self) -> None:
@@ -115,15 +109,8 @@ class GlobalErrorCollector:
             return
         self._installed = False
         # 1. 还原钩子
-        if self._log_handler is not None:
-            logging.getLogger().removeHandler(self._log_handler)
-            self._log_handler = None
-        if self._prev_excepthook is not None:
-            sys.excepthook = self._prev_excepthook
-        if self._prev_threadhook is not None:
-            threading.excepthook = self._prev_threadhook
-        if self._loop is not None:
-            self._loop.set_exception_handler(self._prev_loop_handler)
+        uninstall_global_hooks(self)
+        self._log_handler = None
         # 2. 停 flush task 并最终 flush
         if self._flush_task is not None:
             _ = self._flush_task.cancel()

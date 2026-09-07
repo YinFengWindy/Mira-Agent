@@ -3,6 +3,7 @@ from typing import Any, cast
 
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from agent.tools.registry import ToolRegistry
 from bootstrap.toolsets.protocol import (
@@ -72,7 +73,7 @@ def test_build_registered_tools_uses_toolset_providers(monkeypatch, tmp_path: Pa
             calls.append("mcp")
             return ToolsetRegistrationResult(
                 source_name="mcp",
-                extras={"mcp_registry": object()},
+                extras={"mcp_registry": SimpleNamespace(shutdown=AsyncMock())},
             )
 
     monkeypatch.setattr(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from agent.looping.core import AgentLoop
@@ -22,6 +22,7 @@ from desktop_bridge.voice.tts_coordinator import TtsTurnCoordinator
 from desktop_bridge.voice.voice_service import VoiceService
 from session.manager import Session, SessionManager
 from session.manager.models import INTERRUPTED_TURN_METADATA_KEY
+from core.common.runtime_tasks import create_runtime_task
 
 logger = logging.getLogger("desktop.bridge.chat")
 
@@ -67,6 +68,7 @@ class _DesktopChatTurn:
     task: asyncio.Task[None]
     turn_id: str
     voice_turn_id: str
+    completed: bool = False
 
 
 class DesktopChatService:
@@ -106,7 +108,7 @@ class DesktopChatService:
         """Returns whether the session already has an active desktop turn."""
 
         turn = self._tasks_by_session.get(session_key)
-        return turn is not None and not turn.task.done()
+        return turn is not None and not turn.completed and not turn.task.done()
 
     def cancel_chat_turn(
         self,
@@ -624,6 +626,16 @@ class DesktopChatService:
         if self.is_busy(session_key):
             raise ChatTurnBusyError(f"会话 {session_key} 已有正在执行的聊天任务")
 
+        terminal_events: list[dict[str, Any]] = []
+
+        async def emit_turn_event(payload):
+            # Completion enables the next send in the renderer. Publish it only
+            # after the role turn and persistence have released their ownership.
+            if terminal_events or payload.get("method") in {"chat.done", "chat.error"}:
+                terminal_events.append(payload)
+            else:
+                await self._emit_payload(emit_event, payload)
+
         async def _runner() -> None:
             try:
                 _ = await self.run_chat_turn(
@@ -634,19 +646,25 @@ class DesktopChatService:
                     media=media,
                     metadata=metadata,
                     omit_user_turn=omit_user_turn,
-                    emit_event=emit_event,
+                    emit_event=emit_turn_event,
                 )
             except asyncio.CancelledError:
                 return
             except Exception:
                 logger.exception("desktop chat turn failed: %s", session_key)
+            finally:
+                owner = self._tasks_by_session.get(session_key)
+                if owner is not None and owner.task is asyncio.current_task():
+                    self._tasks_by_session[session_key] = replace(owner, completed=True)
+                for event in terminal_events:
+                    await self._emit_payload(emit_event, event)
 
         voice_turn_id = (
             str(metadata.get("voice_turn_id") or "").strip()
             if isinstance(metadata, dict) and metadata.get("input_method") == "voice"
             else ""
         )
-        task = asyncio.create_task(_runner(), name=f"desktop-chat:{session_key}")
+        task = create_runtime_task(_runner(), name=f"desktop-chat:{session_key}")
         self._tasks_by_session[session_key] = _DesktopChatTurn(
             task=task,
             turn_id=turn_id,
@@ -685,6 +703,18 @@ class DesktopChatService:
 
         if self._tts_tasks:
             _ = await asyncio.gather(*list(self._tts_tasks))
+
+    async def drain(self) -> None:
+        """Waits for accepted turns and their TTS children without cancelling them."""
+        while self._tasks_by_session or self._tts_tasks:
+            tasks = [turn.task for turn in self._tasks_by_session.values()]
+            tasks.extend(self._tts_tasks)
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.sleep(0)
+
+    def owns_voice_turn(self, turn_id: str) -> bool:
+        """Identifies the generation that owns a voice cancellation request."""
+        return turn_id in self._voice_turn_tasks or turn_id in self._tts_coordinators
 
     def _create_tts_coordinator(
         self,
@@ -729,7 +759,7 @@ class DesktopChatService:
         return coordinator
 
     def _track_tts(self, coordinator: TtsTurnCoordinator) -> None:
-        task = asyncio.create_task(
+        task = create_runtime_task(
             coordinator.wait(), name=f"desktop-tts-wait:{id(coordinator)}"
         )
         self._tts_tasks.add(task)

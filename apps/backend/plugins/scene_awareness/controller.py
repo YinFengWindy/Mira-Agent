@@ -14,6 +14,7 @@ from bus.events_lifecycle import (
     SceneTurnSource,
 )
 from core.roles.store import RoleStore
+from core.common.runtime_tasks import create_runtime_task
 from plugins.scene_awareness.contracts import (
     SceneDecision,
     SceneDecisionInput,
@@ -185,7 +186,7 @@ class SceneAwarenessController:
         )
 
     def _schedule(self, pending: _PendingTurn, *, assistant_reply: str) -> None:
-        task = asyncio.create_task(
+        task = create_runtime_task(
             self._run(pending, assistant_reply=assistant_reply),
             name=f"scene_awareness:{pending.session_key}",
         )

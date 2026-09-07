@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -20,6 +21,8 @@ from plugins.scene_awareness.contracts import SceneDecisionProtocolError
 from plugins.scene_awareness.controller import SceneAwarenessController
 from plugins.scene_awareness.decision import SceneDecision
 from session.manager import SessionManager
+from bootstrap.runtime_generations import RuntimeCandidate
+from core.common.runtime_scope import bind_runtime, current_runtime_lease
 
 
 def _controller(
@@ -46,6 +49,33 @@ def _controller(
         light_model="light-model",
         decision_provider=decision_provider,
     )
+
+
+@pytest.mark.asyncio
+async def test_scene_task_prevents_retired_runtime_from_terminating_its_controller(tmp_path):
+    controller = _controller(tmp_path, event_bus=EventBus(), decision_provider=AsyncMock())
+    started, finish = asyncio.Event(), asyncio.Event()
+    observed = []
+
+    async def run(*args, **kwargs):
+        observed.append(current_runtime_lease().generation)
+        started.set()
+        await finish.wait()
+
+    controller._run = run
+    core = SimpleNamespace(stop=AsyncMock(side_effect=controller.terminate), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    generation = RuntimeCandidate(3, core, SimpleNamespace())
+    parent = generation.acquire()
+    with bind_runtime(parent):
+        controller._schedule(SimpleNamespace(session_key="role:mira"), assistant_reply="scene")
+    await parent.release()
+    await generation.retire()
+    await started.wait()
+    core.stop.assert_not_awaited()
+    finish.set()
+    await asyncio.wait_for(generation.drained.wait(), timeout=1)
+    assert observed == [3]
+    core.stop.assert_awaited_once()
 
 
 @pytest.mark.asyncio

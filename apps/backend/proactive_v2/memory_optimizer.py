@@ -438,8 +438,11 @@ class MemoryOptimizerLoop:
         self._interval = max(60, interval_seconds)
         self._now_fn = _now_fn or datetime.now
         self._running = False
+        self._stop_requested = asyncio.Event()
 
     async def run(self) -> None:
+        if self._stop_requested.is_set():
+            return
         self._running = True
         await self._catch_up_overdue_roles()
         logger.info(
@@ -454,7 +457,10 @@ class MemoryOptimizerLoop:
                 secs,
                 secs / 3600,
             )
-            await asyncio.sleep(secs)
+            try:
+                await asyncio.wait_for(self._stop_requested.wait(), timeout=secs)
+            except TimeoutError:
+                pass
             if not self._running:
                 break
             try:
@@ -463,12 +469,16 @@ class MemoryOptimizerLoop:
                     if workspace:
                         role_store = RoleStore(Path(workspace))
                         for role in role_store.list_roles():
+                            if not self._running:
+                                break
                             await self._optimizer.optimize(role_id=role.id)
             except Exception:
                 logger.exception("[memory_optimizer] 优化异常")
 
     def stop(self) -> None:
+        """Stops future optimization batches without cancelling the active role."""
         self._running = False
+        self._stop_requested.set()
 
     async def _catch_up_overdue_roles(self) -> None:
         optimizer = self._optimizer
@@ -480,6 +490,8 @@ class MemoryOptimizerLoop:
         role_store = RoleStore(Path(workspace))
         now = self._now_fn().astimezone()
         for role in role_store.list_roles():
+            if self._stop_requested.is_set():
+                break
             if not self._is_role_overdue(role, now=now):
                 continue
             try:

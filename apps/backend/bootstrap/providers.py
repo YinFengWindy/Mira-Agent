@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from agent.config_models import Config
 from infra.providers.llm_provider import LLMProvider
+from core.roles.model_errors import ModelConfigurationError, incomplete_registration_fields
+from bootstrap.runtime_construction import track_build_resource
 
 _MAIN_PROVIDER_TIMEOUT_S = 45.0
 _LIGHT_PROVIDER_TIMEOUT_S = 45.0
@@ -9,9 +11,28 @@ _MAIN_STREAM_IDLE_TIMEOUT_S = 45.0
 _LIGHT_STREAM_IDLE_TIMEOUT_S = 45.0
 
 
+class UnconfiguredProvider(LLMProvider):
+    """Keeps local services available while rejecting model-dependent work."""
+
+    def __init__(self, reason: str) -> None:
+        self._reason = reason
+
+    async def chat(self, *args, **kwargs):
+        """Reports missing configuration at the actual model invocation boundary."""
+        raise ModelConfigurationError(reason=self._reason, role_id="", purpose="chat")
+
+    async def aclose(self) -> None:
+        """An unavailable provider owns no network resources."""
+
+
 def build_providers(
     config: Config,
 ) -> tuple[LLMProvider, LLMProvider | None, LLMProvider | None]:
+    """Builds the global provider without inventing a default model registration."""
+    if not config.model_registrations:
+        return UnconfiguredProvider("no_models"), None, None
+    if incomplete_registration_fields(config.model_registrations[0]):
+        return UnconfiguredProvider("connection_incomplete"), None, None
     payload_snapshot_enabled = bool(getattr(config, "dev_mode", False))
     main_extra = _sanitize_extra_body(
         base_url=config.base_url,
@@ -26,6 +47,7 @@ def build_providers(
         provider_name=config.provider,
         payload_snapshot_enabled=payload_snapshot_enabled,
     )
+    track_build_resource(provider, provider.aclose)
 
     return provider, None, None
 

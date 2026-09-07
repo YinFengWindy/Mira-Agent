@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from agent.config_models import Config
 from agent.looping.core import AgentLoop
@@ -60,6 +60,7 @@ def build_proactive_runtime(
     tool_hooks: list[ToolHook] | None = None,
     proactive_gates: list[ProactiveGate] | None = None,
     event_bus: "EventBus | None" = None,
+    provider_consumer: Callable[[LLMProvider], None] | None = None,
 ) -> tuple[list, dict[str, ProactiveLoop]]:
     tasks: list = []
     roles = [role for role in RoleStore(workspace).list_roles() if role.proactive.enabled]
@@ -68,6 +69,8 @@ def build_proactive_runtime(
 
     # 2. 为每个角色创建独立配置、状态与 agent loop。
     proactive_provider = _build_proactive_provider(config, provider)
+    if provider_consumer is not None and proactive_provider is not provider:
+        provider_consumer(proactive_provider)
     loops: dict[str, ProactiveLoop] = {}
     role_runtime_registry = agent_loop.role_runtime_registry
     role_aware_provider = RoleAwareProvider(proactive_provider)
@@ -184,8 +187,9 @@ def build_memory_optimizer_task(
     provider: LLMProvider,
     memory_store: "MarkdownMemoryStore",
     role_runtime_registry: "RoleRuntimeRegistry | None" = None,
+    loop_consumer: Callable[[MemoryOptimizerLoop], None] | None = None,
 ) -> tuple[list, "MemoryOptimizer | None"]:
-    if not config.memory_optimizer_enabled:
+    if not config.memory_optimizer_enabled or not config.model_registrations:
         logger.info("MemoryOptimizerLoop 已禁用（memory_optimizer_enabled=false）")
         return [], None
 
@@ -198,4 +202,7 @@ def build_memory_optimizer_task(
     )
     interval = config.memory_optimizer_interval_seconds
     logger.info("MemoryOptimizerLoop 已启动，间隔=%ss (%.1fh)", interval, interval / 3600)
-    return [MemoryOptimizerLoop(mem_optimizer, interval_seconds=interval).run()], mem_optimizer
+    loop = MemoryOptimizerLoop(mem_optimizer, interval_seconds=interval)
+    if loop_consumer is not None:
+        loop_consumer(loop)
+    return [loop.run()], mem_optimizer

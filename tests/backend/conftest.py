@@ -35,6 +35,10 @@ if "openai" not in sys.modules:
     class AsyncOpenAI:
         def __init__(self, *args, **kwargs):
             self.chat = _DummyChat()
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
 
     openai_stub.AsyncOpenAI = AsyncOpenAI
     sys.modules["openai"] = openai_stub

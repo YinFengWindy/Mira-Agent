@@ -11,6 +11,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from agent.looping.interrupt import InterruptController
 from bus.event_bus import EventBus
+from bus.event_binding import EventBinding
 from bus.events_lifecycle import (
     StreamDeltaReady,
     ToolCallCompleted,
@@ -21,6 +22,7 @@ from bus.queue import MessageBus
 from core.channels import ChannelHub
 from infra.channels.base import AttachmentStore, MessageDeduper, SessionIdentityIndex
 from infra.channels.contract import ChannelContext
+from infra.channels.intake import ChannelIntake
 from infra.channels.telegram_utils import (
     TelegramLiveEditQueue,
     TelegramLiveTextMessage,
@@ -99,6 +101,14 @@ class TelegramChannel(
         self._event_bus = event_bus
         self._outbound_bound = False
         self._events_bound = False
+        self._push_tool = None
+        self._intake = ChannelIntake(self._accept_inbound, self.send)
+        self._event_bindings = (
+            EventBinding(TurnStarted, self._on_turn_started),
+            EventBinding(StreamDeltaReady, self._on_stream_delta),
+            EventBinding(ToolCallStarted, self._on_tool_call_started),
+            EventBinding(ToolCallCompleted, self._on_tool_call_completed),
+        )
         self.user_map = self._identity_index.mapping
         self._polling_conflict_task: asyncio.Task[None] | None = None
         self._telegram_outbound_limiter = TelegramOutboundLimiter()
@@ -118,10 +128,12 @@ class TelegramChannel(
         return self._app.bot
 
     async def start(self, ctx: ChannelContext | None = None) -> None:
+        self._intake.start(paused=ctx.intake_paused if ctx is not None else False)
         if ctx is not None:
             self._bus = ctx.bus
             self._event_bus = ctx.event_bus
             self._interrupt_controller = ctx.interrupt_controller
+            self._push_tool = ctx.push_tool
             ctx.push_tool.register_channel(
                 self.name,
                 text=self.send,
@@ -149,13 +161,38 @@ class TelegramChannel(
             self._bus.subscribe_outbound(self._channel, self._on_response)
             self._outbound_bound = True
         if self._event_bus is not None and not self._events_bound:
-            self._event_bus.on(TurnStarted, self._on_turn_started)
-            self._event_bus.on(StreamDeltaReady, self._on_stream_delta)
-            self._event_bus.on(ToolCallStarted, self._on_tool_call_started)
-            self._event_bus.on(ToolCallCompleted, self._on_tool_call_completed)
+            for binding in self._event_bindings:
+                binding.bind(self._event_bus)
             self._events_bound = True
 
     async def stop(self) -> None:
+        """Stops intake and releases owned subscriptions, including partial starts."""
+        self._intake.pause()
+        try:
+            await self._stop_connection()
+        finally:
+            self._unbind_runtime()
+
+    def pause_intake(self) -> None:
+        """Buffers new incoming turns while keeping accepted replies deliverable."""
+        self._intake.pause()
+
+    def resume_intake(self) -> None:
+        """Restores intake after a rejected channel removal."""
+        self._intake.resume()
+
+    def _unbind_runtime(self) -> None:
+        if self._outbound_bound:
+            self._bus.unsubscribe_outbound(self._channel, self._on_response)
+            self._outbound_bound = False
+        if self._event_bus is not None and self._events_bound:
+            for binding in self._event_bindings:
+                binding.unbind(self._event_bus)
+            self._events_bound = False
+        if self._push_tool is not None:
+            self._push_tool.unregister_channel(self.name, text=self.send)
+
+    async def _stop_connection(self) -> None:
         if self._polling_conflict_task and not self._polling_conflict_task.done():
             await self._polling_conflict_task
         if self._live_tasks:
@@ -163,7 +200,9 @@ class TelegramChannel(
         updater = self._app.updater
         if updater and updater.running:
             await updater.stop()
-        await self._app.stop()
+        if self._app.running:
+            await self._app.stop()
+        await self._intake.close()
         await self._app.shutdown()
         logger.info("TelegramChannel 已停止")
 

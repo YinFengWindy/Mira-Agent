@@ -2,6 +2,7 @@
 统一消息推送工具，agent 通过 channel + chat_id 向任意已注册渠道发送消息、文件或图片。
 """
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from agent.tools.base import Tool
 from bus.event_bus import EventBus
 from bus.events_lifecycle import ExternalImagePushed
+from core.common.runtime_scope import current_runtime_lease
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,25 @@ class MessagePushTool(Tool):
         self._target_resolvers: dict[str, Callable[[str], str]] = {}
         self._role_target_validator: Callable[[str, str, str], bool | str] | None = None
         self._event_bus = event_bus
+        self._transport_lock: asyncio.Lock | None = None
+        self._retired_channels: set[str] = set()
+
+    def set_transport_lock(self, lock: asyncio.Lock) -> None:
+        """Shares the bus handover barrier so direct sends drain before disconnect."""
+        self._transport_lock = lock
+
+    def unregister_channel(self, channel: str, *, text: Callable | None = None) -> None:
+        """Removes only the sender registration owned by the stopping connection."""
+        senders = self._senders.get(channel)
+        if senders is None or (text is not None and senders.get("text") != text):
+            return
+        self._senders.pop(channel, None)
+        self._target_resolvers.pop(channel, None)
+        self._retired_channels.discard(channel)
+
+    def retire_channel(self, channel: str) -> None:
+        """Restricts a removed transport to tasks accepted while it was configured."""
+        self._retired_channels.add(channel)
 
     def set_role_target_validator(
         self,
@@ -89,6 +110,7 @@ class MessagePushTool(Tool):
         - target_resolver(chat_id) -> canonical chat_id
         """
         self._senders[channel] = {}
+        self._retired_channels.discard(channel)
         if text:
             self._senders[channel]["text"] = text
         if stream_text:
@@ -106,7 +128,28 @@ class MessagePushTool(Tool):
         )
 
     async def execute(self, **kwargs: Any) -> str:
+        if self._transport_lock is None:
+            return await self._execute_send(**kwargs)
+        async with self._transport_lock:
+            return await self._execute_send(**kwargs)
+
+    @staticmethod
+    def _has_retired_transport(channel: str) -> bool:
+        lease = current_runtime_lease()
+        if lease is None:
+            return False
+        channels = lease.config.channels
+        if channels.telegram is not None and channel == channels.telegram.channel_name:
+            return True
+        if channels.qq is not None and channel == "qq":
+            return True
+        manager = lease.core.plugin_manager
+        return manager is not None and any(item.name == channel for item in manager.channels)
+
+    async def _execute_send(self, **kwargs: Any) -> str:
         channel: str = kwargs["channel"]
+        if channel in self._retired_channels and not self._has_retired_transport(channel):
+            return f"渠道 {channel!r} 已停用"
         requested_chat_id = str(kwargs["chat_id"])
         message: str | None = kwargs.get("message")
         file: str | None = kwargs.get("file")

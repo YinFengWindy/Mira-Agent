@@ -38,7 +38,7 @@ type MutableBridgeClient = {
   session: TestSession | null;
   createSession(child: ChildProcessWithoutNullStreams): TestSession;
   attachSessionListeners(session: TestSession): void;
-  invokeTimeoutMs(method: string): number;
+  invokeTimeoutMs(method: string): number | null;
   gracefulStopTimeoutMs(): number;
   forcedStopTimeoutMs(): number;
   killProcessTree(pid: number): void;
@@ -101,7 +101,7 @@ async function withTestDeadline<T>(promise: Promise<T>, timeoutMs = 500): Promis
   }
 }
 
-function createReadyClient(timeoutMs = 20): {
+function createReadyClient(timeoutMs: number | null = 20): {
   client: DesktopBridgeClient;
   mutableClient: MutableBridgeClient;
   child: FakeChild;
@@ -170,6 +170,29 @@ describe("DesktopBridgeClient", () => {
     assert.equal(session.pending.size, 0);
     assert.equal(client.isRunning(), true);
     assert.equal(child.killed, false);
+  });
+
+  it("waits for a transaction response without scheduling a request deadline", async (context) => {
+    const { client, child, session } = createReadyClient(null);
+    context.mock.timers.enable({ apis: ["setTimeout"] });
+    const pending = client.invoke({ method: "runtime.apply", payload: {} });
+    await new Promise<void>((resolvePromise) => setImmediate(resolvePromise));
+    context.mock.timers.tick(10 * 60_000);
+    await Promise.resolve();
+    assert.equal(session.pending.size, 1);
+    const request = parseRequest(child.stdin.writes[0]);
+    emitResponse(child, { ...request, type: "response", payload: { generation: 2 }, error: null });
+    assert.deepEqual((await pending).payload, { generation: 2 });
+    assert.equal(session.pending.size, 0);
+  });
+
+  it("settles a waiting transaction when its bridge process exits", async () => {
+    const { client, child, session } = createReadyClient(null);
+    const pending = client.invoke({ method: "runtime.apply", payload: {} });
+    await new Promise<void>((resolvePromise) => setImmediate(resolvePromise));
+    child.emitExit(1);
+    assert.equal((await pending).error?.code, "bridge_exit");
+    assert.equal(session.pending.size, 0);
   });
 
   it("ignores a late response without affecting the next request", async () => {

@@ -43,6 +43,11 @@ class DesktopVoiceHandler:
             name="desktop-voice-recover-orphans",
         )
 
+    def owns_synthesis(self, request_id: str) -> bool:
+        """Identifies the generation whose worker owns this synthesis request."""
+        with self._synthesis_lock:
+            return request_id in self._synthesis_cancel_events
+
     async def handle(
         self, method: str, payload: dict[str, Any]
     ) -> dict[str, Any] | None:

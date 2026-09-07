@@ -187,6 +187,13 @@ export function useDesktopBridgeLifecycle({
           return;
         }
 
+        if (event.method === "runtime.applied") {
+          void callbacks.loadRolesFromBridge().catch((error: unknown) => {
+            setError(error instanceof Error ? error.message : String(error));
+          });
+          return;
+        }
+
         if (event.method === "session.updated") {
           const update = parseSessionMessageUpdatePayload(event.payload);
           if (!update) return;

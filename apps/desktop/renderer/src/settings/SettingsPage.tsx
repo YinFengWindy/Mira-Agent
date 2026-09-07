@@ -66,11 +66,15 @@ export function SettingsPage({
   }
 
   return (
-    <section className={cx(settingsPageSurfaceClass, "relative grid h-full grid-rows-[minmax(0,1fr)] overflow-hidden")} data-testid="settings-page">
-      <SettingsSaveFeedback
-        phase={controller.savePhase}
-        message={controller.statusMessage}
-      />
+    <section className={cx(settingsPageSurfaceClass, "relative grid h-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden")} data-testid="settings-page">
+      <div>
+        <SettingsSaveFeedback
+          phase={controller.savePhase}
+          message={controller.statusMessage}
+          onRetry={controller.retrySave}
+          onReload={controller.reloadSettings}
+        />
+      </div>
       <div className={settingsContentClass}>
         <div className="mx-auto w-full max-w-[840px]">
           {!currentSection ? (

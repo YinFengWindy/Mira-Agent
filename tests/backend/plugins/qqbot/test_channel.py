@@ -29,13 +29,20 @@ class _Bus:
     def subscribe_outbound(self, channel: str, callback: object) -> None:
         self.outbound.append((channel, callback))
 
+    def unsubscribe_outbound(self, channel: str, callback: object) -> None:
+        self.outbound = [item for item in self.outbound if item != (channel, callback)]
+
 
 class _PushTool:
     def __init__(self) -> None:
         self.registrations: list[tuple[str, list[str]]] = []
+        self.removed: list[str] = []
 
     def register_channel(self, name: str, **kwargs: object) -> None:
         self.registrations.append((name, sorted(kwargs)))
+
+    def unregister_channel(self, name: str, **kwargs: object) -> None:
+        self.removed.append(name)
 
 
 class _Hub:
@@ -88,13 +95,54 @@ async def test_qqbot_channel_registers_and_stops_cleanly(monkeypatch: pytest.Mon
         return None
 
     channel._gateway_loop = _no_gateway_loop
-    await channel.start(_context(bus, push_tool, _Hub()))
+    context = _context(bus, push_tool, _Hub())
+    await channel.start(context)
+    assert bus.outbound[0][0] == "qqbot"
     await channel.stop()
 
-    assert bus.outbound[0][0] == "qqbot"
+    assert bus.outbound == []
+    assert context.event_bus._handlers == {}
+    assert push_tool.removed == ["qqbot"]
     assert push_tool.registrations == [
         ("qqbot", ["image", "stream_text", "text"])
     ]
+
+
+@pytest.mark.asyncio
+async def test_qqbot_pauses_intake_until_removal_is_rolled_back():
+    channel = QQBotChannel("app", "secret")
+    channel._bus = _Bus()
+    channel._send_input_notify = AsyncMock()
+    channel.pause_intake()
+    await channel._handle_dispatch("C2C_MESSAGE_CREATE", {
+        "id": "1", "author": {"user_openid": "user"}, "content": "buffered",
+    })
+    assert channel._bus.inbound == []
+    channel.resume_intake()
+    await channel._intake.drain()
+    assert [item.content for item in channel._bus.inbound] == ["buffered"]
+    await channel.stop()
+
+
+@pytest.mark.asyncio
+async def test_qqbot_reports_pending_input_before_closing_original_account(monkeypatch):
+    notices = []
+
+    async def send(self, chat_id, text):
+        assert not self._client.is_closed
+        notices.append((self._app_id, chat_id, text))
+
+    monkeypatch.setattr(QQBotChannel, "send", send)
+    channel = QQBotChannel("old-account", "secret")
+    channel._bus = _Bus()
+    channel.pause_intake()
+    await channel._publish_inbound(InboundMessage(channel="qqbot", sender="user", chat_id="c2c:user", content="pending"))
+    await channel.stop()
+    assert channel._bus.inbound == []
+    assert len(notices) == 1
+    assert notices[0][:2] == ("old-account", "c2c:user")
+    assert "重新发送" in notices[0][2]
+    assert channel._client.is_closed
 
 
 @pytest.mark.asyncio

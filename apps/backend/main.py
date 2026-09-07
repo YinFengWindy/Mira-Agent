@@ -74,20 +74,30 @@ async def inspect_modules(
 ) -> None:
     import logging
     from bootstrap.tools import build_core_runtime
+    from bootstrap.runtime_construction import prepare_core_runtime
+    from bootstrap.runtime_cleanup import run_cleanup_steps
 
     logging.getLogger().setLevel(logging.WARNING)
     config = Config.load(config_path)
     http_resources = SharedHttpResources()
-    runtime = build_core_runtime(
-        config,
-        workspace or resolve_default_workspace(),
-        http_resources,
-    )
+    runtime = None
     try:
+        runtime = await prepare_core_runtime(
+            config,
+            workspace or resolve_default_workspace(),
+            http_resources,
+            builder=build_core_runtime,
+        )
         print(await runtime.inspect_modules())
     finally:
-        await runtime.stop()
-        await http_resources.aclose()
+        steps = []
+        if runtime is not None:
+            steps.extend([
+                ("core.stop", runtime.stop),
+                ("memory.aclose", runtime.memory_runtime.aclose),
+            ])
+        steps.append(("http.aclose", http_resources.aclose))
+        await run_cleanup_steps(*steps)
 
 
 async def serve_bridge(
@@ -95,6 +105,9 @@ async def serve_bridge(
     workspace: Path | None = None,
 ) -> None:
     configure_logging_stream(sys.stderr)
+    from desktop_bridge.config_transaction import ConfigTransaction
+
+    ConfigTransaction(Path(config_path), workspace or resolve_default_workspace()).recover()
     runtime = build_app_runtime(
         Config.load(config_path),
         workspace=workspace or resolve_default_workspace(),
@@ -105,7 +118,7 @@ async def serve_bridge(
         core_runtime = runtime.core
         if core_runtime is None:
             raise RuntimeError("desktop bridge runtime 未正确初始化 core")
-        server = DesktopBridgeServer(core_runtime)
+        server = DesktopBridgeServer(core_runtime, app=runtime, config_path=Path(config_path))
         await server.serve_stdio()
     finally:
         await runtime.shutdown()

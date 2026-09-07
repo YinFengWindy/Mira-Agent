@@ -54,7 +54,7 @@ export function ModelsSettingsSection({
   async function removeRegistration(registration: ModelRegistrationFormData): Promise<void> {
     const canRemove = await prepareModelRegistrationRemoval(
       registration,
-      draft.models.registrations,
+      draft.pendingRoleModelUpdates,
     );
     if (!canRemove) return;
     updateDraft((current) => ({
@@ -76,7 +76,7 @@ export function ModelsSettingsSection({
     return (
       <ModelRegistrationDetails
         registration={activeRegistration}
-        canDelete={draft.models.registrations.length > 1}
+        canDelete
         onBack={() => setActiveRegistrationId(null)}
         onChange={(mutate) => updateRegistration(activeRegistration.id, mutate)}
         onDelete={() => void removeRegistration(activeRegistration)}
