@@ -12,6 +12,7 @@ from bootstrap.runtime_generations import RuntimeLease
 from bootstrap.runtime_cleanup import run_cleanup_steps
 from core.roles import RoleStore
 from core.common.runtime_scope import bind_runtime
+from core.common.task_collector import TaskCollector
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.runtime_apply import RuntimeApplyError, RuntimeSettingsApplication
 from desktop_bridge.runtime_service_factory import build_desktop_service
@@ -41,8 +42,7 @@ class ReloadableDesktopService:
         self._current = _ServiceGeneration(build_desktop_service(lease.core, roles), lease)
         self._entries = [self._current]
         self._listeners: set = set()
-        self._retirements: set[asyncio.Task] = set()
-        self._cleanup_errors: list[Exception] = []
+        self._retirements = TaskCollector("Desktop runtime retirement")
 
     @property
     def has_event_listeners(self) -> bool:
@@ -163,15 +163,7 @@ class ReloadableDesktopService:
         self._entries.append(self._current)
         for listener in self._listeners:
             service.add_event_listener(listener)
-        task = asyncio.create_task(self._retire(previous), name="desktop-runtime-retire")
-        self._retirements.add(task)
-        task.add_done_callback(self._retired)
-
-    def _retired(self, task):
-        self._retirements.discard(task)
-        if not task.cancelled() and task.exception() is not None:
-            self._cleanup_errors.append(task.exception())
-            logger.error("Desktop runtime retirement failed", exc_info=task.exception())
+        self._retirements.spawn(self._retire(previous), name="desktop-runtime-retire")
 
     async def _retire(self, entry):
         if entry.requests:
@@ -186,9 +178,8 @@ class ReloadableDesktopService:
 
     async def aclose(self) -> None:
         """Cancels tasks only when the desktop bridge itself is shutting down."""
-        for task in self._retirements:
-            task.cancel()
-        await asyncio.gather(*self._retirements, return_exceptions=True)
+        self._retirements.cancel_all()
+        await self._retirements.drain()
         try:
             await run_cleanup_steps(*[
                 step for entry in self._entries
@@ -197,5 +188,5 @@ class ReloadableDesktopService:
             ])
         finally:
             self._entries.clear()
-        if self._cleanup_errors:
-            raise ExceptionGroup("Desktop runtime retirement failed", self._cleanup_errors)
+        if self._retirements.errors:
+            raise ExceptionGroup("Desktop runtime retirement failed", self._retirements.errors)

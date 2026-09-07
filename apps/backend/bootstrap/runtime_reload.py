@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from copy import deepcopy
 
@@ -116,9 +115,10 @@ class RuntimeReloadMixin:
             self._publish_background(previous, candidate)
             # No await separates durable commit and pointer publication.
             previous.retired = True
-            task = asyncio.create_task(previous.close_if_idle())
-            self._retirement_tasks.add(task)
-            task.add_done_callback(self._retirement_done)
+            self._retirements.spawn(
+                previous.close_if_idle(),
+                name=f"runtime:{previous.generation}:retire",
+            )
 
         if self.channel_host is not None and candidate.channel_host is not None:
             def restore_background() -> None:
@@ -179,8 +179,3 @@ class RuntimeReloadMixin:
         if candidate is not self._current and candidate in self._generations:
             self._generations.remove(candidate)
         self._background_groups.pop(candidate, None)
-
-    def _retirement_done(self, task: asyncio.Task[None]) -> None:
-        self._retirement_tasks.discard(task)
-        if not task.cancelled() and (error := task.exception()) is not None:
-            self._cleanup_errors.append(error)

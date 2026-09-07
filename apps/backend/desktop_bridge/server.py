@@ -29,8 +29,12 @@ class DesktopBridgeServer:
     def __init__(self, runtime: CoreRuntime, *, app: AppRuntime | None = None,
                  config_path: Path | None = None) -> None:
         self.runtime = runtime
-        repository = getattr(getattr(runtime, "role_runtime_registry", None), "_repository", None)
-        self.role_store = repository.store if repository is not None else RoleStore(runtime.session_manager.workspace)
+        registry = runtime.role_runtime_registry
+        repository = registry.repository if registry is not None else None
+        self.role_store = (
+            repository.store if repository is not None
+            else RoleStore(runtime.session_manager.workspace)
+        )
         self._event_bus = runtime.event_bus if app is None else app.event_bus
         if app is not None:
             if config_path is None:

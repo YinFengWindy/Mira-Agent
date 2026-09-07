@@ -66,8 +66,7 @@ class RuntimeShutdownMixin:
         errors = [error for error in outcomes if isinstance(error, Exception)]
         if errors:
             raise ExceptionGroup("Runtime generations failed to close", errors)
-        if self._retirement_tasks:
-            await asyncio.gather(*self._retirement_tasks, return_exceptions=True)
+        await self._retirements.drain()
 
     async def _drain_outbound(self) -> None:
         if self.bus is not None:
@@ -93,5 +92,6 @@ class RuntimeShutdownMixin:
             await self.event_bus.aclose()
 
     async def _report_cleanup_errors(self) -> None:
-        if self._cleanup_errors:
-            raise ExceptionGroup("Retired runtime cleanup failed", self._cleanup_errors)
+        errors = [*self._cleanup_errors, *self._retirements.errors]
+        if errors:
+            raise ExceptionGroup("Retired runtime cleanup failed", errors)

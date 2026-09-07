@@ -31,10 +31,16 @@ def create_runtime_task(operation: Coroutine[Any, Any, T], *, name: str) -> asyn
         # coroutine and release ownership. Release outside the owned task so its
         # generation can drain task registries without waiting on itself.
         operation.close()
-        release = asyncio.create_task(lease.release(), name=f"{name}:release")
-        release.add_done_callback(_report_release_failure)
+        release_lease_in_background(lease, name=f"{name}:release")
 
     task.add_done_callback(finished)
+    return task
+
+
+def release_lease_in_background(lease, *, name: str = "runtime-lease-release") -> asyncio.Task[None]:
+    """Releases generation ownership outside the owned task, logging any failure."""
+    task = asyncio.create_task(lease.release(), name=name)
+    task.add_done_callback(_report_release_failure)
     return task
 
 

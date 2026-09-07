@@ -10,26 +10,25 @@ from desktop_bridge.service import DesktopBridgeService
 def build_desktop_service(runtime: CoreRuntime, role_store: RoleStore, *,
                           activate_transport: bool = True) -> DesktopBridgeService:
     """Captures generation-owned dependencies without starting background work."""
-    tools = getattr(runtime, "tools", None)
-    spawn = tools.get_tool("spawn") if tools else None
-    image = tools.get_tool("generate_image") if tools else None
+    spawn = runtime.tools.get_tool("spawn")
+    registry = runtime.role_runtime_registry
     return DesktopBridgeService(
         workspace=runtime.session_manager.workspace,
         role_store=role_store,
         session_manager=runtime.session_manager,
         agent_loop=runtime.loop,
         event_bus=runtime.event_bus,
-        config=getattr(runtime, "config", None),
-        model_resolver=getattr(getattr(runtime, "role_runtime_registry", None), "_model_resolver", None),
+        config=runtime.config,
+        model_resolver=registry.model_resolver if registry is not None else None,
         activate_transport=activate_transport,
-        push_tool=getattr(runtime, "push_tool", None),
-        relationship_runtime=getattr(runtime, "relationship_runtime", None),
-        presence=getattr(runtime, "presence", None),
-        scheduler=getattr(runtime, "scheduler", None),
+        push_tool=runtime.push_tool,
+        relationship_runtime=runtime.relationship_runtime,
+        presence=runtime.presence,
+        scheduler=runtime.scheduler,
         subagent_manager=getattr(spawn, "manager", None),
-        memory_optimizer=getattr(runtime, "memory_optimizer", None),
-        observation_service=getattr(runtime, "screen_observation", None),
-        role_runtime_registry=getattr(runtime, "role_runtime_registry", None),
-        image_tool=image,
-        memory_engine=getattr(getattr(runtime, "memory_runtime", None), "engine", None),
+        memory_optimizer=runtime.memory_optimizer,
+        observation_service=runtime.screen_observation,
+        role_runtime_registry=registry,
+        image_tool=runtime.tools.get_tool("generate_image"),
+        memory_engine=runtime.memory_runtime.engine,
     )

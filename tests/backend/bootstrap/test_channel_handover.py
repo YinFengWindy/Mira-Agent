@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agent.tools.message_push import MessagePushTool
-from bootstrap.channel_handover import handover_channels
 from bootstrap.channel_host import ChannelHost, ChannelHandoverError
 from bus.queue import MessageBus
 from bus.events import OutboundMessage
@@ -79,7 +78,7 @@ async def test_start_failure_cleans_candidate_subscriptions_and_restores_old():
     active, candidate, bus, _ = hosts(events, fail_start=True)
     await active.start_all()
     with pytest.raises(ChannelHandoverError) as caught:
-        await handover_channels(active, candidate, commit=None)
+        await active.handover_channels(candidate, commit=None)
     assert caught.value.degraded == []
     assert events == ["start:old", "stop:old", "start:new", "stop:new", "start:old"]
     assert len(bus._subscribers["chat"]) == 1
@@ -93,7 +92,7 @@ async def test_failed_stop_reports_degraded_connection_without_duplicate_start()
     active, candidate, bus, _ = hosts(events, fail_stop=True)
     await active.start_all()
     with pytest.raises(ChannelHandoverError) as caught:
-        await handover_channels(active, candidate, commit=None)
+        await active.handover_channels(candidate, commit=None)
     assert caught.value.to_details()["degraded"][0]["phase"] == "stop"
     assert events == ["start:old", "stop:old"]
     assert len(bus._subscribers["chat"]) == 1
@@ -110,7 +109,7 @@ async def test_commit_failure_restores_connection_and_does_not_adopt_candidate()
         raise OSError("disk full")
 
     with pytest.raises(OSError, match="disk full"):
-        await handover_channels(active, candidate, commit=fail_commit)
+        await active.handover_channels(candidate, commit=fail_commit)
     assert active.channels == [original]
     assert original.intake
     assert not candidate.channels[0].intake
@@ -127,7 +126,7 @@ async def test_resume_failure_prevents_commit_and_restores_original_transport():
     candidate.channels[0].fail_resume = True
     commits = []
     with pytest.raises(ChannelHandoverError) as caught:
-        await handover_channels(active, candidate, commit=lambda: commits.append("committed"))
+        await active.handover_channels(candidate, commit=lambda: commits.append("committed"))
     assert caught.value.failure.phase == "resume"
     assert caught.value.degraded == []
     assert commits == []
@@ -146,8 +145,8 @@ async def test_reused_channel_is_resumed_before_commit():
     await active.start_all()
     active.pause_intake()
     intake_at_commit = []
-    await handover_channels(active, candidate,
-                            commit=lambda: intake_at_commit.append(active.channels[0].intake))
+    await active.handover_channels(candidate,
+                                   commit=lambda: intake_at_commit.append(active.channels[0].intake))
     assert intake_at_commit == [True]
 
 
@@ -180,7 +179,7 @@ async def test_commit_failure_repauses_candidate_before_async_cleanup_can_flush_
     new.pause_intake = intake.pause
     new.resume_intake = intake.resume
     with pytest.raises(OSError, match="disk full"):
-        await handover_channels(active, candidate, commit=fail_commit)
+        await active.handover_channels(candidate, commit=fail_commit)
     accepted.assert_not_awaited()
     assert any(event.startswith("send:new:") and "重新发送" in event for event in events)
 
@@ -191,7 +190,7 @@ async def test_unchanged_connection_is_preserved_without_start_or_stop():
     active, candidate, bus, _ = hosts(events)
     candidate._channels = active.channels
     await active.start_all()
-    await handover_channels(active, candidate, commit=lambda: events.append("commit"))
+    await active.handover_channels(candidate, commit=lambda: events.append("commit"))
     assert events == ["start:old", "commit"]
     assert len(bus._subscribers["chat"]) == 1
 
@@ -203,7 +202,7 @@ async def test_restore_failure_is_reported_separately_from_candidate_failure():
     await active.start_all()
     active.channels[0].fail_start = True
     with pytest.raises(ChannelHandoverError) as caught:
-        await handover_channels(active, candidate, commit=None)
+        await active.handover_channels(candidate, commit=None)
     assert caught.value.failure.phase == "start"
     assert caught.value.degraded[0].phase == "restore"
 
@@ -252,7 +251,7 @@ async def test_removed_channel_keeps_old_replies_until_retirement_signal():
     await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="last-reply"))
     assert events[-1] == "send:old:last-reply"
     drained.set()
-    await asyncio.gather(*active._retirement_tasks)
+    await active._retirements.drain()
     assert events[-1] == "stop:old"
     assert "chat" not in bus._subscribers
 
@@ -268,7 +267,7 @@ async def test_readding_removed_channel_replaces_retained_transport_once():
     await active.handover(candidate)
     assert len(bus._subscribers["chat"]) == 1
     drained.set()
-    await asyncio.gather(*active._retirement_tasks)
+    await active._retirements.drain()
     await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="reply"))
     assert events[-1] == "send:new:reply"
     assert events.count("stop:old") == 1

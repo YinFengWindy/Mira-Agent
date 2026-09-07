@@ -84,17 +84,17 @@ class RuntimeLease:
         self._persistent = persistent
 
     @property
-    def core(self):
+    def core(self) -> CoreRuntime:
         """Returns the retained core."""
         return self._candidate.core
 
     @property
-    def config(self):
+    def config(self) -> Config:
         """Returns the retained configuration."""
         return self._candidate.config
 
     @property
-    def generation(self):
+    def generation(self) -> int:
         """Returns the retained generation identifier."""
         return self._candidate.generation
 

@@ -45,6 +45,11 @@ class RoleStore:
             default_dialogue_registration_id.strip()
         )
 
+    @property
+    def lock(self):
+        """Returns the persistence lock guarding manifest read-modify-write cycles."""
+        return self._lock
+
     def list_roles(self) -> list[RoleRecord]:
         return self._repository.list_roles()
 

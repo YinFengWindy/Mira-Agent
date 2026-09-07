@@ -150,7 +150,7 @@ class CoreRuntime:
             ("event_bus.aclose", self.event_bus.aclose),
             ("provider.aclose", self.provider.aclose),
         ])
-        resolver = self.role_runtime_registry._model_resolver
+        resolver = self.role_runtime_registry.model_resolver
         if resolver is not None:
             steps.append(("role_models.aclose", resolver.aclose))
         steps.extend((f"provider:{index}", provider.aclose) for index, provider in enumerate(self.additional_providers))
@@ -398,7 +398,7 @@ def build_core_runtime(
     default_registration_id = (
         config.model_registrations[0].id if config.model_registrations else ""
     )
-    role_store = shared.role_runtime_registry._repository.store if shared else RoleStore(
+    role_store = shared.role_runtime_registry.repository.store if shared else RoleStore(
         workspace,
         default_dialogue_registration_id=default_registration_id,
     )

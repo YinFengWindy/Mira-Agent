@@ -894,17 +894,18 @@ async def test_desktop_bridge_push_does_not_treat_subset_media_as_duplicate(
 
 
 @pytest.mark.asyncio
-async def test_desktop_bridge_server_streams_requests_and_responses(tmp_path: Path):
+async def test_desktop_bridge_server_streams_requests_and_responses(
+    tmp_path: Path, stub_core_runtime
+):
     _ = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
-    runtime = SimpleNamespace(
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(
             workspace=tmp_path, open_role_session=session_manager.open_role_session
         ),
         loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
         event_bus=event_bus,
-        provider=None,
     )
     server = DesktopBridgeServer(runtime)
 
@@ -940,18 +941,17 @@ async def test_desktop_bridge_server_streams_requests_and_responses(tmp_path: Pa
 
 @pytest.mark.asyncio
 async def test_desktop_bridge_server_returns_invalid_request_and_keeps_stream_open(
-    tmp_path: Path,
+    tmp_path: Path, stub_core_runtime
 ):
     _ = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
-    runtime = SimpleNamespace(
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(
             workspace=tmp_path, open_role_session=session_manager.open_role_session
         ),
         loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
         event_bus=event_bus,
-        provider=None,
     )
     server = DesktopBridgeServer(runtime)
 
@@ -983,18 +983,17 @@ async def test_desktop_bridge_server_returns_invalid_request_and_keeps_stream_op
 
 @pytest.mark.asyncio
 async def test_desktop_bridge_server_wraps_handler_errors_without_closing_stream(
-    tmp_path: Path,
+    tmp_path: Path, stub_core_runtime
 ):
     _ = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
-    runtime = SimpleNamespace(
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(
             workspace=tmp_path, open_role_session=session_manager.open_role_session
         ),
         loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
         event_bus=event_bus,
-        provider=None,
     )
     server = DesktopBridgeServer(runtime)
     call_count = 0

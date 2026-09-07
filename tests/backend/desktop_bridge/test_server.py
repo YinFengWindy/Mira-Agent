@@ -20,7 +20,6 @@ from desktop_bridge.models import BridgeResponse
 from desktop_bridge.server import DesktopBridgeServer
 from desktop_bridge.service import DesktopBridgeService
 from session.manager import SessionManager
-from agent.tools.registry import ToolRegistry
 
 
 class _ReconfigurableTextStream:
@@ -54,25 +53,24 @@ def _build_observation_service(runtime, role_store):
     )
 
 
-def _build_server(tmp_path: Path) -> DesktopBridgeServer:
+def _build_server(tmp_path: Path, stub_core_runtime) -> DesktopBridgeServer:
     session_manager = SessionManager(tmp_path)
-    runtime = SimpleNamespace(
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(
             workspace=tmp_path,
             open_role_session=session_manager.open_role_session,
         ),
         loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
         event_bus=EventBus(),
-        provider=None,
     )
     return DesktopBridgeServer(runtime)
 
 
 @pytest.mark.asyncio
 async def test_serve_stdio_forces_utf8_for_all_bridge_streams(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_core_runtime
 ) -> None:
-    server = _build_server(tmp_path)
+    server = _build_server(tmp_path, stub_core_runtime)
     streams = {
         "stdin": _ReconfigurableTextStream("cp936"),
         "stdout": _ReconfigurableTextStream("cp936"),
@@ -104,17 +102,18 @@ async def test_serve_stdio_forces_utf8_for_all_bridge_streams(
     }
 
 
-def test_server_forwards_the_role_runtime_registry_to_story(tmp_path: Path) -> None:
+def test_server_forwards_the_role_runtime_registry_to_story(
+    tmp_path: Path, stub_core_runtime
+) -> None:
     session_manager = SessionManager(tmp_path)
-    role_runtime_registry = SimpleNamespace()
-    runtime = SimpleNamespace(
+    role_runtime_registry = SimpleNamespace(repository=None, model_resolver=None)
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(
             workspace=tmp_path,
             open_role_session=session_manager.open_role_session,
         ),
         loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
         event_bus=EventBus(),
-        provider=None,
         role_runtime_registry=role_runtime_registry,
     )
 
@@ -124,7 +123,7 @@ def test_server_forwards_the_role_runtime_registry_to_story(tmp_path: Path) -> N
 
 
 def test_desktop_server_reuses_core_screen_observation_service(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_core_runtime
 ) -> None:
     monkeypatch.setattr(
         DesktopBridgeService,
@@ -132,11 +131,10 @@ def test_desktop_server_reuses_core_screen_observation_service(
         lambda self: None,
     )
     observation = SimpleNamespace()
-    runtime = SimpleNamespace(
+    runtime = stub_core_runtime(
         session_manager=SimpleNamespace(workspace=tmp_path),
         loop=SimpleNamespace(),
         event_bus=EventBus(),
-        tools=ToolRegistry(),
         config=SimpleNamespace(multimodal=True, model="main-model"),
         provider=SimpleNamespace(),
         memory_runtime=SimpleNamespace(engine=SimpleNamespace()),
@@ -238,8 +236,10 @@ async def test_observation_service_validates_memory_roles_through_the_repository
 
 
 @pytest.mark.asyncio
-async def test_health_response_is_not_blocked_by_slow_mutation(tmp_path: Path) -> None:
-    server = _build_server(tmp_path)
+async def test_health_response_is_not_blocked_by_slow_mutation(
+    tmp_path: Path, stub_core_runtime
+) -> None:
+    server = _build_server(tmp_path, stub_core_runtime)
     lines: asyncio.Queue[str | None] = asyncio.Queue()
     mutation_started = asyncio.Event()
     release_mutation = asyncio.Event()
@@ -282,8 +282,10 @@ async def test_health_response_is_not_blocked_by_slow_mutation(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_server_uses_one_writer_for_concurrent_responses(tmp_path: Path) -> None:
-    server = _build_server(tmp_path)
+async def test_server_uses_one_writer_for_concurrent_responses(
+    tmp_path: Path, stub_core_runtime
+) -> None:
+    server = _build_server(tmp_path, stub_core_runtime)
     lines = iter(
         [
             json.dumps({"id": str(index), "method": "health"})
@@ -313,8 +315,10 @@ async def test_server_uses_one_writer_for_concurrent_responses(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_server_eof_cancels_and_awaits_in_flight_request(tmp_path: Path) -> None:
-    server = _build_server(tmp_path)
+async def test_server_eof_cancels_and_awaits_in_flight_request(
+    tmp_path: Path, stub_core_runtime
+) -> None:
+    server = _build_server(tmp_path, stub_core_runtime)
     lines = iter(
         [json.dumps({"id": "slow", "method": "novelai.generate"}), None]
     )

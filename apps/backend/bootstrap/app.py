@@ -22,6 +22,7 @@ from core.common.workspace import resolve_default_workspace
 from core.roles import (
     LonelinessHeartbeatLoop,
 )
+from core.common.task_collector import TaskCollector
 from core.net.http import (
     SharedHttpResources,
     configure_default_shared_http_resources,
@@ -94,7 +95,7 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
         self._generations: list[RuntimeCandidate] = []
         self._dispatcher = RuntimeDispatcher(self)
         self._background_groups = {}
-        self._retirement_tasks: set[asyncio.Task[None]] = set()
+        self._retirements = TaskCollector("Retired runtime cleanup")
         self._cleanup_errors: list[Exception] = []
         self._admission_open = asyncio.Event()
         self._admission_open.set()
@@ -153,7 +154,7 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
             if self.relationship_runtime is not None:
                 loneliness_loop = LonelinessHeartbeatLoop(
                     self.relationship_runtime,
-                    role_store=self.core.relationship_runtime._role_store,
+                    role_store=self.core.relationship_runtime.role_store,
                 )
                 self._background_tasks.extend(
                     [
