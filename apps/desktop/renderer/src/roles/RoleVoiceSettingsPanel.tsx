@@ -4,13 +4,12 @@ import { useState } from "react";
 import { minimaxVoiceEmotionOptions } from "./roleVoiceConfig";
 import type { RoleFormState } from "../shared/types";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
+import { roleTileFieldClass as voiceFieldClass } from "./roleEditorStyles";
 
 type RoleVoiceSettingsPanelProps = {
   roleForm: RoleFormState;
   onUpdate: (next: React.SetStateAction<RoleFormState>) => void;
 };
-
-const voiceFieldClass = "w-full border-0 border-b border-[#DDE5EC] bg-[#F7F9FB] px-3 py-2.5 text-sm text-[#182230] transition focus:border-[#DDE5EC] focus:outline-none placeholder:text-[#98A2B3]";
 
 /** Renders role-owned voice selection, speed, and mood mapping fields. */
 export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettingsPanelProps) {
@@ -23,10 +22,10 @@ export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettings
   const voiceSource = roleForm.voiceOwnership === "shiori_managed" ? "Shiori 管理音色" : `${roleForm.voiceProvider || "MiniMax"} 外部音色`;
 
   return (
-    <section aria-labelledby="role-voice-heading" className="grid gap-5" data-testid="role-voice-config">
-      <div className="flex items-start justify-between gap-4 border-b border-[#E7ECF1] pb-4">
+    <section aria-labelledby="role-voice-heading" className="grid gap-5 rounded-2xl bg-[#EEF6F2] p-5" data-testid="role-voice-config">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[#EFF6F4] text-[#2E7D5B]" aria-hidden="true">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/75 text-[#2E7D5B]" aria-hidden="true">
             <Waveform className="h-5 w-5" weight="duotone" />
           </span>
           <div className="min-w-0">
@@ -36,7 +35,7 @@ export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettings
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-[#52606D] transition hover:bg-[#F3F6FA] hover:text-[#182230] focus:outline-none" type="button" aria-expanded={technicalFieldsOpen} onClick={() => setTechnicalFieldsOpen((current) => !current)}>
+          <button className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#52606D] transition hover:bg-white/70 hover:text-[#182230] focus:outline-none" type="button" aria-expanded={technicalFieldsOpen} onClick={() => setTechnicalFieldsOpen((current) => !current)}>
             <PencilSimple className="h-4 w-4" weight="bold" />编辑参数
           </button>
           <span className={roleForm.voiceEnabled ? "text-xs text-[#2E7D5B]" : "text-xs text-[#7B8794]"}>{roleForm.voiceEnabled ? "已启用" : "未启用"}</span>
@@ -45,7 +44,7 @@ export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettings
       </div>
 
       {technicalFieldsOpen ? (
-        <div className="grid gap-4 border-y border-[#E7ECF1] py-4 sm:grid-cols-2">
+        <div className="grid gap-4 border-t border-[#DCEAE2] pt-4 sm:grid-cols-2">
             <label className="grid gap-1.5 text-xs text-[#667085]"><span>音色名称</span><input className={voiceFieldClass} value={roleForm.voiceName} onChange={(event) => onUpdate((current) => ({ ...current, voiceName: event.target.value }))} placeholder="显示名称" /></label>
             <label className="grid gap-1.5 text-xs text-[#667085]"><span>语速（0.5 - 2.0）</span><input className={voiceFieldClass} type="number" min="0.5" max="2" step="0.1" value={String(roleForm.voiceSpeed)} onChange={(event) => onUpdate((current) => ({ ...current, voiceSpeed: Number(event.target.value) }))} /></label>
             <label className="grid gap-1.5 text-xs text-[#667085]"><span>Provider</span><input className={voiceFieldClass} value={roleForm.voiceProvider} readOnly={roleForm.voiceOwnership === "shiori_managed"} onChange={(event) => onUpdate((current) => ({ ...current, voiceProvider: event.target.value, voiceOwnership: "external" }))} placeholder="minimax" /></label>
@@ -54,13 +53,13 @@ export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettings
       ) : null}
 
       {moods.length > 0 ? (
-        <div className="grid gap-3 border-t border-[#E7ECF1] pt-5">
+        <div className="grid gap-3 border-t border-[#DCEAE2] pt-4">
           <div><h3 className="text-sm font-medium text-[#182230]">情绪映射</h3><p className="mt-1 text-xs text-[#7B8794]">为角色状态选择优先使用的语音情绪。</p></div>
           <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
             {moods.map((mood) => (
-              <label className="grid grid-cols-[minmax(0,1fr)_132px] items-center gap-3 border-b border-[#EEF2F5] py-2.5 text-sm" key={mood}>
+              <label className="grid grid-cols-[minmax(0,1fr)_132px] items-center gap-3 border-b border-[#E2EEE7] py-2.5 text-sm last:border-b-0" key={mood}>
                 <span className="truncate text-[#475467]">{mood}</span>
-                <select className="rounded-md border-0 bg-[#F7F9FB] px-2.5 py-2 text-xs text-[#344054] transition focus:outline-none" value={roleForm.voiceMoodEmotions[mood] ?? ""} onChange={(event) => onUpdate((current) => {
+                <select className="rounded-lg border border-transparent bg-white/75 px-2.5 py-2 text-xs text-[#344054] transition focus:border-[#A9C6F2] focus:bg-white focus:outline-none" value={roleForm.voiceMoodEmotions[mood] ?? ""} onChange={(event) => onUpdate((current) => {
                   const next = { ...current.voiceMoodEmotions };
                   if (event.target.value) next[mood] = event.target.value;
                   else delete next[mood];

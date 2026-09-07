@@ -65,7 +65,7 @@ export function RoleDetailPage({
   ) : activeTab === "capabilities" ? (
     <RoleCapabilitiesPanel activeRole={activeRole} bridgeReady={bridgeReady} roleForm={roleForm} onUpdate={updateRoleForm} />
   ) : (
-    <div className="grid gap-4">
+    <div className="grid gap-6">
       <RoleChannelBindingsPanel activeRoleId={activeRoleId} bindings={roleForm.channelBindings ?? []} onUpdate={updateRoleForm} />
       <RoleProactiveSettingsPanel bindings={roleForm.channelBindings ?? []} roleForm={roleForm} onUpdate={updateRoleForm} />
     </div>

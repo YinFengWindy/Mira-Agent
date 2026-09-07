@@ -11,7 +11,8 @@ describe("RoleCapabilitiesPanel", () => {
     assert.match(markup, /运行能力/);
     assert.match(markup, /已启用/);
     assert.match(markup, /未配置桌宠/);
-    assert.match(markup, /divide-y divide-\[#E7ECF1\]/);
+    assert.match(markup, /rounded-2xl/);
+    assert.match(markup, /sm:grid-cols-2/);
     assert.doesNotMatch(markup, /shadow-\[0_12px_30px/);
   });
 });
