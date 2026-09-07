@@ -50,12 +50,18 @@ class DesktopChatRequestHandler:
                 str(payload.get("session_key") or "").strip(),
                 str(payload.get("turn_id") or "").strip(),
             )
-            return {
+            response: dict[str, Any] = {
                 "status": result.status,
                 "message": result.message,
                 "session_key": result.session_key,
                 "turn_id": result.turn_id,
             }
+            if result.session is not None and result.interrupted_message is not None:
+                response["session"] = self._session_presenter.serialize_summary(result.session)
+                response["message_payload"] = self._session_presenter.serialize_message(
+                    result.interrupted_message
+                )
+            return response
         return None
 
     async def _send(
