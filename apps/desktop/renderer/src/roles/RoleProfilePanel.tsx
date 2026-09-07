@@ -56,7 +56,7 @@ export function RoleProfilePanel({
           <input aria-label="角色简介" className="w-full border-0 border-b border-transparent bg-transparent px-0 py-1 text-sm leading-6 text-[#6B7280] placeholder:text-[#9CA3AF] transition focus:border-[#2176FF] focus:outline-none" data-testid="edit-role-description" value={roleForm.description} placeholder="添加一行角色简介" onChange={(event) => onUpdate((current) => ({ ...current, description: event.target.value }))} />
         </div>
       </div>
-      <RoleCardProfileForm profile={profile} onUpdate={updateProfile} />
+      <RoleCardProfileForm profile={profile} onUpdate={updateProfile} showKnowledge={false} />
     </div>
   );
 }

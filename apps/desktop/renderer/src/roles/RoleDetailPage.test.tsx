@@ -43,7 +43,7 @@ describe("RoleDetailPage", () => {
     assert.match(markup, /角色资料/);
     assert.match(markup, /性格/);
     assert.match(markup, /执行规则/);
-    assert.match(markup, /知识库/);
+    assert.doesNotMatch(markup, /data-testid="role-card-profile-knowledge"/);
     assert.doesNotMatch(markup, /data-testid="edit-role-prompt"/);
     assert.match(markup, /data-has-featured-image="false"/);
     assert.doesNotMatch(markup, /bg-\[#f4ebe5\]/);

@@ -6,10 +6,15 @@ import type { RoleProfileDraft } from "../shared/types";
 type RoleCardProfileFormProps = {
   profile: RoleProfileDraft;
   onUpdate: (next: RoleProfileDraft) => void;
+  showKnowledge?: boolean;
 };
 
-/** Edits the fields imported from a character card without flattening its profile. */
-export function RoleCardProfileForm({ profile, onUpdate }: RoleCardProfileFormProps) {
+/** Edits structured role fields without flattening their persisted profile. */
+export function RoleCardProfileForm({
+  profile,
+  onUpdate,
+  showKnowledge = true,
+}: RoleCardProfileFormProps) {
   const character = profile.character ?? {};
   const knowledge = profile.knowledge_base ?? {};
   const entries = knowledge.entries ?? [];
@@ -37,7 +42,8 @@ export function RoleCardProfileForm({ profile, onUpdate }: RoleCardProfileFormPr
         </div>
       </div>
 
-      <section className="grid gap-3 rounded-md border border-[#E5E7EB] p-4">
+      {showKnowledge ? (
+        <section className="grid gap-3 rounded-md border border-[#E5E7EB] p-4" data-testid="role-card-profile-knowledge">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-medium text-[#344054]">知识库 · {entries.length}</h3>
           <label className="flex items-center gap-2 text-xs text-[#475467]">
@@ -54,7 +60,8 @@ export function RoleCardProfileForm({ profile, onUpdate }: RoleCardProfileFormPr
             {entries.map((entry, index) => <div className="rounded-md bg-[#F8FAFC] p-2 text-xs" key={entry.id ?? index}><p className="text-[#475467]">{entry.content || "空条目"}</p><p className="mt-1 text-[#98A2B3]">{(entry.primary_keys ?? entry.keywords ?? []).join("、") || "未设置关键词"}</p></div>)}
           </div>
         ) : <p className="text-xs text-[#98A2B3]">无</p>}
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }
