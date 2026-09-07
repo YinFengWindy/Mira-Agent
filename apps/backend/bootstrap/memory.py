@@ -15,7 +15,7 @@ from core.memory.plugin import (
 )
 from core.memory.runtime import MemoryRuntime
 from core.net.http import SharedHttpResources
-from bootstrap.runtime_construction import track_build_closeables
+from bootstrap.runtime.construction import track_build_closeables
 
 if TYPE_CHECKING:
     from bus.event_bus import EventBus

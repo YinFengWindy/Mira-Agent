@@ -7,7 +7,7 @@ from collections.abc import Coroutine
 from typing import Any, Protocol
 
 from bootstrap.proactive import build_memory_optimizer_task, build_proactive_runtime
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime
 
 

@@ -21,7 +21,7 @@ from plugins.scene_awareness.contracts import SceneDecisionProtocolError
 from plugins.scene_awareness.controller import SceneAwarenessController
 from plugins.scene_awareness.decision import SceneDecision
 from session.manager import SessionManager
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime, current_runtime_lease
 
 

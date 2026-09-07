@@ -19,7 +19,7 @@ async def test_app_runtime_start_passes_markdown_store_to_memory_optimizer(
 ):
     optimizer = MagicMock()
     build_optimizer = MagicMock(return_value=([], optimizer))
-    monkeypatch.setattr("bootstrap.runtime_background.build_memory_optimizer_task", build_optimizer)
+    monkeypatch.setattr("bootstrap.runtime.background.build_memory_optimizer_task", build_optimizer)
     app = AppRuntime(empty_config, tmp_path)
 
     try:

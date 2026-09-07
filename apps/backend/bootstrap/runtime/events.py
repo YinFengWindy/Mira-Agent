@@ -10,7 +10,7 @@ from core.common.runtime_scope import bind_runtime, current_runtime_lease
 from core.common.runtime_tasks import release_lease_in_background
 
 if TYPE_CHECKING:
-    from bootstrap.runtime_generations import RuntimeLease
+    from bootstrap.runtime.generations import RuntimeLease
 
 
 @dataclass

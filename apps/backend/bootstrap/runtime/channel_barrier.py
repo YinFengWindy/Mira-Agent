@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from bootstrap.channel_host import ChannelHost
-    from bootstrap.runtime_background import RuntimeBackground
-    from bootstrap.runtime_generations import RuntimeCandidate
+    from bootstrap.runtime.background import RuntimeBackground
+    from bootstrap.runtime.generations import RuntimeCandidate
 
 
 @asynccontextmanager

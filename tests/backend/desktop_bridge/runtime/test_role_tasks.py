@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import current_runtime_lease
 from core.roles.store import RoleStore
-from desktop_bridge.runtime_role_tasks import RuntimeRoleTasks
+from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 
 
 @pytest.mark.asyncio

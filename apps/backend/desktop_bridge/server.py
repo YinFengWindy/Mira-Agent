@@ -13,7 +13,7 @@ from bootstrap.tools import CoreRuntime
 from core.roles import RoleStore
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
-from desktop_bridge.runtime_service_factory import build_desktop_service
+from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.stream_writer import BridgeStreamWriter
 from bus.events_lifecycle import DesktopPetActionRequested
 
@@ -39,7 +39,7 @@ class DesktopBridgeServer:
         if app is not None:
             if config_path is None:
                 raise ValueError("config_path required for runtime reload")
-            from desktop_bridge.runtime_service import ReloadableDesktopService
+            from desktop_bridge.runtime.service import ReloadableDesktopService
 
             self.service = ReloadableDesktopService(app, config_path, self.role_store)
         else:

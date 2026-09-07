@@ -32,8 +32,8 @@ from agent.scheduler import SchedulerService
 from agent.tools.message_push import MessagePushTool
 from agent.tools.observe_screen import ObserveScreenTool
 from agent.tools.registry import ToolRegistry
-from bootstrap.runtime_cleanup import run_cleanup_steps
-from bootstrap.runtime_construction import track_build_resource
+from core.common.cleanup import run_cleanup_steps
+from bootstrap.runtime.construction import track_build_resource
 from bootstrap.toolsets.meta import (
     build_readonly_tools,
 )
@@ -131,7 +131,7 @@ class CoreRuntime:
 
     async def inspect_modules(self) -> str:
         """Renders this generation\'s lifecycle module configuration."""
-        from bootstrap.runtime_inspection import inspect_core_modules
+        from bootstrap.runtime.inspection import inspect_core_modules
 
         return await inspect_core_modules(self)
 

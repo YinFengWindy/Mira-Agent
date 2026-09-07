@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from bootstrap.runtime_generations import RuntimeLease
+    from bootstrap.runtime.generations import RuntimeLease
     from agent.policies.delegation import SpawnDecision
     from bus.internal_events import SpawnCompletionEvent
 

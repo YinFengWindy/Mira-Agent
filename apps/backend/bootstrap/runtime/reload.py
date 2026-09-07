@@ -6,13 +6,13 @@ from collections.abc import Callable
 from copy import deepcopy
 
 from agent.config_models import Config
-from bootstrap.runtime_events import RuntimeEventBus
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.events import RuntimeEventBus
+from bootstrap.runtime.generations import RuntimeCandidate
 from bootstrap.tools import build_core_runtime
 from bootstrap.channels import start_channels
-from bootstrap.runtime_memory import validate_memory_transition
-from bootstrap.runtime_construction import prepare_core_runtime
-from bootstrap.runtime_channel_barrier import channel_handover_barrier
+from bootstrap.runtime.memory import validate_memory_transition
+from bootstrap.runtime.construction import prepare_core_runtime
+from bootstrap.runtime.channel_barrier import channel_handover_barrier
 
 
 class RuntimeReloadMixin:

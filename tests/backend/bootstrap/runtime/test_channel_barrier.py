@@ -75,7 +75,7 @@ def _install_background_work(monkeypatch):
         loop_consumer(loop)
         return [loop.run()], None
 
-    monkeypatch.setattr("bootstrap.runtime_background.build_memory_optimizer_task", build)
+    monkeypatch.setattr("bootstrap.runtime.background.build_memory_optimizer_task", build)
     return loops
 
 

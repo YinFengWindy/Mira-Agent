@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from bootstrap.runtime_background import RuntimeBackground
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.background import RuntimeBackground
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import current_runtime_lease
 
 
@@ -43,7 +43,7 @@ async def test_new_background_scheduling_waits_for_accepted_old_work(monkeypatch
         loop_consumer(loop)
         return [loop.run()], None
 
-    monkeypatch.setattr("bootstrap.runtime_background.build_memory_optimizer_task", build)
+    monkeypatch.setattr("bootstrap.runtime.background.build_memory_optimizer_task", build)
     app = SimpleNamespace(features=SimpleNamespace(enable_proactive=False))
     old_version, new_version = candidate(1), candidate(2)
     old_group, new_group = RuntimeBackground(app, old_version), RuntimeBackground(app, new_version)

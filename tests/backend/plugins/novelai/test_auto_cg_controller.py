@@ -13,7 +13,7 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.integrations.novelai.models import NovelAISettings
 from plugins.novelai.auto_cg import AutoCgPolicy
 from plugins.novelai.auto_cg_controller import AutoCgController
-from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime, current_runtime_lease
 
 

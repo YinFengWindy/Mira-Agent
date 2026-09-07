@@ -8,15 +8,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from bootstrap.app import AppRuntime
-from bootstrap.runtime_generations import RuntimeLease
-from bootstrap.runtime_cleanup import run_cleanup_steps
+from bootstrap.runtime.generations import RuntimeLease
+from core.common.cleanup import run_cleanup_steps
 from core.roles import RoleStore
 from core.common.runtime_scope import bind_runtime
 from core.common.task_collector import TaskCollector
 from desktop_bridge.models import BridgeError, BridgeResponse
-from desktop_bridge.runtime_apply import RuntimeApplyError, RuntimeSettingsApplication
-from desktop_bridge.runtime_service_factory import build_desktop_service
-from desktop_bridge.runtime_role_tasks import RuntimeRoleTasks
+from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
+from desktop_bridge.runtime.factory import build_desktop_service
+from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 from desktop_bridge.service import DesktopBridgeService
 
 logger = logging.getLogger(__name__)

@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from agent.config_models import Config
-from bootstrap.runtime_memory import MemoryStorageIncompatibleError, validate_memory_transition
+from bootstrap.runtime.memory import MemoryStorageIncompatibleError, validate_memory_transition
 
 
 def test_existing_vector_storage_allows_connection_changes_but_rejects_new_vector_space(tmp_path, monkeypatch):

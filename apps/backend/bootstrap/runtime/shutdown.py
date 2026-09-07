@@ -2,7 +2,7 @@
 
 import asyncio
 
-from bootstrap.runtime_cleanup import run_cleanup_steps
+from core.common.cleanup import run_cleanup_steps
 from core.net.http import clear_default_shared_http_resources
 
 

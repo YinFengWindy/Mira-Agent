@@ -29,7 +29,7 @@ from memory2.procedure_tagger import ProcedureTagger
 from memory2.retriever import Retriever
 from memory2.store import VEC_DIM, MemoryStore2
 from plugins.default_memory.config import DefaultMemoryConfig, resolve_memory_db_path
-from bootstrap.runtime_construction import track_build_resource
+from bootstrap.runtime.construction import track_build_resource
 
 from .admin import _AdminMixin
 from .mutation import _MutationMixin

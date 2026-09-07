@@ -10,13 +10,13 @@ from agent.config_models import Config
 from bootstrap.channel_host import ChannelHost
 from bootstrap.channels import start_channels
 from bootstrap.tools import CoreRuntime, build_core_runtime
-from bootstrap.runtime_dispatcher import RuntimeDispatcher
-from bootstrap.runtime_events import RuntimeEventBus
-from bootstrap.runtime_generations import RuntimeCandidate
-from bootstrap.runtime_reload import RuntimeReloadMixin
-from bootstrap.runtime_background import RuntimeBackgroundMixin
-from bootstrap.runtime_shutdown import RuntimeShutdownMixin
-from bootstrap.runtime_construction import prepare_core_runtime
+from bootstrap.runtime.dispatcher import RuntimeDispatcher
+from bootstrap.runtime.events import RuntimeEventBus
+from bootstrap.runtime.generations import RuntimeCandidate
+from bootstrap.runtime.reload import RuntimeReloadMixin
+from bootstrap.runtime.background import RuntimeBackgroundMixin
+from bootstrap.runtime.shutdown import RuntimeShutdownMixin
+from bootstrap.runtime.construction import prepare_core_runtime
 from bus.event_bus import EventBus
 from core.common.workspace import resolve_default_workspace
 from core.roles import (
