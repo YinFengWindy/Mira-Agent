@@ -61,7 +61,7 @@ export function RoleDetailPage({
   const content = activeTab === "profile" ? (
     <RoleProfilePanel activeRole={activeRole} previewAvatar={previewAvatar} roleForm={roleForm} onOpenAssetsPage={onOpenAssetsPage} onUpdate={updateRoleForm} />
   ) : activeTab === "knowledge" ? (
-    <RoleKnowledgePanel activeRole={activeRole} bridgeReady={bridgeReady} />
+    <RoleKnowledgePanel roleForm={roleForm} onUpdate={updateRoleForm} />
   ) : activeTab === "capabilities" ? (
     <RoleCapabilitiesPanel activeRole={activeRole} bridgeReady={bridgeReady} roleForm={roleForm} onUpdate={updateRoleForm} />
   ) : (

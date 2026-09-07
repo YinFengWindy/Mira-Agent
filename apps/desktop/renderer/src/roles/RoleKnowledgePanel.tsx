@@ -2,11 +2,10 @@ import { BookOpenText, CaretDown } from "@phosphor-icons/react";
 import { useState } from "react";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
 import { cx } from "../shared/styles";
-import type { RoleKnowledgeBase, RoleKnowledgeEntry, RoleRecord } from "../shared/types";
+import type { RoleFormState, RoleKnowledgeBase, RoleKnowledgeEntry } from "../shared/types";
 import {
   roleChipClass,
   roleFieldClass,
-  rolePanelPrimaryButtonClass,
   roleSectionDescriptionClass,
   roleSectionTitleClass,
 } from "./roleEditorStyles";
@@ -47,25 +46,29 @@ function KnowledgeEntryRow({ entry, index, expanded, onToggle }: KnowledgeEntryR
   );
 }
 
-export function RoleKnowledgePanel({ activeRole, bridgeReady }: { activeRole: RoleRecord | null; bridgeReady: boolean }) {
-  const initial = activeRole?.profile?.knowledge_base ?? {};
-  const [draft, setDraft] = useState<RoleKnowledgeBase>(initial);
-  const [saving, setSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null);
-  const [expandedEntries, setExpandedEntries] = useState<ReadonlySet<number>>(new Set());
-  const entries = draft.entries ?? [];
-  const enabled = draft.enabled !== false;
+type RoleKnowledgePanelProps = {
+  roleForm: RoleFormState;
+  onUpdate: (next: React.SetStateAction<RoleFormState>) => void;
+};
 
-  async function save(): Promise<void> {
-    if (!activeRole) return;
-    setSaving(true);
-    setFeedback(null);
-    const response = await window.miraDesktop.invoke({
-      method: "roles.update",
-      payload: { role_id: activeRole.id, profile: { knowledge_base: draft } },
+/** Edits knowledge-base fields inside the shared role draft. */
+export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelProps) {
+  const knowledge = roleForm.profile?.knowledge_base ?? {};
+  const [expandedEntries, setExpandedEntries] = useState<ReadonlySet<number>>(new Set());
+  const entries = knowledge.entries ?? [];
+  const enabled = knowledge.enabled !== false;
+
+  function updateKnowledge(update: (current: RoleKnowledgeBase) => RoleKnowledgeBase): void {
+    onUpdate((current) => {
+      const profile = current.profile ?? {};
+      return {
+        ...current,
+        profile: {
+          ...profile,
+          knowledge_base: update(profile.knowledge_base ?? {}),
+        },
+      };
     });
-    setSaving(false);
-    setFeedback(response.error ? { text: response.error.message, error: true } : { text: "知识库已保存", error: false });
   }
 
   function toggleEntry(index: number): void {
@@ -89,10 +92,6 @@ export function RoleKnowledgePanel({ activeRole, bridgeReady }: { activeRole: Ro
             <p className={roleSectionDescriptionClass}>导入的 Lorebook 条目会在运行时按关键词匹配。</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3 pt-0.5">
-          {feedback ? <span className={feedback.error ? "text-xs text-[#B54747]" : "text-xs text-[#2E7D5B]"}>{feedback.text}</span> : null}
-          <button type="button" className={rolePanelPrimaryButtonClass} disabled={!bridgeReady || saving} onClick={() => void save()}>{saving ? "保存中" : "保存"}</button>
-        </div>
       </div>
 
       <div className="grid gap-4 border-y border-[#E7ECF1] py-4">
@@ -101,11 +100,11 @@ export function RoleKnowledgePanel({ activeRole, bridgeReady }: { activeRole: Ro
             <h3 className="text-sm font-medium text-[#182230]">启用知识库</h3>
             <p className={roleSectionDescriptionClass}>{enabled ? "对话时会按关键词注入匹配条目。" : "关闭后条目保留，但不参与对话。"}</p>
           </div>
-          <SettingsToggleCard checked={enabled} ariaLabel="启用知识库" onChange={(checked) => setDraft((current) => ({ ...current, enabled: checked }))} />
+          <SettingsToggleCard checked={enabled} ariaLabel="启用知识库" onChange={(checked) => updateKnowledge((current) => ({ ...current, enabled: checked }))} />
         </div>
         <label className="grid max-w-48 gap-1.5 text-xs text-[#667085]">
           <span>Token 预算</span>
-          <input className={roleFieldClass} type="number" min={0} value={draft.token_budget ?? 1200} onChange={(event) => setDraft((current) => ({ ...current, token_budget: Number(event.target.value) || 0 }))} />
+          <input className={roleFieldClass} type="number" min={0} value={knowledge.token_budget ?? 1200} onChange={(event) => updateKnowledge((current) => ({ ...current, token_budget: Number(event.target.value) || 0 }))} />
         </label>
       </div>
 

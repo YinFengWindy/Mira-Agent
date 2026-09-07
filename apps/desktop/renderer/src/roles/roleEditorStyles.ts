@@ -19,10 +19,6 @@ export const roleSectionDescriptionClass = "mt-1 text-xs text-[#7B8794]";
 export const roleChipClass =
   "inline-flex max-w-full items-center truncate rounded-full bg-[#F3F6FA] px-2.5 py-1 text-[11px] leading-4 text-[#52606D]";
 
-/** Compact primary action for in-panel saves. */
-export const rolePanelPrimaryButtonClass =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#2176FF] px-3.5 text-xs font-medium text-white transition hover:bg-[#1D68E6] disabled:cursor-not-allowed disabled:bg-[#E5EAF1] disabled:text-[#98A2B3]";
-
 /** Compact ghost action rendered beside section headings. */
 export const rolePanelGhostButtonClass =
   "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#52606D] transition hover:bg-[#F3F6FA] hover:text-[#182230] focus:outline-none disabled:cursor-not-allowed disabled:text-[#C3CDD7]";
