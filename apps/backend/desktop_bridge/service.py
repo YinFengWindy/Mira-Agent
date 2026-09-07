@@ -38,6 +38,7 @@ from desktop_bridge.image_service import DesktopImageService
 from desktop_bridge.models import BridgeError, BridgeEvent, BridgeResponse
 from desktop_bridge.request_router import DesktopBridgeRequestRouter
 from desktop_bridge.role_requests import DesktopRoleRequestHandler
+from desktop_bridge.role_card_import_service import DesktopRoleCardImportService
 from agent.screen_observation.service import ScreenObservationService
 from desktop_bridge.role_presenter import DesktopRolePresenter
 from desktop_bridge.role_difference_service import RoleDifferenceGenerationService
@@ -154,6 +155,15 @@ class DesktopBridgeService:
             relationship_runtime,
         )
         self.role_presenter = DesktopRolePresenter(role_store, relationship_runtime)
+        self.role_card_import_service = (
+            card_import_service
+            if card_import_service is not None
+            else DesktopRoleCardImportService(
+                workspace=workspace,
+                role_service=self.role_service,
+                role_store=role_store,
+            )
+        )
         self.pet_packages = RolePetPackageService(role_store)
         self.voice_service = voice_service or VoiceService(
             getattr(config, "voice", None) or VoiceConfig()
@@ -212,7 +222,7 @@ class DesktopBridgeService:
                 role_differences=self.role_difference_service,
                 role_presenter=self.role_presenter,
                 voice_handler=self.voice_handler,
-                card_import_service=card_import_service,
+                card_import_service=self.role_card_import_service,
                 publish_event=self._broadcast_event,
             ),
             sessions_and_tasks=DesktopSessionTaskRequestHandler(

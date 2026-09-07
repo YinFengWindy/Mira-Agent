@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
+from bus.event_bus import EventBus
 from core.roles import RoleAggregateService, RoleStore
 from desktop_bridge.role_card_import_service import DesktopRoleCardImportService
+from desktop_bridge.service import DesktopBridgeService
 from session.manager import SessionManager
 
 
@@ -100,3 +104,30 @@ async def test_preview_rejects_sources_outside_the_staging_directory(tmp_path) -
 
     with pytest.raises(ValueError, match="受控导入目录"):
         await service.preview({"source": str(source)})
+
+
+@pytest.mark.asyncio
+async def test_default_desktop_bridge_service_exposes_role_card_preview(tmp_path) -> None:
+    role_store = RoleStore(tmp_path)
+    service = DesktopBridgeService(
+        workspace=tmp_path,
+        role_store=role_store,
+        session_manager=SessionManager(tmp_path),
+        agent_loop=SimpleNamespace(process_direct=AsyncMock()),
+        event_bus=EventBus(),
+    )
+    source = _stage_card(tmp_path, _card())
+
+    response = await service.handle(
+        {
+            "id": "role-card-preview",
+            "method": "roles.cardImport.preview",
+            "payload": {"source": str(source)},
+        },
+        emit_event=lambda _payload: None,
+    )
+
+    assert response.error is None
+    assert response.payload["name"] == "小诗"
+    assert response.payload["import_id"]
+    await service.aclose()
