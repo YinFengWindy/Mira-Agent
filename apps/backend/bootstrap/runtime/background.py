@@ -108,6 +108,9 @@ class RuntimeBackgroundMixin:
     def _prepare_background(self, candidate: RuntimeCandidate) -> None:
         self._background_groups[candidate] = RuntimeBackground(self, candidate)
 
+    def _generation_closed(self, candidate: RuntimeCandidate) -> None:
+        self._background_groups.pop(candidate, None)
+
     def _publish_background(self, previous, candidate: RuntimeCandidate) -> None:
         old_group = self._background_groups.get(previous)
         if old_group is not None:

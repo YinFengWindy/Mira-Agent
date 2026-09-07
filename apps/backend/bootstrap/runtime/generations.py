@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from core.common.task_collector import TaskCollector
+
 if TYPE_CHECKING:
     from bootstrap.channel_host import ChannelHost
     from agent.config_models import Config
@@ -120,3 +122,114 @@ class RuntimeLease:
 
     async def __aexit__(self, exc_type, exc, traceback):
         await self.release()
+
+
+class GenerationManager:
+    """Owns the published pointer, tracked generations and the admission gate."""
+
+    def __init__(self) -> None:
+        self.current: RuntimeCandidate | None = None
+        self.admission = asyncio.Event()
+        self.admission.set()
+        self.on_closed: Callable[[RuntimeCandidate], None] | None = None
+        self._tracked: list[RuntimeCandidate] = []
+        self._retirements = TaskCollector("Retired runtime cleanup")
+        self._closed = False
+
+    @property
+    def generation(self) -> int:
+        """Returns the active version, or zero before startup."""
+        return self.current.generation if self.current is not None else 0
+
+    @property
+    def tracked(self) -> tuple[RuntimeCandidate, ...]:
+        """Returns every generation that has not finished closing its resources."""
+        return tuple(self._tracked)
+
+    @property
+    def retained(self) -> tuple[RuntimeCandidate, ...]:
+        """Returns open resource owners for cross-generation task inspection."""
+        return tuple(generation for generation in self._tracked if not generation.closed)
+
+    @property
+    def accepting_work(self) -> bool:
+        """Reports whether new user operations can be accepted immediately."""
+        return self.admission.is_set() and not self._closed
+
+    @property
+    def retirement_errors(self) -> list[Exception]:
+        """Returns failures preserved from completed retirement tasks."""
+        return self._retirements.errors
+
+    def require_running(self) -> RuntimeCandidate:
+        """Returns the published generation, refusing before start and after shutdown."""
+        if self.current is None or self._closed:
+            raise RuntimeError("Application runtime is not running")
+        return self.current
+
+    def acquire(self) -> RuntimeLease:
+        """Pins the currently published runtime for one logical operation."""
+        return self.require_running().acquire()
+
+    def pin(self) -> RuntimeLease:
+        """Retains idle bridge handlers without counting them as accepted work."""
+        return self.require_running().acquire(persistent=True)
+
+    async def wait_for_admission(self) -> None:
+        """Defers new operations while a process-global channel identity changes."""
+        await self.admission.wait()
+
+    def track(self, candidate: RuntimeCandidate) -> None:
+        """Registers a generation whose close must be observed before shutdown ends."""
+        self._tracked.append(candidate)
+        candidate.on_closed = self._candidate_closed
+
+    def start(self, candidate: RuntimeCandidate) -> None:
+        """Adopts the first published generation at process start."""
+        self.current = candidate
+        self.track(candidate)
+
+    def publish(self, candidate: RuntimeCandidate) -> RuntimeCandidate:
+        """Swaps the published pointer synchronously and returns the previous owner."""
+        previous = self.require_running()
+        candidate.published = True
+        self.current = candidate
+        self.track(candidate)
+        return previous
+
+    def retire(self, previous: RuntimeCandidate) -> None:
+        """Schedules the replaced generation's close once its accepted work ends."""
+        previous.retired = True
+        self._retirements.spawn(
+            previous.close_if_idle(),
+            name=f"runtime:{previous.generation}:retire",
+        )
+
+    def close(self) -> None:
+        """Refuses new acquisition once process shutdown begins."""
+        self._closed = True
+
+    async def close_all(self) -> None:
+        """Retires every tracked generation and waits for their resources to close."""
+        generations = list(self._tracked)
+        for generation in generations:
+            generation.retired = True
+
+        async def close(generation: RuntimeCandidate) -> None:
+            await generation.close_if_idle()
+            await generation.drained.wait()
+            await generation.close_if_idle()
+
+        outcomes = await asyncio.gather(
+            *(close(generation) for generation in generations), return_exceptions=True,
+        )
+        errors = [error for error in outcomes if isinstance(error, Exception)]
+        if errors:
+            raise ExceptionGroup("Runtime generations failed to close", errors)
+        await self._retirements.drain()
+
+    def _candidate_closed(self, candidate: RuntimeCandidate) -> None:
+        if candidate is not self.current and candidate in self._tracked:
+            self._tracked.remove(candidate)
+        if self.on_closed is not None:
+            self.on_closed(candidate)

@@ -104,10 +104,10 @@ async def test_credential_change_drains_old_direct_and_queued_replies_before_swi
     publish = asyncio.create_task(app.publish(candidate))
     try:
         for _ in range(10):
-            if not app._admission_open.is_set():
+            if not app._generation_manager.admission.is_set():
                 break
             await asyncio.sleep(0)
-        assert not app._admission_open.is_set()
+        assert not app._generation_manager.admission.is_set()
         assert not app.accepting_work
         assert not publish.done()
         with bind_runtime(accepted):
@@ -117,7 +117,7 @@ async def test_credential_change_drains_old_direct_and_queued_replies_before_swi
         await asyncio.wait_for(publish, 3)
         assert sent == [("account-A", "direct old"), ("account-A", "queued old")]
         assert app.generation == 2
-        assert app._admission_open.is_set()
+        assert app._generation_manager.admission.is_set()
         assert app.accepting_work
         async with app.acquire() as fresh:
             with bind_runtime(fresh):
@@ -146,7 +146,7 @@ async def test_channel_commit_failure_restores_old_transport_and_admission(tmp_p
         with pytest.raises(OSError, match="commit failed"):
             await app.publish(candidate, commit=fail)
         await app.discard(candidate)
-        assert app.generation == 1 and app._admission_open.is_set()
+        assert app.generation == 1 and app._generation_manager.admission.is_set()
         await app.push_tool.execute(channel="telegram", chat_id="chat", message="still A")
         assert sent == [("account-A", "still A")]
     finally:
@@ -164,7 +164,7 @@ async def test_successful_account_switch_starts_untouched_candidate_background(t
         await asyncio.wait_for(loops[1].started.wait(), 1)
         assert loops[0].stopped.is_set()
         assert loops[1].stop_calls == 0
-        assert app.generation == 2 and app._admission_open.is_set()
+        assert app.generation == 2 and app._generation_manager.admission.is_set()
         assert not app.channel_host.channels[0].paused
         resume_after_commit.assert_not_called()
     finally:
@@ -186,7 +186,7 @@ async def test_failed_switch_restarts_only_published_background(tmp_path, monkey
         await asyncio.wait_for(loops[2].started.wait(), 1)
         assert loops[0].stopped.is_set()
         assert loops[1].stop_calls == 0 and not loops[1].started.is_set()
-        assert app.generation == 1 and app._admission_open.is_set()
+        assert app.generation == 1 and app._generation_manager.admission.is_set()
     finally:
         await app.discard(candidate)
         await app.shutdown()
@@ -203,7 +203,7 @@ async def test_pause_failure_reopens_admission_without_stopping_background(tmp_p
     try:
         with pytest.raises(RuntimeError, match="pause failed"):
             await app.publish(candidate)
-        assert app._admission_open.is_set()
+        assert app._generation_manager.admission.is_set()
         assert len(loops) == 2 and loops[0].stop_calls == loops[1].stop_calls == 0
         assert app.generation == 1
     finally:
@@ -227,7 +227,7 @@ async def test_background_recovery_failure_preserves_errors_and_reopens_admissio
         with pytest.raises(ExceptionGroup, match="Channel handover recovery failed") as failure:
             await asyncio.wait_for(app.publish(candidate, commit=commit_failure), 3)
         assert [str(error) for error in failure.value.exceptions] == ["commit failed", "background recovery failed"]
-        assert app._admission_open.is_set()
+        assert app._generation_manager.admission.is_set()
         assert loops[1].stop_calls == 0
         assert app.generation == 1
     finally:
@@ -250,7 +250,7 @@ async def test_rollback_resume_failure_still_reopens_admission(tmp_path, monkeyp
         with pytest.raises(ExceptionGroup, match="Channel handover recovery failed"):
             await asyncio.wait_for(app.publish(candidate, commit=commit_failure), 3)
         await asyncio.wait_for(loops[2].started.wait(), 1)
-        assert app._admission_open.is_set()
+        assert app._generation_manager.admission.is_set()
         assert app.generation == 1
     finally:
         await app.discard(candidate)

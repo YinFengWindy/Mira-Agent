@@ -38,7 +38,7 @@ async def test_shutdown_keeps_http_resources_until_queued_event_lease_drains(tmp
     finish.set()
     await asyncio.wait_for(shutdown, timeout=2)
     assert app.http_resources._closed
-    assert app._current.drained.is_set()
+    assert app._generation_manager.current.drained.is_set()
 
 
 @pytest.mark.asyncio
@@ -47,5 +47,5 @@ async def test_shutdown_releases_queued_spawn_completion_lease(tmp_path, monkeyp
     retained = app.acquire()
     await app.bus.publish_inbound(SpawnCompletionItem("desktop", "one", object(), runtime_lease=retained))
     await asyncio.wait_for(app.shutdown(), timeout=2)
-    assert app._current.references == 0
-    assert app._current.drained.is_set()
+    assert app._generation_manager.current.references == 0
+    assert app._generation_manager.current.drained.is_set()
