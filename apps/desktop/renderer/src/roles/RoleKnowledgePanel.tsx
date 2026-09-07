@@ -1,50 +1,15 @@
-import { BookOpenText, CaretDown } from "@phosphor-icons/react";
+import { BookOpenText } from "@phosphor-icons/react";
+import { PlusIcon } from "../shared/icons";
 import { useState } from "react";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
-import { cx } from "../shared/styles";
 import type { RoleFormState, RoleKnowledgeBase, RoleKnowledgeEntry } from "../shared/types";
 import {
-  roleChipClass,
   roleFieldClass,
+  rolePanelGhostButtonClass,
   roleSectionDescriptionClass,
   roleSectionTitleClass,
 } from "./roleEditorStyles";
-
-type KnowledgeEntryRowProps = {
-  entry: RoleKnowledgeEntry;
-  index: number;
-  expanded: boolean;
-  onToggle: () => void;
-};
-
-/** One collapsible Lorebook entry with its keyword chips. */
-function KnowledgeEntryRow({ entry, index, expanded, onToggle }: KnowledgeEntryRowProps) {
-  const keywords = entry.primary_keys ?? entry.keywords ?? [];
-
-  return (
-    <div className="border-b border-[#EEF2F5] last:border-b-0">
-      <button
-        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-left focus:outline-none"
-        type="button"
-        aria-expanded={expanded}
-        onClick={onToggle}
-      >
-        <span className="grid min-w-0 gap-1.5">
-          <span className="truncate text-sm font-medium text-[#182230]">{entry.name || entry.id || `条目 ${index + 1}`}</span>
-          <span className="flex flex-wrap gap-1.5">
-            {keywords.length
-              ? keywords.map((keyword) => <span className={roleChipClass} key={keyword}>{keyword}</span>)
-              : <span className="text-[11px] leading-4 text-[#98A2B3]">未设置关键词</span>}
-          </span>
-        </span>
-        <CaretDown className={cx("h-4 w-4 shrink-0 text-[#98A2B3] transition-transform", expanded && "rotate-180")} weight="bold" />
-      </button>
-      {expanded ? (
-        <p className="whitespace-pre-wrap pb-4 text-xs leading-5 text-[#4B5563]">{entry.content || "空条目"}</p>
-      ) : null}
-    </div>
-  );
-}
+import { RoleKnowledgeEntryRow } from "./RoleKnowledgeEntryRow";
 
 type RoleKnowledgePanelProps = {
   roleForm: RoleFormState;
@@ -54,9 +19,13 @@ type RoleKnowledgePanelProps = {
 /** Edits knowledge-base fields inside the shared role draft. */
 export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelProps) {
   const knowledge = roleForm.profile?.knowledge_base ?? {};
-  const [expandedEntries, setExpandedEntries] = useState<ReadonlySet<number>>(new Set());
+  const [expandedEntries, setExpandedEntries] = useState<ReadonlySet<string>>(new Set());
   const entries = knowledge.entries ?? [];
   const enabled = knowledge.enabled !== false;
+
+  function entryKey(entry: { id?: string }, index: number): string {
+    return entry.id || `index-${index}`;
+  }
 
   function updateKnowledge(update: (current: RoleKnowledgeBase) => RoleKnowledgeBase): void {
     onUpdate((current) => {
@@ -74,8 +43,41 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
   function toggleEntry(index: number): void {
     setExpandedEntries((current) => {
       const next = new Set(current);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+      const key = entryKey(entries[index] ?? {}, index);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function updateEntry(index: number, update: (current: RoleKnowledgeEntry) => RoleKnowledgeEntry): void {
+    updateKnowledge((current) => ({
+      ...current,
+      entries: (current.entries ?? []).map((entry, entryIndex) => entryIndex === index ? update(entry) : entry),
+    }));
+  }
+
+  function addEntry(): void {
+    const id = crypto.randomUUID();
+    updateKnowledge((current) => ({
+      ...current,
+      entries: [
+        ...(current.entries ?? []),
+        { id, content: "", primary_keys: [], enabled: true, always_active: false, case_sensitive: false, priority: 0 },
+      ],
+    }));
+    setExpandedEntries((current) => new Set(current).add(id));
+  }
+
+  function removeEntry(index: number): void {
+    const key = entryKey(entries[index] ?? {}, index);
+    updateKnowledge((current) => ({
+      ...current,
+      entries: (current.entries ?? []).filter((_, entryIndex) => entryIndex !== index),
+    }));
+    setExpandedEntries((current) => {
+      const next = new Set(current);
+      next.delete(key);
       return next;
     });
   }
@@ -109,11 +111,25 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
       </div>
 
       <div className="grid gap-1">
-        <h3 className="text-sm font-medium text-[#182230]">条目 · {entries.length}</h3>
+        <div className="flex items-center justify-between gap-4">
+          <h3 className="text-sm font-medium text-[#182230]">条目 · {entries.length}</h3>
+          <button className={rolePanelGhostButtonClass} type="button" onClick={addEntry} aria-label="添加知识库条目" data-testid="add-knowledge-entry-button">
+            <PlusIcon className="h-4 w-4 fill-current" />
+            添加条目
+          </button>
+        </div>
         {entries.length ? (
           <div>
             {entries.map((entry, index) => (
-              <KnowledgeEntryRow entry={entry} index={index} expanded={expandedEntries.has(index)} onToggle={() => toggleEntry(index)} key={entry.id ?? index} />
+              <RoleKnowledgeEntryRow
+                entry={entry}
+                index={index}
+                expanded={expandedEntries.has(entryKey(entry, index))}
+                onToggle={() => toggleEntry(index)}
+                onUpdate={(update) => updateEntry(index, update)}
+                onRemove={() => removeEntry(index)}
+                key={entry.id ?? index}
+              />
             ))}
           </div>
         ) : (
