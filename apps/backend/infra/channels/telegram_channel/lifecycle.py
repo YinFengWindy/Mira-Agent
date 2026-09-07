@@ -11,6 +11,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from agent.looping.interrupt import InterruptController
 from bus.event_bus import EventBus
+from bus.event_binding import EventBinding
 from bus.events_lifecycle import (
     StreamDeltaReady,
     ToolCallCompleted,
@@ -103,10 +104,10 @@ class TelegramChannel(
         self._push_tool = None
         self._intake = ChannelIntake(self._accept_inbound, self.send)
         self._event_bindings = (
-            (TurnStarted, self._on_turn_started),
-            (StreamDeltaReady, self._on_stream_delta),
-            (ToolCallStarted, self._on_tool_call_started),
-            (ToolCallCompleted, self._on_tool_call_completed),
+            EventBinding(TurnStarted, self._on_turn_started),
+            EventBinding(StreamDeltaReady, self._on_stream_delta),
+            EventBinding(ToolCallStarted, self._on_tool_call_started),
+            EventBinding(ToolCallCompleted, self._on_tool_call_completed),
         )
         self.user_map = self._identity_index.mapping
         self._polling_conflict_task: asyncio.Task[None] | None = None
@@ -160,8 +161,8 @@ class TelegramChannel(
             self._bus.subscribe_outbound(self._channel, self._on_response)
             self._outbound_bound = True
         if self._event_bus is not None and not self._events_bound:
-            for event_type, handler in self._event_bindings:
-                self._event_bus.on(event_type, handler)
+            for binding in self._event_bindings:
+                binding.bind(self._event_bus)
             self._events_bound = True
 
     async def stop(self) -> None:
@@ -185,8 +186,8 @@ class TelegramChannel(
             self._bus.unsubscribe_outbound(self._channel, self._on_response)
             self._outbound_bound = False
         if self._event_bus is not None and self._events_bound:
-            for event_type, handler in self._event_bindings:
-                self._event_bus.off(event_type, handler)
+            for binding in self._event_bindings:
+                binding.unbind(self._event_bus)
             self._events_bound = False
         if self._push_tool is not None:
             self._push_tool.unregister_channel(self.name, text=self.send)

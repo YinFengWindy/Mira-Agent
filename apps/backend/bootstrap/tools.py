@@ -449,6 +449,8 @@ def build_core_runtime(
         presence=presence,
     )
     processing_state = shared.loop.processing_state if shared is not None else ProcessingState()
+    if processing_state is None:
+        raise RuntimeError("Shared runtime is missing its processing state")
     image_sync_service = shared.image_sync_service if shared is not None else ExternalImageSyncService(
         session_manager=session_manager,
         event_bus=event_outlet or event_bus,

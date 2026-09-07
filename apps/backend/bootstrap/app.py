@@ -124,9 +124,9 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
             plugin_manager = getattr(self.core, "plugin_manager", None)
             self.channel_host = await start_channels(
                 self.config,
-                bus=self.bus,
-                session_manager=self.session_manager,
-                push_tool=self.push_tool,
+                bus=self.core.bus,
+                session_manager=self.core.session_manager,
+                push_tool=self.core.push_tool,
                 http_resources=self.http_resources,
                 event_bus=event_bus,
                 bot_commands=(

@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from agent.looping.interrupt import InterruptController
 from bus.event_bus import EventBus
+from bus.event_binding import EventBinding
 from bus.events_lifecycle import ToolCallCompleted, ToolCallStarted, TurnStarted
 from bus.queue import MessageBus
 from core.channels import ChannelHub
@@ -86,9 +87,9 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
         self._push_tool = None
         self._intake = ChannelIntake(self._accept_inbound, self.send)
         self._event_bindings = (
-            (TurnStarted, self._on_turn_started),
-            (ToolCallStarted, self._on_tool_call_started),
-            (ToolCallCompleted, self._on_tool_call_completed),
+            EventBinding(TurnStarted, self._on_turn_started),
+            EventBinding(ToolCallStarted, self._on_tool_call_started),
+            EventBinding(ToolCallCompleted, self._on_tool_call_completed),
         )
         self._handlers_bound = False
         self._trace_states: dict[str, _QQTraceState] = {}
@@ -223,8 +224,8 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
     def _bind_events(self) -> None:
         if self._event_bus is None or self._events_bound:
             return
-        for event_type, handler in self._event_bindings:
-            self._event_bus.on(event_type, handler)
+        for binding in self._event_bindings:
+            binding.bind(self._event_bus)
         self._events_bound = True
 
     async def stop(self) -> None:
@@ -244,8 +245,8 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
                 self._bus.unsubscribe_outbound(CHANNEL, self._on_response)
                 self._outbound_bound = False
             if self._event_bus is not None and self._events_bound:
-                for event_type, handler in self._event_bindings:
-                    self._event_bus.off(event_type, handler)
+                for binding in self._event_bindings:
+                    binding.unbind(self._event_bus)
                 self._events_bound = False
             if self._push_tool is not None:
                 self._push_tool.unregister_channel(self.name, text=self.send)

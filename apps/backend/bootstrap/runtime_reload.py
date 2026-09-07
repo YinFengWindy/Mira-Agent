@@ -94,6 +94,9 @@ class RuntimeReloadMixin:
         commit: Callable[[], None] | None = None,
     ) -> None:
         """Commits persistence immediately before publishing the prepared pointer."""
+        current = self._current
+        if current is None or self._shutdown:
+            raise RuntimeError("Application runtime is not running")
         if candidate is self._current:
             if commit is not None:
                 commit()
@@ -118,7 +121,23 @@ class RuntimeReloadMixin:
             task.add_done_callback(self._retirement_done)
 
         if self.channel_host is not None and candidate.channel_host is not None:
-            async with channel_handover_barrier(self, candidate) as accepted_generations:
+            def restore_background() -> None:
+                try:
+                    self._prepare_background(current)
+                    self._publish_background(None, current)
+                except BaseException as error:
+                    try:
+                        self._discard_background(current)
+                    except BaseException as cleanup_error:
+                        raise BaseExceptionGroup("Background recovery failed", [error, cleanup_error]) from error
+                    raise
+
+            async with channel_handover_barrier(
+                self.channel_host, candidate, current=current,
+                accepted=tuple(self._generations), background_groups=self._background_groups,
+                admission=self._admission_open, drain_outbound=self.bus.drain_outbound,
+                restore_background=restore_background,
+            ) as accepted_generations:
                 async def retire_transports() -> None:
                     for generation in accepted_generations:
                         await generation.drained.wait()

@@ -3,28 +3,41 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from bootstrap.app import AppRuntime
+    from bootstrap.channel_host import ChannelHost
+    from bootstrap.runtime_background import RuntimeBackground
     from bootstrap.runtime_generations import RuntimeCandidate
 
 
 @asynccontextmanager
-async def channel_handover_barrier(app: AppRuntime, candidate: RuntimeCandidate):
+async def channel_handover_barrier(
+    host: ChannelHost,
+    candidate: RuntimeCandidate,
+    *,
+    current: RuntimeCandidate,
+    accepted: tuple[RuntimeCandidate, ...],
+    background_groups: Mapping[RuntimeCandidate, RuntimeBackground],
+    admission: asyncio.Event,
+    drain_outbound: Callable[[], Awaitable[None]],
+    restore_background: Callable[[], None],
+):
     """Drains published versions while leaving prepared candidate work untouched."""
-    accepted = tuple(app._generations)
-    host = app.channel_host
-    if not host.requires_exclusive_handover(candidate.channel_host):
+    candidate_host = candidate.channel_host
+    if candidate_host is None:
+        raise RuntimeError("Channel handover requires a prepared channel host")
+    if not host.requires_exclusive_handover(candidate_host):
         yield accepted
         return
 
-    groups = [app._background_groups[generation] for generation in accepted if generation in app._background_groups]
-    current_group = app._background_groups.get(app._current)
+    groups = [background_groups[generation] for generation in accepted if generation in background_groups]
+    current_group = background_groups.get(current)
     stopped_current = False
     failure: BaseException | None = None
-    app._admission_open.clear()
+    admission.clear()
     try:
         # Intake can fail after partially pausing channels, so it belongs inside
         # the same recovery boundary as background drain and durable commit.
@@ -38,7 +51,7 @@ async def channel_handover_barrier(app: AppRuntime, candidate: RuntimeCandidate)
         if errors:
             raise BaseExceptionGroup("Accepted background work failed to drain", errors)
         await asyncio.gather(*(generation.wait_for_work() for generation in accepted))
-        await app.bus.drain_outbound()
+        await drain_outbound()
         yield accepted
     except BaseException as error:
         failure = error
@@ -48,21 +61,16 @@ async def channel_handover_barrier(app: AppRuntime, candidate: RuntimeCandidate)
         try:
             if stopped_current and not candidate.published:
                 try:
-                    app._prepare_background(app._current)
-                    app._publish_background(None, app._current)
+                    restore_background()
                 except BaseException as error:
                     recovery_errors.append(error)
-                    try:
-                        app._discard_background(app._current)
-                    except BaseException as cleanup_error:
-                        recovery_errors.append(cleanup_error)
             if not candidate.published:
                 try:
                     host.resume_intake()
                 except BaseException as error:
                     recovery_errors.append(error)
         finally:
-            app._admission_open.set()
+            admission.set()
         if recovery_errors:
             if failure is not None:
                 recovery_errors.insert(0, failure)
