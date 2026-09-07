@@ -132,11 +132,18 @@ export function RoleCardImportPreviewDialog({
 
             <PreviewSection title={`素材 · ${assets.length}`}>
               {assets.length ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-3">
                   {assets.map((asset, index) => (
-                    <span className={roleChipClass} key={`${asset.kind ?? "asset"}-${asset.path ?? index}`}>
-                      {assetLabel(asset.kind)}{asset.name ? ` · ${asset.name}` : ""}
-                    </span>
+                    <figure className="m-0 grid w-20 justify-items-center gap-1.5" key={`${asset.kind ?? "asset"}-${asset.path ?? index}`}>
+                      {asset.thumbnail ? (
+                        <img className="h-20 w-20 rounded-xl object-cover shadow-[0_6px_16px_rgba(15,23,42,0.12)]" src={asset.thumbnail} alt={`${assetLabel(asset.kind)}素材预览`} />
+                      ) : (
+                        <div className="grid h-20 w-20 place-items-center rounded-xl bg-[#F2F5F9] text-[11px] text-[#98A2B3]" aria-hidden="true">无预览</div>
+                      )}
+                      <figcaption className="w-full truncate text-center text-[11px] leading-4 text-[#667085]">
+                        {assetLabel(asset.kind)}{asset.name ? ` · ${asset.name}` : ""}
+                      </figcaption>
+                    </figure>
                   ))}
                 </div>
               ) : <p className="m-0 text-xs text-[#98A2B3]">无</p>}

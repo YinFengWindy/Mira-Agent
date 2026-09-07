@@ -1,12 +1,31 @@
 from __future__ import annotations
 
+import base64
+import io
 import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from core.roles import RoleAggregateService, RoleAssetCategory, RoleStore
 from core.roles.card_import import RoleCardImportService
+
+_THUMBNAIL_MAX_EDGE = 320
+
+
+def _asset_thumbnail(data: bytes) -> str | None:
+    """Renders a bounded data-URI thumbnail for one previewed image asset."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            thumbnail = image.convert("RGBA")
+            thumbnail.thumbnail((_THUMBNAIL_MAX_EDGE, _THUMBNAIL_MAX_EDGE))
+            output = io.BytesIO()
+            thumbnail.save(output, format="PNG")
+    except (OSError, ValueError):
+        return None
+    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
 
 
 class DesktopRoleCardImportService:
@@ -35,6 +54,12 @@ class DesktopRoleCardImportService:
         import_id = uuid.uuid4().hex
         self._imports[import_id] = source
         result = preview.to_dict()
+        for asset, payload in zip(preview.assets, result["assets"]):
+            if asset.data is None:
+                continue
+            thumbnail = _asset_thumbnail(asset.data)
+            if thumbnail:
+                payload["thumbnail"] = thumbnail
         result.update(
             {
                 "import_id": import_id,

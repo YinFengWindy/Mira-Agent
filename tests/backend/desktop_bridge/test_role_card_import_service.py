@@ -193,6 +193,10 @@ async def test_commit_keeps_png_card_as_avatar_and_imported_asset(tmp_path) -> N
         {"id": "preview", "method": "roles.cardImport.preview", "payload": {"source": str(source)}},
         emit_event=lambda _payload: None,
     )
+    assert any(
+        str(asset.get("thumbnail") or "").startswith("data:image/png;base64,")
+        for asset in preview.payload["assets"]
+    )
     committed = await service.handle(
         {
             "id": "commit",
