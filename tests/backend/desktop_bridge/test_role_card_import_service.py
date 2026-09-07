@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -193,10 +194,13 @@ async def test_commit_keeps_png_card_as_avatar_and_imported_asset(tmp_path) -> N
         {"id": "preview", "method": "roles.cardImport.preview", "payload": {"source": str(source)}},
         emit_event=lambda _payload: None,
     )
-    assert any(
-        str(asset.get("thumbnail") or "").startswith("data:image/png;base64,")
+    preview_paths = [
+        str(asset.get("preview_abs") or "")
         for asset in preview.payload["assets"]
-    )
+        if asset.get("preview_abs")
+    ]
+    assert preview_paths, "expected at least one asset preview thumbnail"
+    assert all(Path(path).is_file() for path in preview_paths)
     committed = await service.handle(
         {
             "id": "commit",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import base64
 import io
+import shutil
 import tempfile
 import uuid
 from pathlib import Path
@@ -15,17 +15,16 @@ from core.roles.card_import import RoleCardImportService
 _THUMBNAIL_MAX_EDGE = 320
 
 
-def _asset_thumbnail(data: bytes) -> str | None:
-    """Renders a bounded data-URI thumbnail for one previewed image asset."""
+def _write_asset_preview(data: bytes, target: Path) -> bool:
+    """Writes a bounded PNG thumbnail for one previewed image asset."""
     try:
         with Image.open(io.BytesIO(data)) as image:
             thumbnail = image.convert("RGBA")
             thumbnail.thumbnail((_THUMBNAIL_MAX_EDGE, _THUMBNAIL_MAX_EDGE))
-            output = io.BytesIO()
-            thumbnail.save(output, format="PNG")
+            thumbnail.save(target, format="PNG")
     except (OSError, ValueError):
-        return None
-    return "data:image/png;base64," + base64.b64encode(output.getvalue()).decode("ascii")
+        return False
+    return True
 
 
 class DesktopRoleCardImportService:
@@ -47,6 +46,11 @@ class DesktopRoleCardImportService:
         ).resolve()
         self._staging_root.mkdir(parents=True, exist_ok=True)
         self._imports: dict[str, Path] = {}
+        for child in self._staging_root.iterdir():
+            # Only preview-thumbnail directories live under the staging root;
+            # staged card files are plain files and must survive restarts.
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
 
     async def preview(self, payload: dict[str, Any]) -> dict[str, Any]:
         source = self._validate_source(payload.get("source"))
@@ -54,12 +58,14 @@ class DesktopRoleCardImportService:
         import_id = uuid.uuid4().hex
         self._imports[import_id] = source
         result = preview.to_dict()
-        for asset, payload in zip(preview.assets, result["assets"]):
+        preview_dir = self._staging_root / import_id
+        for index, (asset, asset_payload) in enumerate(zip(preview.assets, result["assets"])):
             if asset.data is None:
                 continue
-            thumbnail = _asset_thumbnail(asset.data)
-            if thumbnail:
-                payload["thumbnail"] = thumbnail
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            target = preview_dir / f"asset-{index}.png"
+            if _write_asset_preview(asset.data, target):
+                asset_payload["preview_abs"] = str(target)
         result.update(
             {
                 "import_id": import_id,
@@ -130,6 +136,7 @@ class DesktopRoleCardImportService:
             return {"role": aggregate.role.to_dict()}
         finally:
             self._imports.pop(import_id, None)
+            self._cleanup_preview_assets(import_id)
             for temporary_path in temporary_files:
                 temporary_path.unlink(missing_ok=True)
 
@@ -178,7 +185,15 @@ class DesktopRoleCardImportService:
     async def cancel(self, payload: dict[str, Any]) -> dict[str, Any]:
         import_id = str(payload.get("import_id") or "").strip()
         self._imports.pop(import_id, None)
+        self._cleanup_preview_assets(import_id)
         return {"cancelled": bool(import_id)}
+
+    def _cleanup_preview_assets(self, import_id: str) -> None:
+        if not import_id:
+            return
+        preview_dir = (self._staging_root / import_id).resolve()
+        if preview_dir.parent == self._staging_root and preview_dir.is_dir():
+            shutil.rmtree(preview_dir, ignore_errors=True)
 
     def _validate_source(self, raw_source: Any) -> Path:
         source = Path(str(raw_source or "")).expanduser().resolve()

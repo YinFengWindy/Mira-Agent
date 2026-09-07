@@ -344,7 +344,7 @@ export type RoleCardImportPreview = {
     unsupported_resources?: string[];
     unsupported_rules?: string[];
   };
-  assets?: Array<{ kind?: string; name?: string | null; path?: string; media_type?: string | null; size?: number; thumbnail?: string }>;
+  assets?: Array<{ kind?: string; name?: string | null; path?: string; media_type?: string | null; size?: number; preview_abs?: string }>;
   provenance?: { format?: string; card_version?: string | null } | null;
 };
 
