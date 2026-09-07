@@ -8,6 +8,7 @@ from PIL import Image
 from bus.event_bus import EventBus
 from core.roles import RoleStore
 from desktop_bridge.service import DesktopBridgeService
+from desktop_bridge.role_requests import DesktopRoleRequestHandler
 from session.manager import SessionManager
 
 
@@ -29,6 +30,31 @@ class FakeNovelAI:
         output = self.output_dir / f"generated-{self.index}.png"
         _write_image(output, (210, 80, 110))
         return SimpleNamespace(output_paths=[str(output)])
+
+
+@pytest.mark.asyncio
+async def test_role_card_preview_forwards_the_full_payload_to_its_service() -> None:
+    card_import = SimpleNamespace(preview=AsyncMock(return_value={"import_id": "preview-1"}))
+    handler = DesktopRoleRequestHandler(
+        role_service=SimpleNamespace(),
+        role_store=SimpleNamespace(),
+        pet_packages=SimpleNamespace(),
+        role_differences=SimpleNamespace(),
+        role_presenter=SimpleNamespace(),
+        voice_handler=SimpleNamespace(),
+        card_import_service=card_import,
+        publish_event=AsyncMock(),
+    )
+
+    result = await handler.handle(
+        "roles.cardImport.preview",
+        {"source": "C:/workspace/private_runtime/imports/role-cards/card.json"},
+    )
+
+    card_import.preview.assert_awaited_once_with(
+        {"source": "C:/workspace/private_runtime/imports/role-cards/card.json"}
+    )
+    assert result == {"import_id": "preview-1"}
 
 
 @pytest.mark.asyncio

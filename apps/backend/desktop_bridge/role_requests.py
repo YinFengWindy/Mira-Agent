@@ -71,7 +71,7 @@ class DesktopRoleRequestHandler:
             handler = getattr(service, operation, None)
             if not callable(handler):
                 raise RuntimeError(f"role card import service lacks {operation} operation")
-            argument: object = str(payload.get("source") or "") if operation == "preview" else dict(payload)
+            argument = dict(payload)
             result = handler(argument)
             if inspect.isawaitable(result):
                 result = await result
