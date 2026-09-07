@@ -55,7 +55,7 @@ class DesktopRoleCardImportService:
         overrides = overrides if isinstance(overrides, dict) else {}
         name = str(overrides.get("name") or preview.name).strip()
         description = str(overrides.get("description") or "")
-        profile = dict(preview.profile)
+        profile = self._profile_with_overrides(preview, overrides.get("profile"))
         character = dict(profile.get("character") or {})
         requested_prompt = str(overrides.get("system_prompt") or "").strip()
         if requested_prompt:
@@ -166,3 +166,15 @@ class DesktopRoleCardImportService:
         if source.suffix.casefold() not in {".json", ".png", ".apng", ".charx"}:
             raise ValueError("不支持的角色卡格式")
         return source
+
+    @staticmethod
+    def _profile_with_overrides(preview: Any, raw_overrides: Any) -> dict[str, Any]:
+        profile = dict(preview.profile)
+        if preview.provenance is not None:
+            profile["import_provenance"] = preview.provenance.to_dict()
+        overrides = raw_overrides if isinstance(raw_overrides, dict) else {}
+        for section in ("character", "greetings", "knowledge_base"):
+            value = overrides.get(section)
+            if isinstance(value, dict):
+                profile[section] = {**dict(profile.get(section) or {}), **value}
+        return profile

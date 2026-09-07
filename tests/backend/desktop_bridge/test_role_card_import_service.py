@@ -122,12 +122,20 @@ async def test_commit_keeps_long_card_description_out_of_the_role_summary(tmp_pa
     source = _stage_card(tmp_path, card)
     preview = await service.preview({"source": str(source)})
 
-    await service.commit({"import_id": preview["import_id"]})
+    await service.commit(
+        {
+            "import_id": preview["import_id"],
+            "overrides": {"profile": {"character": {"personality": "自定义性格"}}},
+        }
+    )
 
     imported = store.list_roles()[0]
     assert imported.description == ""
     assert imported.profile.character.profile == "完整角色设定"
+    assert imported.profile.character.personality == "自定义性格"
     assert imported.system_prompt == "请遵循角色资料进行自然对话。"
+    assert imported.profile.import_provenance is not None
+    assert imported.profile.import_provenance.format == "tavern-json"
 
 
 @pytest.mark.asyncio

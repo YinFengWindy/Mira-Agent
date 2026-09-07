@@ -302,6 +302,7 @@ export type NewRoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  profile?: RoleProfileDraft;
   /** Server-owned staging import id; never a renderer filesystem path. */
   importId?: string;
 };
@@ -325,15 +326,18 @@ export type RoleKnowledgeBase = {
   entries?: RoleKnowledgeEntry[];
 };
 
+/** Editable structured role data shared by card import and role persistence. */
+export type RoleProfileDraft = {
+  character?: { profile?: string; personality?: string; behavior_rules?: string };
+  greetings?: { default?: string; alternates?: string[] };
+  knowledge_base?: RoleKnowledgeBase;
+};
+
 export type RoleCardImportPreview = {
   import_id: string;
   name?: string;
   description?: string;
-  profile?: {
-    character?: { profile?: string; personality?: string; behavior_rules?: string };
-    greetings?: { default?: string; alternates?: string[] };
-    knowledge_base?: RoleKnowledgeBase;
-  };
+  profile?: RoleProfileDraft;
   report?: {
     adapted_fields?: string[];
     discarded_fields?: string[];

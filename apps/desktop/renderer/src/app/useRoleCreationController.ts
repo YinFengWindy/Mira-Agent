@@ -106,7 +106,12 @@ export async function runRoleCreation(
       method: "roles.cardImport.commit",
       payload: {
         import_id: form.importId,
-        overrides: { name, description: form.description, system_prompt: systemPrompt },
+        overrides: {
+          name,
+          description: form.description,
+          system_prompt: systemPrompt,
+          ...(form.profile ? { profile: form.profile } : {}),
+        },
       },
     });
     setCreating(false);
@@ -270,6 +275,7 @@ export function useRoleCreationController({
       importId,
       name: typeof previewPayload.name === "string" ? previewPayload.name : current.name,
       systemPrompt: typeof previewPayload.system_prompt === "string" ? previewPayload.system_prompt : current.systemPrompt,
+      profile: preview.profile,
     }));
   }
 

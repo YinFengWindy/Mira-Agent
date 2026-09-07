@@ -4,6 +4,7 @@ import { cx, inputClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
 import type { RoleCardImportState } from "../app/useRoleCreationController";
 import { RoleCardImportPreviewDialog } from "./RoleCardImportPreview";
+import { RoleCardProfileForm } from "./RoleCardProfileForm";
 
 type RoleCreatePageProps = {
   bridgeReady: boolean;
@@ -137,17 +138,25 @@ export function RoleCreatePage({
                   placeholder="简短描述这个角色"
                 />
               </label>
-              <label className="grid gap-2 text-xs text-[#6b7280]">
-                <span>系统提示词</span>
-                <textarea
-                  ref={promptRef}
-                  data-testid="new-role-prompt"
-                  className={cx(inputClass, "min-h-[120px] resize-none overflow-hidden border-[#E5E7EB] bg-white/78 text-[#1f2937] placeholder:text-[#9ca3af]")}
-                  value={form.systemPrompt}
-                  onChange={(event) => onUpdateForm((current) => ({ ...current, systemPrompt: event.target.value }))}
-                  placeholder="定义这个角色的行为、语气和边界"
+              {!form.profile ? (
+                <label className="grid gap-2 text-xs text-[#6b7280]">
+                  <span>系统提示词</span>
+                  <textarea
+                    ref={promptRef}
+                    data-testid="new-role-prompt"
+                    className={cx(inputClass, "min-h-[120px] resize-none overflow-hidden border-[#E5E7EB] bg-white/78 text-[#1f2937] placeholder:text-[#9ca3af]")}
+                    value={form.systemPrompt}
+                    onChange={(event) => onUpdateForm((current) => ({ ...current, systemPrompt: event.target.value }))}
+                    placeholder="定义这个角色的行为、语气和边界"
+                  />
+                </label>
+              ) : null}
+              {form.profile ? (
+                <RoleCardProfileForm
+                  profile={form.profile}
+                  onUpdate={(profile) => onUpdateForm((current) => ({ ...current, profile }))}
                 />
-              </label>
+              ) : null}
             </div>
           </div>
         </div>
