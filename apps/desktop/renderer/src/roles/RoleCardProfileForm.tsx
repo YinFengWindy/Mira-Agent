@@ -1,17 +1,10 @@
 import { cx } from "../shared/styles";
 import type { RoleProfileDraft } from "../shared/types";
-import { SettingsToggleCard } from "../settings/SettingsToggleCard";
-import {
-  roleChipClass,
-  roleFieldClass,
-  roleSectionDescriptionClass,
-  roleSectionTitleClass,
-} from "./roleEditorStyles";
+import { roleFieldClass } from "./roleEditorStyles";
 
 type RoleCardProfileFormProps = {
   profile: RoleProfileDraft;
   onUpdate: (next: RoleProfileDraft) => void;
-  showKnowledge?: boolean;
 };
 
 type ProfileFieldProps = {
@@ -41,15 +34,12 @@ function ProfileField({ label, hint, value, placeholder, heightClass = "h-40", o
   );
 }
 
-/** Edits structured role fields without flattening their persisted profile. */
+/** Edits structured character fields; the knowledge base is managed in the detail tab. */
 export function RoleCardProfileForm({
   profile,
   onUpdate,
-  showKnowledge = true,
 }: RoleCardProfileFormProps) {
   const character = profile.character ?? {};
-  const knowledge = profile.knowledge_base ?? {};
-  const entries = knowledge.entries ?? [];
 
   function updateCharacter(field: keyof NonNullable<RoleProfileDraft["character"]>, value: string): void {
     onUpdate({ ...profile, character: { ...character, [field]: value } });
@@ -81,39 +71,6 @@ export function RoleCardProfileForm({
           />
         </div>
       </div>
-
-      {showKnowledge ? (
-        <section className="grid gap-4 border-t border-[#E7ECF1] pt-6" data-testid="role-card-profile-knowledge">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className={roleSectionTitleClass}>知识库 · {entries.length}</h3>
-              <p className={roleSectionDescriptionClass}>随角色卡导入的 Lorebook 条目。</p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
-              <span className={knowledge.enabled === true ? "text-xs text-[#2E7D5B]" : "text-xs text-[#7B8794]"}>{knowledge.enabled === true ? "已启用" : "未启用"}</span>
-              <SettingsToggleCard compact checked={knowledge.enabled === true} ariaLabel="启用知识库" onChange={(checked) => onUpdate({ ...profile, knowledge_base: { ...knowledge, enabled: checked } })} />
-            </div>
-          </div>
-          <label className="grid max-w-48 gap-1.5 text-xs text-[#667085]">
-            <span>Token 预算</span>
-            <input className={roleFieldClass} type="number" min={0} value={knowledge.token_budget ?? 2000} onChange={(event) => onUpdate({ ...profile, knowledge_base: { ...knowledge, token_budget: Number(event.target.value) || 0 } })} />
-          </label>
-          {entries.length ? (
-            <div className="grid gap-0">
-              {entries.map((entry, index) => (
-                <div className="grid gap-2 border-b border-[#EEF2F5] py-3 text-xs last:border-b-0" key={entry.id ?? index}>
-                  <p className="whitespace-pre-wrap leading-5 text-[#475467]">{entry.content || "空条目"}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(entry.primary_keys ?? entry.keywords ?? []).length
-                      ? (entry.primary_keys ?? entry.keywords ?? []).map((keyword) => <span className={roleChipClass} key={keyword}>{keyword}</span>)
-                      : <span className="text-[11px] text-[#98A2B3]">未设置关键词</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : <p className="text-xs text-[#98A2B3]">无条目</p>}
-        </section>
-      ) : null}
     </div>
   );
 }
