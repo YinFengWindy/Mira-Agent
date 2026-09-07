@@ -3,6 +3,10 @@ import type { SessionMessage } from "../shared/types";
 export const chatMessageVirtualOverscanPixels = 720;
 export const chatMessageVirtualFallbackViewportHeight = 720;
 export const chatMessageVirtualRowGap = 12;
+// The bridge initially loads bounded history pages. Rendering those pages in
+// full avoids placing a real message behind a height estimate while the user
+// starts scrolling; virtualization remains reserved for genuinely long lists.
+export const chatMessageVirtualizationThreshold = 240;
 
 export type ChatMessageVirtualWindow = {
   startIndex: number;
@@ -96,13 +100,35 @@ export function getVirtualChatMessageWindow({
     };
   }
 
+  if (messages.length <= chatMessageVirtualizationThreshold) {
+    const totalHeight = messages.reduce(
+      (total, message, index) => total + heightForMessage(
+        message,
+        messageKeys[index]!,
+        measuredHeights,
+      ),
+      0,
+    );
+    return {
+      startIndex: 0,
+      endIndex: messages.length,
+      firstVisibleIndex: 0,
+      messages: [...messages],
+      topSpacerHeight: 0,
+      bottomSpacerHeight: 0,
+      totalHeight: Math.max(0, totalHeight - chatMessageVirtualRowGap),
+    };
+  }
+
   const offsets = [0];
   for (let index = 0; index < messages.length; index += 1) {
     offsets.push(
       offsets[index]! + heightForMessage(messages[index]!, messageKeys[index]!, measuredHeights),
     );
   }
-  const totalHeight = offsets.at(-1) ?? 0;
+  // Grid gaps exist only between rows. The cumulative offsets model one gap
+  // after every row, so remove the final non-existent gap from the scroll map.
+  const totalHeight = Math.max(0, (offsets.at(-1) ?? 0) - chatMessageVirtualRowGap);
   const safeScrollTop = Math.max(0, Math.min(scrollTop, totalHeight));
   const safeViewportHeight = Math.max(1, viewportHeight || chatMessageVirtualFallbackViewportHeight);
   const firstVisibleIndex = firstIndexAfterOffset(offsets, safeScrollTop);
@@ -123,8 +149,10 @@ export function getVirtualChatMessageWindow({
     endIndex,
     firstVisibleIndex,
     messages: messages.slice(startIndex, endIndex),
-    topSpacerHeight: offsets[startIndex] ?? 0,
-    bottomSpacerHeight: totalHeight - (offsets[endIndex] ?? totalHeight),
+    // The grid supplies the boundary gap beside each spacer. Keeping that gap
+    // out of spacer heights prevents the virtual positions drifting per slice.
+    topSpacerHeight: Math.max(0, (offsets[startIndex] ?? 0) - chatMessageVirtualRowGap),
+    bottomSpacerHeight: Math.max(0, totalHeight - (offsets[endIndex] ?? totalHeight)),
     totalHeight,
   };
 }

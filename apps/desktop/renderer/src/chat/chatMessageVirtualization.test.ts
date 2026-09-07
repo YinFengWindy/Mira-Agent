@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import {
   getVirtualChatMessageWindow,
   chatMessageVirtualRowGap,
+  chatMessageVirtualizationThreshold,
 } from "./chatMessageVirtualization";
 import type { SessionMessage } from "../shared/types";
 
@@ -17,6 +18,22 @@ function messages(count: number): SessionMessage[] {
 }
 
 describe("getVirtualChatMessageWindow", () => {
+  it("keeps a bounded bridge history page fully mounted before virtualization is needed", () => {
+    const source = messages(chatMessageVirtualizationThreshold);
+    const window = getVirtualChatMessageWindow({
+      messages: source,
+      messageKeys: source.map((message) => message.id ?? ""),
+      measuredHeights: new Map(),
+      scrollTop: Number.POSITIVE_INFINITY,
+      viewportHeight: 720,
+      pinnedMessageIndex: -1,
+    });
+
+    assert.equal(window.messages.length, chatMessageVirtualizationThreshold);
+    assert.equal(window.topSpacerHeight, 0);
+    assert.equal(window.bottomSpacerHeight, 0);
+  });
+
   it("keeps the mounted message window bounded at 1k, 5k, and 10k history sizes", () => {
     for (const count of [1_000, 5_000, 10_000]) {
       const source = messages(count);
@@ -98,7 +115,7 @@ describe("getVirtualChatMessageWindow", () => {
   });
 
   it("keeps the last row mounted when the scroll position reaches total height", () => {
-    const source = messages(12);
+    const source = messages(chatMessageVirtualizationThreshold + 12);
     const window = getVirtualChatMessageWindow({
       messages: source,
       messageKeys: source.map((message) => message.id ?? ""),
@@ -108,7 +125,7 @@ describe("getVirtualChatMessageWindow", () => {
       pinnedMessageIndex: -1,
     });
 
-    assert.equal(window.messages.at(-1)?.id, "message-11");
+    assert.equal(window.messages.at(-1)?.id, `message-${source.length - 1}`);
     assert.equal(window.endIndex, source.length);
   });
 });

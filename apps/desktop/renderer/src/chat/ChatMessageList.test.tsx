@@ -125,7 +125,7 @@ describe("ChatMessageList", () => {
         visibleMessageWindow={{
           startIndex: 0,
           hiddenMessageCount: 0,
-          messages: Array.from({ length: 200 }, (_value, index): SessionMessage => ({
+          messages: Array.from({ length: 1_000 }, (_value, index): SessionMessage => ({
             id: `message-${index}`,
             role: "assistant",
             content: `message-${index}`,
