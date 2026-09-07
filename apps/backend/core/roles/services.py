@@ -635,6 +635,7 @@ class RoleAggregateService:
             description=description,
             system_prompt=system_prompt,
             background=background,
+            profile=profile,
             runtime_config=runtime_config,
             role_id=role_id,
             avatar_source=avatar_source,

@@ -44,3 +44,27 @@ def test_role_deletion_listener_can_be_removed(tmp_path) -> None:
         service.delete_role("mira")
 
     assert deleted_role_ids == []
+
+
+def test_sync_role_creation_persists_the_structured_profile(tmp_path) -> None:
+    service = RoleAggregateService.from_runtime(
+        workspace=tmp_path,
+        role_store=RoleStore(tmp_path),
+        session_manager=SessionManager(tmp_path),
+    )
+
+    aggregate = service.create_role(
+        role_id="mira",
+        name="Mira",
+        system_prompt="Legacy fallback.",
+        profile={
+            "character": {
+                "profile": "A careful archivist.",
+                "personality": "Quiet and precise.",
+                "behavior_rules": "Answer from the archive.",
+            }
+        },
+    )
+
+    assert aggregate.role.profile.character.profile == "A careful archivist."
+    assert aggregate.role.profile.character.personality == "Quiet and precise."
