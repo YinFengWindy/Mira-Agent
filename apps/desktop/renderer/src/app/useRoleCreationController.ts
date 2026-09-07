@@ -269,7 +269,6 @@ export function useRoleCreationController({
       ...current,
       importId,
       name: typeof previewPayload.name === "string" ? previewPayload.name : current.name,
-      description: typeof previewPayload.description === "string" ? previewPayload.description : current.description,
       systemPrompt: typeof previewPayload.system_prompt === "string" ? previewPayload.system_prompt : current.systemPrompt,
     }));
   }

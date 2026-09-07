@@ -54,7 +54,7 @@ class DesktopRoleCardImportService:
         overrides = payload.get("overrides")
         overrides = overrides if isinstance(overrides, dict) else {}
         name = str(overrides.get("name") or preview.name).strip()
-        description = str(overrides.get("description") or preview.description)
+        description = str(overrides.get("description") or "")
         profile = dict(preview.profile)
         character = dict(profile.get("character") or {})
         requested_prompt = str(overrides.get("system_prompt") or "").strip()
@@ -62,8 +62,6 @@ class DesktopRoleCardImportService:
             character["behavior_rules"] = requested_prompt
         profile["character"] = character
         system_prompt = str(character.get("behavior_rules") or "").strip()
-        if not system_prompt:
-            system_prompt = str(character.get("profile") or "").strip()
         if not system_prompt:
             system_prompt = "请遵循角色资料进行自然对话。"
 

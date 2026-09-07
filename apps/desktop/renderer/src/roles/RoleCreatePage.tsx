@@ -1,9 +1,9 @@
-import { useLayoutEffect, useRef } from "react";
-import { ResetIcon, SaveIcon, UploadIcon } from "../shared/icons";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { DocumentIcon, ResetIcon, SaveIcon, UploadIcon } from "../shared/icons";
 import { cx, inputClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
 import type { RoleCardImportState } from "../app/useRoleCreationController";
-import { RoleCardImportPreviewPanel } from "./RoleCardImportPreview";
+import { RoleCardImportPreviewDialog } from "./RoleCardImportPreview";
 
 type RoleCreatePageProps = {
   bridgeReady: boolean;
@@ -32,6 +32,7 @@ export function RoleCreatePage({
   onCancelRoleCardImport,
 }: RoleCreatePageProps) {
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const backIcon = (
     <svg viewBox="0 0 1024 1024" className="h-5 w-5 fill-[#111111]" aria-hidden="true">
       <path d="M631.04 161.941333a42.666667 42.666667 0 0 1 63.061333 57.386667l-2.474666 2.730667-289.962667 292.245333 289.706667 287.402667a42.666667 42.666667 0 0 1 2.730666 57.6l-2.474666 2.752a42.666667 42.666667 0 0 1-57.6 2.709333l-2.752-2.474667-320-317.44a42.666667 42.666667 0 0 1-2.709334-57.6l2.474667-2.752 320-322.56z" />
@@ -47,6 +48,10 @@ export function RoleCreatePage({
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [form.systemPrompt]);
+
+  useEffect(() => {
+    if (roleCardImport.preview) setPreviewOpen(true);
+  }, [roleCardImport.preview?.import_id]);
 
   return (
     <section
@@ -71,12 +76,23 @@ export function RoleCreatePage({
               className={cx(floatingActionClass, "w-auto grid-cols-[18px_auto] gap-1.5 border-black/8 px-3 text-[#4f4f4f] hover:border-black/14 hover:bg-[#F5F7FA]")}
               type="button"
               onClick={onPreviewRoleCard}
-              disabled={roleCardImport.status === "previewing" || !bridgeReady}
+              disabled={roleCardImport.status !== "idle" || !bridgeReady}
               aria-label={roleCardImport.status === "previewing" ? "正在导入角色" : "导入角色"}
             >
               <UploadIcon className="h-[18px] w-[18px] fill-current" />
               <span>导入角色</span>
             </button>
+            {roleCardImport.preview ? (
+              <button
+                className={cx(floatingActionClass, "border-black/8 text-[#4f4f4f] hover:border-black/14 hover:bg-[#F5F7FA]")}
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                aria-label="查看角色卡预览"
+                title="查看角色卡预览"
+              >
+                <DocumentIcon className="h-[18px] w-[18px] stroke-current" />
+              </button>
+            ) : null}
             <button
               className={cx(floatingActionClass, "border-black/8 text-[#747474] hover:border-black/14 hover:bg-[#F5F7FA] hover:text-[#4f4f4f]")}
               type="button"
@@ -98,13 +114,6 @@ export function RoleCreatePage({
             </button>
           </div>
         </div>
-        {roleCardImport.preview ? (
-          <RoleCardImportPreviewPanel
-            preview={roleCardImport.preview}
-            sourceUrl={roleCardImport.source ? window.miraDesktop.localAssetUrl(roleCardImport.source) : ""}
-            onCancel={onCancelRoleCardImport}
-          />
-        ) : null}
         <div className="p-2">
           <div className="grid gap-5 rounded-[28px] border border-white/65 bg-white/72 p-8 shadow-[0_18px_48px_rgba(31,41,55,0.08)] backdrop-blur-[6px]">
             <div className="grid gap-4">
@@ -143,6 +152,18 @@ export function RoleCreatePage({
           </div>
         </div>
       </div>
+      {roleCardImport.preview ? (
+        <RoleCardImportPreviewDialog
+          open={previewOpen}
+          preview={roleCardImport.preview}
+          sourceUrl={roleCardImport.source ? window.miraDesktop.localAssetUrl(roleCardImport.source) : ""}
+          onClose={() => setPreviewOpen(false)}
+          onCancel={() => {
+            setPreviewOpen(false);
+            onCancelRoleCardImport();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

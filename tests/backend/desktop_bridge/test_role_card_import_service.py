@@ -112,6 +112,25 @@ async def test_cancel_invalidates_preview_without_creating_a_role(tmp_path) -> N
 
 
 @pytest.mark.asyncio
+async def test_commit_keeps_long_card_description_out_of_the_role_summary(tmp_path) -> None:
+    service, store = _service(tmp_path)
+    card = _card()
+    data = card["data"]
+    assert isinstance(data, dict)
+    data["description"] = "完整角色设定"
+    data["system_prompt"] = ""
+    source = _stage_card(tmp_path, card)
+    preview = await service.preview({"source": str(source)})
+
+    await service.commit({"import_id": preview["import_id"]})
+
+    imported = store.list_roles()[0]
+    assert imported.description == ""
+    assert imported.profile.character.profile == "完整角色设定"
+    assert imported.system_prompt == "请遵循角色资料进行自然对话。"
+
+
+@pytest.mark.asyncio
 async def test_preview_rejects_sources_outside_the_staging_directory(tmp_path) -> None:
     service, _store = _service(tmp_path)
     source = tmp_path / "outside.json"
