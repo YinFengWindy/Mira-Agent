@@ -92,9 +92,16 @@ function findMatchingMessageIndex(
     const seqMatch = messages.findIndex((message) => message.seq === incoming.seq);
     if (seqMatch >= 0) return seqMatch;
   }
+  // 已提交的助手回复会原样继承请求 metadata（含用户的 client_message_id），
+  // 因此按 client_message_id 匹配必须限定同角色，否则助手回复会顶掉用户消息；
+  // 未命中时继续走下方的流式助手兜底分支。
   const incomingClientMessageId = clientMessageId(incoming);
   if (incomingClientMessageId) {
-    return messages.findIndex((message) => clientMessageId(message) === incomingClientMessageId);
+    const clientMatch = messages.findIndex((message) => (
+      message.role === incoming.role
+        && clientMessageId(message) === incomingClientMessageId
+    ));
+    if (clientMatch >= 0) return clientMatch;
   }
   const maxLoadedSeq = messages.reduce(
     (maximum, message) => typeof message.seq === "number" ? Math.max(maximum, message.seq) : maximum,
