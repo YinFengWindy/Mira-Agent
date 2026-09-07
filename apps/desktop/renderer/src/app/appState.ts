@@ -94,6 +94,18 @@ export function createEmptyRoleForm(): RoleFormState {
     name: "",
     description: "",
     systemPrompt: "",
+    profile: {
+      character: {
+        profile: "",
+        personality: "",
+        behavior_rules: "",
+      },
+      knowledge_base: {
+        enabled: false,
+        token_budget: 2000,
+        entries: [],
+      },
+    },
     nsfwMemoryEnabled: false,
     autoSceneCgEnabled: false,
     desktopPetEnabled: false,

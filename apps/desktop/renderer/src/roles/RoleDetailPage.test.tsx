@@ -14,7 +14,18 @@ describe("RoleDetailPage", () => {
         bridgeReady
         previewAvatar={null}
         chatBackgroundUrl=""
-        roleForm={{ ...createEmptyRoleForm(), name: "Mira", systemPrompt: "Keep focus." }}
+        roleForm={{
+          ...createEmptyRoleForm(),
+          name: "Mira",
+          profile: {
+            character: {
+              profile: "A meticulous archivist.",
+              personality: "Calm and precise.",
+              behavior_rules: "Keep focus.",
+            },
+            knowledge_base: { enabled: true, token_budget: 2000, entries: [] },
+          },
+        }}
         roleFormDirty
         savingRole={false}
         onBackToList={() => undefined}
@@ -29,9 +40,12 @@ describe("RoleDetailPage", () => {
     assert.match(markup, /能力/);
     assert.match(markup, /渠道与主动推送/);
     assert.match(markup, /aria-current="page"[^>]*>.*资料/);
-    assert.match(markup, /data-testid="edit-role-prompt"/);
+    assert.match(markup, /角色资料/);
+    assert.match(markup, /性格/);
+    assert.match(markup, /执行规则/);
+    assert.match(markup, /知识库/);
+    assert.doesNotMatch(markup, /data-testid="edit-role-prompt"/);
     assert.match(markup, /data-has-featured-image="false"/);
-    assert.match(markup, /resize-none overflow-hidden/);
     assert.doesNotMatch(markup, /bg-\[#f4ebe5\]/);
     assert.doesNotMatch(markup, /shadow-\[0_18px_48px_rgba\(70,38,25,0.2\)\]/);
     assert.doesNotMatch(markup, /data-testid="role-channel-config"/);

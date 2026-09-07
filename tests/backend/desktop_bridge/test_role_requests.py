@@ -95,6 +95,28 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
     persisted = role_store.get_role(response.payload["role"]["id"])
     assert persisted is not None
     assert persisted.profile.to_dict() == {"version": 1, **profile}
+
+    update = await service.handle(
+        {
+            "id": "update-role-knowledge",
+            "method": "roles.update",
+            "payload": {
+                "role_id": response.payload["role"]["id"],
+                "profile": {
+                    "knowledge_base": {
+                        "enabled": True,
+                        "token_budget": 1000,
+                        "entries": [],
+                    }
+                },
+            },
+        },
+        emit_event=lambda _payload: None,
+    )
+
+    assert update.error is None
+    assert update.payload["role"]["profile"]["character"] == profile["character"]
+    assert update.payload["role"]["profile"]["knowledge_base"]["token_budget"] == 1000
     await service.aclose()
 
 

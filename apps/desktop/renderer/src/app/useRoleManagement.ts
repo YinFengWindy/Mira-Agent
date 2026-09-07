@@ -114,6 +114,7 @@ export function useRoleManagement({
         name: nextRoleForm.name,
         description: nextRoleForm.description,
         system_prompt: nextRoleForm.systemPrompt,
+        profile: nextRoleForm.profile,
         runtime_config: writeRoleVoiceConfigToRuntimeConfig(
           writeRoleMoodConfigToRuntimeConfig(
             {

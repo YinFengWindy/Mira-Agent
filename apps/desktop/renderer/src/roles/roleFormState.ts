@@ -23,6 +23,7 @@ export function createRoleFormFromRole(role: RoleRecord): RoleFormState {
     name: role.name,
     description: role.description,
     systemPrompt: role.system_prompt,
+    profile: role.profile,
     nsfwMemoryEnabled: Boolean(role.runtime_config?.nsfw_memory_enabled),
     autoSceneCgEnabled: Boolean(role.runtime_config?.auto_scene_cg_enabled),
     channelBindings: role.channel_bindings ?? [],
@@ -69,6 +70,7 @@ export function isRoleFormDirty(roleForm: RoleFormState, role: RoleRecord | null
         roleForm.name !== role.name
         || roleForm.description !== role.description
         || roleForm.systemPrompt !== role.system_prompt
+        || JSON.stringify(roleForm.profile ?? {}) !== JSON.stringify(role.profile ?? {})
         || roleForm.nsfwMemoryEnabled !== Boolean(role.runtime_config?.nsfw_memory_enabled)
         || roleForm.autoSceneCgEnabled !== Boolean(role.runtime_config?.auto_scene_cg_enabled)
         || JSON.stringify(roleForm.channelBindings ?? []) !== JSON.stringify(role.channel_bindings ?? [])

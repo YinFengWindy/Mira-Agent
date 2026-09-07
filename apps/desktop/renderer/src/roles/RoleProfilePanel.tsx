@@ -1,8 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
 import { toFileUrl } from "../shared/format";
-import { cx, inputClass } from "../shared/styles";
-import type { RoleFormState, RoleRecord } from "../shared/types";
+import type { RoleFormState, RoleProfileDraft, RoleRecord } from "../shared/types";
 import { TiltedCard } from "../shared/ui/reactBits/TiltedCard";
+import { RoleCardProfileForm } from "./RoleCardProfileForm";
 
 type RoleProfilePanelProps = {
   activeRole: RoleRecord | null;
@@ -12,7 +11,7 @@ type RoleProfilePanelProps = {
   onUpdate: (next: React.SetStateAction<RoleFormState>) => void;
 };
 
-/** Edits the role identity and system prompt. */
+/** Edits persisted role identity and structured runtime fields. */
 export function RoleProfilePanel({
   activeRole,
   previewAvatar,
@@ -20,14 +19,17 @@ export function RoleProfilePanel({
   onOpenAssetsPage,
   onUpdate,
 }: RoleProfilePanelProps) {
-  const promptRef = useRef<HTMLTextAreaElement | null>(null);
+  const profile: RoleProfileDraft = roleForm.profile ?? {
+    character: { behavior_rules: roleForm.systemPrompt },
+  };
 
-  useLayoutEffect(() => {
-    const textarea = promptRef.current;
-    if (!textarea) return;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.max(textarea.scrollHeight, 240)}px`;
-  }, [roleForm.systemPrompt]);
+  function updateProfile(nextProfile: RoleProfileDraft): void {
+    onUpdate((current) => ({
+      ...current,
+      profile: nextProfile,
+      systemPrompt: nextProfile.character?.behavior_rules ?? current.systemPrompt,
+    }));
+  }
 
   return (
     <div className="grid gap-7" data-testid="role-detail-form-panel">
@@ -54,10 +56,7 @@ export function RoleProfilePanel({
           <input aria-label="角色简介" className="w-full border-0 border-b border-transparent bg-transparent px-0 py-1 text-sm leading-6 text-[#6B7280] placeholder:text-[#9CA3AF] transition focus:border-[#2176FF] focus:outline-none" data-testid="edit-role-description" value={roleForm.description} placeholder="添加一行角色简介" onChange={(event) => onUpdate((current) => ({ ...current, description: event.target.value }))} />
         </div>
       </div>
-      <label className="grid gap-2 text-sm text-[#374151]">
-        <span className="font-medium">系统提示词</span>
-        <textarea ref={promptRef} className={cx(inputClass, "min-h-[320px] resize-none overflow-hidden border-[#D8DCE2] !bg-white px-4 py-3 font-mono text-[13px] leading-6 text-[#1F2937] placeholder:text-[#9CA3AF] focus:border-[#D8DCE2]")} data-testid="edit-role-prompt" value={roleForm.systemPrompt} placeholder="定义这个角色的行为、语气和边界" onChange={(event) => onUpdate((current) => ({ ...current, systemPrompt: event.target.value }))} />
-      </label>
+      <RoleCardProfileForm profile={profile} onUpdate={updateProfile} />
     </div>
   );
 }

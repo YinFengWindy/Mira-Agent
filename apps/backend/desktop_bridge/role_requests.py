@@ -103,7 +103,10 @@ class DesktopRoleRequestHandler:
                 "runtime_config": self._dict_payload(payload, "runtime_config"),
             }
             if "profile" in payload:
-                update_kwargs["profile"] = self._dict_payload(payload, "profile")
+                update_kwargs["profile"] = self._merge_profile_payload(
+                    previous.profile.to_dict(),
+                    self._dict_payload(payload, "profile"),
+                )
             aggregate = await self._role_service.update_role_async(
                 role_id,
                 **update_kwargs,
@@ -205,6 +208,22 @@ class DesktopRoleRequestHandler:
     def _dict_payload(payload: dict[str, Any], key: str) -> dict[str, Any] | None:
         value = payload.get(key)
         return dict(value) if isinstance(value, dict) else None
+
+    @staticmethod
+    def _merge_profile_payload(
+        current: dict[str, Any], patch: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Applies one bridge profile patch without discarding unrelated role fields."""
+        if patch is None:
+            return dict(current)
+        merged = dict(current)
+        for key, value in patch.items():
+            existing = merged.get(key)
+            if isinstance(existing, dict) and isinstance(value, dict):
+                merged[key] = {**existing, **value}
+            else:
+                merged[key] = value
+        return merged
 
     @staticmethod
     def _list_payload(payload: dict[str, Any], key: str) -> list[Any] | None:

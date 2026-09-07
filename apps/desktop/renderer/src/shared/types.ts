@@ -266,6 +266,7 @@ export type RoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  profile?: RoleProfileDraft;
   nsfwMemoryEnabled: boolean;
   autoSceneCgEnabled: boolean;
   channelBindings?: RoleChannelBinding[];
