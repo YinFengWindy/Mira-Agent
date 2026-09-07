@@ -3,6 +3,8 @@ import { DeleteIcon } from "../shared/icons";
 import { cx } from "../shared/styles";
 import type { RoleKnowledgeEntry } from "../shared/types";
 import { roleChipClass, roleFieldClass } from "./roleEditorStyles";
+import { RoleKeywordInput } from "./RoleKeywordInput";
+import { RoleKnowledgeEntryOptions } from "./RoleKnowledgeEntryOptions";
 
 type RoleKnowledgeEntryRowProps = {
   entry: RoleKnowledgeEntry;
@@ -46,18 +48,9 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
               onChange={(event) => onUpdate((current) => ({ ...current, title: event.target.value }))}
             />
           </label>
-          <label className="grid gap-1.5 text-xs text-[#667085]">
-            <span>关键词</span>
-            <input
-              className={roleFieldClass}
-              value={keywords.join(", ")}
-              placeholder="用逗号分隔多个关键词"
-              onChange={(event) => onUpdate((current) => ({
-                ...current,
-                primary_keys: event.target.value.split(",").map((keyword) => keyword.trim()).filter(Boolean),
-              }))}
-            />
-          </label>
+          <RoleKeywordInput label="关键词" keywords={keywords} onChange={(primary_keys) => onUpdate((current) => ({ ...current, primary_keys }))} />
+          <RoleKeywordInput label="次关键词" keywords={entry.secondary_keys ?? []} onChange={(secondary_keys) => onUpdate((current) => ({ ...current, secondary_keys }))} />
+          <RoleKnowledgeEntryOptions entry={entry} onUpdate={onUpdate} />
           <label className="grid gap-1.5 text-xs text-[#667085]">
             <span>内容</span>
             <textarea

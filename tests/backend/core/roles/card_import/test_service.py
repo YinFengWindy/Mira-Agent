@@ -34,7 +34,13 @@ def _card(**overrides):
             "alternate_greetings": ["晚上好。"],
             "character_book": {
                 "entries": [
-                    {"title": "雨天", "keys": ["雨"], "content": "她喜欢听雨。", "constant": True, "priority": 2},
+                    {
+                        "title": "雨天",
+                        "keys": ["雨"],
+                        "content": "她喜欢听雨。",
+                        "constant": True,
+                        "priority": 2,
+                    },
                 ]
             },
             "scenario": "discard me",
@@ -51,7 +57,8 @@ def test_json_adapter_normalizes_profile_and_report(tmp_path):
     preview = RoleCardImportService().preview(source)
 
     assert preview.name == "小诗"
-    assert preview.profile["character"]["behavior_rules"] == "遵守边界\n\n保持角色口吻"
+    assert preview.profile["character"]["behavior_rules"] == "遵守边界"
+    assert preview.profile["character"]["response_constraints"] == "保持角色口吻"
     assert "greetings" not in preview.profile
     assert preview.profile["knowledge_base"]["entries"][0]["always_active"] is True
     assert preview.profile["knowledge_base"]["entries"][0]["title"] == "雨天"
@@ -62,9 +69,11 @@ def test_json_adapter_normalizes_profile_and_report(tmp_path):
 
 def test_json_adapter_reports_macros_and_does_not_persist_source_metadata():
     payload = _card(system_prompt="{{user}} says hello")
-    preview = RoleCardImportService().preview_bytes(json.dumps(payload).encode(), filename="card.json")
+    preview = RoleCardImportService().preview_bytes(
+        json.dumps(payload).encode(), filename="card.json"
+    )
 
-    assert "{{user}}" in preview.report.unsupported_macros
+    assert "{{user}}" not in preview.report.unsupported_macros
     assert "source" not in preview.profile
     assert "creator" not in preview.profile
 
@@ -83,20 +92,44 @@ def test_png_prefers_ccv3_metadata(tmp_path):
 
 
 def test_preview_bytes_supports_png_and_charx(tmp_path):
-    png = _png(metadata={"chara": base64.b64encode(json.dumps(_card()).encode()).decode()})
+    png = _png(
+        metadata={"chara": base64.b64encode(json.dumps(_card()).encode()).decode()}
+    )
     service = RoleCardImportService()
     assert service.preview_bytes(png, filename="card.png").name == "小诗"
 
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as writer:
         writer.writestr("card.json", json.dumps(_card()))
-    assert service.preview_bytes(archive.getvalue(), filename="card.charx").name == "小诗"
+    assert (
+        service.preview_bytes(archive.getvalue(), filename="card.charx").name == "小诗"
+    )
 
 
 def test_charx_requires_root_card_json_and_maps_images(tmp_path):
     source = tmp_path / "card.charx"
     with zipfile.ZipFile(source, "w") as archive:
-        archive.writestr("card.json", json.dumps(_card()))
+        archive.writestr(
+            "card.json",
+            json.dumps(
+                _card(
+                    assets=[
+                        {
+                            "type": "icon",
+                            "name": "main",
+                            "uri": "embeded://icon/main.png",
+                            "ext": "png",
+                        },
+                        {
+                            "type": "background",
+                            "name": "main",
+                            "uri": "embeded://background/main.png",
+                            "ext": "png",
+                        },
+                    ]
+                )
+            ),
+        )
         archive.writestr("icon/main.png", _png())
         archive.writestr("background/main.png", _png())
 

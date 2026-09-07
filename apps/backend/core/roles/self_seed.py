@@ -8,6 +8,7 @@ from agent.memory import DEFAULT_SELF_MD
 from agent.provider import LLMProvider
 
 from .store import RoleRecord
+from .role_prompt_compiler import RolePromptCompiler
 
 if TYPE_CHECKING:
     from core.roles.role_runtime import RoleRuntimeRegistry
@@ -42,10 +43,7 @@ _SELF_SEED_PROMPT = """\
 角色简介：
 {role_description}
 
-角色背景：
-{role_background}
-
-角色系统提示词：
+角色定义：
 {role_prompt}
 """
 
@@ -85,8 +83,7 @@ class LlmRoleSelfSeedGenerator:
         prompt = _SELF_SEED_PROMPT.format(
             role_name=role.name or role.id,
             role_description=role.description.strip() or "（无）",
-            role_background=role.background.strip() or "（无）",
-            role_prompt=role.system_prompt.strip(),
+            role_prompt=RolePromptCompiler().compile(role).content,
         )
         try:
             response = await asyncio.wait_for(

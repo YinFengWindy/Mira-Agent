@@ -23,7 +23,7 @@ describe("RoleDetailPage", () => {
               personality: "Calm and precise.",
               behavior_rules: "Keep focus.",
             },
-            knowledge_base: { enabled: true, token_budget: 2000, entries: [] },
+            knowledge_base: { enabled: true, entries: [] },
           },
         }}
         roleFormDirty

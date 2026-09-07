@@ -29,7 +29,7 @@ import type {
   RoleSearchResult,
   SessionPayload,
 } from "../shared/types";
-import type { RoleCardImportState } from "./useRoleCreationController";
+import type { RoleCardImportState } from "./roleCardImportState";
 import { TitleBar } from "../shell/TitleBar";
 import type { WorkspaceFeedback } from "./appState";
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from copy import deepcopy
 from typing import Any
 
 
@@ -22,6 +23,7 @@ class RoleKnowledgeEntry:
     priority: int = 0
     insertion_order: int = 0
     id: str = ""
+    raw_source: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -35,6 +37,7 @@ class RoleKnowledgeEntry:
             "case_sensitive": self.case_sensitive,
             "priority": self.priority,
             "insertion_order": self.insertion_order,
+            "raw_source": deepcopy(self.raw_source),
         }
 
     @classmethod
@@ -56,6 +59,7 @@ class RoleKnowledgeEntry:
             case_sensitive=bool(payload.get("case_sensitive", False)),
             priority=int(payload.get("priority") or 0),
             insertion_order=int(payload.get("insertion_order") or 0),
+            raw_source=deepcopy(payload.get("raw_source") or {}),
         )
 
 
@@ -63,15 +67,15 @@ class RoleKnowledgeEntry:
 class RoleKnowledgeBase:
     """Role-owned normalized Lorebook settings and entries."""
 
-    enabled: bool = True
-    token_budget: int = 2048
+    enabled: bool = False
     entries: list[RoleKnowledgeEntry] = field(default_factory=list)
+    raw_source: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
-            "token_budget": max(0, int(self.token_budget)),
             "entries": [entry.to_dict() for entry in self.entries],
+            "raw_source": deepcopy(self.raw_source),
         }
 
     @classmethod
@@ -84,9 +88,9 @@ class RoleKnowledgeBase:
             if isinstance(item, dict)
         ]
         return cls(
-            enabled=bool(data.get("enabled", True)),
-            token_budget=max(0, int(data.get("token_budget") or 2048)),
+            enabled=bool(data.get("enabled", False)),
             entries=entries,
+            raw_source=deepcopy(data.get("raw_source") or {}),
         )
 
 
@@ -97,12 +101,16 @@ class RoleCharacterDefinition:
     profile: str = ""
     personality: str = ""
     behavior_rules: str = ""
+    response_constraints: str = ""
+    nickname: str = ""
 
     def to_dict(self) -> dict[str, str]:
         return {
             "profile": self.profile,
             "personality": self.personality,
             "behavior_rules": self.behavior_rules,
+            "response_constraints": self.response_constraints,
+            "nickname": self.nickname,
         }
 
     @classmethod
@@ -112,25 +120,53 @@ class RoleCharacterDefinition:
             profile=_text(data.get("profile")),
             personality=_text(data.get("personality")),
             behavior_rules=_text(data.get("behavior_rules")),
+            response_constraints=_text(data.get("response_constraints")),
+            nickname=_text(data.get("nickname")),
         )
 
 
 @dataclass
 class ImportProvenance:
-    """Minimal optional source marker; it never participates in prompt rendering."""
+    """Imported card attribution, excluded from runtime prompt rendering."""
 
     format: str
     card_version: str | None = None
+    creator: str = ""
+    tags: list[str] = field(default_factory=list)
+    source: list[str] = field(default_factory=list)
+    created_at: str | int | float | None = None
+    updated_at: str | int | float | None = None
+    imported_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return {"format": self.format, "card_version": self.card_version}
+        return {
+            "format": self.format,
+            "card_version": self.card_version,
+            "creator": self.creator,
+            "tags": list(self.tags),
+            "source": list(self.source),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "imported_at": self.imported_at,
+        }
 
     @classmethod
     def from_dict(cls, payload: Any) -> "ImportProvenance | None":
         if not isinstance(payload, dict):
             return None
         value = _text(payload.get("format"))
-        return cls(value, _text(payload.get("card_version")) or None) if value else None
+        if not value:
+            return None
+        return cls(
+            format=value,
+            card_version=_text(payload.get("card_version")) or None,
+            creator=_text(payload.get("creator")),
+            tags=list(payload.get("tags") or []),
+            source=list(payload.get("source") or []),
+            created_at=payload.get("created_at"),
+            updated_at=payload.get("updated_at"),
+            imported_at=_text(payload.get("imported_at")),
+        )
 
 
 @dataclass

@@ -88,24 +88,20 @@ export function navigationEntriesEqual(left: NavigationEntry, right: NavigationE
   );
 }
 
+function createEmptyRoleProfile() {
+  return {
+    character: { profile: "", personality: "", behavior_rules: "", response_constraints: "" },
+    knowledge_base: { enabled: false, entries: [] },
+  };
+}
+
 /** Creates an empty role-edit form state. */
 export function createEmptyRoleForm(): RoleFormState {
   return {
     name: "",
     description: "",
     systemPrompt: "",
-    profile: {
-      character: {
-        profile: "",
-        personality: "",
-        behavior_rules: "",
-      },
-      knowledge_base: {
-        enabled: false,
-        token_budget: 2000,
-        entries: [],
-      },
-    },
+    profile: createEmptyRoleProfile(),
     nsfwMemoryEnabled: false,
     autoSceneCgEnabled: false,
     desktopPetEnabled: false,
@@ -134,18 +130,7 @@ export function createEmptyNewRoleForm(): NewRoleFormState {
     name: "",
     description: "",
     systemPrompt: "",
-    profile: {
-      character: {
-        profile: "",
-        personality: "",
-        behavior_rules: "",
-      },
-      knowledge_base: {
-        enabled: false,
-        token_budget: 2000,
-        entries: [],
-      },
-    },
+    profile: createEmptyRoleProfile(),
   };
 }
 

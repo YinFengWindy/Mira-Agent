@@ -18,6 +18,10 @@ describe("RoleKnowledgeEntryRow", () => {
 
     assert.match(markup, />标题</);
     assert.match(markup, />关键词</);
+    assert.match(markup, />次关键词</);
+    assert.match(markup, />优先级</);
+    assert.match(markup, />插入顺序</);
+    assert.match(markup, /aria-label="启用条目"/);
     assert.match(markup, />内容</);
     assert.doesNotMatch(markup, /未设置关键词/);
   });

@@ -1,30 +1,18 @@
 from __future__ import annotations
 
-import io
 import shutil
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
-from core.roles import RoleAggregateService, RoleAssetCategory, RoleStore
+from core.roles import RoleAggregateService, RoleStore
 from core.roles.card_import import RoleCardImportService
-
-_THUMBNAIL_MAX_EDGE = 320
-
-
-def _write_asset_preview(data: bytes, target: Path) -> bool:
-    """Writes a bounded PNG thumbnail for one previewed image asset."""
-    try:
-        with Image.open(io.BytesIO(data)) as image:
-            thumbnail = image.convert("RGBA")
-            thumbnail.thumbnail((_THUMBNAIL_MAX_EDGE, _THUMBNAIL_MAX_EDGE))
-            thumbnail.save(target, format="PNG")
-    except (OSError, ValueError):
-        return False
-    return True
+from .role_card_import_assets import (
+    apply_asset_metadata,
+    resolve_emotion_selections,
+    stage_assets,
+    write_asset_preview,
+)
 
 
 class DesktopRoleCardImportService:
@@ -46,6 +34,8 @@ class DesktopRoleCardImportService:
         ).resolve()
         self._staging_root.mkdir(parents=True, exist_ok=True)
         self._imports: dict[str, Path] = {}
+        self._committing: set[str] = set()
+        self._pending_roles: dict[str, str] = {}
         for child in self._staging_root.iterdir():
             # Only preview-thumbnail directories live under the staging root;
             # staged card files are plain files and must survive restarts.
@@ -56,16 +46,22 @@ class DesktopRoleCardImportService:
         source = self._validate_source(payload.get("source"))
         preview = self._parser.preview(source)
         import_id = uuid.uuid4().hex
-        self._imports[import_id] = source
         result = preview.to_dict()
         preview_dir = self._staging_root / import_id
-        for index, (asset, asset_payload) in enumerate(zip(preview.assets, result["assets"])):
-            if asset.data is None:
-                continue
-            preview_dir.mkdir(parents=True, exist_ok=True)
-            target = preview_dir / f"asset-{index}.png"
-            if _write_asset_preview(asset.data, target):
-                asset_payload["preview_abs"] = str(target)
+        try:
+            for index, (asset, asset_payload) in enumerate(
+                zip(preview.assets, result["assets"])
+            ):
+                if asset.data is None:
+                    continue
+                preview_dir.mkdir(parents=True, exist_ok=True)
+                target = preview_dir / f"asset-{index}.png"
+                if write_asset_preview(asset.data, target):
+                    asset_payload["preview_abs"] = str(target)
+        except Exception:
+            self._cleanup_preview_assets(import_id)
+            raise
+        self._imports[import_id] = source
         result.update(
             {
                 "import_id": import_id,
@@ -78,6 +74,8 @@ class DesktopRoleCardImportService:
 
     async def commit(self, payload: dict[str, Any]) -> dict[str, Any]:
         import_id = str(payload.get("import_id") or "").strip()
+        if import_id in self._committing:
+            raise ValueError("角色卡正在提交，请等待完成")
         source = self._imports.get(import_id)
         if source is None:
             raise ValueError("角色卡导入预览已失效，请重新选择文件")
@@ -85,7 +83,10 @@ class DesktopRoleCardImportService:
         overrides = payload.get("overrides")
         overrides = overrides if isinstance(overrides, dict) else {}
         name = str(overrides.get("name") or preview.name).strip()
-        description = str(overrides.get("description") or "")
+        description = str(overrides.get("description", preview.description))
+        selections = resolve_emotion_selections(
+            preview.assets, payload.get("emotion_selections")
+        )
         profile = self._profile_with_overrides(preview, overrides.get("profile"))
         character = dict(profile.get("character") or {})
         requested_prompt = str(overrides.get("system_prompt") or "").strip()
@@ -96,94 +97,56 @@ class DesktopRoleCardImportService:
         if not system_prompt:
             system_prompt = "请遵循角色资料进行自然对话。"
 
-        temporary_files: list[Path] = []
+        self._rollback_pending_role(import_id)
+        self._committing.add(import_id)
         try:
-            avatar_source: Path | None = None
-            imported_assets: list[tuple[str, str | None, Path]] = []
-            for index, asset in enumerate(preview.assets):
-                if asset.data is None:
-                    continue
-                suffix = Path(asset.path).suffix or ".png"
-                handle = tempfile.NamedTemporaryFile(
-                    prefix=f"shiori-role-card-{index}-",
-                    suffix=suffix,
-                    dir=self._staging_root,
-                    delete=False,
+            with stage_assets(preview.assets, self._staging_root) as staged:
+                role_id = f"role-{uuid.uuid4().hex[:12]}"
+                self._pending_roles[import_id] = role_id
+                aggregate = await self._role_service.create_role_async(
+                    role_id=role_id,
+                    name=name,
+                    description=description,
+                    system_prompt=system_prompt,
+                    profile=profile,
+                    avatar_source=next(
+                        (path for asset, path in staged if asset.kind == "avatar"), None
+                    ),
+                    illustration_sources=[path for _, path in staged],
                 )
-                temporary_path = Path(handle.name)
-                handle.write(asset.data)
-                handle.close()
-                temporary_files.append(temporary_path)
-                if asset.kind == "avatar" and avatar_source is None:
-                    avatar_source = temporary_path
-                if asset.kind in {"avatar", "emotion", "background", "asset"}:
-                    imported_assets.append((asset.kind, asset.name, temporary_path))
-
-            aggregate = await self._role_service.create_role_async(
-                name=name,
-                description=description,
-                system_prompt=system_prompt,
-                profile=profile,
-                avatar_source=avatar_source,
-                illustration_sources=[path for _, _, path in imported_assets],
-            )
-            if imported_assets:
-                aggregate = await self._apply_imported_asset_metadata(
-                    aggregate.role.id,
-                    aggregate.role.illustrations,
-                    imported_assets,
-                )
-            return {"role": aggregate.role.to_dict()}
-        finally:
+                if staged:
+                    aggregate = await apply_asset_metadata(
+                        self._role_service,
+                        aggregate.role.id,
+                        aggregate.role.illustrations,
+                        staged,
+                        selections,
+                    )
+            self._pending_roles.pop(import_id, None)
             self._imports.pop(import_id, None)
             self._cleanup_preview_assets(import_id)
-            for temporary_path in temporary_files:
-                temporary_path.unlink(missing_ok=True)
+            return {"role": aggregate.role.to_dict()}
+        except BaseException:
+            # Creation can persist the record before awaiting memory initialization.
+            # Keep failed rollback IDs so retries cannot silently create duplicates.
+            self._rollback_pending_role(import_id)
+            raise
+        finally:
+            self._committing.discard(import_id)
 
-    async def _apply_imported_asset_metadata(
-        self,
-        role_id: str,
-        illustration_paths: list[str],
-        imported_assets: list[tuple[str, str | None, Path]],
-    ) -> Any:
-        category = RoleAssetCategory(
-            id="imported-role-card",
-            name="导入角色卡",
-            allow_role_send=False,
-        )
-        bindings = {path: category.id for path in illustration_paths}
-        background_path = next(
-            (
-                illustration_paths[index]
-                for index, (kind, _name, _path) in enumerate(imported_assets)
-                if kind == "background"
-            ),
-            None,
-        )
-        mood_bindings = {
-            name.strip(): illustration_paths[index]
-            for index, (kind, name, _path) in enumerate(imported_assets)
-            if kind == "emotion" and name and name.strip()
-        }
-        current = self._role_service.repository.get_required(role_id)
-        runtime_config = dict(current.runtime_config)
-        if mood_bindings:
-            existing_bindings = dict(runtime_config.get("mood_illustration_bindings") or {})
-            existing_bindings.update(mood_bindings)
-            runtime_config["mood_illustration_bindings"] = existing_bindings
-            runtime_config["mood_catalog"] = list(existing_bindings)
-            if "neutral" in mood_bindings:
-                runtime_config["default_mood"] = "neutral"
-        return await self._role_service.update_role_async(
-            role_id,
-            runtime_config=runtime_config,
-            chat_background=background_path,
-            asset_categories=[*current.asset_categories, category],
-            asset_category_bindings=bindings,
-        )
+    def _rollback_pending_role(self, import_id: str) -> None:
+        role_id = self._pending_roles.get(import_id)
+        if role_id is None:
+            return
+        if self._role_store.get_role(role_id) is not None:
+            self._role_service.delete_role(role_id)
+        self._pending_roles.pop(import_id, None)
 
     async def cancel(self, payload: dict[str, Any]) -> dict[str, Any]:
         import_id = str(payload.get("import_id") or "").strip()
+        if import_id in self._committing:
+            raise ValueError("角色卡正在提交，请等待完成")
+        self._rollback_pending_role(import_id)
         self._imports.pop(import_id, None)
         self._cleanup_preview_assets(import_id)
         return {"cancelled": bool(import_id)}

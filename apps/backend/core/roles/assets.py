@@ -23,7 +23,14 @@ class RoleAssetStore:
         role_assets_dir = self.assets_dir / role_id
         role_assets_dir.mkdir(parents=True, exist_ok=True)
         target = role_assets_dir / f"{prefix}-{uuid.uuid4().hex[:8]}{src.suffix or ''}"
-        shutil.copy2(src, target)
+        try:
+            shutil.copy2(src, target)
+        except BaseException as error:
+            try:
+                target.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                error.add_note(f"角色素材临时文件清理失败: {cleanup_error}")
+            raise
         return target.relative_to(self.roles_dir).as_posix()
 
     def remove(self, rel_path: str | None) -> None:

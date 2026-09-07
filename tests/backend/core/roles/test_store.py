@@ -1,10 +1,126 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from core.roles import RoleStore
+from core.roles import assets as assets_module
+
+
+@pytest.mark.parametrize("failure_phase", ["copy", "manifest"])
+@pytest.mark.parametrize("preexisting_directory", [False, True])
+def test_failed_role_creation_cleans_only_its_own_imported_assets(
+    tmp_path, monkeypatch, failure_phase, preexisting_directory
+):
+    store = RoleStore(tmp_path)
+    store.create_role(name="Existing", system_prompt="existing", role_id="existing")
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image")
+    directory = store.assets_dir / "new-role"
+    if preexisting_directory:
+        directory.mkdir()
+        (directory / "unrelated.png").write_bytes(b"keep")
+    original_copy = assets_module.shutil.copy2
+    original_save = store._save_roles
+    copies = 0
+
+    def fail_second_copy(source_path, target):
+        nonlocal copies
+        copies += 1
+        if copies == 2:
+            Path(target).write_bytes(b"partial")
+            raise PermissionError("copy unavailable")
+        return original_copy(source_path, target)
+
+    def fail_manifest(_roles):
+        raise PermissionError("manifest unavailable")
+
+    if failure_phase == "copy":
+        monkeypatch.setattr(assets_module.shutil, "copy2", fail_second_copy)
+    else:
+        monkeypatch.setattr(store, "_save_roles", fail_manifest)
+    with pytest.raises(PermissionError, match=f"{failure_phase} unavailable"):
+        store.create_role(
+            name="New",
+            system_prompt="new",
+            role_id="new-role",
+            avatar_source=source,
+            illustration_sources=[source],
+        )
+    assert [role.id for role in store.list_roles()] == ["existing"]
+    if preexisting_directory:
+        assert [path.name for path in directory.iterdir()] == ["unrelated.png"]
+        assert (directory / "unrelated.png").read_bytes() == b"keep"
+    else:
+        assert not directory.exists()
+    monkeypatch.setattr(assets_module.shutil, "copy2", original_copy)
+    monkeypatch.setattr(store, "_save_roles", original_save)
+    assert store.create_role(
+        name="New", system_prompt="new", role_id="new-role", avatar_source=source
+    ).avatar
+
+
+def test_profile_update_persists_constraints_without_rewriting_legacy_background(
+    tmp_path,
+):
+    store = RoleStore(tmp_path)
+    store.create_role(
+        name="Mira", system_prompt="旧规则", background="旧背景", role_id="mira"
+    )
+
+    store.update_role(
+        "mira",
+        profile={
+            "character": {
+                "profile": "新资料",
+                "behavior_rules": "新规则",
+                "response_constraints": "新约束",
+            },
+            "knowledge_base": {"enabled": True, "token_budget": 1},
+        },
+    )
+    reloaded = store.get_role("mira")
+
+    assert reloaded is not None
+    assert reloaded.background == "旧背景"
+    assert reloaded.profile.character.profile == "新资料"
+    assert reloaded.profile.character.response_constraints == "新约束"
+    assert reloaded.profile.knowledge_base.enabled is True
+    assert "token_budget" not in reloaded.to_dict()["profile"]["knowledge_base"]
+
+
+def test_structured_profile_can_clear_rules_without_legacy_validation_or_background_write(
+    tmp_path,
+):
+    store = RoleStore(tmp_path)
+    store.create_role(
+        name="Mira", system_prompt="旧规则", background="旧背景", role_id="mira"
+    )
+
+    store.update_role(
+        "mira",
+        system_prompt="",
+        background="不应保存的旧表单值",
+        profile={
+            "character": {
+                "profile": "资料",
+                "behavior_rules": "",
+                "response_constraints": "约束",
+            }
+        },
+    )
+
+    reloaded = store.get_role("mira")
+    assert reloaded is not None
+    assert reloaded.background == "旧背景"
+    assert reloaded.profile.character.behavior_rules == ""
+    assert reloaded.profile.character.profile == "资料"
+    assert reloaded.profile.character.response_constraints == "约束"
+
+    with pytest.raises(ValueError, match="role.system_prompt"):
+        store.update_role("mira", system_prompt="")
 
 
 def test_role_store_raises_for_corrupted_manifest(tmp_path):

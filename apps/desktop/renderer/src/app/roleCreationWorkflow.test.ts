@@ -11,7 +11,7 @@ import {
   resetRoleCreationForm,
   runRoleCreation,
   type RoleCreationWorkflowArgs,
-} from "./useRoleCreationController";
+} from "./roleCreationWorkflow";
 
 function createRole(overrides: Partial<RoleRecord> = {}): RoleRecord {
   return {
@@ -42,6 +42,7 @@ function createForm(overrides: Partial<NewRoleFormState> = {}): NewRoleFormState
     systemPrompt: overrides.systemPrompt ?? "  Be helpful  ",
     profile: overrides.profile,
     importId: overrides.importId,
+    emotionSelections: overrides.emotionSelections,
   };
 }
 
@@ -68,6 +69,8 @@ function createHarness({
   const snapshots: RoleRecord[] = [];
   const requests: Array<{ method: string; payload: Record<string, unknown> }> = [];
   const openedRoles: string[] = [];
+  const openedSnapshots: Array<RoleRecord | null | undefined> = [];
+  let refreshCount = 0;
 
   const apply = <T>(current: T, next: T | ((value: T) => T)): T => (
     typeof next === "function" ? (next as (value: T) => T)(current) : next
@@ -83,8 +86,8 @@ function createHarness({
       openRoleWorkspace: (view: Extract<AppMainView, { kind: "roles-list" | "role-create" | "role-detail" | "role-assets" }>) => { views.push(view); },
       buildNavigationEntry: (view: AppMainView, roleId = "") => ({ view, activeRoleId: roleId, settingsSection: "models" as const }),
       replaceNavigationEntry: (entry: NavigationEntry) => { navigationEntries.push(entry); },
-      loadRolesFromBridge: async () => loadedRoles,
-      openRole: async (roleId: string) => { openedRoles.push(roleId); return true; },
+      loadRolesFromBridge: async () => { refreshCount += 1; return loadedRoles; },
+      openRole: async (roleId: string, role?: RoleRecord | null) => { openedRoles.push(roleId); openedSnapshots.push(role); return true; },
       applyRoleSnapshot: (role: RoleRecord) => { snapshots.push(role); },
       setCreating: (next: React.SetStateAction<boolean>) => { creating = apply(creating, next); },
       invoke: async (request: { method: string; payload: Record<string, unknown> }) => { requests.push(request); return invoke(request); },
@@ -95,7 +98,7 @@ function createHarness({
   return {
     args,
     get state() {
-      return { roles, activeRoleId, activeRoleIdRef, creating, pendingAction, error, feedback, views, navigationEntries, snapshots, requests, openedRoles };
+      return { roles, activeRoleId, activeRoleIdRef, creating, pendingAction, error, feedback, views, navigationEntries, snapshots, requests, openedRoles, openedSnapshots, refreshCount };
     },
   };
 }
@@ -152,7 +155,7 @@ describe("runRoleCreation", () => {
         personality: "Calm and precise.",
         behavior_rules: "Use concise answers and cite the archive.",
       },
-      knowledge_base: { enabled: true, token_budget: 2000, entries: [] },
+      knowledge_base: { enabled: true, entries: [] },
     };
     const createdRole = createRole({ id: "manual-role", name: "Mira" });
     const harness = createHarness({
@@ -206,6 +209,7 @@ describe("runRoleCreation", () => {
           method: "roles.cardImport.commit",
           payload: {
             import_id: "staged-card",
+            emotion_selections: {},
             overrides: { name: "Imported", description: "A role", system_prompt: "Be helpful" },
           },
         });
@@ -221,6 +225,41 @@ describe("runRoleCreation", () => {
     assert.equal(created, true);
     assert.deepEqual(harness.state.views, [{ kind: "role-detail", roleId: "imported-role" }]);
     assert.deepEqual(harness.state.navigationEntries.at(-1)?.view, { kind: "role-detail", roleId: "imported-role" });
+    assert.equal(harness.state.refreshCount, 1);
+  });
+
+  it("passes selected emotions and refreshes the imported snapshot without restoring cleared rules", async () => {
+    const role = createRole({ id: "imported" });
+    const refreshedRole = { ...role, description: "Refreshed", avatar: "avatar.png" };
+    const profile = { character: { profile: "A librarian", behavior_rules: "", response_constraints: "Brief" } };
+    const harness = createHarness({ invoke: async () => createResponse({ role }), loadedRoles: [refreshedRole] });
+    assert.equal(await runRoleCreation(createForm({ importId: "card", profile, systemPrompt: "stale rules", emotionSelections: { neutral: "asset-2" } }), harness.args), true);
+    assert.deepEqual(harness.state.requests[0]?.payload, {
+      import_id: "card", emotion_selections: { neutral: "asset-2" }, overrides: { name: "Mira", description: "A role", profile },
+    });
+    assert.equal(harness.state.openedSnapshots[0], refreshedRole);
+    assert.equal(harness.state.snapshots.at(-1), refreshedRole);
+  });
+
+  it("clears busy and optimistic state after a rejected transport request", async () => {
+    const harness = createHarness({ invoke: async () => { throw new Error("Bridge disconnected"); } });
+    assert.equal(await runRoleCreation(createForm(), harness.args), false);
+    assert.equal(harness.state.creating, false);
+    assert.equal(harness.state.pendingAction, null);
+    assert.deepEqual(harness.state.roles.map((role) => role.id), ["existing"]);
+    assert.match(harness.state.error, /disconnected/);
+  });
+
+  it("preserves a committed role when its subsequent refresh fails", async () => {
+    const harness = createHarness();
+    harness.args.loadRolesFromBridge = async () => { throw new Error("Refresh failed"); };
+    assert.equal(await runRoleCreation(createForm(), harness.args), true);
+    assert.equal(harness.state.requests.length, 1);
+    assert.equal(harness.state.activeRoleId, "mira");
+    assert.equal(harness.state.creating, false);
+    assert.equal(harness.state.pendingAction, null);
+    assert.deepEqual(harness.state.views.at(-1), { kind: "role-detail", roleId: "mira" });
+    assert.match(harness.state.feedback?.message ?? "", /角色已创建/);
   });
 });
 
@@ -239,8 +278,8 @@ describe("role creation form actions", () => {
       description: "",
       systemPrompt: "",
       profile: {
-        character: { profile: "", personality: "", behavior_rules: "" },
-        knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
+        character: { profile: "", personality: "", behavior_rules: "", response_constraints: "" },
+        knowledge_base: { enabled: false, entries: [] },
       },
     });
     assert.deepEqual(feedback, { tone: "success", message: "新建角色表单已重置。" });
@@ -264,8 +303,8 @@ describe("role creation form actions", () => {
       description: "",
       systemPrompt: "",
       profile: {
-        character: { profile: "", personality: "", behavior_rules: "" },
-        knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
+        character: { profile: "", personality: "", behavior_rules: "", response_constraints: "" },
+        knowledge_base: { enabled: false, entries: [] },
       },
     });
     assert.equal(feedback, null);

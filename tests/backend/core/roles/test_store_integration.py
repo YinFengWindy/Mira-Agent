@@ -610,12 +610,12 @@ def test_role_aggregate_service_initializes_role_first_memory_space(
     assert aggregate.memory_root.is_dir()
     self_text = (aggregate.memory_root / "SELF.md").read_text(encoding="utf-8").strip()
     assert self_text.startswith("# 我是谁")
-    assert "来自深海城的向导。" in self_text
+    assert "我是Mira。" in self_text
     assert "## 我对你的理解" in self_text
     assert "## 我们的关系" in self_text
     assert "内部底座" not in self_text
     assert (aggregate.memory_root / "MEMORY.md").read_text(encoding="utf-8")
-    assert aggregate.role.memory_init_state["seed_background_ready"] is True
+    assert aggregate.role.memory_init_state["seed_self_ready"] is True
     assert aggregate.role.memory_init_state["seed_first_impression_ready"] is True
     assert aggregate.role.runtime_config == {}
 

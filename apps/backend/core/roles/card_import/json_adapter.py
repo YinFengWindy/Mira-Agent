@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any
 
 from .lorebook_adapter import normalize_lorebook
-from .models import ImportProvenance, RoleCardAsset, RoleCardImportPreview, RoleCardImportReport
+from .asset_adapter import normalize_assets
+from .models import ImportProvenance, RoleCardImportPreview, RoleCardImportReport
 
 _MACRO_PATTERN = re.compile(r"\{\{[^{}]+\}\}")
 
 
-def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str = "tavern-json") -> RoleCardImportPreview:
+def adapt_json(
+    payload: Any, *, source_name: str = "card.json", format_name: str = "tavern-json"
+) -> RoleCardImportPreview:
     """Normalize a Tavern card object without reading or writing external state."""
     if not isinstance(payload, dict):
         raise ValueError("角色卡 JSON 必须是对象")
@@ -23,7 +28,7 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
     name = _first_text(data, "name", "char_name") or "未命名角色"
     description = _first_text(data, "description")
     personality = _first_text(data, "personality")
-    rules = _join_text(data.get("system_prompt"), data.get("post_history_instructions"))
+    rules = _first_text(data, "system_prompt")
     entries, lore_discarded = normalize_lorebook(data.get("character_book"))
     profile = {
         "version": 1,
@@ -31,16 +36,20 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
             "profile": description,
             "personality": personality,
             "behavior_rules": rules,
+            "response_constraints": _first_text(data, "post_history_instructions"),
+            "nickname": _first_text(data, "nickname"),
         },
         "knowledge_base": {
-            "enabled": bool(entries),
-            "token_budget": 2000,
+            "enabled": False,
             "entries": entries,
+            "raw_source": deepcopy(data["character_book"])
+            if isinstance(data.get("character_book"), dict)
+            else {},
         },
     }
     adapted = ["name", "description", "personality", "system_prompt"]
     if data.get("post_history_instructions"):
-        adapted.append("post_history_instructions -> behavior_rules")
+        adapted.append("post_history_instructions -> response_constraints")
     if data.get("character_book"):
         adapted.append("character_book")
     discarded = list(lore_discarded)
@@ -50,19 +59,25 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
     for field in ("scenario", "mes_example", "example_dialogue"):
         if data.get(field):
             discarded.append(field)
-    macros = _macros(data)
+    macros = [
+        macro
+        for macro in _macros(data)
+        if macro.lower() not in {"{{char}}", "{{user}}"}
+    ]
     report = RoleCardImportReport(
         adapted_fields=tuple(dict.fromkeys(adapted)),
         discarded_fields=tuple(dict.fromkeys(discarded)),
         unsupported_macros=tuple(macros),
         unsupported_rules=tuple(_unsupported_rules(data)),
     )
-    assets, unsupported_resources = _json_assets(data)
+    assets, unsupported_resources = normalize_assets(data)
     report = RoleCardImportReport(
         adapted_fields=report.adapted_fields,
         discarded_fields=report.discarded_fields,
         unsupported_macros=report.unsupported_macros,
-        unsupported_resources=tuple(dict.fromkeys((*report.unsupported_resources, *unsupported_resources))),
+        unsupported_resources=tuple(
+            dict.fromkeys((*report.unsupported_resources, *unsupported_resources))
+        ),
         unsupported_rules=report.unsupported_rules,
     )
     return RoleCardImportPreview(
@@ -71,7 +86,16 @@ def adapt_json(payload: Any, *, source_name: str = "card.json", format_name: str
         profile=profile,
         assets=tuple(assets),
         report=report,
-        provenance=ImportProvenance(format=format_name, card_version=card_version),
+        provenance=ImportProvenance(
+            format=format_name,
+            card_version=card_version,
+            creator=_first_text(data, "creator"),
+            tags=_string_list(data.get("tags")),
+            source=_string_list(data.get("source")),
+            created_at=data.get("creation_date"),
+            updated_at=data.get("modification_date"),
+            imported_at=datetime.now(timezone.utc).isoformat(),
+        ),
     )
 
 
@@ -97,8 +121,12 @@ def _first_text(data: dict[str, Any], *fields: str) -> str:
     return ""
 
 
-def _join_text(*values: Any) -> str:
-    return "\n\n".join(value.strip() for value in values if isinstance(value, str) and value.strip())
+def _string_list(value: Any) -> list[str]:
+    return (
+        [item for item in value if isinstance(item, str)]
+        if isinstance(value, list)
+        else []
+    )
 
 
 def _macros(value: Any) -> list[str]:
@@ -116,30 +144,13 @@ def _macros(value: Any) -> list[str]:
 
 def _unsupported_rules(data: dict[str, Any]) -> list[str]:
     values: list[str] = []
-    for key in ("extensions", "decorators", "recursive_scanning", "scan_depth", "insertion_order"):
+    for key in (
+        "extensions",
+        "decorators",
+        "recursive_scanning",
+        "scan_depth",
+        "insertion_order",
+    ):
         if data.get(key):
             values.append(key)
     return values
-
-
-def _json_assets(data: dict[str, Any]) -> tuple[list[RoleCardAsset], list[str]]:
-    assets: list[RoleCardAsset] = []
-    unsupported: list[str] = []
-    for key, kind in (("avatar", "avatar"), ("icon", "avatar"), ("background", "background"), ("background_image", "background")):
-        value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            if value.startswith(("http://", "https://")):
-                unsupported.append(value.strip())
-            else:
-                assets.append(RoleCardAsset(kind=kind, path=value.strip()))
-    for key in ("emotion_images", "emotions"):
-        value = data.get(key)
-        if isinstance(value, dict):
-            for name, path in value.items():
-                if isinstance(path, str) and path.strip():
-                    assets.append(RoleCardAsset(kind="emotion", name=str(name), path=path.strip()))
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict) and isinstance(item.get("path"), str):
-                    assets.append(RoleCardAsset(kind="emotion", name=str(item.get("name", "")) or None, path=item["path"].strip()))
-    return assets, unsupported

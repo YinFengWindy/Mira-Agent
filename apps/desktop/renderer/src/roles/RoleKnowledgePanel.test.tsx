@@ -13,7 +13,6 @@ describe("RoleKnowledgePanel", () => {
           profile: {
             knowledge_base: {
               enabled: true,
-              token_budget: 1800,
               entries: [{ id: "entry-1", title: "雨天", content: "她喜欢听雨。", primary_keys: [] }],
             },
           },
@@ -26,9 +25,17 @@ describe("RoleKnowledgePanel", () => {
     assert.match(markup, /data-testid="add-knowledge-entry-button"/);
     assert.match(markup, />添加条目</);
     assert.match(markup, />雨天</);
-    assert.match(markup, /value="1800"/);
+    assert.doesNotMatch(markup, /Token 预算/);
     assert.doesNotMatch(markup, /未设置关键词/);
     assert.doesNotMatch(markup, />保存</);
     assert.doesNotMatch(markup, /roles\.update/);
+  });
+
+  it("defaults missing knowledge settings to disabled", () => {
+    const markup = renderToStaticMarkup(
+      <RoleKnowledgePanel roleForm={createEmptyRoleForm()} onUpdate={() => undefined} />,
+    );
+
+    assert.match(markup, /aria-checked="false" aria-label="启用知识库"/);
   });
 });

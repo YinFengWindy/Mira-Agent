@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { BackIcon, DocumentIcon, ResetIcon, SaveIcon, UploadIcon } from "../shared/icons";
 import { cx } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
-import type { RoleCardImportState } from "../app/useRoleCreationController";
+import type { RoleCardImportState } from "../app/roleCardImportState";
 import { RoleCardImportPreviewDialog } from "./RoleCardImportPreview";
 import { RoleCardProfileForm } from "./RoleCardProfileForm";
+import { selectRoleCreateState } from "./roleCreateSelectors";
 import {
   roleFieldClass,
   roleFieldLabelClass,
@@ -41,19 +42,12 @@ export function RoleCreatePage({
   onCancelRoleCardImport,
 }: RoleCreatePageProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const profileDirty = Boolean(
-    form.profile?.character?.profile?.trim()
-    || form.profile?.character?.personality?.trim()
-    || form.profile?.character?.behavior_rules?.trim()
-    || form.profile?.knowledge_base?.entries?.length,
-  );
-  const formDirty = Boolean(
-    form.name.trim() || form.description.trim() || form.systemPrompt.trim() || profileDirty,
-  );
+  const { formDirty, needsEmotionChoice, previewImagePath } = selectRoleCreateState(form, roleCardImport);
+  const previewId = roleCardImport.preview?.import_id;
 
   useEffect(() => {
-    if (roleCardImport.preview) setPreviewOpen(true);
-  }, [roleCardImport.preview?.import_id]);
+    if (previewId) setPreviewOpen(true);
+  }, [previewId]);
 
   return (
     <section
@@ -66,6 +60,7 @@ export function RoleCreatePage({
             className={cx(floatingActionClass, "hover:-translate-x-0.5")}
             type="button"
             onClick={onBackToList}
+            disabled={creating}
             aria-label="返回角色列表"
           >
             <BackIcon className="h-5 w-5 fill-current" />
@@ -76,7 +71,7 @@ export function RoleCreatePage({
               className={cx(floatingActionClass, "w-auto grid-cols-[18px_auto] gap-1.5 px-3.5 text-sm text-[#4B5563]")}
               type="button"
               onClick={onPreviewRoleCard}
-              disabled={roleCardImport.status !== "idle" || !bridgeReady}
+              disabled={creating || roleCardImport.status !== "idle" || !bridgeReady}
               aria-label={roleCardImport.status === "previewing" ? "正在导入角色" : "导入角色"}
             >
               <UploadIcon className="h-[18px] w-[18px] fill-current" />
@@ -97,7 +92,7 @@ export function RoleCreatePage({
               className={floatingActionClass}
               type="button"
               onClick={onResetForm}
-              disabled={!formDirty}
+              disabled={creating || !formDirty}
               aria-label="重置新建角色表单"
             >
               <ResetIcon className="h-[18px] w-[18px] fill-current" />
@@ -107,7 +102,7 @@ export function RoleCreatePage({
               className={cx(floatingActionClass, "bg-[#fff7f0] hover:shadow-[0_10px_28px_rgba(255,217,184,0.32)]")}
               type="button"
               onClick={onCreateRole}
-              disabled={creating || !bridgeReady}
+              disabled={creating || !bridgeReady || roleCardImport.status === "previewing" || needsEmotionChoice}
               aria-label={creating ? "正在创建角色" : "创建角色"}
             >
               <SaveIcon className="h-5 w-5 fill-current" />
@@ -172,7 +167,11 @@ export function RoleCreatePage({
         <RoleCardImportPreviewDialog
           open={previewOpen}
           preview={roleCardImport.preview}
-          sourceUrl={roleCardImport.source ? window.miraDesktop.localAssetUrl(roleCardImport.source) : ""}
+          selections={form.emotionSelections ?? {}}
+          onSelectEmotion={(name, assetId) => onUpdateForm((current) => ({
+            ...current, emotionSelections: { ...current.emotionSelections, [name]: assetId },
+          }))}
+          sourceUrl={previewImagePath ? window.miraDesktop.localAssetUrl(previewImagePath) : ""}
           onClose={() => setPreviewOpen(false)}
           onCancel={() => {
             setPreviewOpen(false);

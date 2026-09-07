@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .models import RoleRecord
-from .profile_models import RoleKnowledgeBase, RoleKnowledgeEntry, RoleProfile
+from .knowledge_matcher import RoleKnowledgeMatcher
+from .profile_models import RoleKnowledgeEntry, RoleProfile
+from .role_macros import expand_role_macros
 
 
 @dataclass(frozen=True)
@@ -13,59 +15,6 @@ class CompiledRolePrompt:
 
     content: str
     matched_knowledge_entries: tuple[RoleKnowledgeEntry, ...] = ()
-
-
-class RoleKnowledgeMatcher:
-    """Matches enabled Lorebook entries with deterministic ordering and a char budget."""
-
-    def match(
-        self,
-        knowledge_base: RoleKnowledgeBase,
-        text: str = "",
-    ) -> list[RoleKnowledgeEntry]:
-        if not knowledge_base.enabled or knowledge_base.token_budget <= 0:
-            return []
-        matched: list[RoleKnowledgeEntry] = []
-        for entry in knowledge_base.entries:
-            if not entry.enabled or not entry.content.strip():
-                continue
-            if entry.always_active or self._matches(entry, text):
-                matched.append(entry)
-        matched.sort(key=lambda item: (-item.priority, item.insertion_order, item.id))
-        budget_chars = knowledge_base.token_budget * 4
-        result: list[RoleKnowledgeEntry] = []
-        used = 0
-        for entry in matched:
-            cost = len(entry.content)
-            if result and used + cost > budget_chars:
-                continue
-            if not result and cost > budget_chars:
-                result.append(entry)
-                break
-            result.append(entry)
-            used += cost
-        return result
-
-    @staticmethod
-    def _matches(entry: RoleKnowledgeEntry, text: str) -> bool:
-        primary = [item for item in entry.primary_keys if item]
-        secondary = [item for item in entry.secondary_keys if item]
-        if not primary and not secondary:
-            return False
-        if entry.case_sensitive:
-            haystack = text
-
-            def contains(key: str) -> bool:
-                return key in haystack
-        else:
-            haystack = text.casefold()
-
-            def contains(key: str) -> bool:
-                return key.casefold() in haystack
-        # A primary key is required; secondary keys refine a match when present.
-        if primary and not any(contains(key) for key in primary):
-            return False
-        return not secondary or any(contains(key) for key in secondary)
 
 
 class RolePromptCompiler:
@@ -79,19 +28,14 @@ class RolePromptCompiler:
         profile: RoleProfile | RoleRecord,
         matched_knowledge_entries: Iterable[RoleKnowledgeEntry] | None = None,
         runtime_context: dict[str, Any] | None = None,
+        *,
+        role_name: str = "",
+        user_name: str = "",
     ) -> CompiledRolePrompt:
+        """Render stable definitions, selected knowledge, and runtime output constraints."""
         if isinstance(profile, RoleRecord):
-            if not (
-                profile.profile.character.profile
-                or profile.profile.character.personality
-                or profile.profile.character.behavior_rules
-            ):
-                profile = RoleProfile.from_legacy(
-                    system_prompt=profile.system_prompt,
-                    background=profile.background,
-                )
-            else:
-                profile = profile.profile
+            role_name = role_name or profile.name or profile.id
+            profile = profile.profile
         definition = profile.character
         blocks: list[str] = []
         if definition.profile:
@@ -106,10 +50,20 @@ class RolePromptCompiler:
                 "[role_knowledge]\n"
                 + "\n\n".join(entry.content.strip() for entry in entries)
             )
+        if definition.response_constraints:
+            blocks.append(f"[role_response_constraints]\n{definition.response_constraints}")
+        content = expand_role_macros(
+            "\n\n".join(blocks),
+            role_name=role_name,
+            nickname=definition.nickname,
+            user_name=user_name,
+        )
+        if role_name.strip():
+            content = "\n\n".join(part for part in (f"[role_identity]\n{role_name.strip()}", content) if part)
         mood_contract = _build_mood_contract(runtime_context or {})
         if mood_contract:
-            blocks.append(mood_contract)
-        return CompiledRolePrompt(content="\n\n".join(blocks), matched_knowledge_entries=entries)
+            content = "\n\n".join(part for part in (content, mood_contract) if part)
+        return CompiledRolePrompt(content=content, matched_knowledge_entries=entries)
 
 
 def _build_mood_contract(runtime_config: dict[str, Any]) -> str:

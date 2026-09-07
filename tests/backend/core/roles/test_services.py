@@ -4,6 +4,39 @@ import pytest
 
 from core.roles import RoleAggregateService, RoleStore
 from session.manager import SessionManager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from core.roles.self_seed import LlmRoleSelfSeedGenerator
+
+
+@pytest.mark.asyncio
+async def test_new_role_generates_self_from_profile_and_profile_edits_preserve_it(tmp_path):
+    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁\n\n角色自我认知")))
+    service = RoleAggregateService.from_runtime(
+        workspace=tmp_path,
+        role_store=RoleStore(tmp_path),
+        session_manager=SessionManager(tmp_path),
+        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
+    )
+    aggregate = await service.create_role_async(
+        role_id="mira", name="Mira", system_prompt="旧规则", background="旧背景",
+        profile={"character": {"profile": "{{char}}的新资料", "response_constraints": "回答简洁"}},
+    )
+    prompt = provider.chat.await_args.kwargs["messages"][1]["content"]
+    assert "Mira的新资料" in prompt
+    assert "回答简洁" in prompt
+    assert "旧背景" not in prompt and "旧规则" not in prompt
+    self_path = aggregate.memory_root / "SELF.md"
+    saved_self = self_path.read_text(encoding="utf-8")
+    history_path = aggregate.memory_root / "HISTORY.md"
+    saved_history = history_path.read_text(encoding="utf-8")
+
+    await service.update_role_async("mira", profile={"character": {"profile": "再次更新的资料"}})
+    await service.open_role_async("mira")
+
+    provider.chat.assert_awaited_once()
+    assert self_path.read_text(encoding="utf-8") == saved_self
+    assert history_path.read_text(encoding="utf-8") == saved_history
 
 
 def test_role_deletion_requires_a_lifecycle_listener(tmp_path) -> None:

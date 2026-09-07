@@ -7,6 +7,7 @@ import binascii
 import io
 import json
 import zlib
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,9 @@ def adapt_png(source: str | Path) -> RoleCardImportPreview:
     return adapt_png_bytes(path.read_bytes(), source_name=path.name)
 
 
-def adapt_png_bytes(data: bytes, *, source_name: str = "card.png") -> RoleCardImportPreview:
+def adapt_png_bytes(
+    data: bytes, *, source_name: str = "card.png"
+) -> RoleCardImportPreview:
     """Parse PNG/APNG bytes without creating a staging file."""
     image_format, media_type = validate_image(data, name="角色卡图片")
     try:
@@ -41,13 +44,37 @@ def adapt_png_bytes(data: bytes, *, source_name: str = "card.png") -> RoleCardIm
                 break
     if payload is None:
         raise ValueError("角色卡图片缺少 chara 或 ccv3 metadata")
-    preview = adapt_json(payload, source_name=source_name, format_name="apng" if image_format == "PNG" and _is_animated(data) else "png")
-    asset = RoleCardAsset(kind="avatar", path=source_name, data=data, media_type=media_type)
+    preview = adapt_json(
+        payload,
+        source_name=source_name,
+        format_name="apng" if image_format == "PNG" and _is_animated(data) else "png",
+    )
+    default_assets = tuple(
+        replace(asset, path=source_name, data=data, media_type=media_type)
+        for asset in preview.assets
+        if asset.path == "ccdefault:"
+    )
+    asset = RoleCardAsset(
+        kind="avatar",
+        path=source_name,
+        data=data,
+        media_type=media_type,
+        asset_id="card-image",
+    )
     return RoleCardImportPreview(
         name=preview.name,
         description=preview.description,
         profile=preview.profile,
-        assets=(asset, *preview.assets),
+        assets=(
+            *default_assets,
+            *(
+                candidate
+                for candidate in preview.assets
+                if candidate.path != "ccdefault:"
+            ),
+        )
+        if default_assets
+        else (asset, *preview.assets),
         report=preview.report,
         provenance=preview.provenance,
     )

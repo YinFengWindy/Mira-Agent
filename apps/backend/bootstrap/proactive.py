@@ -12,6 +12,7 @@ from agent.core.proactive_turn.gates import ProactiveGate
 from agent.tools.message_push import MessagePushTool
 from core.roles import RoleRecord, RoleStore
 from core.roles.model_runtime import RoleAwareProvider
+from core.roles.role_prompt_compiler import RoleKnowledgeMatcher, RolePromptCompiler
 from proactive_v2.config_loader import load_proactive_config
 from proactive_v2.loop import ProactiveLoop
 from proactive_v2.memory_optimizer import MemoryOptimizer, MemoryOptimizerLoop
@@ -113,7 +114,10 @@ def _build_role_prompt_resolver(workspace: Path, role_id: str):
         role = RoleStore(workspace).get_role(role_id)
         if role is None:
             raise ValueError(f"role not found for proactive generation: {role_id}")
-        prompt = role.system_prompt.strip()
+        prompt = RolePromptCompiler().compile(
+            role,
+            matched_knowledge_entries=RoleKnowledgeMatcher().match(role.profile.knowledge_base),
+        ).content.strip()
         if not prompt:
             raise ValueError(f"role.system_prompt required: {role_id}")
         return prompt

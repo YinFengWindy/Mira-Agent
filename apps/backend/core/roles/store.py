@@ -150,22 +150,41 @@ class RoleStore:
                     background=str(background),
                 )
             )
-            if avatar_source is not None:
-                record.avatar = self.import_asset(
-                    resolved_id,
-                    avatar_source,
-                    prefix="avatar",
-                )
-            if illustration_sources:
-                record.illustrations = [
-                    self.import_asset(resolved_id, source, prefix="illustration")
-                    for source in illustration_sources
-                ]
+            asset_directory = (self.assets_dir / resolved_id).resolve()
+            if asset_directory.parent != self.assets_dir.resolve():
+                raise ValueError("角色素材路径越界")
+            directory_existed = asset_directory.exists()
+            created_assets: list[str] = []
+            try:
+                if avatar_source is not None:
+                    record.avatar = self.import_asset(
+                        resolved_id, avatar_source, prefix="avatar"
+                    )
+                    created_assets.append(record.avatar)
+                for source in illustration_sources or []:
+                    imported_path = self.import_asset(
+                        resolved_id, source, prefix="illustration"
+                    )
+                    created_assets.append(imported_path)
+                    record.illustrations.append(imported_path)
                 record.asset_category_bindings = {
                     path: DEFAULT_ASSET_CATEGORY_ID for path in record.illustrations
                 }
-            roles.append(record)
-            self._save_roles(roles)
+                roles.append(record)
+                self._save_roles(roles)
+            except BaseException as error:
+                # The manifest is atomic; undo only files copied by this attempt.
+                for path in created_assets:
+                    try:
+                        self._assets.remove(path)
+                    except OSError as cleanup_error:
+                        error.add_note(f"角色素材回滚失败: {cleanup_error}")
+                if not directory_existed and asset_directory.exists():
+                    try:
+                        asset_directory.rmdir()
+                    except OSError as cleanup_error:
+                        error.add_note(f"角色素材目录清理失败: {cleanup_error}")
+                raise
             return record
 
     def update_role(
@@ -303,13 +322,13 @@ class RoleStore:
             role.name = clean_name
         if description is not None:
             role.description = str(description)
-        if system_prompt is not None:
+        if profile is None and system_prompt is not None:
             clean_prompt = str(system_prompt).strip()
             if not clean_prompt:
                 raise ValueError("role.system_prompt 不能为空")
             role.system_prompt = clean_prompt
             role.profile.character.behavior_rules = clean_prompt
-        if background is not None:
+        if profile is None and background is not None:
             role.background = str(background)
             role.profile.character.profile = str(background).strip()
         if profile is not None:
@@ -321,7 +340,6 @@ class RoleStore:
             role.system_prompt = role.profile.character.behavior_rules.strip()
             if not role.system_prompt:
                 role.system_prompt = role.profile.character.profile.strip()
-            role.background = role.profile.character.profile
         if runtime_config is not None:
             role.runtime_config = dict(runtime_config)
         if memory_init_state is not None:

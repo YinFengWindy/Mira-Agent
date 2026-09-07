@@ -17,10 +17,12 @@ class RoleCardAsset:
     name: str | None = None
     data: bytes | None = field(default=None, repr=False, compare=False)
     media_type: str | None = None
+    asset_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
             "kind": self.kind,
+            "asset_id": self.asset_id,
             "path": self.path,
             "name": self.name,
             "media_type": self.media_type,

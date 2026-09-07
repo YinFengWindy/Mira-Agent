@@ -4,9 +4,7 @@ import { useState } from "react";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
 import type { RoleFormState, RoleKnowledgeBase, RoleKnowledgeEntry } from "../shared/types";
 import {
-  roleFieldClass,
   rolePanelGhostButtonClass,
-  roleSectionDescriptionClass,
   roleSectionTitleClass,
 } from "./roleEditorStyles";
 import { RoleKnowledgeEntryRow } from "./RoleKnowledgeEntryRow";
@@ -21,7 +19,7 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
   const knowledge = roleForm.profile?.knowledge_base ?? {};
   const [expandedEntries, setExpandedEntries] = useState<ReadonlySet<string>>(new Set());
   const entries = knowledge.entries ?? [];
-  const enabled = knowledge.enabled !== false;
+  const enabled = knowledge.enabled === true;
 
   function entryKey(entry: { id?: string }, index: number): string {
     return entry.id || `index-${index}`;
@@ -63,7 +61,7 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
       ...current,
       entries: [
         ...(current.entries ?? []),
-        { id, content: "", primary_keys: [], enabled: true, always_active: false, case_sensitive: false, priority: 0 },
+        { id, content: "", primary_keys: [], secondary_keys: [], enabled: true, always_active: false, case_sensitive: false, priority: 0, insertion_order: current.entries?.length ?? 0 },
       ],
     }));
     setExpandedEntries((current) => new Set(current).add(id));
@@ -91,7 +89,6 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
           </span>
           <div>
             <h2 className={roleSectionTitleClass}>知识库</h2>
-            <p className={roleSectionDescriptionClass}>导入的 Lorebook 条目会在运行时按关键词匹配。</p>
           </div>
         </div>
       </div>
@@ -100,14 +97,9 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-sm font-medium text-[#182230]">启用知识库</h3>
-            <p className={roleSectionDescriptionClass}>{enabled ? "对话时会按关键词注入匹配条目。" : "关闭后条目保留，但不参与对话。"}</p>
           </div>
           <SettingsToggleCard checked={enabled} ariaLabel="启用知识库" onChange={(checked) => updateKnowledge((current) => ({ ...current, enabled: checked }))} />
         </div>
-        <label className="grid max-w-48 gap-1.5 text-xs text-[#667085]">
-          <span>Token 预算</span>
-          <input className={roleFieldClass} type="number" min={0} value={knowledge.token_budget ?? 1200} onChange={(event) => updateKnowledge((current) => ({ ...current, token_budget: Number(event.target.value) || 0 }))} />
-        </label>
       </div>
 
       <div className="grid gap-1">
@@ -136,7 +128,6 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
           <div className="mt-2 grid justify-items-center gap-2 border-y border-dashed border-[#DDE5EC] py-8 text-center">
             <BookOpenText className="h-6 w-6 text-[#C3CDD7]" weight="duotone" aria-hidden="true" />
             <p className="text-xs text-[#7B8794]">当前没有知识库条目</p>
-            <p className="text-[11px] text-[#98A2B3]">导入角色卡时会自动带入 Lorebook 条目。</p>
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from copy import deepcopy
 
 
 def normalize_lorebook(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
@@ -21,7 +22,9 @@ def normalize_lorebook(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
             discarded.append(f"character_book.entries[{index}]")
             continue
         keys = _string_list(raw_entry.get("keys"))
-        secondary_keys = _string_list(raw_entry.get("secondary_keys", raw_entry.get("secondaryKeys")))
+        secondary_keys = _string_list(
+            raw_entry.get("secondary_keys", raw_entry.get("secondaryKeys"))
+        )
         raw_title = raw_entry.get("title", "")
         title = raw_title.strip() if isinstance(raw_title, str) else ""
         content = raw_entry.get("content", "")
@@ -35,16 +38,29 @@ def normalize_lorebook(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
             "primary_keys": keys,
             "secondary_keys": secondary_keys,
             "enabled": bool(raw_entry.get("enabled", True)),
-            "always_active": bool(raw_entry.get("constant", raw_entry.get("always", False))),
-            "case_sensitive": bool(raw_entry.get("case_sensitive", raw_entry.get("caseSensitive", False))),
+            "always_active": bool(
+                raw_entry.get("constant", raw_entry.get("always", False))
+            ),
+            "case_sensitive": bool(
+                raw_entry.get("case_sensitive", raw_entry.get("caseSensitive", False))
+            ),
             "priority": _integer(raw_entry.get("priority"), 0),
-            "insertion_order": _integer(raw_entry.get("insertion_order", raw_entry.get("order", index)), index),
+            "insertion_order": _integer(
+                raw_entry.get("insertion_order", raw_entry.get("order", index)), index
+            ),
+            "raw_source": deepcopy(raw_entry),
         }
         entries.append(entry)
         for unsupported in ("selectiveLogic", "scan_depth", "position", "extensions"):
             if unsupported in raw_entry:
                 discarded.append(f"character_book.entries[{index}].{unsupported}")
-    entries.sort(key=lambda item: (-int(item["priority"]), int(item["insertion_order"]), str(item["id"])))
+    entries.sort(
+        key=lambda item: (
+            -int(item["priority"]),
+            int(item["insertion_order"]),
+            str(item["id"]),
+        )
+    )
     return entries, discarded
 
 

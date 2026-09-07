@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 
-import { toFileUrl } from "../shared/format";
 import { CloseIcon, DocumentIcon } from "../shared/icons";
 import type { RoleCardImportPreview } from "../shared/types";
 import { roleChipClass } from "./roleEditorStyles";
+import { RoleCardImportAssets } from "./RoleCardImportAssets";
+import { hasUnselectedEmotions } from "./roleCardImportSelectors";
 
 type RoleCardImportPreviewDialogProps = {
   open: boolean;
@@ -11,14 +12,9 @@ type RoleCardImportPreviewDialogProps = {
   sourceUrl: string;
   onClose: () => void;
   onCancel: () => void;
+  selections: Record<string, string>;
+  onSelectEmotion: (name: string, assetId: string) => void;
 };
-
-function assetLabel(kind: string | undefined): string {
-  if (kind === "avatar") return "头像";
-  if (kind === "background") return "背景";
-  if (kind === "emotion") return "心情";
-  return "素材";
-}
 
 type PreviewSectionProps = {
   title: string;
@@ -56,6 +52,8 @@ export function RoleCardImportPreviewDialog({
   sourceUrl,
   onClose,
   onCancel,
+  selections,
+  onSelectEmotion,
 }: RoleCardImportPreviewDialogProps) {
   useEffect(() => {
     if (!open) return;
@@ -78,7 +76,7 @@ export function RoleCardImportPreviewDialog({
   const assets = (preview.assets ?? []).filter((asset) => asset.size !== undefined);
   const entries = knowledge?.entries ?? [];
   const hasCharacterContent = Boolean(
-    character?.profile || preview.description || character?.personality || character?.behavior_rules,
+    character?.profile || preview.description || character?.personality || character?.behavior_rules || character?.response_constraints,
   );
 
   return (
@@ -112,6 +110,7 @@ export function RoleCardImportPreviewDialog({
                   <PreviewField label="设定" value={character?.profile || preview.description || ""} />
                   <PreviewField label="性格" value={character?.personality ?? ""} />
                   <PreviewField label="规则" value={character?.behavior_rules ?? ""} />
+                  <PreviewField label="回复约束" value={character?.response_constraints ?? ""} />
                 </div>
               ) : <p className="m-0 text-xs text-[#98A2B3]">无</p>}
             </PreviewSection>
@@ -133,20 +132,7 @@ export function RoleCardImportPreviewDialog({
 
             <PreviewSection title={`素材 · ${assets.length}`}>
               {assets.length ? (
-                <div className="flex flex-wrap gap-3">
-                  {assets.map((asset, index) => (
-                    <figure className="m-0 grid w-20 justify-items-center gap-1.5" key={`${asset.kind ?? "asset"}-${asset.path ?? index}`}>
-                      {asset.preview_abs ? (
-                        <img className="h-20 w-20 rounded-xl object-cover shadow-[0_6px_16px_rgba(15,23,42,0.12)]" src={toFileUrl(asset.preview_abs)} alt={`${assetLabel(asset.kind)}素材预览`} />
-                      ) : (
-                        <div className="grid h-20 w-20 place-items-center rounded-xl bg-[#F2F5F9] text-[11px] text-[#98A2B3]" aria-hidden="true">无预览</div>
-                      )}
-                      <figcaption className="w-full truncate text-center text-[11px] leading-4 text-[#667085]">
-                        {assetLabel(asset.kind)}{asset.name ? ` · ${asset.name}` : ""}
-                      </figcaption>
-                    </figure>
-                  ))}
-                </div>
+                <RoleCardImportAssets assets={assets} selections={selections} onSelectEmotion={onSelectEmotion} />
               ) : <p className="m-0 text-xs text-[#98A2B3]">无</p>}
             </PreviewSection>
           </div>
@@ -154,7 +140,7 @@ export function RoleCardImportPreviewDialog({
 
         <footer className="flex justify-end gap-2 border-t border-[#EEF2F5] px-6 py-4">
           <button className="rounded-lg border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm text-[#344054] transition hover:bg-[#F8FAFC] focus:outline-none" type="button" onClick={onCancel}>取消导入</button>
-          <button className="rounded-lg bg-[#2176FF] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1D68E6] focus:outline-none" type="button" onClick={onClose}>继续编辑</button>
+          <button className="rounded-md bg-[#2176FF] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#1D68E6] focus:outline-none disabled:opacity-40" type="button" disabled={hasUnselectedEmotions(assets, selections)} onClick={onClose}>继续编辑</button>
         </footer>
       </section>
     </div>

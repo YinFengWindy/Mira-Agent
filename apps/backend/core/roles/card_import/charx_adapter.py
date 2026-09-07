@@ -5,8 +5,8 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+from dataclasses import replace
 from pathlib import Path
-from typing import Any
 
 from .json_adapter import adapt_json
 from .models import RoleCardAsset, RoleCardImportPreview, RoleCardImportReport
@@ -64,12 +64,18 @@ def adapt_charx_bytes(data: bytes) -> RoleCardImportPreview:
             raise ValueError("角色卡包根目录缺少 card.json")
         try:
             payload = json.loads(archive.read(names["card.json"]).decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, RuntimeError, zipfile.BadZipFile) as error:
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            KeyError,
+            RuntimeError,
+            zipfile.BadZipFile,
+        ) as error:
             raise ValueError("角色卡包 card.json 无效") from error
         preview = adapt_json(payload, source_name="card.json", format_name="charx")
         assets: list[RoleCardAsset] = []
         unsupported_resources: list[str] = []
-        for candidate in _referenced_assets(preview, payload, names):
+        for candidate in preview.assets:
             info = names.get(candidate.path)
             if info is None:
                 unsupported_resources.append(candidate.path)
@@ -83,13 +89,15 @@ def adapt_charx_bytes(data: bytes) -> RoleCardImportPreview:
             except ValueError:
                 unsupported_resources.append(candidate.path)
                 continue
-            assets.append(RoleCardAsset(kind=candidate.kind, name=candidate.name, path=candidate.path, data=raw, media_type=media_type))
+            assets.append(replace(candidate, data=raw, media_type=media_type))
         report = preview.report
         report = RoleCardImportReport(
             adapted_fields=report.adapted_fields,
             discarded_fields=report.discarded_fields,
             unsupported_macros=report.unsupported_macros,
-            unsupported_resources=tuple(dict.fromkeys((*report.unsupported_resources, *unsupported_resources))),
+            unsupported_resources=tuple(
+                dict.fromkeys((*report.unsupported_resources, *unsupported_resources))
+            ),
             unsupported_rules=report.unsupported_rules,
         )
         return RoleCardImportPreview(
@@ -100,23 +108,3 @@ def adapt_charx_bytes(data: bytes) -> RoleCardImportPreview:
             report=report,
             provenance=preview.provenance,
         )
-
-
-def _referenced_assets(preview: RoleCardImportPreview, payload: Any, names: dict[str, zipfile.ZipInfo]) -> list[RoleCardAsset]:
-    candidates = list(preview.assets)
-    for name in names:
-        if name == "card.json" or not _is_image_name(name):
-            continue
-        lower = name.casefold()
-        if any(token in lower for token in ("user_icon", "user-icon", "model", "font", "audio", "video", "live2d", "3d")):
-            continue
-        if any(asset.path == name for asset in candidates):
-            continue
-        kind = "background" if "background" in lower else "emotion" if "emotion" in lower else "avatar" if "icon" in lower or "avatar" in lower or "main" in lower else "asset"
-        emotion_name = Path(name).stem if kind == "emotion" else None
-        candidates.append(RoleCardAsset(kind=kind, name=emotion_name, path=name))
-    return candidates
-
-
-def _is_image_name(value: str) -> bool:
-    return Path(value).suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}

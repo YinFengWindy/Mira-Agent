@@ -72,8 +72,10 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
             "profile": "A meticulous archivist.",
             "personality": "Calm and precise.",
             "behavior_rules": "Use concise answers and cite the archive.",
+            "response_constraints": "Use short paragraphs.",
+            "nickname": "",
         },
-        "knowledge_base": {"enabled": True, "token_budget": 2000, "entries": []},
+        "knowledge_base": {"enabled": True, "entries": [], "raw_source": {}},
     }
 
     response = await service.handle(
@@ -104,8 +106,7 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
                 "role_id": response.payload["role"]["id"],
                 "profile": {
                     "knowledge_base": {
-                        "enabled": True,
-                        "token_budget": 1000,
+                        "enabled": False,
                         "entries": [],
                     }
                 },
@@ -116,7 +117,26 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
 
     assert update.error is None
     assert update.payload["role"]["profile"]["character"] == profile["character"]
-    assert update.payload["role"]["profile"]["knowledge_base"]["token_budget"] == 1000
+    assert update.payload["role"]["profile"]["knowledge_base"]["enabled"] is False
+    assert "token_budget" not in update.payload["role"]["profile"]["knowledge_base"]
+
+    cleared_rules = await service.handle(
+        {
+            "id": "clear-role-behavior-rules",
+            "method": "roles.update",
+            "payload": {
+                "role_id": response.payload["role"]["id"],
+                "system_prompt": "",
+                "profile": {"character": {"behavior_rules": ""}},
+            },
+        },
+        emit_event=lambda _payload: None,
+    )
+    assert cleared_rules.error is None
+    character = cleared_rules.payload["role"]["profile"]["character"]
+    assert character["behavior_rules"] == ""
+    assert character["response_constraints"] == "Use short paragraphs."
+    assert character["profile"] == "A meticulous archivist."
     await service.aclose()
 
 
