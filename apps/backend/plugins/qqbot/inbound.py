@@ -33,7 +33,6 @@ class _InboundMixin:
         message_id = str(data.get("id") or "").strip()
         if message_id:
             self._last_c2c_msg_id[user_openid] = message_id
-            await self._send_input_notify(user_openid, message_id)
         chat_id = f"c2c:{user_openid}"
         logger.info(
             "[qqbot] 收到私聊消息 user_openid=%s msg_id=%s",
@@ -57,8 +56,13 @@ class _InboundMixin:
                 },
             )
         )
+        if message_id:
+            await self._send_input_notify(user_openid, message_id)
 
     async def _publish_inbound(self, message: InboundMessage) -> None:
+        await self._intake.submit(message)
+
+    async def _accept_inbound(self, message: InboundMessage) -> None:
         if self._channel_hub is not None:
             if not self._channel_hub.is_sender_allowed(
                 channel=message.channel,

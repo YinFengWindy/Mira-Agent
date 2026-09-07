@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
+from bootstrap.runtime_cleanup import run_cleanup_steps
+
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -30,6 +33,7 @@ from core.roles import (
 )
 from core.roles.role_runtime import RoleRuntimeRegistry
 from core.roles.self_seed import LlmRoleSelfSeedGenerator
+from core.roles.model_runtime import ModelConfigurationError, RoleModelRuntime
 from desktop_bridge.app_service import DesktopAppService
 from desktop_bridge.chat_requests import DesktopChatRequestHandler
 from desktop_bridge.chat_service import ChatTurnBusyError, DesktopChatService
@@ -102,6 +106,8 @@ class DesktopBridgeService:
         image_tool: Any | None = None,
         memory_engine: Any | None = None,
         card_import_service: Any | None = None,
+        activate_transport: bool = True,
+        model_resolver: RoleModelRuntime | None = None,
     ) -> None:
         self.workspace = workspace
         self.role_store = role_store
@@ -117,6 +123,13 @@ class DesktopBridgeService:
         )
         self.config = config
         self.role_runtime_registry = role_runtime_registry
+        registrations = getattr(config, "model_registrations", None)
+        self._owns_model_resolver = model_resolver is None
+        self.model_resolver = model_resolver or (
+            RoleModelRuntime(role_store=role_store, registrations=registrations,
+                             dev_mode=bool(getattr(config, "dev_mode", False)))
+            if isinstance(registrations, list) else None
+        )
         self.memory_engine = memory_engine
         self._event_listeners: set[
             Callable[[dict[str, Any]], Awaitable[None] | None]
@@ -128,6 +141,9 @@ class DesktopBridgeService:
             role_store=role_store,
             session_manager=session_manager,
             self_seed_generator=self._self_seed_generator,
+            model_available=(
+                lambda role_id: self.model_resolver.availability(role_id)["available"]
+            ) if self.model_resolver is not None else None,
         )
         self.role_service.add_role_deleted_listener(self._role_deleted_listener)
         self.conversation_service = ConversationService(
@@ -251,7 +267,7 @@ class DesktopBridgeService:
             stories=self.story_simulation,
             observation=observation_service,
         )
-        if push_tool is not None:
+        if push_tool is not None and activate_transport:
             self.register_desktop_push_channel(push_tool)
 
     async def _on_turn_committed(self, event: TurnCommitted) -> None:
@@ -333,9 +349,16 @@ class DesktopBridgeService:
         )
         self.role_service.remove_role_deleted_listener(self._role_deleted_listener)
         self._event_listeners.clear()
-        await self.chat_service.aclose()
-        await self.voice_handler.aclose()
-        await self.story_simulation.aclose()
+        steps = [
+            ("desktop.chat.close", self.chat_service.aclose),
+            ("desktop.voice.close", self.voice_handler.aclose),
+            ("desktop.story.close", self.story_simulation.aclose),
+        ]
+        if self.model_resolver is not None and self._owns_model_resolver:
+            steps.append(("desktop.models.close", self.model_resolver.aclose))
+        if self._self_seed_provider is not None:
+            steps.append(("desktop.self_seed.close", self._self_seed_provider.aclose))
+        await run_cleanup_steps(*steps)
 
     def start_background_tasks(self) -> None:
         """Starts bridge-owned background maintenance after an event loop exists."""
@@ -618,14 +641,13 @@ class DesktopBridgeService:
         )
 
     def _build_self_seed_generator(self) -> LlmRoleSelfSeedGenerator | None:
-        if self.config is None:
+        self._self_seed_provider = None
+        if self.model_resolver is None:
             return None
-        try:
-            from bootstrap.providers import build_providers
+        from bootstrap.providers import build_providers
 
-            provider, _light, _agent = build_providers(self.config)
-        except Exception:
-            return None
+        provider, _light, _agent = build_providers(self.config)
+        self._self_seed_provider = provider
         return LlmRoleSelfSeedGenerator(
             provider=provider,
             model=self.config.model,
@@ -646,12 +668,18 @@ class DesktopBridgeService:
         payload: dict[str, Any] = raw_payload if isinstance(raw_payload, dict) else {}
         self.start_background_tasks()
         try:
-            result = await self.request_router.dispatch(
-                method,
-                payload,
-                request_id=request_id,
-                emit_event=emit_event,
-            )
+            with ExitStack() as task_scope:
+                if method == "chat.send" and self.model_resolver is not None:
+                    purpose = "vision" if payload.get("media") else "chat"
+                    task_scope.enter_context(self.model_resolver.activate(
+                        str(payload.get("role_id") or ""), purpose,
+                    ))
+                result = await self.request_router.dispatch(
+                    method,
+                    payload,
+                    request_id=request_id,
+                    emit_event=emit_event,
+                )
             if result is not None:
                 return self._ok(request_id, method, result)
         except KeyError as exc:
@@ -677,6 +705,8 @@ class DesktopBridgeService:
                 str(exc),
                 details=details,
             )
+        except ModelConfigurationError as exc:
+            return self._error(request_id, method, exc.code, str(exc), details=exc.to_details())
         except ValueError as exc:
             return self._error(request_id, method, "invalid_request", str(exc))
         except ChatTurnBusyError as exc:

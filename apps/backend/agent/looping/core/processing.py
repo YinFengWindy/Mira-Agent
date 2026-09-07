@@ -37,26 +37,32 @@ class _ProcessingMixin:
             except asyncio.TimeoutError:
                 continue
 
-            key = item.session_key
-            self._active_turn_states[key] = self._build_initial_turn_state(item, key)
-            task = asyncio.create_task(self._process_role_scoped(item, key))
-            self._active_tasks[key] = task
-            try:
-                await task
-            except asyncio.CancelledError:
-                logger.info(f"Turn cancelled for {key}")
-            except Exception as e:
-                logger.error(f"处理消息出错: {e}", exc_info=True)
-                error_metadata = dict(getattr(item, "metadata", {}) or {})
-                await self.bus.publish_outbound(
-                    OutboundMessage(
-                        channel=item.channel,
-                        chat_id=item.chat_id,
-                        content=f"出错：{e}",
-                        metadata=error_metadata,
-                    )
+            await self.process_inbound(item)
+
+    async def process_inbound(self, item: InboundItem) -> None:
+        """Processes one dequeued transport item using this captured runtime."""
+        key = item.session_key
+        self._active_turn_states[key] = self._build_initial_turn_state(item, key)
+        task = asyncio.create_task(self._process_role_scoped(item, key))
+        self._active_tasks[key] = task
+        try:
+            await task
+        except asyncio.CancelledError:
+            if asyncio.current_task().cancelling():
+                raise
+            logger.info(f"Turn cancelled for {key}")
+        except Exception as e:
+            logger.error(f"处理消息出错: {e}", exc_info=True)
+            await self.bus.publish_outbound(
+                OutboundMessage(
+                    channel=item.channel,
+                    chat_id=item.chat_id,
+                    content=f"出错：{e}",
+                    metadata=dict(getattr(item, "metadata", {}) or {}),
                 )
-            finally:
+            )
+        finally:
+            if self._active_tasks.get(key) is task:
                 self._active_tasks.pop(key, None)
                 self._active_turn_states.pop(key, None)
 

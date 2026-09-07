@@ -28,6 +28,8 @@ from bus.internal_events import (
 from bus.events import SpawnCompletionItem
 from bus.queue import MessageBus
 from core.common.strategy_trace import build_strategy_trace_envelope
+from core.common.runtime_scope import current_runtime_lease
+from core.common.runtime_tasks import create_runtime_task
 from core.net.http import HttpRequester
 from prompts.background import build_spawn_subagent_prompt
 
@@ -193,7 +195,7 @@ class SubagentManager:
             },
         )
         # 2. 再把真正执行逻辑放到后台 task 中，避免阻塞当前会话。
-        bg_task = asyncio.create_task(
+        bg_task = create_runtime_task(
             self._run_subagent(
                 job_id=job_id,
                 task=task,
@@ -240,6 +242,12 @@ class SubagentManager:
 
     def get_running_count(self) -> int:
         return len(self._running_tasks)
+
+    async def drain(self) -> None:
+        """Waits for accepted jobs without cancelling their model or tool calls."""
+        while self._running_tasks:
+            await asyncio.gather(*tuple(self._running_tasks.values()), return_exceptions=True)
+            await asyncio.sleep(0)
 
     def list_running_jobs(self) -> list[dict[str, object]]:
         return [asdict(job) for job in self._running_jobs.values()]
@@ -472,8 +480,16 @@ class SubagentManager:
             ),
             decision=decision,
         )
+        lease = current_runtime_lease()
+        if lease is not None:
+            item.runtime_lease = lease.retain()
         # 3. 最后发布到 bus，让主 agent 以同一会话身份继续回复用户。
-        await self._bus.publish_inbound(item)
+        try:
+            await self._bus.publish_inbound(item)
+        except BaseException:
+            if item.runtime_lease is not None:
+                await item.runtime_lease.release()
+            raise
         logger.info(
             "[spawn] completed job_id=%s status=%s exit_reason=%s profile=%s retry_count=%d route=%s:%s decision_reason=%s",
             job_id,

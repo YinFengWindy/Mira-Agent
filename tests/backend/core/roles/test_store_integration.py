@@ -617,7 +617,10 @@ def test_role_aggregate_service_initializes_role_first_memory_space(
     assert (aggregate.memory_root / "MEMORY.md").read_text(encoding="utf-8")
     assert aggregate.role.memory_init_state["seed_self_ready"] is True
     assert aggregate.role.memory_init_state["seed_first_impression_ready"] is True
-    assert aggregate.role.runtime_config == {}
+    assert aggregate.role.runtime_config == {
+        "dialogue_model_registration_id": "",
+        "visual_model_registration_id": "",
+    }
 
 
 def test_role_aggregate_service_updates_background_without_losing_history(

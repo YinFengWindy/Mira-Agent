@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from bus.event_bus import EventBus
-from bus.events import OutboundMessage
+from bus.events import InboundMessage, OutboundMessage
 from bus.events_lifecycle import (
     StreamDeltaReady,
     ToolCallCompleted,
@@ -34,6 +34,9 @@ class _Bus:
 
     def subscribe_outbound(self, channel, callback) -> None:
         self.outbound.append((channel, callback))
+
+    def unsubscribe_outbound(self, channel, callback) -> None:
+        self.outbound = [item for item in self.outbound if item != (channel, callback)]
 
 
 class _SessionManager:
@@ -184,6 +187,7 @@ def _import_telegram_channel(monkeypatch: pytest.MonkeyPatch):
     class _Application:
         def __init__(self, token):
             self.token = token
+            self.running = False
             self.bot = SimpleNamespace(
                 send_message=AsyncMock(return_value=SimpleNamespace(message_id=99)),
                 edit_message_text=AsyncMock(),
@@ -205,10 +209,10 @@ def _import_telegram_channel(monkeypatch: pytest.MonkeyPatch):
             return None
 
         async def start(self):
-            return None
+            self.running = True
 
         async def stop(self):
-            return None
+            self.running = False
 
         async def shutdown(self):
             return None
@@ -277,6 +281,7 @@ def _import_qq_channel(monkeypatch: pytest.MonkeyPatch):
     class BotClient:
         def __init__(self):
             self.api = _Api()
+            self.adapter = SimpleNamespace(connect_websocket=AsyncMock())
             self.private_handler = None
             self.group_handler = None
             self.startup_handler = None
@@ -305,7 +310,7 @@ def _import_qq_channel(monkeypatch: pytest.MonkeyPatch):
         def run_backend(self):
             return self.api
 
-        def exit(self):
+        def bot_exit(self):
             return None
 
     class ForwardConstructor:
@@ -789,6 +794,13 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
         await asyncio.gather(*created)
     channel._on_polling_error(mod.TelegramError("warn"))
     await channel.stop()
+    assert bus.outbound == []
+    assert event_bus._handlers == {}
+    await channel.start()
+    assert len(bus.outbound) == 1
+    assert all(len(handlers) == 1 for handlers in event_bus._handlers.values())
+    await channel.stop()
+    assert bus.outbound == []
     assert {
         "session_key": "role:mira",
         "thread_id": "thread:mira:telegram:123",
@@ -860,11 +872,9 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     )
     adapter_mod = sys.modules["ncatbot.core.adapter.adapter"]
     adapter_mod.websockets.connect("ws://example.invalid", open_timeout=1)
-    assert adapter_mod._captured_connect_calls[-1]["open_timeout"] == 7.5
-    assert sys.modules["ncatbot.utils"].ncatbot_config.root == "1"
-    assert sys.modules["ncatbot.utils"].ncatbot_config.plugin.plugins_dir == str(
-        ncatbot_dir / "plugins"
-    )
+    assert adapter_mod._captured_connect_calls[-1]["open_timeout"] == 1
+    assert sys.modules["ncatbot.utils"].ncatbot_config.root == ""
+    assert channel._bot is None
     assert channel._is_allowed("1") is True
     assert channel._is_allowed("2") is False
     from infra.channels.qq_channel.compat import (
@@ -890,6 +900,12 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     )
     await channel.start()
     assert bus.outbound[0][0] == "qq"
+    adapter_mod.websockets.connect("ws://example.invalid", open_timeout=1)
+    assert adapter_mod._captured_connect_calls[-1]["open_timeout"] == 7.5
+    assert sys.modules["ncatbot.utils"].ncatbot_config.root == "1"
+    assert sys.modules["ncatbot.utils"].ncatbot_config.plugin.plugins_dir == str(
+        ncatbot_dir / "plugins"
+    )
     channel._channel_hub._conversation.ensure_thread_for_session(
         LegacySessionDescriptor(
             session_key="qq:gqq:100",
@@ -963,12 +979,52 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
         await mod.QQChannel._run_on_bot_loop(channel, pending)
     pending.close()
     await channel.stop()
+    assert bus.outbound == []
     assert {
         "session_key": "role:mira",
         "thread_id": "thread:mira:qq:gqq:100",
         "delivery_status": "sent",
         "external_message_id": "",
     } in session_manager.delivery_updates
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["telegram", "qq"])
+async def test_builtin_channel_buffers_received_input_during_pause(monkeypatch, tmp_path, kind):
+    mod = _import_telegram_channel(monkeypatch) if kind == "telegram" else _import_qq_channel(monkeypatch)
+    bus = _Bus()
+    sessions = _SessionManager(tmp_path)
+    channel = (mod.TelegramChannel("token", bus, sessions) if kind == "telegram"
+               else mod.QQChannel("42", bus, sessions, http_requester=SimpleNamespace()))
+    channel._channel_hub = None
+    channel.pause_intake()
+    message = InboundMessage(channel=kind, sender="1", chat_id="1", content="during save")
+    await channel._publish_inbound(message)
+    assert bus.inbound == []
+    channel.resume_intake()
+    await channel._intake.drain()
+    assert bus.inbound == [message]
+    await channel._intake.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["telegram", "qq"])
+async def test_builtin_channel_notifies_pending_input_before_disconnect(monkeypatch, tmp_path, kind):
+    mod = _import_telegram_channel(monkeypatch) if kind == "telegram" else _import_qq_channel(monkeypatch)
+    channel_type = mod.TelegramChannel if kind == "telegram" else mod.QQChannel
+    send = AsyncMock()
+    monkeypatch.setattr(channel_type, "send", send)
+    bus = _Bus()
+    sessions = _SessionManager(tmp_path)
+    channel = (channel_type("token", bus, sessions) if kind == "telegram"
+               else channel_type("42", bus, sessions, http_requester=SimpleNamespace()))
+    channel._channel_hub = None
+    channel.pause_intake()
+    await channel._publish_inbound(InboundMessage(channel=kind, sender="1", chat_id="1", content="pending"))
+    await channel.stop()
+    assert bus.inbound == []
+    send.assert_awaited_once()
+    assert "重新发送" in send.await_args.args[1]
 
 
 @pytest.mark.asyncio

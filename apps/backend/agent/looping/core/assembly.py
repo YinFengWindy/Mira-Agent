@@ -99,6 +99,12 @@ class _AssemblyMixin:
         )
         self._configure_stream_events()
 
+    def share_execution(self, previous: _AssemblyMixin) -> None:
+        """Preserves process-wide cancellation and resume state across generations."""
+        self._active_tasks = previous._active_tasks
+        self._active_turn_states = previous._active_turn_states
+        self._interrupt_states = previous._interrupt_states
+
     def _resolve_memory_runtime(
         self,
         deps: AgentLoopDeps,

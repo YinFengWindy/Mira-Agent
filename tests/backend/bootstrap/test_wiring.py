@@ -4,6 +4,7 @@ from typing import Any, cast
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -523,7 +524,7 @@ def test_build_registered_tools_respects_toolset_order_and_subset(monkeypatch, t
 
         def register(self, registry, deps):
             calls.append(self._name)
-            extras = {"mcp_registry": object()} if self._name == "mcp" else {}
+            extras = {"mcp_registry": SimpleNamespace(shutdown=AsyncMock())} if self._name == "mcp" else {}
             return SimpleNamespace(extras=extras)
 
     monkeypatch.setattr(

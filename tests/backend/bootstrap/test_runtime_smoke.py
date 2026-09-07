@@ -7,7 +7,6 @@ from typing import cast, Any
 
 import pytest
 
-from bootstrap import app as bootstrap_app
 from bootstrap import init_workspace as workspace_init
 from bootstrap.channels import start_channels
 from agent.config import (
@@ -18,6 +17,8 @@ from agent.config import (
     load_config,
 )
 from bus.event_bus import EventBus
+from bus.queue import MessageBus
+from agent.tools.message_push import MessagePushTool
 from core.net.http import SharedHttpResources
 
 
@@ -130,25 +131,6 @@ system_prompt = "test"
     assert cfg.memory_optimizer_interval_seconds == 64800
 
 
-@pytest.mark.asyncio
-async def test_run_cleanup_steps_continues_after_failure():
-    calls: list[str] = []
-
-    async def _fail() -> None:
-        calls.append("fail")
-        raise RuntimeError("stop failed")
-
-    async def _cleanup() -> None:
-        calls.append("cleanup")
-
-    with pytest.raises(RuntimeError, match="stop failed"):
-        await bootstrap_app._run_cleanup_steps(
-            ("fail", _fail),
-            ("cleanup", _cleanup),
-        )
-
-    assert calls == ["fail", "cleanup"]
-
 def test_init_workspace_creates_expected_assets(tmp_path):
     config_path = tmp_path / "config.toml"
     workspace = tmp_path / "workspace"
@@ -160,13 +142,8 @@ def test_init_workspace_creates_expected_assets(tmp_path):
 
     assert config_path.exists()
     config_text = config_path.read_text(encoding="utf-8")
-    assert config_text.count("[[llm.registrations]]") == 2
     registrations = tomllib.loads(config_text)["llm"]["registrations"]
-    assert all("name" not in registration for registration in registrations)
-    assert [registration["model"] for registration in registrations] == [
-        "deepseek-v4-flash",
-        "qwen-vl-plus",
-    ]
+    assert registrations == []
     assert "[llm.vl]" not in config_text
     assert (workspace / "sessions.db").exists()
     assert (workspace / "observe").is_dir()
@@ -198,8 +175,8 @@ def test_init_workspace_respects_force_for_text_assets(tmp_path):
         workspace=workspace,
     )
     config_text = config_path.read_text(encoding="utf-8").replace(
-        'model = "deepseek-v4-flash"',
-        'model = "custom"',
+        'max_iterations = 40',
+        'max_iterations = 99',
         1,
     )
     config_path.write_text(config_text, encoding="utf-8")
@@ -208,7 +185,7 @@ def test_init_workspace_respects_force_for_text_assets(tmp_path):
         config_path=config_path,
         workspace=workspace,
     )
-    assert 'model = "custom"' in config_path.read_text(encoding="utf-8")
+    assert 'max_iterations = 99' in config_path.read_text(encoding="utf-8")
     assert any(path == config_path for path in summary_skip.skipped)
 
     summary_force = workspace_init.init_workspace(
@@ -315,7 +292,7 @@ async def test_start_channels_wires_telegram_and_qq(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
-    class _PushTool:
+    class _PushTool(MessagePushTool):
         def register_channel(self, name: str, **kwargs) -> None:
             registrations.append((name, sorted(kwargs)))
 
@@ -336,7 +313,7 @@ async def test_start_channels_wires_telegram_and_qq(monkeypatch, tmp_path):
         session_manager = types.SimpleNamespace(workspace=tmp_path)
         host = await start_channels(
             config,
-            bus=cast(Any, object()),
+            bus=MessageBus(),
             session_manager=cast(Any, session_manager),
             push_tool=cast(Any, _PushTool()),
             http_resources=resources,
@@ -384,7 +361,7 @@ async def test_start_channels_skips_unfilled_optional_channels(monkeypatch, tmp_
     monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
-    class _PushTool:
+    class _PushTool(MessagePushTool):
         def register_channel(self, name: str, **kwargs) -> None:
             raise AssertionError(f"unexpected channel registration: {name}")
 
@@ -401,7 +378,7 @@ async def test_start_channels_skips_unfilled_optional_channels(monkeypatch, tmp_
     try:
         host = await start_channels(
             config,
-            bus=cast(Any, object()),
+            bus=MessageBus(),
             session_manager=cast(Any, object()),
             push_tool=cast(Any, _PushTool()),
             http_resources=resources,
@@ -447,9 +424,9 @@ async def test_start_channels_skips_channel_constructor_failures(monkeypatch):
     try:
         host = await start_channels(
             config,
-            bus=cast(Any, object()),
+            bus=MessageBus(),
             session_manager=cast(Any, object()),
-            push_tool=cast(Any, object()),
+            push_tool=MessagePushTool(),
             http_resources=resources,
             event_bus=EventBus(),
         )
@@ -495,9 +472,9 @@ async def test_start_channels_desktop_mode_skips_message_channels(
     try:
         host = await start_channels(
             config,
-            bus=cast(Any, object()),
+            bus=MessageBus(),
             session_manager=cast(Any, object()),
-            push_tool=cast(Any, object()),
+            push_tool=MessagePushTool(),
             http_resources=resources,
             event_bus=EventBus(),
             enable_message_channels=False,

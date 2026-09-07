@@ -12,6 +12,7 @@ RequestOperation = Callable[[], Awaitable[None]]
 _READ_ONLY_METHODS = frozenset(
     {
         "health",
+        "runtime.status",
         "roles.list",
         "roles.tasks.list",
         "novelai.history",
@@ -87,6 +88,11 @@ class BridgeRequestDispatcher:
         self._tasks.clear()
 
     async def _run(self, method: str, operation: RequestOperation) -> None:
+        if method == "runtime.apply":
+            # The runtime transaction owns its serial lock. Waiting for old work
+            # must leave transport capacity for health, cancellation and rejection.
+            await operation()
+            return
         if method in _INTEGRATION_METHODS:
             async with self._integration_semaphore:
                 async with self._semaphore:

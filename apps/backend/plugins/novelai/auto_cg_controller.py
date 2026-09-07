@@ -10,6 +10,7 @@ from agent.tools.registry import ToolRegistry
 from bus.events_lifecycle import SceneObservationCommitted
 from core.integrations.novelai.models import NovelAISettings
 from core.roles.store import RoleStore
+from core.common.runtime_tasks import create_runtime_task
 from plugins.novelai.auto_cg import AutoCgPolicy
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class AutoCgController:
         required = event.transition in _REQUIRED_TRANSITIONS
         if not required and self._policy.cooldown_remaining(event.session_key) > 0:
             return
-        task = asyncio.create_task(
+        task = create_runtime_task(
             self._run(event, role_id=role_id, bypass_cooldown=required),
             name=f"novelai_auto_cg:{event.session_key}",
         )

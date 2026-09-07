@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from core.roles import RoleStore, RoleRuntimeRegistry
+from core.common.runtime_tasks import create_runtime_task
 
 from story_simulation.catalog import StoryCatalog
 from story_simulation.director import ProviderStoryDirector, StoryDirector
@@ -71,6 +72,17 @@ class StorySimulationHandler:
             repository.close()
         self._repositories.clear()
         self._catalog.close()
+
+    async def drain(self) -> None:
+        """Waits for accepted Story turns and generated assets before retirement."""
+        while self._tasks or self._resource_tasks:
+            await asyncio.gather(*self._tasks.values(), *self._resource_tasks.values(),
+                                 return_exceptions=True)
+            await asyncio.sleep(0)
+
+    def skip_startup_recovery(self) -> None:
+        """Preserves in-flight persisted turns when another generation owns them."""
+        self._recovered = True
 
     async def handle(
         self,
@@ -486,7 +498,7 @@ class StorySimulationHandler:
         existing = self._resource_tasks.get(resource_id)
         if existing is not None and not existing.done():
             return
-        task = asyncio.create_task(
+        task = create_runtime_task(
             service.generate_resource(resource, emit_event),
             name=f"story-resource:{resource_id}",
         )
@@ -504,7 +516,7 @@ class StorySimulationHandler:
         existing = self._tasks.get(turn_id)
         if existing is not None and not existing.done():
             return
-        task = asyncio.create_task(
+        task = create_runtime_task(
             self._generate_turn(service, turn, emit_event),
             name=f"story-director:{turn_id}",
         )

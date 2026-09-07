@@ -189,15 +189,19 @@ function publishVoiceState(payload: VoiceStatePayload): void {
   }
 }
 
-function syncVoiceAvailability(): void {
+function syncVoiceAvailability(cancelCurrentTurn = true): void {
   if (!voiceHotkey) return;
   const enabled = Boolean(voiceSettings?.enabled && desktopPet?.isRunning && desktopPetSettings.visible);
   if (enabled) {
     voiceHotkey.start();
     return;
   }
-  voiceHotkey.stop();
-  voiceController?.cancel();
+  if (cancelCurrentTurn) {
+    voiceHotkey.stop();
+    voiceController?.cancel();
+  } else {
+    voiceHotkey.stopAfterCurrentPress();
+  }
 }
 
 function syncDesktopPetRuntimeState(): void {
@@ -208,7 +212,8 @@ function syncDesktopPetRuntimeState(): void {
 function reloadVoiceSettings(): void {
   voiceSettings = loadSettingsData().formData.voice;
   voiceHotkey?.setHotkey(voiceSettings.hotkey);
-  syncVoiceAvailability();
+  // Applying settings changes admission of new input; existing voice work keeps its owner.
+  syncVoiceAvailability(false);
 }
 
 async function hideDesktopPet(): Promise<void> {

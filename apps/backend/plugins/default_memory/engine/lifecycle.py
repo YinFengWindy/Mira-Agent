@@ -29,6 +29,7 @@ from memory2.procedure_tagger import ProcedureTagger
 from memory2.retriever import Retriever
 from memory2.store import VEC_DIM, MemoryStore2
 from plugins.default_memory.config import DefaultMemoryConfig, resolve_memory_db_path
+from bootstrap.runtime_construction import track_build_resource
 
 from .admin import _AdminMixin
 from .mutation import _MutationMixin
@@ -110,6 +111,7 @@ class DefaultMemoryEngine(
             db_path,
             vec_dim=embedding.output_dimensionality or VEC_DIM,
         )
+        track_build_resource(self._v2_store, self._v2_store.close)
         self._embedder = Embedder(
             base_url=embedding.base_url
             or config.light_base_url
@@ -120,6 +122,7 @@ class DefaultMemoryEngine(
             output_dimensionality=embedding.output_dimensionality,
             requester=http_resources.external_default,
         )
+        track_build_resource(self._embedder, self._embedder.aclose)
         self._memorizer = Memorizer(self._v2_store, self._embedder)
         self._retriever = Retriever(
             self._v2_store,

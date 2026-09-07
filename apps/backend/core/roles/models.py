@@ -13,6 +13,14 @@ def now_iso() -> str:
     return datetime.now().astimezone().isoformat()
 
 
+def normalize_role_id(role_id: str) -> str:
+    """Returns a nonempty role identifier for role-owned service paths."""
+    clean = str(role_id).strip()
+    if not clean:
+        raise ValueError("role_id 不能为空")
+    return clean
+
+
 def normalize_rel_path(path: str | None) -> str | None:
     if not path:
         return None

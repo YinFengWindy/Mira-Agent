@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -38,6 +39,8 @@ async def test_inspect_modules_prints_result(
     capsys: pytest.CaptureFixture[str],
 ):
     class _Runtime:
+        memory_runtime = SimpleNamespace(aclose=AsyncMock())
+
         async def inspect_modules(self):
             return {"memory": "ready"}
 
@@ -58,3 +61,18 @@ async def test_inspect_modules_prints_result(
     await app_main.inspect_modules(workspace=tmp_path)
 
     assert "{'memory': 'ready'}" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_module_inspection_closes_http_when_construction_fails(monkeypatch, tmp_path):
+    http = SimpleNamespace(aclose=AsyncMock())
+    monkeypatch.setattr(app_main.Config, "load", lambda _: object())
+    monkeypatch.setattr(app_main, "SharedHttpResources", lambda: http)
+
+    def fail(*args):
+        raise ValueError("invalid wiring")
+
+    monkeypatch.setattr("bootstrap.tools.build_core_runtime", fail)
+    with pytest.raises(ValueError, match="invalid wiring"):
+        await app_main.inspect_modules(workspace=tmp_path)
+    http.aclose.assert_awaited_once()

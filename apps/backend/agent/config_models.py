@@ -59,6 +59,10 @@ class ModelRegistration:
     effort: Effort = "none"
 
 
+# Distinguish omitted legacy constructor arguments from an explicitly empty registry.
+_UNSET_MODEL_REGISTRATIONS: list[ModelRegistration] = []
+
+
 @dataclass
 class WiringConfig:
     context: str = "default"
@@ -103,10 +107,15 @@ class Config:
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     wiring: WiringConfig = field(default_factory=WiringConfig)
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
-    model_registrations: list[ModelRegistration] = field(default_factory=list)
+    model_registrations: list[ModelRegistration] = field(
+        default_factory=lambda: _UNSET_MODEL_REGISTRATIONS
+    )
 
     def __post_init__(self) -> None:
-        if self.model_registrations:
+        if self.model_registrations is not _UNSET_MODEL_REGISTRATIONS:
+            return
+        self.model_registrations = []
+        if not self.model.strip():
             return
         stable_key = "|".join(
             [self.provider, str(self.base_url or ""), self.model]

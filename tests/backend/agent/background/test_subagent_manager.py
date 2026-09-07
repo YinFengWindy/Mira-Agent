@@ -2,6 +2,7 @@ import asyncio
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -10,6 +11,46 @@ from agent.policies.delegation import SpawnDecision, SpawnDecisionMeta
 from agent.provider import LLMResponse
 from bus.events import SpawnCompletionItem
 from bus.queue import MessageBus
+from bootstrap.runtime_generations import RuntimeCandidate
+from core.common.runtime_scope import bind_runtime
+
+
+@pytest.mark.asyncio
+async def test_detached_job_and_queued_completion_retain_original_generation(tmp_path):
+    core = SimpleNamespace(stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    generation = RuntimeCandidate(1, core, SimpleNamespace(), published=True)
+    parent = generation.acquire()
+    bus = MessageBus()
+    manager = SubagentManager(provider=cast(Any, _Provider()), workspace=tmp_path, bus=bus,
+                              model="old", max_tokens=256, fetch_requester=object())
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def run(**kwargs):
+        started.set()
+        await finish.wait()
+        await manager._announce_result(job_id=kwargs["job_id"], label="job", task="task",
+                                       origin_channel="desktop", origin_chat_id="role:test",
+                                       status="completed", exit_reason="completed", result="result",
+                                       decision=None)
+
+    manager._run_subagent = run
+    with bind_runtime(parent):
+        await manager.spawn(task="task", label="job", origin_channel="desktop", origin_chat_id="role:test")
+    await started.wait()
+    await generation.retire()
+    await parent.release()
+    assert not generation.closed
+    finish.set()
+    await manager.drain()
+    item = await bus.consume_inbound()
+    assert item.runtime_lease.generation == 1
+    assert not generation.closed
+    await item.runtime_lease.release()
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert generation.closed
+    core.stop.assert_awaited_once()
 
 
 class _Provider:

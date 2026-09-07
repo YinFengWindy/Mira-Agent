@@ -1,25 +1,19 @@
 # =============================================================================
-# 必填：LLM 配置
+# 可选：LLM 配置；留空时可启动应用，在设置中添加模型后使用对话能力。
 # api_key 可以直接填字符串，也可以用 ${ENV_VAR} 引用环境变量。
 # =============================================================================
 
 [llm]
+registrations = []
 
-[[llm.registrations]]
-id = "00000000-0000-4000-a000-000000000001"
-provider = "deepseek"
-model = "deepseek-v4-flash"
-api_key = "sk-..."
-base_url = "https://api.deepseek.com/v1"
-effort = "high"
-
-[[llm.registrations]]
-id = "00000000-0000-4000-a000-000000000002"
-provider = "qwen"
-model = "qwen-vl-plus"
-api_key = "sk-..."
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-effort = "none"
+# 添加模型时删除 registrations = []，再使用下列注册格式：
+# [[llm.registrations]]
+# id = "00000000-0000-4000-a000-000000000001"
+# provider = "openai"
+# model = "your-model"
+# api_key = "${MODEL_API_KEY}"
+# base_url = "https://your-provider.example/v1"
+# effort = "none"
 
 # =============================================================================
 # 可选：桌宠语音交互

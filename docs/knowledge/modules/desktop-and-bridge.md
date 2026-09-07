@@ -44,6 +44,20 @@ Story 进入独立路由时才挂载 `StoryRoute`、`useStoryController` 和 `us
 
 屏幕识别是每个角色默认拥有的 Agent 工具，由核心 runtime 注册，桌面端和 Telegram/QQ 等渠道共用同一能力。`apps/backend/desktop_bridge` 只负责桌面 IPC 的观察分析/记忆接口和环境状态；主屏捕获由 `apps/backend/infra/screen_capture.py` 提供，不读取桌宠绑定配置。Electron 的 `DesktopObservationController` 仍负责桌面端的定时观察、持久化开关和桌宠提示，但不决定 Agent 是否拥有 `observe_screen`。
 
+## 配置生效与任务版本
+
+设置通过 `runtime.apply` 提交 TOML 草稿、预期 generation、操作 ID 和待更新的角色模型绑定。后端先解析和准备候选资源，再使用配置事务记录提交配置及模型绑定，最后发布新的 generation。`runtime.status` 同时返回生效配置文本和 generation，避免读取到不匹配的文件与版本。失败保留旧 runtime 和界面草稿；同一操作 ID 重试不会重复提交。启动前恢复中断的文件事务。
+
+空模型注册是合法启动状态。角色管理、会话浏览和健康检查保持可用；只有实际调用模型的能力返回模型配置错误。显式未绑定角色不会在启动或首次注册模型时被自动补绑。
+
+bridge 连接、会话存储和角色执行锁在进程内保持稳定。聊天、Story、语音、后台子任务、事件后处理及自动图片任务持有开始时的 runtime 引用；旧版本在引用释放后清理。任务列表和取消操作覆盖尚未结束的旧版本。设置应用不会重启 bridge 或重载窗口。
+
+未变的渠道连接复用；同名账号或连接配置替换先暂停新任务进入，等待已接受任务和出站队列完成，再切换连接并提交配置。bridge 在等待期间保持在线，现有任务不会被取消。桌面新任务返回 `runtime_reloading`，不会在客户端报告失败后延迟执行；`runtime.apply` 等待实际提交结果或进程退出，不套用普通请求的 30 秒超时。移除渠道时，旧任务仍可完成已有回复。连接启动或提交失败会恢复旧连接；无法恢复的连接返回降级详情。
+
+Telegram、QQ 和 QQBot 在暂停期间使用有界入站缓冲，复用连接在提交后继续处理。旧账号连接即将关闭或缓冲已满时，通过该原始连接明确提示消息尚未处理、需要重试；不把旧账号消息投给新账号。候选恢复接收与提交之间没有异步让出，提交失败会先重新暂停候选，再回滚连接。
+
+已有向量库的 embedding 模型或维度变更需要显式数据迁移，热更新返回 `memory_storage_incompatible`，不会自动重建或清除向量。凭据、连接地址及兼容的记忆配置可通过新的 runtime 实例生效。
+
 ## 修改影响
 
 - 修改 Windows 发版链路：同步检查 `apps/desktop/scripts/`、`.github/workflows/windows-release.yml`、Electron runtime paths、sidecar 启动参数、版本元数据和 checksum 产物；不要把真实 Windows 安装/升级/卸载验收误认为布局校验。

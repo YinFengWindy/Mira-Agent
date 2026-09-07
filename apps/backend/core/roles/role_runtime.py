@@ -5,7 +5,7 @@ import hashlib
 import json
 from collections.abc import Awaitable, Callable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Generator, TypeVar
 from uuid import uuid4
@@ -93,6 +93,16 @@ class RoleExecutionContext:
         }
 
 
+@dataclass
+class RoleExecutionState:
+    """Keeps role arbitration stable across runtime configuration generations."""
+
+    turn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    active_work: int = 0
+    tasks: set[asyncio.Task[object]] = field(default_factory=set)
+    closing: bool = False
+
+
 class RoleRuntime:
     """Owns one role's mutable execution boundaries inside a process."""
 
@@ -101,15 +111,13 @@ class RoleRuntime:
         role: RoleRecord,
         *,
         model_resolver: RoleModelRuntime | None = None,
+        execution_state: RoleExecutionState | None = None,
     ) -> None:
         self._role = role
         self._model_resolver = model_resolver
         # A role session is shared by every transport, so all mutable role work
         # must enter one role-wide turn gate regardless of its source thread.
-        self._turn_lock = asyncio.Lock()
-        self._active_work = 0
-        self._tasks: set[asyncio.Task[object]] = set()
-        self._closing = False
+        self._execution = execution_state or RoleExecutionState()
 
     @property
     def role_id(self) -> str:
@@ -134,7 +142,7 @@ class RoleRuntime:
     def active_work(self) -> int:
         """Returns the number of work items currently executing in this runtime."""
 
-        return self._active_work
+        return self._execution.active_work
 
     @property
     def models_enabled(self) -> bool:
@@ -149,7 +157,7 @@ class RoleRuntime:
     ) -> Generator[RoleModelSnapshot]:
         """Activates one immutable model snapshot owned by this role runtime."""
 
-        if self._closing:
+        if self._execution.closing:
             raise RuntimeError(f"角色运行时已停止: {self.role_id}")
         if self._model_resolver is None:
             raise RuntimeError(f"角色运行时未配置模型能力: {self.role_id}")
@@ -159,12 +167,12 @@ class RoleRuntime:
     def begin_closing(self) -> None:
         """Rejects new work while existing handlers finish or are cancelled."""
 
-        self._closing = True
+        self._execution.closing = True
 
     def cancel_active_work(self) -> None:
         """Cancels all registered work before the runtime is reloaded or removed."""
 
-        for task in tuple(self._tasks):
+        for task in tuple(self._execution.tasks):
             task.cancel()
 
     async def execute_thread(
@@ -175,18 +183,18 @@ class RoleRuntime:
         """Runs role work serially across all transport threads."""
 
         self._validate_context(context)
-        async with self._turn_lock:
+        async with self._execution.turn_lock:
             self._validate_context(context)
-            self._active_work += 1
+            self._execution.active_work += 1
             task = asyncio.current_task()
             if task is not None:
-                self._tasks.add(task)
+                self._execution.tasks.add(task)
             try:
                 return await operation()
             finally:
                 if task is not None:
-                    self._tasks.discard(task)
-                self._active_work -= 1
+                    self._execution.tasks.discard(task)
+                self._execution.active_work -= 1
 
     async def run_passive_turn(self, context: RoleExecutionContext, operation: Callable[[], Awaitable[T]]) -> T:
         """Runs the role's inbound conversation capability."""
@@ -214,22 +222,10 @@ class RoleRuntime:
     ) -> T:
         """Serializes mutations to role-wide state such as relationship data."""
 
-        self._validate_context(context)
-        async with self._turn_lock:
-            self._validate_context(context)
-            self._active_work += 1
-            task = asyncio.current_task()
-            if task is not None:
-                self._tasks.add(task)
-            try:
-                return await operation()
-            finally:
-                if task is not None:
-                    self._tasks.discard(task)
-                self._active_work -= 1
+        return await self.execute_thread(context, operation)
 
     def _validate_context(self, context: RoleExecutionContext) -> None:
-        if self._closing:
+        if self._execution.closing:
             raise RuntimeError(f"角色运行时已停止: {self.role_id}")
         if context.role_id != self.role_id:
             raise ValueError("RoleExecutionContext 角色与 RoleRuntime 不匹配")
@@ -248,11 +244,15 @@ class RoleRuntimeRegistry:
         repository: RoleRepository,
         *,
         model_resolver: RoleModelRuntime | None = None,
+        shared_execution: RoleRuntimeRegistry | None = None,
     ) -> None:
         self._repository = repository
         self._model_resolver = model_resolver
         self._runtimes: dict[str, RoleRuntime] = {}
         self._lock = asyncio.Lock()
+        self._execution_states = (
+            shared_execution._execution_states if shared_execution else {}
+        )
 
     async def get(self, role_id: str) -> RoleRuntime:
         """Returns the stable runtime for a role and refreshes its current configuration."""
@@ -263,7 +263,12 @@ class RoleRuntimeRegistry:
             if current is not None:
                 current.refresh_role(role)
                 return current
-            runtime = RoleRuntime(role, model_resolver=self._model_resolver)
+            execution = self._execution_states.setdefault(role.id, RoleExecutionState())
+            runtime = RoleRuntime(
+                role,
+                model_resolver=self._model_resolver,
+                execution_state=execution,
+            )
             self._runtimes[role.id] = runtime
             return runtime
 
@@ -337,6 +342,7 @@ class RoleRuntimeRegistry:
             if runtime.active_work:
                 raise RuntimeError(f"角色运行时仍有运行中的工作: {clean_role_id}")
             self._runtimes.pop(clean_role_id, None)
+            self._execution_states.pop(clean_role_id, None)
 
     async def close_all(self) -> None:
         """Stops every idle runtime during process shutdown."""

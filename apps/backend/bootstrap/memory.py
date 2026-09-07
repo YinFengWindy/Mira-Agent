@@ -15,6 +15,7 @@ from core.memory.plugin import (
 )
 from core.memory.runtime import MemoryRuntime
 from core.net.http import SharedHttpResources
+from bootstrap.runtime_construction import track_build_closeables
 
 if TYPE_CHECKING:
     from bus.event_bus import EventBus
@@ -117,6 +118,7 @@ def build_memory_runtime(
         )
         engine = plugin_runtime.engine
         closeables.extend(plugin_runtime.closeables)
+        track_build_closeables(closeables)
         register_memory_meta_tools(
             tools,
             engine,

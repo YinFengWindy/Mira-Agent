@@ -16,8 +16,9 @@ const imageGenerationMethods = new Set([
   "roles.differences.generate",
 ]);
 
-/** Returns the deadline for one bridge request method. */
-export function bridgeRequestTimeoutMs(method: string): number {
+/** Returns a deadline, or null for a transaction that must await its committed outcome. */
+export function bridgeRequestTimeoutMs(method: string): number | null {
+  if (method === "runtime.apply") return null;
   if (method === "health") return bridgeTimeoutPolicy.health;
   if (imageGenerationMethods.has(method)) return bridgeTimeoutPolicy.imageGeneration;
   if (method === "observation.analyze") return bridgeTimeoutPolicy.observation;

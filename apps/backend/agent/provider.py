@@ -235,6 +235,10 @@ class LLMProvider:
             else bool(payload_snapshot_enabled)
         )
 
+    async def aclose(self) -> None:
+        """Releases HTTP connections after all owning runtime tasks have drained."""
+        await self._client.close()
+
     async def chat(
         self,
         messages: list[dict],

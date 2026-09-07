@@ -25,6 +25,35 @@ def _context(role, *, thread_id: str = "thread:mira:desktop"):
 
 
 @pytest.mark.asyncio
+async def test_generations_share_role_execution_gate(tmp_path):
+    repository = RoleRepository(RoleStore(tmp_path))
+    role = repository.create_role(role_id="mira", name="Mira", system_prompt="test")
+    original = RoleRuntimeRegistry(repository)
+    updated = RoleRuntimeRegistry(repository, shared_execution=original)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    events = []
+
+    async def first():
+        entered.set()
+        await release.wait()
+        events.append("old")
+
+    async def second():
+        events.append("new")
+
+    old_task = asyncio.create_task(original.dispatch_thread(_context(role), first))
+    await entered.wait()
+    new_task = asyncio.create_task(updated.dispatch_thread(_context(role), second))
+    await asyncio.sleep(0)
+    assert events == []
+    assert (await updated.get(role.id)).active_work == 1
+    release.set()
+    await asyncio.gather(old_task, new_task)
+    assert events == ["old", "new"]
+
+
+@pytest.mark.asyncio
 async def test_registry_serializes_work_in_the_same_thread(tmp_path):
     repository = RoleRepository(RoleStore(tmp_path))
     role = repository.create_role(

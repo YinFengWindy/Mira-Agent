@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -12,6 +13,8 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.integrations.novelai.models import NovelAISettings
 from plugins.novelai.auto_cg import AutoCgPolicy
 from plugins.novelai.auto_cg_controller import AutoCgController
+from bootstrap.runtime_generations import RuntimeCandidate
+from core.common.runtime_scope import bind_runtime, current_runtime_lease
 
 
 def _observation(**overrides: Any) -> SceneObservationCommitted:
@@ -28,6 +31,39 @@ def _observation(**overrides: Any) -> SceneObservationCommitted:
     }
     payload.update(overrides)
     return SceneObservationCommitted(**payload)
+
+
+@pytest.mark.asyncio
+async def test_cg_task_holds_generation_until_image_work_finishes(tmp_path):
+    controller = AutoCgController(
+        settings=NovelAISettings(enabled=True, token="old-token"),
+        role_store=SimpleNamespace(get_role=lambda _: SimpleNamespace(runtime_config={"auto_scene_cg_enabled": True})),
+        policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
+        session_manager=SimpleNamespace(get_or_create=lambda _: SimpleNamespace(metadata={})),
+        generate_tool=None, tool_registry=None,
+    )
+    started, finish = asyncio.Event(), asyncio.Event()
+    observed = []
+
+    async def run(*args, **kwargs):
+        observed.append(current_runtime_lease().generation)
+        started.set()
+        await finish.wait()
+
+    controller._run = run
+    core = SimpleNamespace(stop=AsyncMock(side_effect=controller.terminate), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    generation = RuntimeCandidate(3, core, SimpleNamespace())
+    parent = generation.acquire()
+    with bind_runtime(parent):
+        controller.schedule(_observation(should_generate=True, transition="started"))
+    await parent.release()
+    await generation.retire()
+    await started.wait()
+    core.stop.assert_not_awaited()
+    finish.set()
+    await asyncio.wait_for(generation.drained.wait(), timeout=1)
+    assert observed == [3]
+    core.stop.assert_awaited_once()
 
 
 def test_controller_advances_cooldown_for_passive_observations(tmp_path: Path) -> None:

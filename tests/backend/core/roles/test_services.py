@@ -10,6 +10,44 @@ from core.roles.self_seed import LlmRoleSelfSeedGenerator
 
 
 @pytest.mark.asyncio
+async def test_unavailable_model_defers_self_generation_until_configuration_repair(tmp_path):
+    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁\n\n角色自我认知")))
+    available = False
+    service = RoleAggregateService.from_runtime(
+        workspace=tmp_path,
+        role_store=RoleStore(tmp_path),
+        session_manager=SessionManager(tmp_path),
+        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
+        model_available=lambda role_id: available,
+    )
+    created = await service.create_role_async(role_id="mira", name="Mira", system_prompt="mira")
+    await service.open_role_async("mira")
+    provider.chat.assert_not_awaited()
+    assert (created.memory_root / "SELF.md").exists()
+    assert created.role.memory_init_state["seed_self_pending"] is True
+
+    available = True
+    repaired = await service.open_role_async("mira")
+    provider.chat.assert_awaited_once()
+    assert repaired.role.memory_init_state["seed_self_ready"] is True
+    assert "seed_self_pending" not in repaired.role.memory_init_state
+    await service.open_role_async("mira")
+    provider.chat.assert_awaited_once()
+
+
+def test_sync_unavailable_model_initializes_local_memory_without_provider_call(tmp_path):
+    provider = SimpleNamespace(chat=AsyncMock())
+    service = RoleAggregateService.from_runtime(
+        workspace=tmp_path, role_store=RoleStore(tmp_path), session_manager=SessionManager(tmp_path),
+        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
+        model_available=lambda role_id: False,
+    )
+    created = service.create_role(role_id="mira", name="Mira", system_prompt="mira")
+    assert created.role.memory_init_state["seed_self_pending"] is True
+    provider.chat.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_new_role_generates_self_from_profile_and_profile_edits_preserve_it(tmp_path):
     provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁\n\n角色自我认知")))
     service = RoleAggregateService.from_runtime(

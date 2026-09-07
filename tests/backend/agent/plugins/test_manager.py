@@ -99,6 +99,43 @@ async def test_load_hello_plugin():
 
 
 @pytest.mark.asyncio
+async def test_generation_namespace_keeps_previous_plugin_instances_alive(tmp_path):
+    plugin_dir = tmp_path / "plugins" / "hello"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "plugin.py").write_text(
+        "from agent.plugins import Plugin\nclass Hello(Plugin):\n    name = 'hello'\n",
+        encoding="utf-8",
+    )
+    old = PluginManager([plugin_dir.parent], event_bus=EventBus(), namespace="old", strict=True)
+    new = PluginManager([plugin_dir.parent], event_bus=EventBus(), namespace="new", strict=True)
+    await old.load_all()
+    old_path = old.discover()[0]["import_path"]
+    old_instance = plugin_registry.get_instance(old_path)
+    await new.load_all()
+    new_path = new.discover()[0]["import_path"]
+    assert new_path != old_path
+    assert plugin_registry.get_instance(new_path) is not old_instance
+    await new.terminate_all()
+    assert plugin_registry.get_instance(old_path) is old_instance
+    await old.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_strict_candidate_rejects_plugin_initialization_failure(tmp_path):
+    plugin_dir = tmp_path / "broken"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.py").write_text(
+        "from agent.plugins import Plugin\nclass Broken(Plugin):\n    name = 'broken'\n    async def initialize(self):\n        raise RuntimeError('candidate failure')\n",
+        encoding="utf-8",
+    )
+    manager = PluginManager([tmp_path], event_bus=EventBus(), namespace="candidate", strict=True)
+    with pytest.raises(RuntimeError, match="candidate failure"):
+        await manager.load_all()
+    assert manager.loaded_count == 0
+    assert plugin_registry.get_instance(manager.discover()[0]["import_path"]) is None
+
+
+@pytest.mark.asyncio
 async def test_collects_and_clears_official_proactive_gates(tmp_path: Path):
     source = BACKEND_ROOT / "plugins" / "relationship_proactive"
     plugin_root = tmp_path / "plugins"

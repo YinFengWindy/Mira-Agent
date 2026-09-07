@@ -83,7 +83,7 @@ test("changing the hotkey restarts a registered hook and an empty value disables
   assert.equal(controller.start(), false);
 });
 
-test("changing a held hotkey cancels its active gesture", () => {
+test("changing a held hotkey waits for its original release without cancelling the gesture", () => {
   const hook = new FakeHook();
   const events: string[] = [];
   const controller = new VoiceHotkeyController({
@@ -97,5 +97,37 @@ test("changing a held hotkey cancels its active gesture", () => {
 
   controller.setHotkey("Alt+V");
 
-  assert.deepEqual(events, ["press", "cancel"]);
+  assert.deepEqual(events, ["press"]);
+  hook.emit("keyup", UiohookKey.Space, { ctrlKey: true });
+  hook.emit("keydown", UiohookKey.V, { altKey: true });
+  assert.deepEqual(events, ["press", "release", "press"]);
+});
+
+test("reapplying an unchanged hotkey preserves its hook and held input", () => {
+  const hook = new FakeHook();
+  const events: string[] = [];
+  const controller = new VoiceHotkeyController({ onPress: () => events.push("press"), onRelease: () => events.push("release"), onCancel: () => events.push("cancel") }, hook);
+  controller.setHotkey("Ctrl+Space");
+  controller.start();
+  hook.emit("keydown", UiohookKey.Space, { ctrlKey: true });
+  controller.setHotkey("Ctrl+Space");
+  hook.emit("keyup", UiohookKey.Space, { ctrlKey: true });
+  assert.deepEqual(events, ["press", "release"]);
+  assert.equal(hook.started, 1);
+  assert.equal(hook.stopped, 0);
+});
+
+test("settings disable allows the current keyup before stopping new input", () => {
+  const hook = new FakeHook();
+  const events: string[] = [];
+  const controller = new VoiceHotkeyController({ onPress: () => events.push("press"), onRelease: () => events.push("release"), onCancel: () => events.push("cancel") }, hook);
+  controller.setHotkey("Ctrl+Space");
+  controller.start();
+  hook.emit("keydown", UiohookKey.Space, { ctrlKey: true });
+  controller.stopAfterCurrentPress();
+  assert.equal(hook.stopped, 0);
+  hook.emit("keyup", UiohookKey.Space, { ctrlKey: true });
+  hook.emit("keydown", UiohookKey.Space, { ctrlKey: true });
+  assert.deepEqual(events, ["press", "release"]);
+  assert.equal(hook.stopped, 1);
 });

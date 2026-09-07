@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from agent.plugins.manager import PluginManager
@@ -31,7 +32,8 @@ from agent.scheduler import SchedulerService
 from agent.tools.message_push import MessagePushTool
 from agent.tools.observe_screen import ObserveScreenTool
 from agent.tools.registry import ToolRegistry
-from agent.turns.outbound import BusOutboundPort
+from bootstrap.runtime_cleanup import run_cleanup_steps
+from bootstrap.runtime_construction import track_build_resource
 from bootstrap.toolsets.meta import (
     build_readonly_tools,
 )
@@ -93,6 +95,7 @@ class CoreRuntime:
     plugin_manager: "PluginManager | None" = None
     memory_optimizer: Any | None = None
     screen_observation: ScreenObservationService | None = None
+    additional_providers: list[LLMProvider] = field(default_factory=list)
 
     async def start(self) -> None:
         self.mcp_registry.start_connect_all_background()
@@ -127,115 +130,31 @@ class CoreRuntime:
                     spawn_tool.add_tool_hooks(self.plugin_manager.tool_hooks)
 
     async def inspect_modules(self) -> str:
-        if self.plugin_manager is not None:
-            await self.plugin_manager.load_all()
+        """Renders this generation\'s lifecycle module configuration."""
+        from bootstrap.runtime_inspection import inspect_core_modules
 
-        from agent.lifecycle.phase import inspect_phase
-        from agent.lifecycle.phases.after_reasoning import (
-            default_after_reasoning_modules,
-        )
-        from agent.lifecycle.phases.after_step import default_after_step_modules
-        from agent.lifecycle.phases.after_turn import default_after_turn_modules
-        from agent.lifecycle.phases.before_reasoning import (
-            default_before_reasoning_modules,
-        )
-        from agent.lifecycle.phases.before_step import default_before_step_modules
-        from agent.lifecycle.phases.before_turn import default_before_turn_modules
-        from agent.lifecycle.phases.prompt_render import default_prompt_render_modules
-
-        manager = self.plugin_manager
-        before_turn_modules = manager.before_turn_modules if manager is not None else []
-        before_reasoning_modules = (
-            manager.before_reasoning_modules if manager is not None else []
-        )
-        prompt_render_modules = manager.prompt_render_modules if manager is not None else []
-        before_step_modules = manager.before_step_modules if manager is not None else []
-        after_step_modules = manager.after_step_modules if manager is not None else []
-        after_reasoning_modules = (
-            manager.after_reasoning_modules if manager is not None else []
-        )
-        after_turn_modules = manager.after_turn_modules if manager is not None else []
-
-        agent_core = cast(Any, getattr(self.loop, "_agent_core"))
-        pipeline = agent_core.pipeline
-        reasoner = getattr(self.loop, "_reasoner", None)
-        context = getattr(reasoner, "_context", None)
-
-        phases = [
-            (
-                "before_turn",
-                default_before_turn_modules(
-                    self.event_bus,
-                    self.session_manager,
-                    cast(Any, getattr(pipeline, "_context_store", None)),
-                    plugin_modules=cast(Any, before_turn_modules),
-                ),
-            ),
-            (
-                "before_reasoning",
-                default_before_reasoning_modules(
-                    self.event_bus,
-                    self.tools,
-                    self.session_manager,
-                    cast(Any, context),
-                    plugin_modules=cast(Any, before_reasoning_modules),
-                ),
-            ),
-            (
-                "prompt_render",
-                default_prompt_render_modules(
-                    self.event_bus,
-                    cast(Any, context),
-                    plugin_modules=cast(Any, prompt_render_modules),
-                ),
-            ),
-            (
-                "before_step",
-                default_before_step_modules(
-                    self.event_bus,
-                    plugin_modules=cast(Any, before_step_modules),
-                ),
-            ),
-            (
-                "after_step",
-                default_after_step_modules(
-                    self.event_bus,
-                    plugin_modules=cast(Any, after_step_modules),
-                ),
-            ),
-            (
-                "after_reasoning",
-                default_after_reasoning_modules(
-                    self.event_bus,
-                    cast(Any, getattr(pipeline, "_session", None)),
-                    plugin_modules=cast(Any, after_reasoning_modules),
-                ),
-            ),
-            (
-                "after_turn",
-                default_after_turn_modules(
-                    self.event_bus,
-                    cast(Any, getattr(pipeline, "_outbound_port", BusOutboundPort(self.bus))),
-                    cast(Any, context),
-                    cast(int, getattr(pipeline, "_history_window", 500)),
-                    plugin_modules=cast(Any, after_turn_modules),
-                ),
-            ),
-        ]
-
-        parts: list[str] = []
-        for phase_name, modules in phases:
-            parts.append("=" * 60)
-            parts.append(phase_name)
-            parts.append("=" * 60)
-            parts.append(inspect_phase(modules))
-        return "\n".join(parts)
+        return await inspect_core_modules(self)
 
     async def stop(self) -> None:
+        """Drains child work before releasing this generation's providers."""
+        spawn = self.tools.get_tool("spawn")
+        if spawn is not None:
+            await spawn.manager.drain()
+        await self.event_bus.drain()
+        await self.memory_runtime.markdown.maintenance.drain()
+        steps = []
         if self.plugin_manager is not None:
-            await self.plugin_manager.terminate_all()
-        await self.mcp_registry.shutdown()
-        await self.event_bus.aclose()
+            steps.append(("plugins.terminate", self.plugin_manager.terminate_all))
+        steps.extend([
+            ("mcp.shutdown", self.mcp_registry.shutdown),
+            ("event_bus.aclose", self.event_bus.aclose),
+            ("provider.aclose", self.provider.aclose),
+        ])
+        resolver = self.role_runtime_registry._model_resolver
+        if resolver is not None:
+            steps.append(("role_models.aclose", resolver.aclose))
+        steps.extend((f"provider:{index}", provider.aclose) for index, provider in enumerate(self.additional_providers))
+        await run_cleanup_steps(*steps)
 
 
 def build_registered_tools(
@@ -252,6 +171,8 @@ def build_registered_tools(
     agent_loop_provider: Callable[[], Any] | None = None,
     role_repository: RoleRepository | None = None,
     role_runtime_registry: RoleRuntimeRegistry | None = None,
+    shared_push_tool: MessagePushTool | None = None,
+    shared_scheduler: SchedulerService | None = None,
 ) -> tuple[
     ToolRegistry,
     MessagePushTool,
@@ -270,7 +191,7 @@ def build_registered_tools(
         http_resources, multimodal=multimodal
     )
     store = session_store or SessionStore(workspace / "sessions.db")
-    push_tool = MessagePushTool(event_bus=event_publisher)
+    push_tool = shared_push_tool or MessagePushTool(event_bus=event_publisher)
     memory_result = resolve_memory_toolset_provider(wiring.memory).register(
         tools,
         ToolsetDeps(
@@ -298,7 +219,7 @@ def build_registered_tools(
         risk="read-only",
         search_hint="屏幕 桌面 当前窗口 观察主屏",
     )
-    scheduler = build_scheduler(
+    scheduler = shared_scheduler or build_scheduler(
         workspace,
         push_tool,
         agent_loop_provider=agent_loop_provider,
@@ -339,6 +260,7 @@ def build_registered_tools(
             tool_registry=tools,
         )
 
+    track_build_resource(mcp_registry, mcp_registry.shutdown)
     return (
         tools,
         push_tool,
@@ -457,30 +379,45 @@ def build_core_runtime(
     config: Config,
     workspace: Path,
     http_resources: SharedHttpResources,
+    *,
+    shared: CoreRuntime | None = None,
+    event_bus: EventBus | None = None,
+    agent_loop_provider: Callable[[], Any] | None = None,
+    event_outlet: EventBus | None = None,
 ) -> CoreRuntime:
-    bus = MessageBus()
-    event_bus = EventBus()
+    """Builds version-owned capabilities around stable transport and state owners."""
+    bus = shared.bus if shared is not None else MessageBus()
+    event_bus = event_bus or EventBus()
+    track_build_resource(event_bus, event_bus.aclose)
     provider, light_provider, agent_provider = build_providers(config)
     loop_provider = provider
     loop_model = config.model
-    session_manager = SessionManager(workspace)
-    role_store = RoleStore(
+    session_manager = shared.session_manager if shared is not None else SessionManager(workspace)
+    if shared is None:
+        track_build_resource(session_manager._store, session_manager._store.close)
+    default_registration_id = (
+        config.model_registrations[0].id if config.model_registrations else ""
+    )
+    role_store = shared.role_runtime_registry._repository.store if shared else RoleStore(
         workspace,
-        default_dialogue_registration_id=config.model_registrations[0].id,
+        default_dialogue_registration_id=default_registration_id,
     )
-    role_store.migrate_model_selections(
-        dialogue_registration_id=config.model_registrations[0].id,
-        visual_registration_id="",
-    )
+    if shared is None:
+        role_store.migrate_model_selections(
+            dialogue_registration_id=default_registration_id,
+            visual_registration_id="",
+        )
     role_model_resolver = RoleModelRuntime(
         role_store=role_store,
         registrations=config.model_registrations,
         dev_mode=config.dev_mode,
     )
+    track_build_resource(role_model_resolver, role_model_resolver.aclose)
     role_repository = RoleRepository(role_store)
     role_runtime_registry = RoleRuntimeRegistry(
         role_repository,
         model_resolver=role_model_resolver,
+        shared_execution=shared.role_runtime_registry if shared else None,
     )
     loop_ref: dict[str, AgentLoop] = {}
     tools, push_tool, scheduler, mcp_registry, memory_runtime, screen_observation = (
@@ -494,30 +431,37 @@ def build_core_runtime(
             session_store=session_manager._store,
             event_publisher=event_bus,
             role_runtime_registry=role_runtime_registry,
-            agent_loop_provider=lambda: loop_ref.get("loop"),
+            agent_loop_provider=agent_loop_provider or (lambda: loop_ref.get("loop")),
             role_repository=role_repository,
+            shared_push_tool=(
+                shared.push_tool if shared else MessagePushTool(event_bus=event_outlet or event_bus)
+            ),
+            shared_scheduler=shared.scheduler if shared else None,
         )
     )
-    presence = PresenceStore(session_manager._store)
-    relationship_runtime = RoleRelationshipRuntimeService(
+    presence = shared.presence if shared is not None else PresenceStore(session_manager._store)
+    if shared is not None:
+        memory_runtime.markdown.maintenance.share_execution(shared.memory_runtime.markdown.maintenance)
+    relationship_runtime = shared.relationship_runtime if shared is not None else RoleRelationshipRuntimeService(
         workspace,
         role_store=role_store,
         session_manager=session_manager,
         presence=presence,
     )
-    processing_state = ProcessingState()
-    image_sync_service = ExternalImageSyncService(
+    processing_state = shared.loop.processing_state if shared is not None else ProcessingState()
+    image_sync_service = shared.image_sync_service if shared is not None else ExternalImageSyncService(
         session_manager=session_manager,
-        event_bus=event_bus,
+        event_bus=event_outlet or event_bus,
     )
-    push_tool.set_role_target_validator(
-        lambda role_id, channel, chat_id: _validate_role_target(
-            role_repository,
-            role_id=role_id,
-            channel=channel,
-            chat_id=chat_id,
+    if shared is None:
+        push_tool.set_role_target_validator(
+            lambda role_id, channel, chat_id: _validate_role_target(
+                role_repository,
+                role_id=role_id,
+                channel=channel,
+                chat_id=chat_id,
+            )
         )
-    )
     loop_deps = _build_loop_deps(
         config=config,
         workspace=workspace,
@@ -550,6 +494,8 @@ def build_core_runtime(
         ),
     )
     loop_ref["loop"] = loop
+    if shared is not None:
+        loop.share_execution(shared.loop)
     wire_turn_lifecycle(
         lifecycle=TurnLifecycle(event_bus),
         active_turn_states=loop.active_turn_states,
@@ -573,6 +519,8 @@ def build_core_runtime(
         light_model=plugin_light_model,
         plugin_configs=config.plugins,
         relationship_runtime=relationship_runtime,
+        namespace=uuid4().hex,
+        strict=shared is not None,
     )
 
     return CoreRuntime(

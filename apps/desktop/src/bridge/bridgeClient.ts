@@ -95,7 +95,7 @@ export class DesktopBridgeClient extends EventEmitter {
     session.pending.clear();
   }
 
-  private invokeTimeoutMs(method: string): number {
+  private invokeTimeoutMs(method: string): number | null {
     return bridgeRequestTimeoutMs(method);
   }
 
@@ -345,19 +345,23 @@ export class DesktopBridgeClient extends EventEmitter {
       };
       session.pending.set(id, { id, method: request.method, resolve: resolveOnce });
       const timeoutMs = this.invokeTimeoutMs(request.method);
-      timeout = setTimeout(() => {
-        resolveOnce({
-          id,
-          type: "response",
-          method: request.method,
-          payload: {},
-          error: {
-            code: "bridge_timeout",
-            message: `bridge request timed out after ${timeoutMs}ms`,
-          },
-        });
-      }, timeoutMs);
-      timeout.unref();
+      // A settings transaction can wait for existing work to drain. Its actual
+      // response or process exit settles the operation without a false timeout.
+      if (timeoutMs !== null) {
+        timeout = setTimeout(() => {
+          resolveOnce({
+            id,
+            type: "response",
+            method: request.method,
+            payload: {},
+            error: {
+              code: "bridge_timeout",
+              message: `bridge request timed out after ${timeoutMs}ms`,
+            },
+          });
+        }, timeoutMs);
+        timeout.unref();
+      }
       void this.enqueueWrite(session, id, text).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         resolveOnce({

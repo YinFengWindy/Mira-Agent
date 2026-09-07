@@ -1,68 +1,60 @@
-from __future__ import annotations
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
-from bootstrap.channel_host import ChannelFailure, ChannelHost
+from bootstrap.channel_host import ChannelHost
 
 
-class _Channel:
-    def __init__(
-        self,
-        name: str,
-        events: list[str],
-        *,
-        fail_start: bool = False,
-        fail_stop: bool = False,
-    ) -> None:
-        self.name = name
-        self._events = events
-        self._fail_start = fail_start
-        self._fail_stop = fail_stop
-
-    async def start(self, ctx: object) -> None:
-        self._events.append(f"start:{self.name}:{ctx}")
-        if self._fail_start:
-            raise RuntimeError("start failed")
-
-    async def stop(self) -> None:
-        self._events.append(f"stop:{self.name}")
-        if self._fail_stop:
-            raise RuntimeError("stop failed")
+def connection(name):
+    return SimpleNamespace(name=name, pause_intake=Mock(), resume_intake=Mock())
 
 
-@pytest.mark.asyncio
-async def test_channel_host_start_failure_does_not_block_others():
-    events: list[str] = []
-    host = ChannelHost(lambda channel: f"ctx:{channel.name}")  # type: ignore[arg-type]
-    host.add(_Channel("a", events))  # type: ignore[arg-type]
-    host.add(_Channel("b", events, fail_start=True))  # type: ignore[arg-type]
-    host.add(_Channel("c", events))  # type: ignore[arg-type]
-
-    await host.start_all()
-
-    assert events == [
-        "start:a:ctx:a",
-        "start:b:ctx:b",
-        "start:c:ctx:c",
-    ]
-    assert host.failures == [
-        ChannelFailure(
-            channel="b",
-            phase="start",
-            error_type="RuntimeError",
-            message="start failed",
-        )
-    ]
+def test_same_name_new_credentials_require_exclusive_handover():
+    active = ChannelHost(lambda channel: None)
+    candidate = ChannelHost(lambda channel: None)
+    active.add(connection("telegram"), configuration="credential-A")
+    candidate.add(connection("telegram"), configuration="credential-B")
+    assert active.requires_exclusive_handover(candidate)
 
 
-@pytest.mark.asyncio
-async def test_channel_host_stops_in_reverse_order():
-    events: list[str] = []
-    host = ChannelHost(lambda channel: f"ctx:{channel.name}")  # type: ignore[arg-type]
-    host.add(_Channel("a", events))  # type: ignore[arg-type]
-    host.add(_Channel("b", events, fail_stop=True))  # type: ignore[arg-type]
-    host.add(_Channel("c", events))  # type: ignore[arg-type]
+def test_unchanged_connection_does_not_require_draining_active_turns():
+    active = ChannelHost(lambda channel: None)
+    candidate = ChannelHost(lambda channel: None)
+    channel = connection("telegram")
+    active.add(channel)
+    candidate.add(channel)
+    assert not active.requires_exclusive_handover(candidate)
 
-    await host.stop_all()
 
-    assert events == ["stop:c", "stop:b", "stop:a"]
+def test_reintroduced_name_must_drain_retained_old_credentials():
+    active = ChannelHost(lambda channel: None)
+    candidate = ChannelHost(lambda channel: None)
+    active._retired_transports["telegram"] = connection("telegram")
+    candidate.add(connection("telegram"))
+    assert active.requires_exclusive_handover(candidate)
+
+
+def test_pause_intake_restores_prior_channels_when_a_later_channel_fails():
+    active = ChannelHost(lambda channel: None)
+    first = connection("telegram")
+    second = connection("qq")
+    second.pause_intake.side_effect = RuntimeError("cannot pause")
+    active.add(first)
+    active.add(second)
+    with pytest.raises(RuntimeError, match="cannot pause"):
+        active.pause_intake()
+    first.resume_intake.assert_called_once()
+
+
+def test_resume_intake_uses_current_connections_after_publication():
+    active = ChannelHost(lambda channel: None)
+    old = connection("telegram")
+    new = connection("telegram")
+    active.add(old)
+    active.pause_intake()
+    active._channels = [new]
+    active.resume_intake()
+    old.pause_intake.assert_called_once()
+    new.resume_intake.assert_called_once()
+    old.resume_intake.assert_not_called()

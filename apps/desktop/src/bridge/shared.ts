@@ -128,7 +128,7 @@ export type SettingsFormData = {
   pendingRoleModelUpdates?: PendingRoleModelUpdate[];
 };
 
-/** Deferred role-reference changes committed after the settings save succeeds. */
+/** Deferred role-reference changes committed atomically with the settings. */
 export type PendingRoleModelUpdate = {
   roleId: string;
   runtimeConfig: Record<string, unknown>;
@@ -137,14 +137,30 @@ export type PendingRoleModelUpdate = {
 export type SettingsSnapshot = {
   configPath: string;
   formData: SettingsFormData;
+  /** Active backend version; omitted only by the local configuration reader. */
+  generation?: number;
 };
 
+/** Optimistic concurrency and retry identity for a settings transaction. */
+export type SettingsSaveOptions = {
+  expectedGeneration?: number;
+  operationId?: string;
+};
+
+/** Configuration and role-binding transaction accepted by runtime.apply. */
+export type RuntimeApplyRequest = {
+  config_toml: string;
+  expected_generation?: number;
+  operation_id: string;
+  role_model_updates: { role_id: string; runtime_config: Record<string, unknown> }[];
+};
+
+/** Result of applying settings to the active backend runtime. */
 export type SaveSettingsResult = {
   ok: boolean;
-  health: {
-    ok: boolean;
-    message: string;
-  };
+  generation?: number;
+  changed?: boolean;
+  error?: NonNullable<BridgeResponse["error"]>;
 };
 
 /** Window chrome actions exposed through the preload bridge. */
@@ -225,7 +241,7 @@ export type DesktopApi = {
     lastError: string | null;
   }>;
   readSettings(): Promise<SettingsSnapshot>;
-  saveSettings(formData: SettingsFormData): Promise<SaveSettingsResult>;
+  saveSettings(formData: SettingsFormData, options?: SettingsSaveOptions): Promise<SaveSettingsResult>;
   /** Lists input devices exposed by the hidden capture renderer. */
   listVoiceInputDevices(): Promise<VoiceInputDevice[]>;
   /** Starts a short local microphone test without sending it to ASR. */

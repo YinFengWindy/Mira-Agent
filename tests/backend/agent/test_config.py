@@ -5,6 +5,29 @@ import pytest
 from agent import config
 
 
+@pytest.mark.parametrize("content", ["", "[llm]\nregistrations = []"])
+def test_load_config_accepts_empty_model_registry(tmp_path, content):
+    path = tmp_path / "config.toml"
+    path.write_text(content, encoding="utf-8")
+    loaded = config.load_config(path)
+    assert loaded.model_registrations == []
+    assert loaded.model == ""
+
+
+def test_load_config_retains_incomplete_registration_for_repair():
+    loaded = config.load_config_data({"llm": {"registrations": [{
+        "id": "00000000-0000-4000-a000-000000000001",
+    }]}})
+    assert len(loaded.model_registrations) == 1
+    assert loaded.model_registrations[0].model == ""
+
+
+@pytest.mark.parametrize("registrations", [["invalid"], {}, [{"model": "x"}]])
+def test_load_config_rejects_structurally_invalid_registrations(registrations):
+    with pytest.raises(ValueError):
+        config.load_config_data({"llm": {"registrations": registrations}})
+
+
 def test_resolve_reads_unexpanded_value_from_default_workspace(
     tmp_path: Path,
     monkeypatch,

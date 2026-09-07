@@ -1,18 +1,18 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 
 import type {
   ModelRegistrationFormData,
+  RuntimeApplyRequest,
   SaveSettingsResult,
   SettingsFormData,
+  SettingsSaveOptions,
   SettingsSnapshot,
 } from "./bridge/shared.js";
 import { parseHotkey } from "./voice/hotkey.js";
 import { desktopSettingsDefaults } from "./settingsContract.js";
 
-type BridgeHealthChecker = () => Promise<{
-  ok: boolean;
-  message: string;
-}>;
+type RuntimeSettingsApplier = (request: RuntimeApplyRequest) => Promise<SaveSettingsResult>;
 
 let configPath: string | null = null;
 
@@ -148,9 +148,10 @@ function loadModelRegistrations(llm: Record<string, unknown>): ModelRegistration
   });
 }
 
-export function loadSettingsData(): SettingsSnapshot {
+/** Reads persisted settings without requiring a model or a running bridge. */
+export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const configuredPath = requireConfigPath();
-  const content = existsSync(configuredPath) ? readFileSync(configuredPath, "utf-8") : "";
+  const content = contentOverride ?? (existsSync(configuredPath) ? readFileSync(configuredPath, "utf-8") : "");
   const parsed = parseToml(content);
   const llm = asRecord(parsed.llm);
   const channels = asRecord(parsed.channels);
@@ -250,6 +251,7 @@ function renderSettingsToml(formData: SettingsFormData): string {
 
   return [
     "[llm]",
+    ...(formData.models.registrations.length === 0 ? ["registrations = []"] : []),
     "",
     ...formData.models.registrations.flatMap((registration) => [
       "[[llm.registrations]]",
@@ -366,13 +368,10 @@ function renderSettingsToml(formData: SettingsFormData): string {
 }
 
 function validateSettings(formData: SettingsFormData): void {
-  if (formData.models.registrations.length === 0) {
-    throw new Error("至少需要一个模型注册");
-  }
   const registrationIds = new Set<string>();
   for (const registration of formData.models.registrations) {
-    if (!registration.id || !registration.model.trim()) {
-      throw new Error("模型注册 ID 和模型不能为空");
+    if (!registration.id) {
+      throw new Error("模型注册 ID 不能为空");
     }
     if (registrationIds.has(registration.id)) {
       throw new Error("模型注册 ID 不能重复");
@@ -414,15 +413,24 @@ function validateSettings(formData: SettingsFormData): void {
   }
 }
 
+/** Submits a candidate configuration; only the backend transaction writes the file. */
 export async function saveSettings(
   formData: SettingsFormData,
-  checkHealth: BridgeHealthChecker,
+  applySettings: RuntimeSettingsApplier,
+  options: SettingsSaveOptions = {},
 ): Promise<SaveSettingsResult> {
-  validateSettings(formData);
-  writeFileSync(requireConfigPath(), renderSettingsToml(formData), { encoding: "utf-8" });
-  const health = await checkHealth();
-  return {
-    ok: health.ok,
-    health,
-  };
+  try {
+    validateSettings(formData);
+  } catch (error) {
+    return { ok: false, error: { code: "settings_validation_error", message: error instanceof Error ? error.message : String(error) } };
+  }
+  return applySettings({
+    config_toml: renderSettingsToml(formData),
+    expected_generation: options.expectedGeneration,
+    operation_id: options.operationId ?? randomUUID(),
+    role_model_updates: (formData.pendingRoleModelUpdates ?? []).map((update) => ({
+      role_id: update.roleId,
+      runtime_config: update.runtimeConfig,
+    })),
+  });
 }

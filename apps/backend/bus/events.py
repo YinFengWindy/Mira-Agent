@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from bootstrap.runtime_generations import RuntimeLease
     from agent.policies.delegation import SpawnDecision
     from bus.internal_events import SpawnCompletionEvent
 
@@ -28,6 +29,7 @@ class InboundMessage:
     timestamp: datetime = field(default_factory=datetime.now)
     media: list[str] = field(default_factory=_empty_media)
     metadata: dict[str, Any] = field(default_factory=_empty_metadata)
+    runtime_lease: RuntimeLease | None = field(default=None, repr=False, compare=False)
 
     @property
     def session_key(self) -> str:
@@ -68,6 +70,7 @@ class SpawnCompletionItem:
     event: "SpawnCompletionEvent"
     decision: "SpawnDecision | None" = None
     timestamp: datetime = field(default_factory=datetime.now)
+    runtime_lease: RuntimeLease | None = field(default=None, repr=False, compare=False)
 
     @property
     def session_key(self) -> str:

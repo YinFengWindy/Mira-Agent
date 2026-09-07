@@ -5,13 +5,18 @@ import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
 
 from agent.config_models import Config
 from bootstrap.channel_host import ChannelHost
 from bootstrap.channels import start_channels
-from bootstrap.proactive import build_memory_optimizer_task, build_proactive_runtime
 from bootstrap.tools import CoreRuntime, build_core_runtime
+from bootstrap.runtime_dispatcher import RuntimeDispatcher
+from bootstrap.runtime_events import RuntimeEventBus
+from bootstrap.runtime_generations import RuntimeCandidate
+from bootstrap.runtime_reload import RuntimeReloadMixin
+from bootstrap.runtime_background import RuntimeBackgroundMixin
+from bootstrap.runtime_shutdown import RuntimeShutdownMixin
+from bootstrap.runtime_construction import prepare_core_runtime
 from bus.event_bus import EventBus
 from core.common.workspace import resolve_default_workspace
 from core.roles import (
@@ -19,7 +24,6 @@ from core.roles import (
 )
 from core.net.http import (
     SharedHttpResources,
-    clear_default_shared_http_resources,
     configure_default_shared_http_resources,
 )
 
@@ -54,24 +58,7 @@ DESKTOP_RUNTIME_FEATURES = RuntimeFeatures(
 )
 
 
-async def _run_cleanup_steps(*steps: tuple[str, Callable[[], Awaitable[None]]]) -> None:
-    first_error: Exception | None = None
-    for name, step in steps:
-        try:
-            await step()
-        except Exception as exc:
-            if first_error is None:
-                first_error = exc
-            logger.warning("shutdown step failed: %s: %s", name, exc)
-    if first_error is not None:
-        raise first_error
-
-
-async def _noop_async() -> None:
-    return None
-
-
-class AppRuntime:
+class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixin):
     def __init__(
         self,
         config: Config,
@@ -103,32 +90,36 @@ class AppRuntime:
         self._memory_optimizer = None
         self._shutdown = False
         self._started = False
+        self._current: RuntimeCandidate | None = None
+        self._generations: list[RuntimeCandidate] = []
+        self._dispatcher = RuntimeDispatcher(self)
+        self._background_groups = {}
+        self._retirement_tasks: set[asyncio.Task[None]] = set()
+        self._cleanup_errors: list[Exception] = []
+        self._admission_open = asyncio.Event()
+        self._admission_open.set()
 
     async def start(self) -> None:
         if self._started:
             return
         configure_default_shared_http_resources(self.http_resources)
         try:
-            self.core = build_core_runtime(
+            self.event_bus = EventBus()
+            self.core = await prepare_core_runtime(
                 self.config,
                 self.workspace,
                 self.http_resources,
+                builder=build_core_runtime,
+                event_bus=RuntimeEventBus(self.event_bus),
+                event_outlet=self.event_bus,
+                agent_loop_provider=lambda: self._dispatcher,
             )
-            self.agent_loop = self.core.loop
-            self.bus = self.core.bus
-            event_bus = self.core.event_bus
-            self.event_bus = event_bus
-            self.tools = self.core.tools
-            self.push_tool = self.core.push_tool
-            self.session_manager = self.core.session_manager
-            self.scheduler = self.core.scheduler
-            self.provider = self.core.provider
-            self.light_provider = self.core.light_provider
-            self.mcp_registry = self.core.mcp_registry
-            self.memory_runtime = self.core.memory_runtime
-            self.presence = self.core.presence
-            self.relationship_runtime = self.core.relationship_runtime
+            self._adopt_core(self.core)
+            event_bus = self.event_bus
             await self.core.start()
+            self._current = RuntimeCandidate(1, self.core, self.config, published=True)
+            self._track_generation(self._current)
+            self.bus.bind_runtime_admission(self.acquire)
 
             plugin_manager = getattr(self.core, "plugin_manager", None)
             self.channel_host = await start_channels(
@@ -143,31 +134,22 @@ class AppRuntime:
                     if plugin_manager
                     else None
                 ),
-                interrupt_controller=self.agent_loop,
+                interrupt_controller=self._dispatcher,
                 plugin_channels=plugin_manager.channels if plugin_manager else None,
                 enable_message_channels=self.features.enable_message_channels,
             )
             await self.channel_host.start_all()
 
             self._background_tasks = [
-                asyncio.create_task(self.agent_loop.run(), name="agent_loop"),
+                asyncio.create_task(self._dispatcher.run(), name="agent_loop"),
                 asyncio.create_task(
                     self.bus.dispatch_outbound(),
                     name="bus_dispatch_outbound",
                 ),
                 asyncio.create_task(self.scheduler.run(), name="scheduler"),
             ]
-            optimizer_tasks, self._memory_optimizer = build_memory_optimizer_task(
-                self.config,
-                provider=self.provider,
-                memory_store=self.memory_runtime.markdown.store,
-                role_runtime_registry=getattr(self.core, "role_runtime_registry", None),
-            )
-            self.core.memory_optimizer = self._memory_optimizer
-            self._background_tasks.extend(
-                asyncio.create_task(task, name=f"memory_optimizer:{index}")
-                for index, task in enumerate(optimizer_tasks)
-            )
+            self._prepare_background(self._current)
+            self._publish_background(None, self._current)
             if self.relationship_runtime is not None:
                 loneliness_loop = LonelinessHeartbeatLoop(
                     self.relationship_runtime,
@@ -180,27 +162,6 @@ class AppRuntime:
                             name="loneliness_heartbeat_loop",
                         ),
                     ]
-                )
-            if self.features.enable_proactive:
-                proactive_tasks, self.proactive_loops = build_proactive_runtime(
-                    self.config,
-                    self.workspace,
-                    session_manager=self.session_manager,
-                    provider=self.provider,
-                    light_provider=self.light_provider,
-                    push_tool=self.push_tool,
-                    memory_store=self.memory_runtime,
-                    presence=self.presence,
-                    agent_loop=self.agent_loop,
-                    tool_hooks=list(plugin_manager.tool_hooks) if plugin_manager else None,
-                    proactive_gates=(
-                        list(plugin_manager.proactive_gates) if plugin_manager else None
-                    ),
-                    event_bus=event_bus,
-                )
-                self._background_tasks.extend(
-                    asyncio.create_task(task, name=f"proactive:{index}")
-                    for index, task in enumerate(proactive_tasks)
                 )
             self._started = True
         except Exception:
@@ -215,41 +176,6 @@ class AppRuntime:
         finally:
             await self.shutdown()
 
-    async def shutdown(self) -> None:
-        if self._shutdown:
-            return
-        self._shutdown = True
-        try:
-            if self.agent_loop is not None:
-                self.agent_loop.stop()
-            if self.bus is not None:
-                self.bus.stop()
-            if self.scheduler is not None:
-                self.scheduler.stop()
-            for task in self._background_tasks:
-                if task.done():
-                    continue
-                task.cancel()
-            for task in self._background_tasks:
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-            self._background_tasks = []
-            await _run_cleanup_steps(
-                ("core.stop", self.core.stop if self.core else _noop_async),
-                (
-                    "channels.stop",
-                    self.channel_host.stop_all if self.channel_host else _noop_async,
-                ),
-                (
-                    "memory_runtime.aclose",
-                    self.memory_runtime.aclose if self.memory_runtime else _noop_async,
-                ),
-                ("http_resources.aclose", self.http_resources.aclose),
-            )
-        finally:
-            clear_default_shared_http_resources(self.http_resources)
 
 
 def build_app_runtime(

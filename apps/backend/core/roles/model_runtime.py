@@ -9,6 +9,7 @@ from agent.config_models import ModelRegistration
 from agent.provider import LLMProvider, LLMResponse, StreamDelta
 
 from .store import RoleStore
+from .model_errors import ModelConfigurationError, incomplete_registration_fields
 
 ModelPurpose = Literal["chat", "vision"]
 _VALID_EFFORTS = {"none", "low", "high", "max"}
@@ -22,6 +23,8 @@ class RoleModelSnapshot:
     provider: LLMProvider
     model: str
     effort: str
+    role_id: str = ""
+    purpose: ModelPurpose = "chat"
 
 
 _current_snapshot: ContextVar[RoleModelSnapshot | None] = ContextVar(
@@ -40,12 +43,11 @@ class RoleModelRuntime:
         registrations: list[ModelRegistration],
         dev_mode: bool = False,
     ) -> None:
-        if not registrations:
-            raise ValueError("至少需要一个模型注册")
         self._roles = role_store
         self._registrations = {item.id: item for item in registrations}
-        self._first_registration_id = registrations[0].id
+        self._first_registration_id = registrations[0].id if registrations else ""
         self._dev_mode = dev_mode
+        self._providers: dict[tuple[str, str], LLMProvider] = {}
 
     @property
     def first_registration_id(self) -> str:
@@ -55,10 +57,57 @@ class RoleModelRuntime:
 
     def resolve(self, role_id: str, purpose: ModelPurpose) -> RoleModelSnapshot:
         """Captures the role selection once for chat or image-bearing input."""
-
+        registration = self._selected_registration(role_id, purpose)
         role = self._roles.get_role(role_id)
         if role is None:
             raise KeyError(f"role 不存在: {role_id}")
+        effort = registration.effort
+        effort_key = f"{'dialogue' if purpose == 'chat' else 'visual'}_model_effort"
+        role_effort = str(role.runtime_config.get(effort_key) or "").strip().lower()
+        if role_effort in _VALID_EFFORTS:
+            effort = role_effort
+        extra_body = {} if effort == "none" else {"reasoning_effort": effort}
+        key = (registration.id, effort)
+        provider = self._providers.get(key)
+        if provider is None:
+            provider = LLMProvider(
+                api_key=registration.api_key,
+                base_url=registration.base_url,
+                extra_body=extra_body,
+                provider_name=registration.provider,
+                payload_snapshot_enabled=self._dev_mode,
+            )
+            self._providers[key] = provider
+        return RoleModelSnapshot(
+            registration_id=registration.id,
+            provider=provider,
+            model=registration.model,
+            effort=effort,
+            role_id=role_id,
+            purpose=purpose,
+        )
+
+    def availability(self, role_id: str, purpose: ModelPurpose = "chat"):
+        """Reports configuration availability without instantiating a provider."""
+        try:
+            registration = self._selected_registration(role_id, purpose)
+        except ModelConfigurationError as error:
+            return {"available": False, **error.to_details()}
+        return {"available": True, "registration_id": registration.id}
+
+    async def aclose(self) -> None:
+        """Closes providers after all tasks holding this generation have drained."""
+        providers = list(self._providers.values())
+        self._providers.clear()
+        for provider in providers:
+            await provider.aclose()
+
+    def _selected_registration(self, role_id: str, purpose: ModelPurpose):
+        role = self._roles.get_role(role_id)
+        if role is None:
+            raise KeyError(f"role 不存在: {role_id}")
+        if not self._registrations:
+            raise ModelConfigurationError(reason="no_models", role_id=role_id, purpose=purpose)
         dialogue_id = str(
             role.runtime_config.get("dialogue_model_registration_id") or ""
         ).strip()
@@ -68,36 +117,28 @@ class RoleModelRuntime:
                 role.runtime_config.get("visual_model_registration_id") or ""
             ).strip() or dialogue_id
         if not selected_id:
-            raise ValueError(f"角色未选择对话模型: {role_id}")
+            raise ModelConfigurationError(reason="role_unbound", role_id=role_id, purpose=purpose)
         registration = self._registrations.get(selected_id)
         if registration is None:
-            raise ValueError(f"角色引用了不存在的模型注册: {selected_id}")
-        effort = registration.effort
-        if purpose in ("chat", "vision"):
-            effort_key = f"{'dialogue' if purpose == 'chat' else 'visual'}_model_effort"
-            role_effort = str(role.runtime_config.get(effort_key) or "").strip().lower()
-            if role_effort in _VALID_EFFORTS:
-                effort = role_effort
-        extra_body = {} if effort == "none" else {"reasoning_effort": effort}
-        provider = LLMProvider(
-            api_key=registration.api_key,
-            base_url=registration.base_url,
-            extra_body=extra_body,
-            provider_name=registration.provider,
-            payload_snapshot_enabled=self._dev_mode,
-        )
-        return RoleModelSnapshot(
-            registration_id=registration.id,
-            provider=provider,
-            model=registration.model,
-            effort=effort,
-        )
+            raise ModelConfigurationError(
+                reason="registration_missing", role_id=role_id,
+                purpose=purpose, registration_id=selected_id,
+            )
+        fields = incomplete_registration_fields(registration)
+        if fields:
+            raise ModelConfigurationError(
+                reason="connection_incomplete", role_id=role_id,
+                purpose=purpose, registration_id=selected_id, fields=fields,
+            )
+        return registration
 
     @contextmanager
     def activate(self, role_id: str, purpose: ModelPurpose) -> Generator[RoleModelSnapshot]:
         """Keeps one resolved selection stable for the complete async turn."""
 
-        snapshot = self.resolve(role_id, purpose)
+        snapshot = _current_snapshot.get()
+        if snapshot is None or snapshot.role_id != role_id or snapshot.purpose != purpose:
+            snapshot = self.resolve(role_id, purpose)
         token = _current_snapshot.set(snapshot)
         try:
             yield snapshot

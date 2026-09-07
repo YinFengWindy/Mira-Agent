@@ -29,7 +29,10 @@ async def start_channels(
     interrupt_controller: InterruptController | None = None,
     plugin_channels: list[Channel] | None = None,
     enable_message_channels: bool = True,
+    previous_host: ChannelHost | None = None,
+    strict: bool = False,
 ) -> ChannelHost:
+    """Constructs a traffic-free host, optionally reusing unchanged connections."""
     attachment_store = AttachmentStore()
     channel_hub: ChannelHub | None = None
 
@@ -47,7 +50,8 @@ async def start_channels(
             channel_hub=channel_hub,
         )
 
-    host = ChannelHost(_ctx_factory)
+    host = ChannelHost(_ctx_factory, transport_lock=bus.transport_lock)
+    push_tool.set_transport_lock(bus.transport_lock)
     if not enable_message_channels:
         return host
     channel_hub = (
@@ -60,10 +64,12 @@ async def start_channels(
     )
     if config.channels.telegram and config.channels.telegram.token:
         tg = config.channels.telegram
+        configuration = (tg, tuple(bot_commands or []))
+        existing = previous_host.reusable(tg.channel_name, configuration) if previous_host else None
         try:
             from infra.channels.telegram_channel import TelegramChannel
 
-            host.add(TelegramChannel(
+            host.add(existing or TelegramChannel(
                 token=tg.token,
                 bus=bus,
                 session_manager=session_manager,
@@ -72,17 +78,20 @@ async def start_channels(
                 interrupt_controller=interrupt_controller,
                 channel_name=tg.channel_name,
                 channel_hub=channel_hub,
-            ))
+            ), configuration=configuration)
         except Exception as exc:
+            if strict:
+                raise
             host.record_failure("telegram", phase="construct", error=exc)
             logger.warning("跳过 Telegram 渠道: %s", exc)
 
     if config.channels.qq and config.channels.qq.bot_uin:
         qq = config.channels.qq
+        existing = previous_host.reusable("qq", qq) if previous_host else None
         try:
             from infra.channels.qq_channel import QQChannel
 
-            host.add(QQChannel(
+            host.add(existing or QQChannel(
                 bot_uin=qq.bot_uin,
                 bus=bus,
                 session_manager=session_manager,
@@ -91,12 +100,23 @@ async def start_channels(
                 event_bus=event_bus,
                 interrupt_controller=interrupt_controller,
                 channel_hub=channel_hub,
-            ))
+            ), configuration=qq)
         except Exception as exc:
+            if strict:
+                raise
             host.record_failure("qq", phase="construct", error=exc)
             logger.warning("跳过 QQ 渠道: %s", exc)
 
     for channel in plugin_channels or []:
-        host.add(channel)
+        # Only independently owned plugin connections opt into reuse. Other
+        # channels may retain resources owned by their plugin generation.
+        configuration = getattr(channel, "configuration_key", None)
+        existing = (
+            previous_host.reusable(channel.name, configuration)
+            if previous_host is not None and configuration is not None else None
+        )
+        if existing is not None:
+            await channel.stop()
+        host.add(existing or channel, configuration=configuration)
 
     return host

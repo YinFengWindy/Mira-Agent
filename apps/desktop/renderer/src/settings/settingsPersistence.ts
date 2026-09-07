@@ -2,19 +2,22 @@ import type {
   DesktopApi,
   SaveSettingsResult,
   SettingsFormData,
+  SettingsSaveOptions,
   SettingsSnapshot,
 } from "../../../src/bridge/shared.js";
 
 type SettingsLoadApi = Pick<DesktopApi, "readSettings">;
-type SettingsSaveApi = Pick<DesktopApi, "readSettings" | "saveSettings" | "invoke">;
+type SettingsSaveApi = Pick<DesktopApi, "readSettings" | "saveSettings">;
 
+/** Loaded editable configuration and its backend version. */
 export type SettingsPageLoadResult = {
   snapshot: SettingsSnapshot;
 };
 
+/** Transaction outcome; a failed apply leaves the persisted snapshot untouched. */
 export type SettingsPageSaveResult = {
   saveResult: SaveSettingsResult;
-  snapshot: SettingsSnapshot;
+  snapshot: SettingsSnapshot | null;
   nextDraft: SettingsFormData;
 };
 
@@ -48,29 +51,15 @@ export async function loadSettingsPageData(api: SettingsLoadApi): Promise<Settin
   };
 }
 
-/** Saves settings and reloads the persisted snapshot without restarting the bridge. */
+/** Atomically applies settings and deferred bindings, preserving failed drafts verbatim. */
 export async function saveSettingsPageData(
   api: SettingsSaveApi,
   draft: SettingsFormData,
+  options?: SettingsSaveOptions,
 ): Promise<SettingsPageSaveResult> {
-  const pendingRoleModelUpdates = draft.pendingRoleModelUpdates ?? [];
-  const persistedDraft = cloneSettings(draft);
-  delete persistedDraft.pendingRoleModelUpdates;
-  const saveResult = await api.saveSettings(persistedDraft);
-  if (saveResult.ok) {
-    for (const update of pendingRoleModelUpdates) {
-      const response = await api.invoke({
-        method: "roles.update",
-        payload: { role_id: update.roleId, runtime_config: update.runtimeConfig },
-      });
-      if (response.error) throw new Error(response.error.message);
-    }
-  }
-  const snapshot = await api.readSettings();
-  const nextDraft = cloneSettings(snapshot.formData);
-  if (!saveResult.ok && pendingRoleModelUpdates.length > 0) {
-    nextDraft.pendingRoleModelUpdates = pendingRoleModelUpdates;
-  }
+  const saveResult = await api.saveSettings(cloneSettings(draft), options);
+  const snapshot = saveResult.ok ? await api.readSettings() : null;
+  const nextDraft = cloneSettings(snapshot?.formData ?? draft);
 
   return {
     saveResult,

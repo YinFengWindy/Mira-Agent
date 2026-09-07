@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import sys
 import tomllib
 import uuid
 from pathlib import Path
@@ -48,7 +47,12 @@ def _validated_timezone(tz_name: str, *, enabled: bool) -> str:
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
-    data = _load_config_data(path)
+    """Loads and validates the persisted TOML configuration."""
+    return load_config_data(_load_config_data(path))
+
+
+def load_config_data(data: dict[str, Any]) -> Config:
+    """Builds a configuration from parsed TOML, including environment resolution."""
     _reject_removed_runtime_config(data)
 
     llm = _as_dict(data.get("llm"))
@@ -69,12 +73,12 @@ def load_config(path: str | Path = "config.toml") -> Config:
     wiring = _load_wiring_config(data)
     plugins = _load_plugins_config(data)
     model_registrations = _load_model_registrations(data)
-    primary_registration = model_registrations[0]
+    primary_registration = model_registrations[0] if model_registrations else None
 
     return Config(
-        provider=primary_registration.provider,
-        model=primary_registration.model,
-        api_key=primary_registration.api_key,
+        provider=primary_registration.provider if primary_registration else "",
+        model=primary_registration.model if primary_registration else "",
+        api_key=primary_registration.api_key if primary_registration else "",
         max_tokens=int(agent_cfg.get("max_tokens", data.get("max_tokens", 8192))),
         max_iterations=int(
             agent_cfg.get("max_iterations", data.get("max_iterations", 10))
@@ -82,8 +86,8 @@ def load_config(path: str | Path = "config.toml") -> Config:
         memory_window=int(
             agent_context.get("memory_window", data.get("memory_window", 40))
         ),
-        base_url=primary_registration.base_url,
-        extra_body=_effort_extra_body(primary_registration.effort),
+        base_url=primary_registration.base_url if primary_registration else None,
+        extra_body=_effort_extra_body(primary_registration.effort) if primary_registration else {},
         channels=channels,
         proactive=proactive,
         memory_optimizer_enabled=bool(
@@ -140,23 +144,34 @@ def load_config(path: str | Path = "config.toml") -> Config:
     )
 
 
+def load_config_text(text: str) -> Config:
+    """Validates a configuration candidate without touching the persisted file."""
+    return load_config_data(tomllib.loads(text))
+
+
 def _load_model_registrations(
     data: dict[str, Any],
 ) -> list[ModelRegistration]:
-    llm = _as_dict(data.get("llm"))
+    llm = data.get("llm", {})
+    if not isinstance(llm, dict):
+        raise ValueError("llm 必须是对象")
     raw_registrations = llm.get("registrations", [])
     if not isinstance(raw_registrations, list):
         raise ValueError("llm.registrations 必须是数组")
+    if any(not isinstance(item, dict) for item in raw_registrations):
+        raise ValueError("模型注册必须是对象")
     registrations = [
         _parse_model_registration(item)
         for item in raw_registrations
-        if isinstance(item, dict)
     ]
     _validate_model_registrations(registrations)
     return registrations
 
 
 def _parse_model_registration(payload: dict[str, Any]) -> ModelRegistration:
+    for name in ("id", "provider", "base_url", "api_key", "model", "effort"):
+        if name in payload and not isinstance(payload[name], str):
+            raise ValueError(f"模型注册 {name} 必须是字符串")
     effort = str(payload.get("effort") or "none").strip().lower()
     if effort not in {"none", "low", "high", "max"}:
         raise ValueError(f"模型注册 Effort 无效: {effort}")
@@ -171,12 +186,10 @@ def _parse_model_registration(payload: dict[str, Any]) -> ModelRegistration:
 
 
 def _validate_model_registrations(registrations: list[ModelRegistration]) -> None:
-    if not registrations:
-        raise ValueError("至少需要一个模型注册")
     ids: set[str] = set()
     for registration in registrations:
-        if not registration.id or not registration.model:
-            raise ValueError("模型注册必须包含 id 和 model")
+        if not registration.id:
+            raise ValueError("模型注册必须包含 id")
         try:
             uuid.UUID(registration.id)
         except ValueError as error:
@@ -225,8 +238,7 @@ def _load_proactive_config(data: dict) -> ProactiveConfig:
         try:
             proactive = load_proactive_config(p)
         except ProactiveConfigError as e:
-            logger.error("Proactive 配置错误: %s", e)
-            sys.exit(1)
+            raise ValueError(f"Proactive 配置错误: {e}") from e
     return proactive
 
 
@@ -405,4 +417,6 @@ __all__ = [
     "TelegramChannelConfig",
     "_validated_timezone",
     "load_config",
+    "load_config_data",
+    "load_config_text",
 ]

@@ -14,6 +14,7 @@ from bus.events_lifecycle import StreamDeltaReady, TurnStarted
 from bus.queue import MessageBus
 from core.channels import ChannelHub
 from infra.channels.contract import ChannelContext
+from infra.channels.intake import ChannelIntake
 
 from .formatting import CHANNEL
 from .gateway import _GatewayMixin, _TokenCache
@@ -58,6 +59,10 @@ class QQBotChannel(
         self._token: _TokenCache | None = None
         self._task: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
+        self._intake = ChannelIntake(self._accept_inbound, self.send)
+        self._event_bus = None
+        self._push_tool = None
+        self._event_bindings = [(TurnStarted, self._on_turn_started), (StreamDeltaReady, self._on_stream_delta)]
         self._outbound_bound = False
         self._events_bound = False
         self._last_c2c_msg_id: dict[str, str] = {}
@@ -71,14 +76,27 @@ class QQBotChannel(
         self._live_tasks: set[asyncio.Task[None]] = set()
         self._live_tasks_by_session: dict[str, set[asyncio.Task[None]]] = {}
 
+    @property
+    def configuration_key(self):
+        """Identifies independently owned connections reusable across plugin versions."""
+        return (
+            "official-qqbot", self._app_id, self._client_secret,
+            tuple(sorted(self._allow_from)),
+            {key: group.model_dump() for key, group in self._groups.items()},
+        )
+
     async def start(self, ctx: ChannelContext) -> None:
         """Registers runtime hooks and starts the official Gateway loop."""
         self._bus = ctx.bus
         self._interrupt_controller = ctx.interrupt_controller
         self._channel_hub = ctx.channel_hub
+        self._event_bus = ctx.event_bus
+        self._push_tool = ctx.push_tool
+        if self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=30.0)
         if not self._events_bound:
-            ctx.event_bus.on(TurnStarted, self._on_turn_started)
-            ctx.event_bus.on(StreamDeltaReady, self._on_stream_delta)
+            for event_type, handler in self._event_bindings:
+                ctx.event_bus.on(event_type, handler)
             self._events_bound = True
         ctx.push_tool.register_channel(
             self.name,
@@ -87,6 +105,7 @@ class QQBotChannel(
             image=self.send_image,
         )
         self._stopped.clear()
+        self._intake.start(paused=ctx.intake_paused)
         self._task = asyncio.create_task(self._gateway_loop(), name="qqbot_gateway")
         if not self._outbound_bound:
             ctx.bus.subscribe_outbound(CHANNEL, self._on_response)
@@ -95,6 +114,7 @@ class QQBotChannel(
 
     async def stop(self) -> None:
         """Stops Gateway tasks, pending stream updates, and the HTTP client."""
+        self.pause_intake()
         self._stopped.set()
         if self._task:
             self._task.cancel()
@@ -104,8 +124,26 @@ class QQBotChannel(
                 pass
             self._task = None
         await self._drain_live_tasks()
+        await self._intake.close()
         await self._client.aclose()
+        if self._bus is not None and self._outbound_bound:
+            self._bus.unsubscribe_outbound(CHANNEL, self._on_response)
+            self._outbound_bound = False
+        if self._event_bus is not None and self._events_bound:
+            for event_type, handler in self._event_bindings:
+                self._event_bus.off(event_type, handler)
+            self._events_bound = False
+        if self._push_tool is not None:
+            self._push_tool.unregister_channel(self.name, text=self.send_proactive)
         logger.info("[qqbot] 官方 QQBot 通道已停止")
+
+    def pause_intake(self) -> None:
+        """Buffers incoming turns while existing replies remain deliverable."""
+        self._intake.pause()
+
+    def resume_intake(self) -> None:
+        """Restores intake after a rejected settings transaction."""
+        self._intake.resume()
 
     def _require_bus(self) -> MessageBus:
         if self._bus is None:

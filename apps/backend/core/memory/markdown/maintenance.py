@@ -79,6 +79,16 @@ class MarkdownMemoryMaintenance:
         self._save_session = request.save_session
         self._after_consolidation = request.after_consolidation
 
+    def share_execution(self, previous: MarkdownMemoryMaintenance) -> None:
+        """Serializes writes to shared sessions across configuration versions."""
+        self._maintenance_locks = previous._maintenance_locks
+
+    async def drain(self) -> None:
+        """Waits for already queued maintenance before its providers are closed."""
+        while self._maintenance_tasks:
+            await asyncio.gather(*tuple(self._maintenance_tasks.values()), return_exceptions=True)
+            await asyncio.sleep(0)
+
     def on_turn_committed(self, event: TurnCommitted) -> None:
         if bool((event.extra or {}).get("skip_post_memory")):
             return

@@ -1,0 +1,267 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaitable, Callable
+from pathlib import Path
+from typing import Any, Protocol, cast
+
+from core.memory.markdown_schema import (
+    ensure_memory_documents,
+    normalize_memory_document,
+    replace_memory_section,
+)
+
+from .models import RoleRecord, now_iso as _now_iso, normalize_role_id
+
+
+class RoleSelfSeedGenerator(Protocol):
+    """Produces the initial role self-document from its profile."""
+
+    def generate(self, role: RoleRecord) -> str:
+        """Generates a role-specific SELF.md document."""
+        ...
+
+
+class RoleMemoryService:
+    """角色独立记忆空间服务。"""
+
+    _FILES = (
+        "MEMORY.md",
+        "SELF.md",
+        "HISTORY.md",
+        "PENDING.md",
+        "RECENT_CONTEXT.md",
+    )
+
+    def __init__(
+        self,
+        workspace: Path,
+        *,
+        self_seed_generator: RoleSelfSeedGenerator | None = None,
+        model_available: Callable[[str], bool] | None = None,
+    ) -> None:
+        self._workspace = Path(workspace)
+        self._self_seed_generator = self_seed_generator
+        self._model_available = model_available
+
+    def memory_root(self, role_id: str) -> Path:
+        return self._workspace / "roles" / normalize_role_id(role_id) / "memory"
+
+    def ensure_initialized(self, role: RoleRecord) -> Path:
+        root = self.memory_root(role.id)
+        ensure_memory_documents(root)
+        return root
+
+    def seed_role_memory(self, role: RoleRecord) -> dict[str, Any]:
+        """同步初始化角色记忆，供非事件循环调用方使用。"""
+        needs_self_seed = self._needs_self_seed(role)
+        root = self.ensure_initialized(role)
+        state = dict(role.memory_init_state or {})
+        changed = False
+
+        self_path = root / "SELF.md"
+        if needs_self_seed and self._can_generate_self(role, state):
+            seeded_self = str(self._self_seed_generator.generate(role) or "").strip()
+            if seeded_self:
+                self_path.write_text(
+                    normalize_memory_document("SELF.md", seeded_self),
+                    encoding="utf-8",
+                )
+                state["seed_self_ready"] = True
+                state.pop("seed_self_pending", None)
+                changed = True
+
+        return self._finalize_seed_state(role, root, state, changed)
+
+    async def seed_role_memory_async(self, role: RoleRecord) -> dict[str, Any]:
+        """异步初始化角色记忆，避免在运行中的事件循环里再次调用 asyncio.run。"""
+        needs_self_seed = self._needs_self_seed(role)
+        root = self.ensure_initialized(role)
+        state = dict(role.memory_init_state or {})
+        changed = False
+
+        self_path = root / "SELF.md"
+        if needs_self_seed and self._can_generate_self(role, state):
+            seeded_self = str(await self._generate_self_async(role) or "").strip()
+            if seeded_self:
+                self_path.write_text(
+                    normalize_memory_document("SELF.md", seeded_self),
+                    encoding="utf-8",
+                )
+                state["seed_self_ready"] = True
+                state.pop("seed_self_pending", None)
+                changed = True
+
+        return self._finalize_seed_state(role, root, state, changed)
+
+    def _can_generate_self(self, role: RoleRecord, state: dict[str, Any]) -> bool:
+        if self._self_seed_generator is None:
+            return False
+        if self._model_available is not None and not self._model_available(role.id):
+            # Retry after configuration repair even though local templates now exist.
+            state["seed_self_pending"] = True
+            return False
+        return True
+
+    def _needs_self_seed(self, role: RoleRecord) -> bool:
+        # Inspect before creating the default template, which is itself nonempty.
+        path = self.memory_root(role.id) / "SELF.md"
+        return bool(role.memory_init_state.get("seed_self_pending")) or (
+            not path.exists() or not path.read_text(encoding="utf-8").strip()
+        )
+
+    def _finalize_seed_state(
+        self,
+        role: RoleRecord,
+        root: Path,
+        state: dict[str, Any],
+        changed: bool,
+    ) -> dict[str, Any]:
+        background = role.background.strip()
+        previous_background = str(state.get("seed_background_value") or "").strip()
+        if (
+            background
+            and background != previous_background
+            and not state.get("seed_self_ready")
+        ):
+            self._write_stable_background(root / "SELF.md", background)
+            if previous_background:
+                self._append_once(
+                    root / "HISTORY.md",
+                    (
+                        f"- [{_now_iso()}] 我的角色背景完成修订。\n"
+                        f"  - 来源: user_edited\n"
+                        f"  - 旧版本: {previous_background}\n"
+                        f"  - 新版本: {background}\n"
+                    ),
+                )
+            state["seed_background_ready"] = True
+            state["seed_background_value"] = background
+            changed = True
+
+        if not state.get("seed_first_impression_ready"):
+            impression = self._build_first_impression(role)
+            state = self.update_relationship_baseline(
+                role,
+                content=impression,
+                source="seed:first_impression",
+                current_state=state,
+            )
+            changed = True
+
+        if changed:
+            state["last_memory_initialized_at"] = _now_iso()
+        return state
+
+    async def _generate_self_async(self, role: RoleRecord) -> str:
+        generator = self._self_seed_generator
+        if generator is None:
+            return ""
+        agenerate = getattr(generator, "agenerate", None)
+        if callable(agenerate):
+            async_generate = cast(
+                Callable[[RoleRecord], Awaitable[object]],
+                agenerate,
+            )
+            return str(await async_generate(role) or "")
+        return str(await asyncio.to_thread(generator.generate, role) or "")
+
+    def update_relationship_baseline(
+        self,
+        role: RoleRecord,
+        *,
+        content: str,
+        source: str,
+        current_state: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        clean_content = str(content or "").strip()
+        clean_source = str(source or "").strip()
+        if not clean_content:
+            raise ValueError("relationship baseline 不能为空")
+        if not clean_source:
+            raise ValueError("relationship baseline source 不能为空")
+
+        state = dict(current_state or role.memory_init_state or {})
+        root = self.ensure_initialized(role)
+        path = root / "SELF.md"
+        current_value = str(state.get("relationship_baseline_value") or "").strip()
+        current_source = str(state.get("relationship_baseline_source") or "").strip()
+        normalized_source = "seed" if clean_source.startswith("seed") else clean_source
+
+        if normalized_source == "system_derived" and current_source == "user_edited":
+            self._append_once(
+                root / "HISTORY.md",
+                (
+                    f"- [{_now_iso()}] 我们的关系出现新的演化建议。\n"
+                    f"  - 来源: {clean_source}\n"
+                    f"  - 保留当前人工基线: {current_value}\n"
+                    f"  - 系统建议: {clean_content}\n"
+                ),
+            )
+            state["relationship_revision_count"] = (
+                int(state.get("relationship_revision_count") or 0) + 1
+            )
+            return state
+
+        if clean_content == current_value and clean_source == current_source:
+            return state
+
+        if current_value:
+            self._append_once(
+                root / "HISTORY.md",
+                (
+                    f"- [{_now_iso()}] 我们的关系基线完成修订。\n"
+                    f"  - 来源: {clean_source}\n"
+                    f"  - 旧版本来源: {current_source or 'unknown'}\n"
+                    f"  - 旧版本内容: {current_value}\n"
+                    f"  - 新版本内容: {clean_content}\n"
+                ),
+            )
+            if normalized_source != "seed":
+                state["relationship_revision_count"] = (
+                    int(state.get("relationship_revision_count") or 0) + 1
+                )
+        else:
+            state.setdefault("relationship_revision_count", 0)
+
+        self._write_relationship_baseline(path, clean_content, clean_source)
+        state["seed_first_impression_ready"] = True
+        state["relationship_baseline_value"] = clean_content
+        state["relationship_baseline_source"] = clean_source
+        state["last_memory_initialized_at"] = _now_iso()
+        return state
+
+    def _append_once(self, path: Path, text: str) -> None:
+        current = path.read_text(encoding="utf-8") if path.exists() else ""
+        if text.strip() and text.strip() not in current:
+            path.write_text(
+                (current.rstrip() + "\n\n" + text.strip() + "\n").lstrip(),
+                encoding="utf-8",
+            )
+
+    def _write_stable_background(self, path: Path, background: str) -> None:
+        replace_memory_section(path, "## 我的性格与形象", background.strip())
+
+    def _write_relationship_baseline(
+        self,
+        path: Path,
+        content: str,
+        source: str,
+    ) -> None:
+        replace_memory_section(
+            path,
+            "## 我们的关系",
+            f"来源: {source}\n\n{content.strip()}",
+        )
+
+    def _build_first_impression(self, role: RoleRecord) -> str:
+        pieces = [
+            "来源: seed:first_impression",
+            f"角色: {role.name or role.id}",
+        ]
+        if role.description.strip():
+            pieces.append(f"简介: {role.description.strip()}")
+        pieces.append(
+            "初始关系理解: 尚未与用户形成稳定互动，后续只能在此基线上增量修订。"
+        )
+        return "\n".join(pieces)

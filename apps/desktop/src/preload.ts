@@ -77,8 +77,8 @@ const api: DesktopApi = {
   readSettings() {
     return ipcRenderer.invoke("desktop:settings-read") as Promise<import("./bridge/shared.js").SettingsSnapshot>;
   },
-  saveSettings(formData) {
-    return ipcRenderer.invoke("desktop:settings-save", formData) as Promise<import("./bridge/shared.js").SaveSettingsResult>;
+  saveSettings(formData, options) {
+    return ipcRenderer.invoke("desktop:settings-save", formData, options) as Promise<import("./bridge/shared.js").SaveSettingsResult>;
   },
   listVoiceInputDevices() {
     return ipcRenderer.invoke("desktop:voice-input-devices-list") as Promise<VoiceInputDevice[]>;

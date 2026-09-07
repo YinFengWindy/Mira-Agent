@@ -60,6 +60,8 @@ class PluginManager:
         light_model: str = "",
         plugin_configs: dict[str, dict[str, Any]] | None = None,
         relationship_runtime: Any = None,
+        namespace: str = "",
+        strict: bool = False,
     ) -> None:
         self._dirs = plugin_dirs
         self._event_bus = event_bus
@@ -72,6 +74,9 @@ class PluginManager:
         self._light_provider = light_provider
         self._light_model = light_model
         self._plugin_configs = plugin_configs or {}
+        self._namespace = namespace
+        self._strict = strict
+        self._bound_handlers: dict[str, list[tuple[type, Callable]]] = {}
         self._loaded: set[str] = set()
         self._channels: list[Channel] = []
         self._tool_hooks: list[ToolHook] = []
@@ -167,7 +172,9 @@ class PluginManager:
                 mods.append({
                     "name": child.name,
                     "module_path": str(main),
-                    "import_path": f"akasic_plugin_{source}_{child.name}",
+                    "import_path": f"akasic_plugin_{source}_{child.name}" + (
+                        f"_{self._namespace}" if self._namespace else ""
+                    ),
                 })
         return mods
 
@@ -189,11 +196,16 @@ class PluginManager:
             self._import_plugin(mp, Path(mod["module_path"]))
         except Exception as e:
             logger.warning("插件 %s 导入失败: %s", mod["name"], e)
+            plugin_registry.remove_plugin(mp)
+            if self._strict:
+                raise
             return
         # 3. 导入触发 __init_subclass__，从 registry 取注册的类
         cls = plugin_registry._classes.get(mp)
         if cls is None:
             logger.warning("插件 %s 未注册类", mod["name"])
+            if self._strict:
+                raise ValueError(f"Plugin class was not registered: {mod['name']}")
             return
         # 4. 实例化，读 manifest 覆盖元信息，注入 PluginContext
         instance = cls()
@@ -208,6 +220,9 @@ class PluginManager:
             )
         except _PluginConfigError as e:
             logger.warning("插件 %s 配置无效，跳过: %s", mod["name"], e)
+            plugin_registry.remove_plugin(mp)
+            if self._strict:
+                raise
             return
         from agent.plugins.context import PluginContext, PluginKVStore
         instance.context = PluginContext(  # type: ignore[attr-defined]
@@ -226,6 +241,7 @@ class PluginManager:
             relationship_runtime=self._relationship_runtime,
         )
         plugin_registry.register_instance(mp, instance)
+        self._loaded.add(mp)
         self._bind_handlers(instance, mp)
         tool_names = self._register_tools(instance, mp)
         hook_count_before = len(self._tool_hooks)
@@ -252,7 +268,11 @@ class PluginManager:
                 await instance.initialize()
         except Exception as e:
             logger.warning("插件 %s 初始化失败，回滚: %s", mod["name"], e)
+            if hasattr(instance, "terminate"):
+                await instance.terminate()
+            self._unbind_handlers(mp)
             plugin_registry.remove_plugin(mp)
+            self._loaded.discard(mp)
             for tn in tool_names:
                 if self._tool_registry is not None:
                     self._tool_registry.unregister(tn)
@@ -265,6 +285,8 @@ class PluginManager:
             del self._after_step_modules[after_step_count_before:]
             del self._after_reasoning_modules[after_reasoning_count_before:]
             del self._after_turn_modules[after_turn_count_before:]
+            if self._strict:
+                raise
             return
         self._loaded.add(mp)
         self._collect_channels(instance)
@@ -334,6 +356,11 @@ class PluginManager:
             # 3. 绑定 instance 为第一个参数，EventBus 已处理 sync/async，直接注册
             bound = functools.partial(md.handler, instance)
             self._event_bus.on(ctx_type, bound)
+            self._bound_handlers.setdefault(module_path, []).append((ctx_type, bound))
+
+    def _unbind_handlers(self, module_path: str) -> None:
+        for event_type, handler in self._bound_handlers.pop(module_path, []):
+            self._event_bus.off(event_type, handler)
 
     def _bind_tool_hooks(self, instance: Any, module_path: str) -> None:
         for md in plugin_registry.get_handlers_by_module_path(module_path):
@@ -418,6 +445,8 @@ class PluginManager:
         target.extend(_load_module_list(instance, attr_name))
 
     async def terminate_all(self) -> None:
+        """Releases only this manager's subscriptions, plugins and import namespace."""
+        errors: list[Exception] = []
         for mp in list(self._loaded):
             instance = plugin_registry.get_instance(mp)
             if instance is not None and hasattr(instance, "terminate"):
@@ -425,11 +454,17 @@ class PluginManager:
                     await instance.terminate()
                 except Exception as e:
                     logger.warning("插件 terminate 失败 (%s): %s", mp, e)
+                    errors.append(e)
+            self._unbind_handlers(mp)
             # 注销工具
             for md in plugin_registry.get_handlers_by_module_path(mp):
                 if md.kind == MetadataKind.TOOL and self._tool_registry is not None:
                     self._tool_registry.unregister(md.tool_name or md.handler_name)
             plugin_registry.remove_plugin(mp)
+            if self._namespace:
+                for module_name in tuple(sys.modules):
+                    if module_name == mp or module_name.startswith(mp + "."):
+                        sys.modules.pop(module_name, None)
         self._loaded.clear()
         self._tool_hooks.clear()
         self._proactive_gates.clear()
@@ -441,6 +476,8 @@ class PluginManager:
         self._after_reasoning_modules.clear()
         self._after_turn_modules.clear()
         self._channels.clear()
+        if errors:
+            raise ExceptionGroup("Plugin cleanup failed", errors)
 
 
 class _PluginConfigError(Exception):

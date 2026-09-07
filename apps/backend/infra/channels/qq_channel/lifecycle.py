@@ -15,6 +15,7 @@ from core.common.workspace import resolve_ncatbot_dir
 from core.net.http import HttpRequester, get_default_http_requester
 from infra.channels.base import AttachmentStore, SessionIdentityIndex
 from infra.channels.contract import ChannelContext
+from infra.channels.intake import ChannelIntake
 from infra.channels.group_filter import (
     DefaultGroupFilter,
     GroupMessageFilter,
@@ -29,6 +30,7 @@ from .inbound import _InboundMixin
 from .loop_bridge import _LoopBridgeMixin
 from .outbound import _OutboundMixin
 from .trace import _TraceMixin
+from .sdk_runtime import QQSdkRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +54,6 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
         interrupt_controller: InterruptController | None = None,
         channel_hub: ChannelHub | None = None,
     ) -> None:
-        from ncatbot.core import BotClient
-        from ncatbot.utils import ncatbot_config
-
         self._bus = bus
         self._session_manager = session_manager
         self._bot_uin = bot_uin
@@ -84,15 +83,30 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
         self._event_bus = event_bus
         self._outbound_bound = False
         self._events_bound = False
+        self._push_tool = None
+        self._intake = ChannelIntake(self._accept_inbound, self.send)
+        self._event_bindings = (
+            (TurnStarted, self._on_turn_started),
+            (ToolCallStarted, self._on_tool_call_started),
+            (ToolCallCompleted, self._on_tool_call_completed),
+        )
+        self._handlers_bound = False
         self._trace_states: dict[str, _QQTraceState] = {}
-        self._bot = BotClient()
+        self._bot = None
+        self._sdk_runtime: QQSdkRuntime | None = None
         self._api = None
         self._main_loop: asyncio.AbstractEventLoop | None = None
         self._bot_loop: asyncio.AbstractEventLoop | None = None
 
+        self.user_map = self._identity_index.mapping
+
+    def _configure_sdk(self) -> None:
+        # NcatBot configuration is process-global and may only change at activation.
+        from ncatbot.utils import ncatbot_config
+
         patch_ncatbot_ws_open_timeout(self._websocket_open_timeout_seconds)
-        ncatbot_config.bt_uin = bot_uin
-        ncatbot_config.root = allowed_users[0] if allowed_users else bot_uin
+        ncatbot_config.bt_uin = self._bot_uin
+        ncatbot_config.root = next(iter(self._allow_from), self._bot_uin)
         ncatbot_config.check_ncatbot_update = False
         ncatbot_config.skip_ncatbot_install_check = True
         ncatbot_config.napcat.remote_mode = True
@@ -102,16 +116,23 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
         ncatbot_dir.mkdir(parents=True, exist_ok=True)
         (ncatbot_dir / "plugins").mkdir(exist_ok=True)
         ncatbot_config.plugin.plugins_dir = str(ncatbot_dir / "plugins")
-        self.user_map = self._identity_index.mapping
 
     def _is_allowed(self, user_id: str) -> bool:
         return not self._allow_from or user_id in self._allow_from
 
     async def start(self, ctx: ChannelContext | None = None) -> None:
+        from ncatbot.core import BotClient
+
+        # BotClient construction mutates SDK globals, so it belongs to activation.
+        if self._bot is None:
+            self._bot = BotClient()
+            self._sdk_runtime = QQSdkRuntime(self._bot)
+        self._intake.start(paused=ctx.intake_paused if ctx is not None else False)
         if ctx is not None:
             self._bus = ctx.bus
             self._event_bus = ctx.event_bus
             self._interrupt_controller = ctx.interrupt_controller
+            self._push_tool = ctx.push_tool
             ctx.push_tool.register_channel(
                 self.name,
                 text=self.send,
@@ -119,8 +140,22 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
                 image=self.send_image,
             )
         self._main_loop = asyncio.get_running_loop()
+        self._configure_sdk()
         self._identity_index.rebuild()
         self._bind_events()
+        self._bind_bot_handlers()
+
+        logger.info("[qq] 正在启动 NcatBot（首次运行需要扫码登录）...")
+        self._api = await self._main_loop.run_in_executor(None, self._bot.run_backend)
+        logger.info("[qq] NcatBot 已启动")
+        if not self._outbound_bound:
+            self._bus.subscribe_outbound(CHANNEL, self._on_response)
+            self._outbound_bound = True
+
+    def _bind_bot_handlers(self) -> None:
+        if self._handlers_bound:
+            return
+        self._handlers_bound = True
 
         @cast(Any, self._bot.on_private_message())
         async def _(event) -> None:
@@ -185,25 +220,40 @@ class QQChannel(_InboundMixin, _TraceMixin, _OutboundMixin, _LoopBridgeMixin):
         async def _(_event) -> None:
             self._bot_loop = asyncio.get_running_loop()
 
-        logger.info("[qq] 正在启动 NcatBot（首次运行需要扫码登录）...")
-        self._api = await self._main_loop.run_in_executor(None, self._bot.run_backend)
-        logger.info("[qq] NcatBot 已启动")
-        if not self._outbound_bound:
-            self._bus.subscribe_outbound(CHANNEL, self._on_response)
-            self._outbound_bound = True
-
     def _bind_events(self) -> None:
         if self._event_bus is None or self._events_bound:
             return
-        self._event_bus.on(TurnStarted, self._on_turn_started)
-        self._event_bus.on(ToolCallStarted, self._on_tool_call_started)
-        self._event_bus.on(ToolCallCompleted, self._on_tool_call_completed)
+        for event_type, handler in self._event_bindings:
+            self._event_bus.on(event_type, handler)
         self._events_bound = True
 
     async def stop(self) -> None:
-        if self._api:
-            loop = asyncio.get_running_loop()
-            bot_exit = getattr(self._bot, "exit", None)
-            if callable(bot_exit):
-                await loop.run_in_executor(None, bot_exit)
+        """Stops the SDK and detaches callbacks before connection replacement."""
+        try:
+            await self._intake.close()
+            if self._sdk_runtime is not None:
+                await self._sdk_runtime.stop()
+                self._sdk_runtime = None
+                self._bot = None
+                self._handlers_bound = False
+            self._api = None
+            self._bot_loop = None
             logger.info("[qq] QQChannel 已停止")
+        finally:
+            if self._outbound_bound:
+                self._bus.unsubscribe_outbound(CHANNEL, self._on_response)
+                self._outbound_bound = False
+            if self._event_bus is not None and self._events_bound:
+                for event_type, handler in self._event_bindings:
+                    self._event_bus.off(event_type, handler)
+                self._events_bound = False
+            if self._push_tool is not None:
+                self._push_tool.unregister_channel(self.name, text=self.send)
+
+    def pause_intake(self) -> None:
+        """Buffers incoming turns while retaining the outbound SDK connection."""
+        self._intake.pause()
+
+    def resume_intake(self) -> None:
+        """Restores intake after a rejected channel removal."""
+        self._intake.resume()
