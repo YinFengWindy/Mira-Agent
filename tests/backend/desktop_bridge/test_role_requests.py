@@ -58,6 +58,48 @@ async def test_role_card_preview_forwards_the_full_payload_to_its_service() -> N
 
 
 @pytest.mark.asyncio
+async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
+    role_store = RoleStore(tmp_path)
+    service = DesktopBridgeService(
+        workspace=tmp_path,
+        role_store=role_store,
+        session_manager=SessionManager(tmp_path),
+        agent_loop=SimpleNamespace(process_direct=AsyncMock()),
+        event_bus=EventBus(),
+    )
+    profile = {
+        "character": {
+            "profile": "A meticulous archivist.",
+            "personality": "Calm and precise.",
+            "behavior_rules": "Use concise answers and cite the archive.",
+        },
+        "greetings": {"default": "Welcome back.", "alternates": []},
+        "knowledge_base": {"enabled": True, "token_budget": 2000, "entries": []},
+    }
+
+    response = await service.handle(
+        {
+            "id": "create-structured-role",
+            "method": "roles.create",
+            "payload": {
+                "name": "Mira",
+                "description": "A role",
+                "system_prompt": profile["character"]["behavior_rules"],
+                "profile": profile,
+            },
+        },
+        emit_event=lambda _payload: None,
+    )
+
+    assert response.error is None
+    assert response.payload["role"]["profile"] == {"version": 1, **profile}
+    persisted = role_store.get_role(response.payload["role"]["id"])
+    assert persisted is not None
+    assert persisted.profile.to_dict() == {"version": 1, **profile}
+    await service.aclose()
+
+
+@pytest.mark.asyncio
 async def test_role_difference_rpc_publishes_progress_and_returns_updated_role(
     tmp_path: Path,
 ) -> None:

@@ -41,7 +41,17 @@ export function RoleCreatePage({
   );
   const floatingActionClass =
     "grid h-10 w-10 place-items-center rounded-full border bg-white/90 shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition duration-200 hover:-translate-y-0.5 disabled:translate-y-0 disabled:cursor-default disabled:border-black/6 disabled:bg-white/60 disabled:text-[#b8b8b8] disabled:shadow-none";
-  const formDirty = Boolean(form.name.trim() || form.description.trim() || form.systemPrompt.trim());
+  const profileDirty = Boolean(
+    form.profile?.character?.profile?.trim()
+    || form.profile?.character?.personality?.trim()
+    || form.profile?.character?.behavior_rules?.trim()
+    || form.profile?.greetings?.default?.trim()
+    || form.profile?.greetings?.alternates?.some((greeting) => greeting.trim())
+    || form.profile?.knowledge_base?.entries?.length,
+  );
+  const formDirty = Boolean(
+    form.name.trim() || form.description.trim() || form.systemPrompt.trim() || profileDirty,
+  );
 
   useLayoutEffect(() => {
     const textarea = promptRef.current;

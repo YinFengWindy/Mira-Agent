@@ -52,6 +52,7 @@ class DesktopRoleRequestHandler:
                 description=str(payload.get("description") or ""),
                 system_prompt=str(payload.get("system_prompt") or ""),
                 background=str(payload.get("background") or ""),
+                profile=self._dict_payload(payload, "profile"),
                 runtime_config=self._dict_payload(payload, "runtime_config"),
                 avatar_source=str(payload.get("avatar_source") or "").strip() or None,
                 illustration_sources=self._string_list_payload(
@@ -101,7 +102,7 @@ class DesktopRoleRequestHandler:
                 "background": payload.get("background"),
                 "runtime_config": self._dict_payload(payload, "runtime_config"),
             }
-            if "profile" in inspect.signature(self._role_service.update_role_async).parameters:
+            if "profile" in payload:
                 update_kwargs["profile"] = self._dict_payload(payload, "profile")
             aggregate = await self._role_service.update_role_async(
                 role_id,

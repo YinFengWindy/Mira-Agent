@@ -122,6 +122,22 @@ export function createEmptyNewRoleForm(): NewRoleFormState {
     name: "",
     description: "",
     systemPrompt: "",
+    profile: {
+      character: {
+        profile: "",
+        personality: "",
+        behavior_rules: "",
+      },
+      greetings: {
+        default: "",
+        alternates: [],
+      },
+      knowledge_base: {
+        enabled: false,
+        token_budget: 2000,
+        entries: [],
+      },
+    },
   };
 }
 
@@ -135,7 +151,8 @@ export function createPendingRoleRecord(
     id: roleId,
     name: form.name.trim() || "新角色",
     description: form.description,
-    system_prompt: form.systemPrompt,
+    system_prompt: form.profile?.character?.behavior_rules ?? form.systemPrompt,
+    profile: form.profile,
     runtime_config: {},
     channel_bindings: [],
     proactive: {

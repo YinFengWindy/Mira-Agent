@@ -40,6 +40,7 @@ function createForm(overrides: Partial<NewRoleFormState> = {}): NewRoleFormState
     name: overrides.name ?? "  Mira  ",
     description: overrides.description ?? "A role",
     systemPrompt: overrides.systemPrompt ?? "  Be helpful  ",
+    profile: overrides.profile,
     importId: overrides.importId,
   };
 }
@@ -144,6 +145,41 @@ describe("runRoleCreation", () => {
     assert.equal(harness.state.navigationEntries.at(-1)?.activeRoleId, "new-role");
   });
 
+  it("creates a manual role from its structured profile", async () => {
+    const profile = {
+      character: {
+        profile: "A meticulous archivist.",
+        personality: "Calm and precise.",
+        behavior_rules: "Use concise answers and cite the archive.",
+      },
+      greetings: { default: "Welcome back.", alternates: ["Good to see you."] },
+      knowledge_base: { enabled: true, token_budget: 2000, entries: [] },
+    };
+    const createdRole = createRole({ id: "manual-role", name: "Mira" });
+    const harness = createHarness({
+      invoke: async (request) => {
+        assert.deepEqual(request, {
+          method: "roles.create",
+          payload: {
+            name: "Mira",
+            description: "A role",
+            system_prompt: "Use concise answers and cite the archive.",
+            profile,
+          },
+        });
+        return createResponse({ role: createdRole });
+      },
+      loadedRoles: [createdRole],
+    });
+
+    const created = await runRoleCreation(
+      createForm({ profile, systemPrompt: "legacy prompt" }),
+      harness.args,
+    );
+
+    assert.equal(created, true);
+  });
+
   it("removes the optimistic card and restores the create route after a bridge failure", async () => {
     const harness = createHarness({
       invoke: async () => createResponse({}, { code: "create_failed", message: "保存失败" }),
@@ -199,7 +235,16 @@ describe("role creation form actions", () => {
       openRoleWorkspace: () => undefined,
     });
 
-    assert.deepEqual(form, { name: "", description: "", systemPrompt: "" });
+    assert.deepEqual(form, {
+      name: "",
+      description: "",
+      systemPrompt: "",
+      profile: {
+        character: { profile: "", personality: "", behavior_rules: "" },
+        greetings: { default: "", alternates: [] },
+        knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
+      },
+    });
     assert.deepEqual(feedback, { tone: "success", message: "新建角色表单已重置。" });
   });
 
@@ -216,7 +261,16 @@ describe("role creation form actions", () => {
     assert.equal(cancelRoleCreation({ ...action, creating: true }), false);
     assert.equal(views.length, 0);
     assert.equal(cancelRoleCreation({ ...action, creating: false }), true);
-    assert.deepEqual(form, { name: "", description: "", systemPrompt: "" });
+    assert.deepEqual(form, {
+      name: "",
+      description: "",
+      systemPrompt: "",
+      profile: {
+        character: { profile: "", personality: "", behavior_rules: "" },
+        greetings: { default: "", alternates: [] },
+        knowledge_base: { enabled: false, token_budget: 2000, entries: [] },
+      },
+    });
     assert.equal(feedback, null);
     assert.deepEqual(views, [{ kind: "roles-list" }]);
   });

@@ -90,7 +90,7 @@ export async function runRoleCreation(
   }: RoleCreationWorkflowArgs,
 ): Promise<boolean> {
   const name = form.name.trim();
-  const systemPrompt = form.systemPrompt.trim();
+  const systemPrompt = form.profile?.character?.behavior_rules?.trim() || form.systemPrompt.trim();
   if (!name || (!form.importId && !systemPrompt)) {
     const message = "角色名称和系统提示词不能为空。";
     setError(message);
@@ -147,7 +147,12 @@ export async function runRoleCreation(
 
   const res = await invoke({
     method: "roles.create",
-    payload: { name, description: form.description, system_prompt: systemPrompt },
+    payload: {
+      name,
+      description: form.description,
+      system_prompt: systemPrompt,
+      ...(form.profile ? { profile: form.profile } : {}),
+    },
   });
   await waitForBusy(startedAt);
   setCreating(false);
