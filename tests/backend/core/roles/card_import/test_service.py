@@ -34,7 +34,7 @@ def _card(**overrides):
             "alternate_greetings": ["晚上好。"],
             "character_book": {
                 "entries": [
-                    {"name": "雨天", "keys": ["雨"], "content": "她喜欢听雨。", "constant": True, "priority": 2},
+                    {"title": "雨天", "keys": ["雨"], "content": "她喜欢听雨。", "constant": True, "priority": 2},
                 ]
             },
             "scenario": "discard me",

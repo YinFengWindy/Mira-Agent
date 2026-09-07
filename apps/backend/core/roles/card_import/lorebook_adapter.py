@@ -22,7 +22,7 @@ def normalize_lorebook(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
             continue
         keys = _string_list(raw_entry.get("keys"))
         secondary_keys = _string_list(raw_entry.get("secondary_keys", raw_entry.get("secondaryKeys")))
-        raw_title = raw_entry.get("title", raw_entry.get("name", ""))
+        raw_title = raw_entry.get("title", "")
         title = raw_title.strip() if isinstance(raw_title, str) else ""
         content = raw_entry.get("content", "")
         if not isinstance(content, str) or not content.strip():

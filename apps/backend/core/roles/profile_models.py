@@ -47,7 +47,7 @@ class RoleKnowledgeEntry:
 
         return cls(
             id=_text(payload.get("id")),
-            title=_text(payload.get("title") or payload.get("name")),
+            title=_text(payload.get("title")),
             content=_text(payload.get("content")),
             primary_keys=words("primary_keys"),
             secondary_keys=words("secondary_keys"),
