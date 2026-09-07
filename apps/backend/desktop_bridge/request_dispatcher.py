@@ -5,41 +5,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from desktop_bridge.method_policy import Concurrency, method_policy
+
 logger = logging.getLogger("desktop.bridge.dispatcher")
 
 RequestOperation = Callable[[], Awaitable[None]]
 
-_READ_ONLY_METHODS = frozenset(
-    {
-        "health",
-        "runtime.status",
-        "roles.list",
-        "roles.tasks.list",
-        "novelai.history",
-        "novelai.prompt_tags.list",
-        "stories.list",
-        "stories.get",
-        "stories.cg.list",
-        "session.messagesPage",
-        "session.messagesAround",
-        "session.search",
-        "session.imageHistory",
-    }
-)
-_INTEGRATION_METHODS = frozenset(
-    {
-        "novelai.generate",
-        "novelai.regenerateMessageMedia",
-        "stories.create",
-        "stories.input",
-        "stories.continue",
-        "stories.cg.retry",
-        "stories.cg.regenerate",
-        "observation.analyze",
-        "voice.synthesize",
-        "voice.synthesize.cancel",
-    }
-)
+
 class BridgeRequestDispatcher:
     """Runs bridge requests with bounded concurrency and one conservative write lane."""
 
@@ -88,17 +60,18 @@ class BridgeRequestDispatcher:
         self._tasks.clear()
 
     async def _run(self, method: str, operation: RequestOperation) -> None:
-        if method == "runtime.apply":
+        lane = method_policy(method).concurrency
+        if lane is Concurrency.SETTINGS_APPLY:
             # The runtime transaction owns its serial lock. Waiting for old work
             # must leave transport capacity for health, cancellation and rejection.
             await operation()
             return
-        if method in _INTEGRATION_METHODS:
+        if lane is Concurrency.INTEGRATION:
             async with self._integration_semaphore:
                 async with self._semaphore:
                     await operation()
             return
-        if method in _READ_ONLY_METHODS:
+        if lane is Concurrency.READ_ONLY:
             async with self._semaphore:
                 await operation()
             return

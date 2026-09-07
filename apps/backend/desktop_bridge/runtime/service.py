@@ -13,6 +13,7 @@ from core.common.cleanup import run_cleanup_steps
 from core.roles import RoleStore
 from core.common.runtime_scope import bind_runtime
 from core.common.task_collector import TaskCollector
+from desktop_bridge.method_policy import Handler, OwnerRouting, method_policy
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
 from desktop_bridge.runtime.factory import build_desktop_service
@@ -91,10 +92,9 @@ class ReloadableDesktopService:
         if not isinstance(payload, dict):
             return BridgeResponse(request_id, "response", method,
                                   error=BridgeError("invalid_request", "payload 必须是对象"))
-        if method in {"runtime.status", "runtime.apply"}:
+        policy = method_policy(method)
+        if policy.handler is Handler.SETTINGS:
             try:
-                if not isinstance(payload, dict):
-                    raise RuntimeApplyError("runtime_invalid_request", "payload 必须是对象")
                 result = self.status() if method == "runtime.status" else await self.settings.apply(
                     payload, prepare_service=self._prepare, publish_service=self._publish,
                 )
@@ -105,7 +105,7 @@ class ReloadableDesktopService:
             except RuntimeApplyError as exc:
                 return BridgeResponse(request_id, "response", method,
                                       error=BridgeError(exc.code, str(exc), exc.details))
-        if method in {"roles.tasks.list", "roles.tasks.cancel"}:
+        if policy.handler is Handler.ROLE_TASKS:
             role_id = str(payload.get("role_id") or "")
             try:
                 if method == "roles.tasks.list":
@@ -118,12 +118,10 @@ class ReloadableDesktopService:
             except (KeyError, ValueError, RuntimeError) as error:
                 return BridgeResponse(request_id, "response", method,
                                       error=BridgeError("invalid_request", str(error)))
-        if method not in {"health", "chat.cancel", "voice.turn.cancel", "voice.synthesize.cancel",
-                          "roles.list", "roles.tasks.list", "session.messagesPage"}:
-            if not self.app.accepting_work:
-                return BridgeResponse(request_id, "response", method,
-                                      error=BridgeError("runtime_reloading", "正在更新渠道配置，请稍后重试"))
-        entry = self._owner(method, payload)
+        if not policy.admission_exempt and not self.app.accepting_work:
+            return BridgeResponse(request_id, "response", method,
+                                  error=BridgeError("runtime_reloading", "正在更新渠道配置，请稍后重试"))
+        entry = self._owner(policy.owner_routing, payload)
         if method == "chat.send":
             session_key = f"role:{payload.get('role_id', '')}"
             if any(item.service.chat_service.is_busy(session_key) for item in self._entries):
@@ -140,14 +138,14 @@ class ReloadableDesktopService:
             if not entry.requests:
                 entry.idle.set()
 
-    def _owner(self, method, payload):
+    def _owner(self, routing: OwnerRouting, payload):
         for entry in self._entries:
             service = entry.service
-            if method == "chat.cancel" and service.chat_service.is_busy(str(payload.get("session_key") or "")):
+            if routing is OwnerRouting.BUSY_CHAT_SESSION and service.chat_service.is_busy(str(payload.get("session_key") or "")):
                 return entry
-            if method == "voice.turn.cancel" and service.chat_service.owns_voice_turn(str(payload.get("voice_turn_id") or "")):
+            if routing is OwnerRouting.BUSY_VOICE_TURN and service.chat_service.owns_voice_turn(str(payload.get("voice_turn_id") or "")):
                 return entry
-            if method == "voice.synthesize.cancel" and service.voice_handler.owns_synthesis(str(payload.get("voice_request_id") or "")):
+            if routing is OwnerRouting.BUSY_VOICE_SYNTHESIS and service.voice_handler.owns_synthesis(str(payload.get("voice_request_id") or "")):
                 return entry
         return self._current
 
