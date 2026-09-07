@@ -341,6 +341,53 @@ describe("mergeIncomingSessionDuringSend", () => {
     assert.equal(merged, acknowledgedSession);
   });
 
+  it("does not acknowledge a pending user turn from the assistant reply that inherits its client message id", () => {
+    const pendingUserMessage: SessionMessage = {
+      role: "user",
+      content: "被回复顶掉的消息",
+      metadata: { client_message_id: "desktop-message-shared" },
+    };
+    const replyOnlySession = createSession([
+      {
+        id: "role:mira:2",
+        role: "assistant",
+        content: "回合结束的回复",
+        metadata: { client_message_id: "desktop-message-shared", turn_id: "turn-1" },
+      },
+    ]);
+
+    assert.equal(
+      isPendingUserMessageAcknowledged(pendingUserMessage, replyOnlySession),
+      false,
+    );
+  });
+
+  it("re-inserts the pending user turn when a snapshot only carries its assistant reply", () => {
+    const pendingUserMessage: SessionMessage = {
+      role: "user",
+      content: "被回复顶掉的消息",
+      metadata: { client_message_id: "desktop-message-shared" },
+    };
+    const currentSession = createSession([pendingUserMessage]);
+    const replyOnlySession = createSession([
+      {
+        id: "role:mira:2",
+        role: "assistant",
+        content: "回合结束的回复",
+        metadata: { client_message_id: "desktop-message-shared", turn_id: "turn-1" },
+      },
+    ]);
+
+    const merged = mergeIncomingSessionDuringSend(
+      currentSession,
+      replyOnlySession,
+      false,
+      pendingUserMessage,
+    );
+
+    assert.deepEqual(merged?.messages, [pendingUserMessage, ...replyOnlySession.messages]);
+  });
+
   it("does not acknowledge an identified pending turn from matching historical content", () => {
     const pendingUserMessage: SessionMessage = {
       role: "user",

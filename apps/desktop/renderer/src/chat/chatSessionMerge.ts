@@ -102,7 +102,8 @@ function findMissingOptimisticUserMessage(
   const clientMessageId = normalizeClientMessageId(optimisticUserMessage);
   const alreadyPersisted = incomingSession.messages.some((message) => {
     if (clientMessageId) {
-      return normalizeClientMessageId(message) === clientMessageId;
+      return message.role === optimisticUserMessage.role
+        && normalizeClientMessageId(message) === clientMessageId;
     }
     return areEquivalentMessagesIgnoringMissingIds(optimisticUserMessage, message);
   });
@@ -116,7 +117,8 @@ function findIncomingMessageIndex(
   const clientMessageId = normalizeClientMessageId(message);
   if (clientMessageId) {
     return incomingSession.messages.findIndex((incomingMessage) => (
-      normalizeClientMessageId(incomingMessage) === clientMessageId
+      incomingMessage.role === message.role
+        && normalizeClientMessageId(incomingMessage) === clientMessageId
     ));
   }
   return incomingSession.messages.findIndex((incomingMessage) => (
@@ -151,7 +153,8 @@ function findCurrentPendingUserIndex(
   const clientMessageId = normalizeClientMessageId(pendingUserMessage);
   if (clientMessageId) {
     return currentSession.messages.findIndex((message) => (
-      normalizeClientMessageId(message) === clientMessageId
+      message.role === pendingUserMessage.role
+        && normalizeClientMessageId(message) === clientMessageId
     ));
   }
   return currentSession.messages.findIndex((message) => (
@@ -204,9 +207,10 @@ export function isPendingUserMessageAcknowledged(
 ): boolean {
   const clientMessageId = normalizeClientMessageId(pendingUserMessage);
   return incomingSession.messages.some((message) => {
-    const incomingClientMessageId = normalizeClientMessageId(message);
     if (clientMessageId) {
-      return clientMessageId === incomingClientMessageId;
+      // 助手回复携带同一 client_message_id 时不算确认，必须是同角色的持久化副本。
+      return message.role === pendingUserMessage.role
+        && normalizeClientMessageId(message) === clientMessageId;
     }
     return Boolean(normalizeMessageId(message))
       && areEquivalentMessagesIgnoringMissingIds(pendingUserMessage, message);
@@ -275,9 +279,10 @@ export function mergeIncomingSessionDuringSend(
   const pendingClientMessageId = pendingUserMessage
     ? normalizeClientMessageId(pendingUserMessage)
     : "";
-  const pendingUserIndex = pendingClientMessageId
+  const pendingUserIndex = pendingUserMessage && pendingClientMessageId
     ? currentSession.messages.findIndex((message) => (
-        normalizeClientMessageId(message) === pendingClientMessageId
+        message.role === pendingUserMessage.role
+          && normalizeClientMessageId(message) === pendingClientMessageId
       ))
     : -1;
 
