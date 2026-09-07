@@ -7,8 +7,9 @@ from typing import Any
 from infra.persistence.json_store import atomic_save_json, load_json
 
 from .models import RoleRecord
+from .migration import CURRENT_MANIFEST_VERSION, migrate_manifest_payload
 
-MANIFEST_VERSION = 2
+MANIFEST_VERSION = CURRENT_MANIFEST_VERSION
 
 
 class RoleManifestRepository:
@@ -47,15 +48,11 @@ class RoleManifestRepository:
         for item in roles:
             if not isinstance(item, dict):
                 raise ValueError("角色清单格式无效：角色记录必须是对象")
-        version = int(payload.get("version") or 0)
-        if version != MANIFEST_VERSION:
-            raise ValueError(
-                f"角色清单版本不支持：需要版本 {MANIFEST_VERSION}，实际为 {version}"
-            )
-        return {
-            "version": version,
-            "roles": roles,
-        }
+        migrated, changed = migrate_manifest_payload(payload)
+        if changed:
+            # Persist once so future reads do not repeatedly perform the migration.
+            atomic_save_json(self.manifest_path, migrated, domain="roles")
+        return migrated
 
     def save_roles(self, roles: list[RoleRecord]) -> None:
         self.save_payload([role.to_dict() for role in roles])

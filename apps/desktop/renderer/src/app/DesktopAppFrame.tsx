@@ -29,6 +29,7 @@ import type {
   RoleSearchResult,
   SessionPayload,
 } from "../shared/types";
+import type { RoleCardImportState } from "./roleCardImportState";
 import { TitleBar } from "../shell/TitleBar";
 import type { WorkspaceFeedback } from "./appState";
 
@@ -133,6 +134,9 @@ type DesktopAppFrameProps = {
   onCreateNewRole: () => void;
   onResetNewRoleForm: () => void;
   onUpdateNewRoleForm: React.Dispatch<React.SetStateAction<NewRoleFormState>>;
+  roleCardImport: RoleCardImportState;
+  onPreviewRoleCard: () => void;
+  onCancelRoleCardImport: () => void;
   detailRoleId: string;
   activeIllustration: string;
   previewAvatar: string | null;
@@ -263,6 +267,9 @@ export function DesktopAppFrame({
   onCreateNewRole,
   onResetNewRoleForm,
   onUpdateNewRoleForm,
+  roleCardImport,
+  onPreviewRoleCard,
+  onCancelRoleCardImport,
   detailRoleId,
   activeIllustration,
   previewAvatar,
@@ -520,6 +527,9 @@ export function DesktopAppFrame({
               onCreateRole={onCreateNewRole}
               onResetForm={onResetNewRoleForm}
               onUpdateForm={onUpdateNewRoleForm}
+              roleCardImport={roleCardImport}
+              onPreviewRoleCard={onPreviewRoleCard}
+              onCancelRoleCardImport={onCancelRoleCardImport}
             />
           ) : null}
           {mainView.kind === "role-detail" ? (

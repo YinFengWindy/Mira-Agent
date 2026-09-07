@@ -4,13 +4,46 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import MagicMock
 
-from bootstrap.proactive import build_proactive_runtime
+from bootstrap.proactive import build_proactive_runtime, _build_role_prompt_resolver
+from core.roles import RoleStore
 from agent.core.proactive_turn.gates import (
     ProactiveGateAdapter,
     ProactiveGateContext,
     ProactiveGateDecision,
 )
 from proactive_v2.config import ProactiveConfig
+
+
+def test_proactive_role_prompt_compiles_current_profile_and_always_active_knowledge(tmp_path):
+    store = RoleStore(tmp_path)
+    store.create_role(
+        name="Mira", role_id="mira", system_prompt="过时的规则",
+        runtime_config={"mood_catalog": ["平静"]},
+        profile={
+            "character": {"profile": "{{char}}的资料", "nickname": "小栞", "personality": "温柔", "response_constraints": "简洁回应{{user}}"},
+            "knowledge_base": {"enabled": True, "entries": [
+                {"content": "常驻知识", "always_active": True},
+                {"content": "消息关键词知识", "primary_keys": ["Mira"]},
+                {"content": "已停用知识", "enabled": False, "always_active": True},
+            ]},
+        },
+    )
+    resolve = _build_role_prompt_resolver(tmp_path, "mira")
+
+    prompt = resolve()
+    assert prompt.startswith("[role_identity]\nMira")
+    assert "小栞的资料" in prompt and "温柔" in prompt and "简洁回应用户" in prompt
+    assert "常驻知识" in prompt
+    assert prompt.index("[role_knowledge]") < prompt.index("[role_response_constraints]")
+    assert "过时的规则" not in prompt
+    assert "消息关键词知识" not in prompt and "已停用知识" not in prompt
+    assert "Mood Output Contract" not in prompt
+
+    store.update_role("mira", name="Shiori", profile={"character": {"response_constraints": "只回复一句"}})
+    updated = resolve()
+    assert updated.startswith("[role_identity]\nShiori")
+    assert "只回复一句" in updated
+    assert "常驻知识" not in updated and "小栞" not in updated
 
 
 def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkeypatch):

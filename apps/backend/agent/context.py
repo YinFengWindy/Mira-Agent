@@ -313,6 +313,7 @@ class ContextBuilder:
         role_section = build_role_system_section(
             workspace=self.workspace,
             session_metadata=session_metadata,
+            current_message=request.current_message,
         )
         if role_section is not None:
             insert_index = 1 if role_cache_prefix is not None else 0

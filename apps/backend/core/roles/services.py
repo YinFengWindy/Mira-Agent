@@ -128,6 +128,7 @@ class RoleRepository:
         system_prompt: str,
         description: str = "",
         background: str = "",
+        profile: dict[str, Any] | None = None,
         runtime_config: dict[str, Any] | None = None,
         avatar_source: str | Path | None = None,
         illustration_sources: Sequence[str | Path] | None = None,
@@ -137,6 +138,7 @@ class RoleRepository:
             description=description,
             system_prompt=system_prompt,
             background=background,
+            profile=profile,
             runtime_config=runtime_config,
             role_id=role_id,
             avatar_source=avatar_source,
@@ -252,15 +254,13 @@ class RoleMemoryService:
 
     def seed_role_memory(self, role: RoleRecord) -> dict[str, Any]:
         """同步初始化角色记忆，供非事件循环调用方使用。"""
+        needs_self_seed = self._needs_self_seed(role.id)
         root = self.ensure_initialized(role)
         state = dict(role.memory_init_state or {})
         changed = False
 
         self_path = root / "SELF.md"
-        self_text = (
-            self_path.read_text(encoding="utf-8").strip() if self_path.exists() else ""
-        )
-        if not self_text and self._self_seed_generator is not None:
+        if needs_self_seed and self._self_seed_generator is not None:
             seeded_self = str(self._self_seed_generator.generate(role) or "").strip()
             if seeded_self:
                 self_path.write_text(
@@ -274,15 +274,13 @@ class RoleMemoryService:
 
     async def seed_role_memory_async(self, role: RoleRecord) -> dict[str, Any]:
         """异步初始化角色记忆，避免在运行中的事件循环里再次调用 asyncio.run。"""
+        needs_self_seed = self._needs_self_seed(role.id)
         root = self.ensure_initialized(role)
         state = dict(role.memory_init_state or {})
         changed = False
 
         self_path = root / "SELF.md"
-        self_text = (
-            self_path.read_text(encoding="utf-8").strip() if self_path.exists() else ""
-        )
-        if not self_text and self._self_seed_generator is not None:
+        if needs_self_seed and self._self_seed_generator is not None:
             seeded_self = str(await self._generate_self_async(role) or "").strip()
             if seeded_self:
                 self_path.write_text(
@@ -293,6 +291,11 @@ class RoleMemoryService:
                 changed = True
 
         return self._finalize_seed_state(role, root, state, changed)
+
+    def _needs_self_seed(self, role_id: str) -> bool:
+        # Inspect before creating the default template, which is itself nonempty.
+        path = self.memory_root(role_id) / "SELF.md"
+        return not path.exists() or not path.read_text(encoding="utf-8").strip()
 
     def _finalize_seed_state(
         self,
@@ -623,6 +626,7 @@ class RoleAggregateService:
         system_prompt: str,
         description: str = "",
         background: str = "",
+        profile: dict[str, Any] | None = None,
         runtime_config: dict[str, Any] | None = None,
         avatar_source: str | Path | None = None,
         illustration_sources: Sequence[str | Path] | None = None,
@@ -632,6 +636,7 @@ class RoleAggregateService:
             description=description,
             system_prompt=system_prompt,
             background=background,
+            profile=profile,
             runtime_config=runtime_config,
             role_id=role_id,
             avatar_source=avatar_source,
@@ -653,6 +658,7 @@ class RoleAggregateService:
         system_prompt: str,
         description: str = "",
         background: str = "",
+        profile: dict[str, Any] | None = None,
         runtime_config: dict[str, Any] | None = None,
         avatar_source: str | Path | None = None,
         illustration_sources: Sequence[str | Path] | None = None,
@@ -663,6 +669,7 @@ class RoleAggregateService:
             description=description,
             system_prompt=system_prompt,
             background=background,
+            profile=profile,
             runtime_config=runtime_config,
             role_id=role_id,
             avatar_source=avatar_source,

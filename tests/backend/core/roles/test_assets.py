@@ -1,8 +1,26 @@
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
+from core.roles import assets as assets_module
 
 from core.roles.assets import RoleAssetStore
+
+
+def test_failed_asset_copy_removes_its_partial_target(tmp_path, monkeypatch):
+    roles_dir = tmp_path / "roles"
+    store = RoleAssetStore(roles_dir, roles_dir / "assets")
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image")
+
+    def partial_copy(_source, target):
+        Path(target).write_bytes(b"partial")
+        raise PermissionError("copy unavailable")
+
+    monkeypatch.setattr(assets_module.shutil, "copy2", partial_copy)
+    with pytest.raises(PermissionError, match="copy unavailable"):
+        store.import_asset("mira", source, prefix="avatar")
+    assert list((roles_dir / "assets" / "mira").iterdir()) == []
 
 
 def test_asset_store_rejects_paths_outside_role_assets(tmp_path) -> None:

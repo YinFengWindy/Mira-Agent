@@ -1,0 +1,150 @@
+import type React from "react";
+import type { BridgeResponse } from "../../../src/bridge/shared";
+import type { AppMainView, NewRoleFormState, PendingRoleCardAction, RoleRecord } from "../shared/types";
+import { createEmptyNewRoleForm, createPendingRoleRecord, waitForMinimumRoleCardBusy } from "./appState";
+import type { NavigationEntry } from "./appState";
+
+/** Workspace dependencies used to activate and navigate to a created role. */
+export type RoleCreationControllerArgs = {
+  activeRoleIdRef: React.MutableRefObject<string>;
+  setPendingRoleCardAction: React.Dispatch<React.SetStateAction<PendingRoleCardAction>>;
+  setWorkspaceFeedback: React.Dispatch<React.SetStateAction<{ tone: "success" | "error"; message: string } | null>>;
+  setError: React.Dispatch<React.SetStateAction<string>>;
+  setRoles: React.Dispatch<React.SetStateAction<RoleRecord[]>>;
+  setActiveRoleId: React.Dispatch<React.SetStateAction<string>>;
+  openRoleWorkspace: (
+    nextView: Extract<AppMainView, { kind: "roles-list" | "role-create" | "role-detail" | "role-assets" }>,
+    options?: { recordHistory?: boolean },
+  ) => void;
+  buildNavigationEntry: (view: AppMainView, roleId?: string) => NavigationEntry;
+  replaceNavigationEntry: (entry: NavigationEntry) => void;
+  loadRolesFromBridge: () => Promise<RoleRecord[] | null>;
+  openRole: (roleId: string, roleOverride?: RoleRecord | null, options?: { recordHistory?: boolean }) => Promise<boolean>;
+  applyRoleSnapshot: (role: RoleRecord) => void;
+};
+
+/** Injected effects for the shared manual and imported role creation workflow. */
+export type RoleCreationWorkflowArgs = RoleCreationControllerArgs & {
+  setCreating: React.Dispatch<React.SetStateAction<boolean>>;
+  invoke: (request: { method: string; payload: Record<string, unknown> }) => Promise<BridgeResponse>;
+  waitForBusy?: (startedAt: number) => Promise<void>;
+  createPendingRoleId?: () => string;
+};
+
+type FormActionArgs = Pick<RoleCreationControllerArgs, "setWorkspaceFeedback" | "openRoleWorkspace"> & {
+  updateNewRoleForm: (next: NewRoleFormState) => void;
+};
+
+/** Resets the new-role draft and its feedback. */
+export function resetRoleCreationForm({ updateNewRoleForm, setWorkspaceFeedback }: FormActionArgs) {
+  updateNewRoleForm(createEmptyNewRoleForm());
+  setWorkspaceFeedback({ tone: "success", message: "新建角色表单已重置。" });
+}
+
+/** Leaves role creation only when there is no creation request in flight. */
+export function cancelRoleCreation({ creating, updateNewRoleForm, setWorkspaceFeedback, openRoleWorkspace }: FormActionArgs & { creating: boolean }) {
+  if (creating) return false;
+  updateNewRoleForm(createEmptyNewRoleForm());
+  setWorkspaceFeedback(null);
+  openRoleWorkspace({ kind: "roles-list" });
+  return true;
+}
+
+function activateCreatedRole(role: RoleRecord, pendingId: string | undefined, args: RoleCreationWorkflowArgs) {
+  args.activeRoleIdRef.current = role.id;
+  args.setActiveRoleId(role.id);
+  args.setRoles((current) => [role, ...current.filter((item) => item.id !== role.id && item.id !== pendingId)]);
+  args.applyRoleSnapshot(role);
+}
+
+async function completeRoleCreation(role: RoleRecord, pendingId: string | undefined, imported: boolean, args: RoleCreationWorkflowArgs) {
+  activateCreatedRole(role, pendingId, args);
+  const nextRoles = await args.loadRolesFromBridge();
+  const resolvedRole = nextRoles?.find((item) => item.id === role.id) ?? role;
+  activateCreatedRole(resolvedRole, pendingId, args);
+  if (!await args.openRole(role.id, resolvedRole, { recordHistory: false })) {
+    throw new Error("无法打开已创建的角色会话");
+  }
+  const destination: AppMainView = imported ? { kind: "role-detail", roleId: role.id } : { kind: "roles-list" };
+  args.openRoleWorkspace(destination, { recordHistory: false });
+  args.replaceNavigationEntry(args.buildNavigationEntry(destination, role.id));
+  args.setWorkspaceFeedback({ tone: "success", message: imported ? "角色卡导入成功。" : "角色创建成功。" });
+}
+
+function startOptimisticCreation(form: NewRoleFormState, pendingId: string, args: RoleCreationWorkflowArgs) {
+  const pendingRole = createPendingRoleRecord(pendingId, form);
+  args.setPendingRoleCardAction({ roleId: pendingId, action: "create" });
+  args.setRoles((current) => [pendingRole, ...current]);
+  args.applyRoleSnapshot(pendingRole);
+  args.openRoleWorkspace({ kind: "roles-list" }, { recordHistory: false });
+  args.replaceNavigationEntry(args.buildNavigationEntry({ kind: "roles-list" }, pendingId));
+}
+
+function restoreFailedCreation(pendingId: string, previousRoleId: string, args: RoleCreationWorkflowArgs) {
+  args.setRoles((current) => current.filter((item) => item.id !== pendingId));
+  args.activeRoleIdRef.current = previousRoleId;
+  args.setActiveRoleId(previousRoleId);
+  args.openRoleWorkspace({ kind: "role-create" }, { recordHistory: false });
+  args.replaceNavigationEntry(args.buildNavigationEntry({ kind: "role-create" }, previousRoleId));
+}
+
+/** Creates a role through either bridge entry point, then refreshes and activates it once. */
+export async function runRoleCreation(form: NewRoleFormState, args: RoleCreationWorkflowArgs) {
+  const name = form.name.trim();
+  const character = form.profile?.character;
+  const systemPrompt = character
+    ? [character.behavior_rules, character.profile, character.personality, character.response_constraints].find((text) => text?.trim())?.trim() ?? ""
+    : form.systemPrompt.trim();
+  if (!name || (!form.importId && !systemPrompt)) {
+    const message = "角色名称和系统提示词不能为空。";
+    args.setError(message);
+    args.setWorkspaceFeedback({ tone: "error", message: `角色创建失败：${message}` });
+    return false;
+  }
+
+  const imported = Boolean(form.importId);
+  const pendingId = imported ? undefined : (args.createPendingRoleId ?? (() => `pending-create:${Date.now()}`))();
+  const previousRoleId = args.activeRoleIdRef.current;
+  const startedAt = Date.now();
+  let createdRole: RoleRecord | undefined;
+  args.setCreating(true);
+  args.setError("");
+  args.setWorkspaceFeedback(null);
+  try {
+    if (pendingId) startOptimisticCreation(form, pendingId, args);
+    const fields = {
+      name,
+      description: form.description,
+      ...(!imported || !form.profile ? { system_prompt: systemPrompt } : {}),
+      ...(form.profile ? { profile: form.profile } : {}),
+    };
+    const response = await args.invoke(imported ? {
+      method: "roles.cardImport.commit",
+      payload: { import_id: form.importId, overrides: fields, emotion_selections: form.emotionSelections ?? {} },
+    } : { method: "roles.create", payload: fields });
+    if (response.error) throw new Error(response.error.message);
+    createdRole = response.payload.role as RoleRecord;
+    if (!createdRole?.id) throw new Error("创建结果缺少角色信息");
+    if (pendingId) await (args.waitForBusy ?? waitForMinimumRoleCardBusy)(startedAt);
+    await completeRoleCreation(createdRole, pendingId, imported, args);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    args.setError(message);
+    if (createdRole?.id) {
+      // Persistence has succeeded: keep the role so retrying navigation cannot create it again.
+      activateCreatedRole(createdRole, pendingId, args);
+      const destination = { kind: "role-detail" as const, roleId: createdRole.id };
+      args.openRoleWorkspace(destination, { recordHistory: false });
+      args.replaceNavigationEntry(args.buildNavigationEntry(destination, createdRole.id));
+      args.setWorkspaceFeedback({ tone: "error", message: `角色已创建，打开失败：${message}` });
+      return true;
+    }
+    if (pendingId) restoreFailedCreation(pendingId, previousRoleId, args);
+    args.setWorkspaceFeedback({ tone: "error", message: `${imported ? "角色卡导入" : "角色创建"}失败：${message}` });
+    return false;
+  } finally {
+    args.setCreating(false);
+    args.setPendingRoleCardAction(null);
+  }
+}

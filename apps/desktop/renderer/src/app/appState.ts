@@ -88,12 +88,20 @@ export function navigationEntriesEqual(left: NavigationEntry, right: NavigationE
   );
 }
 
+function createEmptyRoleProfile() {
+  return {
+    character: { profile: "", personality: "", behavior_rules: "", response_constraints: "" },
+    knowledge_base: { enabled: false, entries: [] },
+  };
+}
+
 /** Creates an empty role-edit form state. */
 export function createEmptyRoleForm(): RoleFormState {
   return {
     name: "",
     description: "",
     systemPrompt: "",
+    profile: createEmptyRoleProfile(),
     nsfwMemoryEnabled: false,
     autoSceneCgEnabled: false,
     desktopPetEnabled: false,
@@ -122,6 +130,7 @@ export function createEmptyNewRoleForm(): NewRoleFormState {
     name: "",
     description: "",
     systemPrompt: "",
+    profile: createEmptyRoleProfile(),
   };
 }
 
@@ -135,7 +144,8 @@ export function createPendingRoleRecord(
     id: roleId,
     name: form.name.trim() || "新角色",
     description: form.description,
-    system_prompt: form.systemPrompt,
+    system_prompt: form.profile?.character?.behavior_rules ?? form.systemPrompt,
+    profile: form.profile,
     runtime_config: {},
     channel_bindings: [],
     proactive: {

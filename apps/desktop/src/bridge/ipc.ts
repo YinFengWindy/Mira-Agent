@@ -79,6 +79,26 @@ async function importPetPackageSelection(paths: string[], importsRoot: string): 
   return imported;
 }
 
+async function stageRoleCardSelection(paths: string[], importsRoot: string): Promise<string[]> {
+  const staged: string[] = [];
+  const destinationDirectory = join(importsRoot, "role-cards");
+  await mkdir(destinationDirectory, { recursive: true });
+  for (const source of paths) {
+    const extension = extname(source).toLowerCase();
+    if (![".png", ".apng", ".json", ".charx"].includes(extension)) {
+      throw new Error("角色卡必须是 PNG、APNG、JSON 或 CHARX 文件");
+    }
+    const sourceStats = await stat(source);
+    if (!sourceStats.isFile() || sourceStats.size > maxLocalAssetBytes) {
+      throw new Error("角色卡无效或超过 32MB");
+    }
+    const destination = join(destinationDirectory, `${randomUUID()}-${basename(source)}`);
+    await copyFile(source, destination);
+    staged.push(destination);
+  }
+  return staged;
+}
+
 /** Registers all IPC handlers exposed through the desktop preload bridge. */
 export function registerDesktopIpc({
   bridge,
@@ -216,6 +236,20 @@ export function registerDesktopIpc({
       return assetTransport([], []);
     }
     return await importPickerSelection(result.filePaths, localAssetImportsRoot, localAssets);
+  });
+  ipcMain.handle("desktop:pick-role-card", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [{ name: "Role cards", extensions: ["png", "apng", "json", "charx"] }],
+    });
+    if (result.canceled) return assetTransport([], []);
+    const stagedPaths = await stageRoleCardSelection(result.filePaths, localAssetImportsRoot);
+    const assets = stagedPaths.map((path) => {
+      const reference = localAssets.grantPath(path);
+      if (!reference) throw new Error("staged role card is outside the trusted workspace");
+      return reference;
+    });
+    return assetTransport(stagedPaths, assets);
   });
   ipcMain.handle("desktop:pet-sync", async (_event: IpcMainInvokeEvent, forceVisible?: unknown) => {
     await desktopPet.sync(typeof forceVisible === "boolean" ? forceVisible : undefined);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import inspect
 from typing import Any
 
 from core.roles import RoleAggregateService, RolePetPackageService, RoleStore
@@ -22,6 +23,7 @@ class DesktopRoleRequestHandler:
         role_differences: RoleDifferenceGenerationService,
         role_presenter: DesktopRolePresenter,
         voice_handler: DesktopVoiceHandler,
+        card_import_service: Any | None = None,
         publish_event: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> None:
         self._role_service = role_service
@@ -30,6 +32,7 @@ class DesktopRoleRequestHandler:
         self._role_differences = role_differences
         self._role_presenter = role_presenter
         self._voice_handler = voice_handler
+        self._card_import_service = card_import_service
         self._publish_event = publish_event
 
     async def handle(
@@ -49,6 +52,7 @@ class DesktopRoleRequestHandler:
                 description=str(payload.get("description") or ""),
                 system_prompt=str(payload.get("system_prompt") or ""),
                 background=str(payload.get("background") or ""),
+                profile=self._dict_payload(payload, "profile"),
                 runtime_config=self._dict_payload(payload, "runtime_config"),
                 avatar_source=str(payload.get("avatar_source") or "").strip() or None,
                 illustration_sources=self._string_list_payload(
@@ -56,16 +60,56 @@ class DesktopRoleRequestHandler:
                 ),
             )
             return {"role": self._role_presenter.serialize(aggregate.role)}
+        if method in {"roles.cardImport.preview", "roles.cardImport.commit", "roles.cardImport.cancel"}:
+            service = self._card_import_service
+            if service is None:
+                raise RuntimeError("role card import service unavailable")
+            operation = {
+                "roles.cardImport.preview": "preview",
+                "roles.cardImport.commit": "commit",
+                "roles.cardImport.cancel": "cancel",
+            }[method]
+            handler = getattr(service, operation, None)
+            if not callable(handler):
+                raise RuntimeError(f"role card import service lacks {operation} operation")
+            argument = dict(payload)
+            result = handler(argument)
+            if inspect.isawaitable(result):
+                result = await result
+            if hasattr(result, "to_dict") and callable(result.to_dict):
+                result = result.to_dict()
+            if not isinstance(result, dict):
+                raise RuntimeError(f"role card import {operation} returned invalid payload")
+            if operation == "commit":
+                role = result.get("role")
+                role_id = str(role.get("id") or "").strip() if isinstance(role, dict) else ""
+                if not role_id:
+                    raise RuntimeError("role card import commit returned no role")
+                result = {
+                    **result,
+                    "role": self._role_presenter.serialize(
+                        self._role_service.repository.get_required(role_id)
+                    ),
+                }
+            return result
         if method == "roles.update":
             role_id = str(payload.get("role_id") or "")
             previous = self._role_service.repository.get_required(role_id)
+            update_kwargs: dict[str, Any] = {
+                "name": payload.get("name"),
+                "description": payload.get("description"),
+                "system_prompt": payload.get("system_prompt"),
+                "background": payload.get("background"),
+                "runtime_config": self._dict_payload(payload, "runtime_config"),
+            }
+            if "profile" in payload:
+                update_kwargs["profile"] = self._merge_profile_payload(
+                    previous.profile.to_dict(),
+                    self._dict_payload(payload, "profile"),
+                )
             aggregate = await self._role_service.update_role_async(
                 role_id,
-                name=payload.get("name"),
-                description=payload.get("description"),
-                system_prompt=payload.get("system_prompt"),
-                background=payload.get("background"),
-                runtime_config=self._dict_payload(payload, "runtime_config"),
+                **update_kwargs,
                 channel_bindings=self._list_payload(payload, "channel_bindings"),
                 proactive=self._dict_payload(payload, "proactive"),
                 avatar_source=str(payload.get("avatar_source") or "").strip() or None,
@@ -164,6 +208,22 @@ class DesktopRoleRequestHandler:
     def _dict_payload(payload: dict[str, Any], key: str) -> dict[str, Any] | None:
         value = payload.get(key)
         return dict(value) if isinstance(value, dict) else None
+
+    @staticmethod
+    def _merge_profile_payload(
+        current: dict[str, Any], patch: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Applies one bridge profile patch without discarding unrelated role fields."""
+        if patch is None:
+            return dict(current)
+        merged = dict(current)
+        for key, value in patch.items():
+            existing = merged.get(key)
+            if isinstance(existing, dict) and isinstance(value, dict):
+                merged[key] = {**existing, **value}
+            else:
+                merged[key] = value
+        return merged
 
     @staticmethod
     def _list_payload(payload: dict[str, Any], key: str) -> list[Any] | None:

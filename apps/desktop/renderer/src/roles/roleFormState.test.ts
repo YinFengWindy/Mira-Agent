@@ -63,6 +63,31 @@ describe("roleFormState", () => {
     );
   });
 
+  it("keeps the structured profile in the detail draft and tracks its edits", () => {
+    const role = {
+      ...createRole(),
+      profile: {
+        character: {
+          profile: "A meticulous archivist.",
+          personality: "Calm and precise.",
+          behavior_rules: "Keep focus.",
+        },
+        knowledge_base: { enabled: true, entries: [] },
+      },
+    };
+    const form = createRoleFormFromRole(role);
+
+    assert.deepEqual(form.profile, role.profile);
+    assert.equal(isRoleFormDirty(form, role), false);
+    assert.equal(isRoleFormDirty({
+      ...form,
+      profile: {
+        ...form.profile,
+        character: { ...form.profile?.character, personality: "Warm and precise." },
+      },
+    }, role), true);
+  });
+
   it("keeps desktop-pet enablement inside the saved role form", () => {
     const role = createRole();
     const form = createRoleFormFromRole(role);

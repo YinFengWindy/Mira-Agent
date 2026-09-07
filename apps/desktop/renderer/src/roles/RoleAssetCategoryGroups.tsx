@@ -45,7 +45,9 @@ export function RoleAssetCategoryGroups({
     categories: RoleAssetCategory[];
     bindings: Record<string, string>;
   } | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    () => new Set(getRoleAssetCategories(role).map((category) => category.id)),
+  );
   const [creating, setCreating] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [draggedAssetPath, setDraggedAssetPath] = useState("");
@@ -64,6 +66,11 @@ export function RoleAssetCategoryGroups({
   useEffect(() => {
     setOrganizationDraft(null);
   }, [role?.id, role?.updated_at]);
+
+  useEffect(() => {
+    setExpandedIds(new Set(getRoleAssetCategories(role).map((category) => category.id)));
+    // Re-expand only when switching roles so manual collapse survives saves.
+  }, [role?.id]);
 
   async function persistOrganization(
     nextCategories: RoleAssetCategory[],

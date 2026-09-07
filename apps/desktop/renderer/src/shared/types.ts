@@ -35,6 +35,10 @@ export type RoleRecord = {
   name: string;
   description: string;
   system_prompt: string;
+  profile?: {
+    character?: { profile?: string; personality?: string; behavior_rules?: string };
+    knowledge_base?: RoleKnowledgeBase;
+  };
   runtime_config: Record<string, unknown>;
   channel_bindings?: RoleChannelBinding[];
   proactive?: RoleProactiveConfig;
@@ -262,6 +266,7 @@ export type RoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  profile?: RoleProfileDraft;
   nsfwMemoryEnabled: boolean;
   autoSceneCgEnabled: boolean;
   channelBindings?: RoleChannelBinding[];
@@ -297,6 +302,82 @@ export type NewRoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  profile?: RoleProfileDraft;
+  /** Server-owned staging import id; never a renderer filesystem path. */
+  importId?: string;
+  /** Explicit choices for duplicate emotion assets, keyed by mood name. */
+  emotionSelections?: Record<string, string>;
+};
+
+/** One editable normalized role knowledge entry. */
+export type RoleKnowledgeEntry = {
+  id?: string;
+  title?: string;
+  content?: string;
+  keywords?: string[];
+  primary_keys?: string[];
+  secondary_keys?: string[];
+  enabled?: boolean;
+  always_active?: boolean;
+  case_sensitive?: boolean;
+  priority?: number;
+  insertion_order?: number;
+  raw_source?: Record<string, unknown>;
+};
+
+/** Role-owned knowledge settings; matching has no separate token budget. */
+export type RoleKnowledgeBase = {
+  enabled?: boolean;
+  entries?: RoleKnowledgeEntry[];
+  raw_source?: Record<string, unknown>;
+};
+
+/** Non-runtime metadata retained from an imported character card. */
+export type RoleImportProvenance = {
+  format: string;
+  card_version?: string | null;
+  creator?: string;
+  tags?: string[];
+  source?: string[];
+  created_at?: string | number | null;
+  updated_at?: string | number | null;
+  imported_at?: string;
+};
+
+/** Editable structured role data shared by card import and role persistence. */
+export type RoleProfileDraft = {
+  character?: { profile?: string; personality?: string; behavior_rules?: string; response_constraints?: string; nickname?: string };
+  knowledge_base?: RoleKnowledgeBase;
+  import_provenance?: RoleImportProvenance;
+};
+
+/** A decoded candidate image in a staged import. */
+export type RoleCardImportAsset = {
+  asset_id: string;
+  kind?: string;
+  name?: string | null;
+  path?: string;
+  media_type?: string | null;
+  size?: number;
+  preview_abs?: string;
+};
+
+/** Structured preview returned by the role-card import bridge. */
+export type RoleCardImportPreview = {
+  import_id: string;
+  system_prompt?: string;
+  name?: string;
+  description?: string;
+  profile?: RoleProfileDraft;
+  report?: {
+    adapted_fields?: string[];
+    discarded_fields?: string[];
+    unsupported_macros?: string[];
+    unsupported_resources?: string[];
+    unsupported_rules?: string[];
+  };
+  assets?: RoleCardImportAsset[];
+  provenance?: RoleImportProvenance | null;
 };
 
 /** Pending role card action shown directly in the role list. */

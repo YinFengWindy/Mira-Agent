@@ -207,6 +207,8 @@ export type DesktopApi = {
   invoke(request: Omit<BridgeRequest, "id">): Promise<BridgeResponse>;
   onEvent(listener: (event: BridgeEvent) => void): () => void;
   pickImages(options?: { multiple?: boolean }): Promise<string[]>;
+  /** Selects one role-card file into a temporary, non-role staging directory. */
+  pickRoleCard(): Promise<string | null>;
   pickChatAttachments(options?: { multiple?: boolean }): Promise<string[]>;
   /** Opens an http, https, or mailto link through the operating system. */
   openExternal(url: string): Promise<ExternalLinkOpenResult>;
