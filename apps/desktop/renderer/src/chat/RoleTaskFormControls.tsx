@@ -42,7 +42,7 @@ export function RoleTaskSegmentedControl<Value extends string>({
             key={option.value}
             className={cx(
               "h-8 rounded-md px-2 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-50",
-              selected ? "bg-gradient-accent text-white shadow-soft" : "text-ink-muted hover:bg-white/70 hover:text-ink-secondary",
+              selected ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-muted hover:bg-white/70 hover:text-ink-secondary",
               focusResetClass,
             )}
             type="button"

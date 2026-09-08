@@ -461,7 +461,7 @@ export function ChatSurface({
   }
 
   return (
-    <section className="chat-surface relative grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] overflow-hidden bg-[var(--chat-bg)]">
+    <section className="chat-surface relative grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] overflow-hidden bg-gradient-app bg-fixed">
       <button
         className="absolute right-4 top-4 z-[5] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-ink-muted transition hover:bg-black/5 hover:text-ink-secondary focus:outline-none"
         type="button"
@@ -600,7 +600,7 @@ export function ChatSurface({
                 <button
                   className={cx(
                     sidebarModeButtonClass,
-                    sidebarMode === "status" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink",
+                    sidebarMode === "status" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink",
                     !hasStatusContent && "cursor-default opacity-45 hover:text-ink-secondary",
                   )}
                   type="button"
@@ -613,7 +613,7 @@ export function ChatSurface({
                   </svg>
                 </button>
                 <button
-                  className={cx(sidebarModeButtonClass, sidebarMode === "tasks" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink")}
+                  className={cx(sidebarModeButtonClass, sidebarMode === "tasks" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink")}
                   type="button"
                   aria-label="任务侧栏"
                   onClick={() => setSidebarMode("tasks")}
@@ -623,7 +623,7 @@ export function ChatSurface({
                 <button
                   className={cx(
                     sidebarModeButtonClass,
-                    sidebarMode === "images" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink",
+                    sidebarMode === "images" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink",
                   )}
                   type="button"
                   aria-label="图片侧栏"

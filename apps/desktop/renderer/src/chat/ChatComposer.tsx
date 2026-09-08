@@ -255,7 +255,7 @@ export const ChatComposer = React.memo(function ChatComposer({
             />
             {sending ? (
               <button
-                className="send-btn grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-full border-0 bg-gradient-accent p-0 text-white shadow-soft transition-[filter] hover:brightness-105 disabled:cursor-default disabled:opacity-40"
+                className="send-btn grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-full border-0 bg-gradient-accent p-0 text-ink shadow-soft transition-[filter] hover:brightness-105 disabled:cursor-default disabled:opacity-40"
                 type="button"
                 aria-label="中止回复"
                 onClick={onCancelChat}
@@ -264,7 +264,7 @@ export const ChatComposer = React.memo(function ChatComposer({
                 <Stop className="h-[15px] w-[15px] fill-current" />
               </button>
             ) : (
-              <button className="send-btn grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-full border-0 bg-gradient-accent p-0 text-white shadow-soft transition-[filter] hover:brightness-105 disabled:cursor-default disabled:opacity-40" type="button" aria-label="发送消息" onClick={() => void submitMessage()} disabled={!activeRoleId || !canSubmit || !bridgeReady}>
+              <button className="send-btn grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-full border-0 bg-gradient-accent p-0 text-ink shadow-soft transition-[filter] hover:brightness-105 disabled:cursor-default disabled:opacity-40" type="button" aria-label="发送消息" onClick={() => void submitMessage()} disabled={!activeRoleId || !canSubmit || !bridgeReady}>
                 <SendIcon className="h-[15px] w-[15px] fill-current" />
               </button>
             )}

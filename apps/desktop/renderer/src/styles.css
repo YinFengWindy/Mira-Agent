@@ -123,8 +123,13 @@
     --color-danger-text: var(--danger-700);     /* 6.0:1 */
 
     /* ---------- gradients ---------- */
-    --gradient-accent: linear-gradient(135deg in oklab, var(--blue-grad), var(--pink-grad));
-    --gradient-accent-soft: linear-gradient(135deg in oklab, var(--blue-100), var(--pink-100));
+    /* pastel accent gradient: same blue->pink family as the app base, one
+       tint deeper so controls read as controls; pair with ink text (13:1) */
+    --gradient-accent: linear-gradient(135deg in oklab, var(--blue-150), var(--pink-150));
+    /* saturated variant for text gradients and thin data marks that would
+       vanish in pastel; white/ink both pass on it (see --blue-grad note) */
+    --gradient-accent-strong: linear-gradient(135deg in oklab, var(--blue-grad), var(--pink-grad));
+    --gradient-accent-soft: linear-gradient(135deg in oklab, var(--blue-50), var(--pink-50));
     --gradient-app: linear-gradient(160deg in oklab, var(--blue-100), var(--lavender-50) 45%, var(--pink-100));
 
     /* ---------- radius ---------- */
@@ -307,12 +312,16 @@
     background-image: var(--gradient-accent-soft);
   }
 
+  .bg-gradient-accent-strong {
+    background-image: var(--gradient-accent-strong);
+  }
+
   .bg-gradient-app {
     background-image: var(--gradient-app);
   }
 
   .text-gradient-accent {
-    background-image: var(--gradient-accent);
+    background-image: var(--gradient-accent-strong);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
