@@ -71,7 +71,7 @@ export function ChatStatusSidebar({
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-accent-soft">
           <div
-            className="h-full rounded-full bg-gradient-accent-strong transition-[width] duration-300"
+            className="h-full rounded-full bg-gradient-accent-medium transition-[width] duration-300"
             style={{ width: `${normalizedLoneliness}%` }}
           />
         </div>

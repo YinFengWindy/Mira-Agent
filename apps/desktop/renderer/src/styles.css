@@ -46,6 +46,7 @@
     --blue-100: #e9f5ff;
     --blue-150: #dcf0ff;
     --blue-200: #c9e8fe;
+    --blue-300: #a6d6f9;
     /* accent-gradient endpoints: white text stays >=4.5:1 across the whole
        blue->pink sweep (endpoints 4.78/5.20, oklab midpoint 4.93) */
     --blue-grad: #1e79ad;
@@ -130,6 +131,8 @@
        vanish in pastel; white/ink both pass on it (see --blue-grad note) */
     --gradient-accent-strong: linear-gradient(135deg in oklab, var(--blue-grad), var(--pink-grad));
     --gradient-accent-soft: linear-gradient(135deg in oklab, var(--blue-50), var(--pink-50));
+    /* mid-tint sweep for meters/bars: pastel family but readable on soft tracks */
+    --gradient-accent-medium: linear-gradient(90deg in oklab, var(--blue-300), var(--pink-300));
     --gradient-app: linear-gradient(160deg in oklab, var(--blue-100), var(--lavender-50) 45%, var(--pink-100));
 
     /* ---------- radius ---------- */
@@ -221,7 +224,7 @@
 
 @layer utilities {
   .scrollbar-soft {
-    scrollbar-color: var(--neutral-200) transparent;
+    scrollbar-color: var(--pink-200) transparent;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
   }
@@ -237,7 +240,7 @@
   .scrollbar-soft::-webkit-scrollbar-thumb {
     border: 3px solid transparent;
     border-radius: 999px;
-    background: var(--neutral-200);
+    background: var(--pink-200);
     background-clip: padding-box;
   }
 
@@ -314,6 +317,10 @@
 
   .bg-gradient-accent-strong {
     background-image: var(--gradient-accent-strong);
+  }
+
+  .bg-gradient-accent-medium {
+    background-image: var(--gradient-accent-medium);
   }
 
   .bg-gradient-app {
