@@ -5,6 +5,7 @@ import type {
   SessionPayload,
   SessionSummary,
 } from "../shared/types";
+import { createChatMessageMatcher } from "../chat/chatMessageMatching";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -71,58 +72,31 @@ export function getSessionPaginationState(page: SessionMessagePage) {
   };
 }
 
-function messageId(message: SessionMessage): string {
-  return String(message.id ?? "").trim();
-}
-
-function clientMessageId(message: SessionMessage): string {
-  return String(message.metadata?.client_message_id ?? "").trim();
-}
-
-function findMatchingMessageIndex(
-  messages: readonly SessionMessage[],
-  incoming: SessionMessage,
-): number {
-  const incomingId = messageId(incoming);
-  if (incomingId) {
-    const idMatch = messages.findIndex((message) => messageId(message) === incomingId);
-    if (idMatch >= 0) return idMatch;
-  }
-  if (typeof incoming.seq === "number") {
-    const seqMatch = messages.findIndex((message) => message.seq === incoming.seq);
-    if (seqMatch >= 0) return seqMatch;
-  }
-  // 已提交的助手回复会原样继承请求 metadata（含用户的 client_message_id），
-  // 因此按 client_message_id 匹配必须限定同角色，否则助手回复会顶掉用户消息；
-  // 未命中时继续走下方的流式助手兜底分支。
-  const incomingClientMessageId = clientMessageId(incoming);
-  if (incomingClientMessageId) {
-    const clientMatch = messages.findIndex((message) => (
-      message.role === incoming.role
-        && clientMessageId(message) === incomingClientMessageId
-    ));
-    if (clientMatch >= 0) return clientMatch;
-  }
-  const maxLoadedSeq = messages.reduce(
-    (maximum, message) => typeof message.seq === "number" ? Math.max(maximum, message.seq) : maximum,
-    -1,
-  );
-  if (incoming.role === "assistant" && (!incomingId && typeof incoming.seq !== "number"
-    || typeof incoming.seq === "number" && incoming.seq > maxLoadedSeq)) {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      if (message?.role === "assistant" && !messageId(message)) return index;
-    }
-  }
-  return -1;
-}
-
 function sortSessionMessages(messages: readonly SessionMessage[]): SessionMessage[] {
   const persisted = messages
     .filter((message) => typeof message.seq === "number")
     .sort((left, right) => left.seq! - right.seq!);
-  const transient = messages.filter((message) => typeof message.seq !== "number");
-  return [...persisted, ...transient];
+  const before = new Map<SessionMessage, SessionMessage[]>();
+  const tail: SessionMessage[] = [];
+  let previousSeq = -1;
+  messages.forEach((message, index) => {
+    if (message.seq != null) {
+      previousSeq = Math.max(previousSeq, message.seq);
+      return;
+    }
+    // Preserve a local row before the following reply, including when that
+    // reply arrives before the user's acknowledgement. Older pages cannot anchor it.
+    const anchor = messages.slice(index + 1).find((candidate) => (
+      candidate.seq != null && candidate.seq > previousSeq
+    ));
+    if (!anchor) tail.push(message);
+    else {
+      const group = before.get(anchor) ?? [];
+      group.push(message);
+      before.set(anchor, group);
+    }
+  });
+  return [...persisted.flatMap((message) => [...(before.get(message) ?? []), message]), ...tail];
 }
 
 /** Upserts a persisted bridge message while preserving the existing render identity. */
@@ -130,7 +104,7 @@ export function mergeSessionMessage(
   messages: readonly SessionMessage[],
   incoming: SessionMessage,
 ): SessionMessage[] {
-  const matchedIndex = findMatchingMessageIndex(messages, incoming);
+  const matchedIndex = createChatMessageMatcher(messages)(incoming);
   if (matchedIndex >= 0) {
     const current = messages[matchedIndex]!;
     const nextMessages = [...messages];
@@ -160,7 +134,7 @@ export function mergeSessionSummaryAndMessage(
     ? current.pagination?.newest_seq ?? null
     : null;
   for (const incomingMessage of incomingMessages) {
-    const matchedMessageIndex = findMatchingMessageIndex(mergedMessages, incomingMessage);
+    const matchedMessageIndex = createChatMessageMatcher(mergedMessages)(incomingMessage);
     const matchedMessage = matchedMessageIndex >= 0 ? mergedMessages[matchedMessageIndex] : null;
     if (typeof incomingMessage.seq === "number"
       && (matchedMessageIndex < 0 || typeof matchedMessage?.seq !== "number")) {

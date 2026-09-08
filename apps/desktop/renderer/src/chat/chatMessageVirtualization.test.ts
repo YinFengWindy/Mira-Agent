@@ -18,6 +18,25 @@ function messages(count: number): SessionMessage[] {
 }
 
 describe("getVirtualChatMessageWindow", () => {
+  it("mounts the viewport and a distant pin with bounded rows and exact spacer geometry", () => {
+    const source = messages(10_000);
+    const measuredHeights = new Map(source.map((message, index) => [message.id!, 80 + index % 13]));
+    const window = getVirtualChatMessageWindow({
+      messages: source, messageKeys: source.map((message) => message.id!), measuredHeights,
+      scrollTop: Number.POSITIVE_INFINITY, viewportHeight: 720, pinnedMessageIndex: 12,
+    });
+    assert.ok(window.messages.some((message) => message.id === "message-12"));
+    assert.equal(window.messages.at(-1)?.id, "message-9999");
+    assert.ok(window.messages.length < 80);
+    assert.equal(window.ranges.length, 2);
+    const spacers = window.ranges.map((range) => range.spacerHeightBefore).filter((height) => height > 0);
+    if (window.bottomSpacerHeight > 0) spacers.push(window.bottomSpacerHeight);
+    const renderedHeight = window.messages.reduce((total, message) => total + measuredHeights.get(message.id!)!, 0)
+      + spacers.reduce((total, height) => total + height, 0)
+      + (window.messages.length + spacers.length - 1) * chatMessageVirtualRowGap;
+    assert.equal(renderedHeight, window.totalHeight);
+  });
+
   it("keeps a bounded bridge history page fully mounted before virtualization is needed", () => {
     const source = messages(chatMessageVirtualizationThreshold);
     const window = getVirtualChatMessageWindow({

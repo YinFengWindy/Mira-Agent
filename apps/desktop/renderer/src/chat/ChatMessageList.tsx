@@ -68,26 +68,28 @@ export const ChatMessageList = React.memo(function ChatMessageList({
       style={{ overflowAnchor: "none" }}
     >
       <div className={cx("grid content-start gap-3", chatContentTrackClass)}>
-        {virtualMessageWindow.topSpacerHeight > 0 ? (
-          <div aria-hidden="true" className="pointer-events-none" style={{ height: virtualMessageWindow.topSpacerHeight }} />
-        ) : null}
-        {virtualMessageWindow.messages.map((message, visibleIndex) => {
-          const index = visibleMessageWindow.startIndex + virtualMessageWindow.startIndex + visibleIndex;
-          return (
-            <ChatMessageRow
-              key={getChatMessageReactKey(message, index)}
-              activeRole={activeRole}
-              index={index}
-              isHighlighted={getChatMessageDomKey(message, index) === highlightedMessageKey}
-              message={message}
-              onBeginAttachmentDrag={onBeginAttachmentDrag}
-              onJumpToMessage={onJumpToMessage}
-              onMeasureElement={observeMessageElement}
-              onOpenContextMenu={onOpenContextMenu}
-              onOpenImagePreview={onOpenImagePreview}
-            />
-          );
-        })}
+        {virtualMessageWindow.ranges.flatMap((range) => [
+          ...(range.spacerHeightBefore > 0 ? [
+            <div key={`spacer:${range.startIndex}`} aria-hidden="true" className="pointer-events-none" style={{ height: range.spacerHeightBefore }} />,
+          ] : []),
+          ...range.messages.map((message, visibleIndex) => {
+            const index = visibleMessageWindow.startIndex + range.startIndex + visibleIndex;
+            return (
+              <ChatMessageRow
+                key={getChatMessageReactKey(message, index)}
+                activeRole={activeRole}
+                index={index}
+                isHighlighted={getChatMessageDomKey(message, index) === highlightedMessageKey}
+                message={message}
+                onBeginAttachmentDrag={onBeginAttachmentDrag}
+                onJumpToMessage={onJumpToMessage}
+                onMeasureElement={observeMessageElement}
+                onOpenContextMenu={onOpenContextMenu}
+                onOpenImagePreview={onOpenImagePreview}
+              />
+            );
+          }),
+        ])}
         {virtualMessageWindow.bottomSpacerHeight > 0 ? (
           <div aria-hidden="true" className="pointer-events-none" style={{ height: virtualMessageWindow.bottomSpacerHeight }} />
         ) : null}

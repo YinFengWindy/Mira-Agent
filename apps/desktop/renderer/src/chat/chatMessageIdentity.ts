@@ -1,5 +1,5 @@
 import type { SessionMessage, SessionPayload } from "../shared/types";
-import { normalizeSessionMediaPaths } from "./chatMedia";
+import { createChatMessageMatcher } from "./chatMessageMatching";
 
 const localChatMessageRenderIdPrefix = "local";
 let nextLocalChatMessageRenderId = 0;
@@ -10,70 +10,6 @@ function normalizeMessageId(message: SessionMessage): string {
 
 function normalizeRenderId(message: SessionMessage): string {
   return String(message.render_id ?? "").trim();
-}
-
-function normalizeClientMessageId(message: SessionMessage): string {
-  return String(message.metadata?.client_message_id ?? "").trim();
-}
-
-function normalizeReplyMetadata(message: SessionMessage) {
-  return {
-    messageId: String(message.metadata?.reply_to_message_id ?? "").trim(),
-    content: String(message.metadata?.reply_to_content ?? "").trim(),
-    sender: String(message.metadata?.reply_to_sender ?? "").trim(),
-  };
-}
-
-function normalizeMedia(message: SessionMessage): string[] {
-  return normalizeSessionMediaPaths(message.media);
-}
-
-function sameMedia(left: SessionMessage, right: SessionMessage): boolean {
-  const leftMedia = normalizeMedia(left);
-  const rightMedia = normalizeMedia(right);
-  if (leftMedia.length !== rightMedia.length) {
-    return false;
-  }
-  return leftMedia.every((item, index) => item === rightMedia[index]);
-}
-
-function sameReplyMetadata(left: SessionMessage, right: SessionMessage): boolean {
-  const leftReply = normalizeReplyMetadata(left);
-  const rightReply = normalizeReplyMetadata(right);
-  return leftReply.messageId === rightReply.messageId
-    && leftReply.content === rightReply.content
-    && leftReply.sender === rightReply.sender;
-}
-
-function canReuseRenderIdForStreamingUpdate(current: SessionMessage, incoming: SessionMessage): boolean {
-  const currentClientMessageId = normalizeClientMessageId(current);
-  const incomingClientMessageId = normalizeClientMessageId(incoming);
-  if (currentClientMessageId && incomingClientMessageId) {
-    return current.role === incoming.role && currentClientMessageId === incomingClientMessageId;
-  }
-  const currentId = normalizeMessageId(current);
-  const incomingId = normalizeMessageId(incoming);
-  if (currentId && incomingId && currentId !== incomingId) {
-    return false;
-  }
-  if (current.role !== incoming.role || !sameMedia(current, incoming) || !sameReplyMetadata(current, incoming)) {
-    return false;
-  }
-  const currentContent = current.content;
-  const incomingContent = incoming.content;
-  const currentThinking = String(current.reasoning_content ?? "");
-  const incomingThinking = String(incoming.reasoning_content ?? "");
-  if (currentContent === incomingContent && currentThinking === incomingThinking) {
-    return true;
-  }
-  return isStreamingTextExtension(currentContent, incomingContent)
-    && isStreamingTextExtension(currentThinking, incomingThinking);
-}
-
-function isStreamingTextExtension(left: string, right: string): boolean {
-  const shorter = left.length <= right.length ? left : right;
-  const longer = left.length > right.length ? left : right;
-  return longer.startsWith(shorter);
 }
 
 function createLocalChatMessageRenderId(role: string): string {
@@ -110,7 +46,24 @@ export function ensureChatMessageRenderId(message: SessionMessage): SessionMessa
   };
 }
 
-/** Reuses local render identities when an authoritative session snapshot replaces optimistic or streaming messages. */
+function matchCurrentMessages(current: readonly SessionMessage[], incoming: readonly SessionMessage[]) {
+  const matches = new Map<number, number>();
+  const claimed = new Set<number>();
+  const findMatch = createChatMessageMatcher(current);
+  // Explicit identities claim their rows before content fallback can consume them.
+  for (const minimumStrength of [4, 3, 2, 1]) {
+    incoming.forEach((message, incomingIndex) => {
+      if (matches.has(incomingIndex)) return;
+      const currentIndex = findMatch(message, claimed, minimumStrength);
+      if (currentIndex < 0) return;
+      matches.set(incomingIndex, currentIndex);
+      claimed.add(currentIndex);
+    });
+  }
+  return matches;
+}
+
+/** Reuses compatible identities and allocates unique keys across the complete incoming snapshot. */
 export function reconcileSessionMessageRenderIds(
   currentSession: SessionPayload | null,
   incomingSession: SessionPayload | null,
@@ -119,38 +72,32 @@ export function reconcileSessionMessageRenderIds(
     return null;
   }
 
-  const currentMessages = currentSession?.messages ?? [];
-  let nextCurrentSearchStart = 0;
+  const currentMessages = currentSession?.key === incomingSession.key ? currentSession.messages : [];
+  const matches = matchCurrentMessages(currentMessages, incomingSession.messages);
+  const reserved = new Map<string, number>();
+  incomingSession.messages.forEach((message, index) => {
+    const key = normalizeRenderId(message);
+    if (key && !reserved.has(key)) reserved.set(key, index);
+  });
+  const used = new Set<string>();
   let changed = false;
 
-  const nextMessages = incomingSession.messages.map((incomingMessage) => {
-    let matchedCurrentMessage: SessionMessage | null = null;
-    for (let currentIndex = nextCurrentSearchStart; currentIndex < currentMessages.length; currentIndex += 1) {
-      const currentMessage = currentMessages[currentIndex];
-      if (!canReuseRenderIdForStreamingUpdate(currentMessage, incomingMessage)) {
-        continue;
-      }
-      matchedCurrentMessage = currentMessage;
-      nextCurrentSearchStart = currentIndex + 1;
-      break;
-    }
-
-    if (matchedCurrentMessage) {
-      const matchedRenderId = normalizeRenderId(matchedCurrentMessage);
-      if (matchedRenderId && matchedRenderId !== normalizeRenderId(incomingMessage)) {
-        changed = true;
-        return {
-          ...incomingMessage,
-          render_id: matchedRenderId,
-        };
+  const nextMessages = incomingSession.messages.map((incomingMessage, index) => {
+    const currentIndex = matches.get(index);
+    const matchedKey = currentIndex == null ? "" : normalizeRenderId(currentMessages[currentIndex]!);
+    let key = matchedKey && (!reserved.has(matchedKey) || reserved.get(matchedKey) === index)
+      ? matchedKey : normalizeRenderId(incomingMessage);
+    if (!key || used.has(key)) {
+      const id = normalizeMessageId(incomingMessage);
+      key = id ? createServerChatMessageRenderId(id) : "";
+      while (!key || used.has(key) || (reserved.has(key) && reserved.get(key) !== index)) {
+        key = createLocalChatMessageRenderId(incomingMessage.role);
       }
     }
-
-    const ensuredMessage = ensureChatMessageRenderId(incomingMessage);
-    if (ensuredMessage !== incomingMessage) {
-      changed = true;
-    }
-    return ensuredMessage;
+    used.add(key);
+    if (key === normalizeRenderId(incomingMessage)) return incomingMessage;
+    changed = true;
+    return { ...incomingMessage, render_id: key };
   });
 
   if (!changed) {

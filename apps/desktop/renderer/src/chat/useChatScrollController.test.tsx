@@ -1,0 +1,45 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { act, useRef } from "react";
+import { mountTestComponent } from "../shared/testing/domTestHarness";
+import { useChatScrollController } from "./useChatScrollController";
+
+describe("useChatScrollController", () => {
+  it("settles detached navigation exactly once so its owner can release pending state and highlighting", async () => {
+    let controller!: ReturnType<typeof useChatScrollController>;
+    function Harness() {
+      const containerRef = useRef<HTMLDivElement>(null);
+      controller = useChatScrollController({ conversationListRef: containerRef, sessionKey: "role:test" });
+      return <div ref={containerRef}><div data-target="true" /></div>;
+    }
+    const view = await mountTestComponent(<Harness />);
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 0;
+    window.requestAnimationFrame = (callback) => { frames.set(++nextFrame, callback); return nextFrame; };
+    window.cancelAnimationFrame = (frame) => { frames.delete(frame); };
+    try {
+      const container = view.container.firstElementChild as HTMLDivElement;
+      const target = container.firstElementChild as HTMLDivElement;
+      Object.defineProperties(container, { clientHeight: { value: 600 }, scrollHeight: { value: 6000 } });
+      target.getBoundingClientRect = () => ({ x: 0, y: 4000, top: 4000, bottom: 4100, left: 0, right: 100, width: 100, height: 100, toJSON: () => ({}) });
+      let pending = true;
+      let highlighted = "target";
+      let settleCount = 0;
+      await act(async () => controller.scrollToMessage(target, () => {
+        pending = false;
+        highlighted = "";
+        settleCount += 1;
+      }));
+      assert.equal(controller.isAutoScrollingRef.current, true);
+      target.remove();
+      const frame = frames.values().next().value!;
+      await act(async () => frame(window.performance.now() + 16));
+      assert.equal(pending, false);
+      assert.equal(highlighted, "");
+      assert.equal(controller.isAutoScrollingRef.current, false);
+      await act(async () => window.dispatchEvent(new Event("wheel")));
+      assert.equal(settleCount, 1);
+      assert.equal(frames.size, 0);
+    } finally { await view.cleanup(); }
+  });
+});
