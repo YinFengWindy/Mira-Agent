@@ -43,6 +43,48 @@ describe("ensureChatMessageRenderId", () => {
 });
 
 describe("reconcileSessionMessageRenderIds", () => {
+  it("reserves a tool call identity before an unrelated text prefix can claim the stream", () => {
+    const tool_chain = [{ text: "", reasoning_content: "", calls: [{ call_id: "call", name: "lookup", status: "success", arguments: {}, final_arguments: {}, result: "done" }] }];
+    const stream = { role: "assistant", content: "partial", render_id: "local:tool", tool_chain };
+    const reconciled = reconcileSessionMessageRenderIds(createSession([stream]), createSession([
+      { id: "unrelated", role: "assistant", content: "partial unrelated" },
+      { id: "actual", role: "assistant", content: "final", tool_chain },
+    ]))!;
+    assert.equal(reconciled.messages[0]!.render_id, "server:unrelated");
+    assert.equal(reconciled.messages[1]!.render_id, stream.render_id);
+  });
+
+  it("reserves a live overlay key before matching an earlier persisted row", () => {
+    const overlay = { role: "user", content: "hello", render_id: "local:user:overlay" };
+    const incoming = createSession([{ id: "older", role: "user", content: "hello there" }, overlay]);
+    const reconciled = reconcileSessionMessageRenderIds(createSession([overlay]), incoming)!;
+    assert.equal(reconciled.messages[1]!.render_id, overlay.render_id);
+    assert.notEqual(reconciled.messages[0]!.render_id, overlay.render_id);
+  });
+
+  it("allocates unique keys even when incoming keys collide with existing and generated identities", () => {
+    const incoming = createSession([
+      { role: "error", content: "one", render_id: "shared" },
+      { id: "duplicate", role: "user", content: "two", render_id: "shared" },
+      { role: "assistant", content: "three", render_id: "server:duplicate" },
+    ]);
+    const reconciled = reconcileSessionMessageRenderIds(null, incoming)!;
+    assert.equal(new Set(reconciled.messages.map((message) => message.render_id)).size, 3);
+    assert.equal(reconciled.messages[2]!.render_id, "server:duplicate");
+    assert.equal(reconcileSessionMessageRenderIds(reconciled, reconciled), reconciled);
+  });
+
+  it("keeps distinct assistant rows sharing one request client id and repeated content", () => {
+    const current = createSession([{ id: "a1", role: "assistant", content: "same", render_id: "local:assistant:original", metadata: { client_message_id: "turn" } }]);
+    const incoming = createSession([
+      { id: "a2", role: "assistant", content: "same", metadata: { client_message_id: "turn" } },
+      { id: "a1", role: "assistant", content: "edited", metadata: { client_message_id: "turn" } },
+    ]);
+    const reconciled = reconcileSessionMessageRenderIds(current, incoming)!;
+    assert.equal(reconciled.messages[0]!.render_id, "server:a2");
+    assert.equal(reconciled.messages[1]!.render_id, "local:assistant:original");
+  });
+
   it("reuses the optimistic user render id after the authoritative snapshot adds a persisted id", () => {
     const optimisticUserMessage = ensureChatMessageRenderId({
       role: "user",

@@ -179,7 +179,8 @@ export function useChatScrollController({
         !currentContainer
         || !target.isConnected
       ) {
-        stopAnimation(false);
+        // A removed target cannot resume; settle so navigation releases its pin.
+        stopAnimation(true);
         return;
       }
       const progress = Math.min(1, Math.max(0, (now - startedAt) / duration));

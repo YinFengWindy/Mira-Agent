@@ -9,6 +9,24 @@ import { ChatMessageList } from "./ChatMessageList";
 import { getVisibleChatMessages } from "./chatMessageWindow";
 
 describe("ChatMessageList", () => {
+  it("mounts an old highlighted row and the newest message together with their original DOM keys", () => {
+    const messages = Array.from({ length: 10_000 }, (_, index) => ({ id: `message-${index}`, role: "user", content: `message-${index}` }));
+    const markup = renderToStaticMarkup(<ChatMessageList
+      activeRole={null}
+      conversationEndRef={React.createRef<HTMLDivElement>()}
+      conversationListRef={React.createRef<HTMLDivElement>()}
+      highlightedMessageKey="message-10"
+      visibleMessageWindow={{ startIndex: 0, hiddenMessageCount: 0, messages }}
+      onBeginAttachmentDrag={() => undefined}
+      onJumpToMessage={() => undefined}
+      onOpenContextMenu={() => undefined}
+      onOpenImagePreview={() => undefined}
+    />);
+    assert.ok(markup.includes('data-message-key="message-10"'));
+    assert.ok(markup.includes('data-message-key="message-9999"'));
+    assert.ok((markup.match(/data-message-key=/g) ?? []).length < 80);
+  });
+
   function renderMessage(message: SessionMessage): string {
     return renderToStaticMarkup(
       <ChatMessageList

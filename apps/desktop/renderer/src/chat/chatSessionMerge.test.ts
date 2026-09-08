@@ -21,6 +21,16 @@ function createSession(messages: SessionMessage[]): SessionPayload {
 }
 
 describe("mergeIncomingSessionDuringSend", () => {
+  it("does not reinsert an already present anonymous overlay on a diverging snapshot", () => {
+    const pending = { role: "user", content: "pending", render_id: "local:user:pending" };
+    const current = createSession([{ id: "a", role: "assistant", content: "old" }, pending]);
+    const incoming = createSession([{ id: "a", role: "assistant", content: "edited" }, { ...pending }]);
+    const merged = mergeIncomingSessionDuringSend(current, incoming, true, pending)!;
+    assert.equal(merged.messages.length, 2);
+    assert.equal(merged.messages[1]!.render_id, pending.render_id);
+    assert.equal(isPendingUserMessageAcknowledged(pending, merged), false);
+  });
+
   it("keeps the optimistic user turn when a stale shorter snapshot arrives during sending", () => {
     const currentSession = createSession([
       {

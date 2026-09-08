@@ -1,5 +1,6 @@
 import type { SessionMessage, SessionPayload } from "../shared/types.js";
 import { normalizeSessionMediaPaths } from "./chatMedia.js";
+import { getChatMessageMatchStrength } from "./chatMessageMatching";
 
 function normalizeMessageId(message: SessionMessage): string {
   return String(message.id ?? "").trim();
@@ -99,14 +100,9 @@ function findMissingOptimisticUserMessage(
   if (!optimisticUserMessage || !isOptimisticUserMessage(optimisticUserMessage)) {
     return null;
   }
-  const clientMessageId = normalizeClientMessageId(optimisticUserMessage);
-  const alreadyPersisted = incomingSession.messages.some((message) => {
-    if (clientMessageId) {
-      return message.role === optimisticUserMessage.role
-        && normalizeClientMessageId(message) === clientMessageId;
-    }
-    return areEquivalentMessagesIgnoringMissingIds(optimisticUserMessage, message);
-  });
+  const alreadyPersisted = incomingSession.messages.some((message) => (
+    getChatMessageMatchStrength(optimisticUserMessage, message) > 0
+  ));
   return alreadyPersisted ? null : optimisticUserMessage;
 }
 
@@ -212,16 +208,10 @@ export function isPendingUserMessageAcknowledged(
   pendingUserMessage: SessionMessage,
   incomingSession: SessionPayload,
 ): boolean {
-  const clientMessageId = normalizeClientMessageId(pendingUserMessage);
-  return incomingSession.messages.some((message) => {
-    if (clientMessageId) {
-      // 助手回复携带同一 client_message_id 时不算确认，必须是同角色的持久化副本。
-      return message.role === pendingUserMessage.role
-        && normalizeClientMessageId(message) === clientMessageId;
-    }
-    return Boolean(normalizeMessageId(message))
-      && areEquivalentMessagesIgnoringMissingIds(pendingUserMessage, message);
-  });
+  return incomingSession.messages.some((message) => (
+    Boolean(normalizeMessageId(message) || message.seq != null)
+      && getChatMessageMatchStrength(pendingUserMessage, message) > 0
+  ));
 }
 
 /** Clears a pending user overlay only after its chat turn has finished and a snapshot confirms it. */

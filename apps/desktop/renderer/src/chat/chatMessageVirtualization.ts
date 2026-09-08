@@ -16,6 +16,7 @@ export type ChatMessageVirtualWindow = {
   topSpacerHeight: number;
   bottomSpacerHeight: number;
   totalHeight: number;
+  ranges: { startIndex: number; messages: SessionMessage[]; spacerHeightBefore: number }[];
 };
 
 type GetVirtualChatMessageWindowArgs = {
@@ -74,7 +75,7 @@ function firstIndexAfterOffset(offsets: readonly number[], offset: number): numb
 
 /**
  * Selects a bounded group of rows while retaining spacer heights for all omitted rows.
- * A pinned message takes precedence so search navigation can mount its DOM anchor on demand.
+ * Offscreen navigation targets mount in a separate range without replacing the viewport.
  */
 export function getVirtualChatMessageWindow({
   messages,
@@ -97,6 +98,7 @@ export function getVirtualChatMessageWindow({
       topSpacerHeight: 0,
       bottomSpacerHeight: 0,
       totalHeight: 0,
+      ranges: [],
     };
   }
 
@@ -117,6 +119,7 @@ export function getVirtualChatMessageWindow({
       topSpacerHeight: 0,
       bottomSpacerHeight: 0,
       totalHeight: Math.max(0, totalHeight - chatMessageVirtualRowGap),
+      ranges: [{ startIndex: 0, messages: [...messages], spacerHeightBefore: 0 }],
     };
   }
 
@@ -133,26 +136,40 @@ export function getVirtualChatMessageWindow({
   const safeViewportHeight = Math.max(1, viewportHeight || chatMessageVirtualFallbackViewportHeight);
   const firstVisibleIndex = firstIndexAfterOffset(offsets, safeScrollTop);
   const visibleEnd = Math.min(totalHeight, safeScrollTop + safeViewportHeight);
-  let startIndex = firstIndexAfterOffset(offsets, Math.max(0, safeScrollTop - overscanPixels));
-  let endIndex = Math.min(
+  const startIndex = firstIndexAfterOffset(offsets, Math.max(0, safeScrollTop - overscanPixels));
+  const endIndex = Math.min(
     messages.length,
     firstIndexAfterOffset(offsets, Math.min(totalHeight, visibleEnd + overscanPixels)) + 1,
   );
 
-  if (pinnedMessageIndex >= 0 && (pinnedMessageIndex < startIndex || pinnedMessageIndex >= endIndex)) {
-    startIndex = Math.max(0, pinnedMessageIndex - 12);
-    endIndex = Math.min(messages.length, pinnedMessageIndex + 13);
+  const bounds = [{ startIndex, endIndex }];
+  if (pinnedMessageIndex >= 0 && pinnedMessageIndex < messages.length
+    && (pinnedMessageIndex < startIndex || pinnedMessageIndex >= endIndex)) {
+    bounds.push({ startIndex: Math.max(0, pinnedMessageIndex - 12), endIndex: Math.min(messages.length, pinnedMessageIndex + 13) });
+    bounds.sort((left, right) => left.startIndex - right.startIndex);
+    if (bounds[0]!.endIndex >= bounds[1]!.startIndex) {
+      bounds[0]!.endIndex = Math.max(bounds[0]!.endIndex, bounds[1]!.endIndex);
+      bounds.pop();
+    }
   }
+  const ranges = bounds.map((bound, index) => ({
+    startIndex: bound.startIndex,
+    messages: messages.slice(bound.startIndex, bound.endIndex),
+    // The grid contributes a gap on each side of an internal spacer.
+    spacerHeightBefore: Math.max(0,
+      offsets[bound.startIndex]! - (index === 0 ? 0 : offsets[bounds[index - 1]!.endIndex]!) - chatMessageVirtualRowGap),
+  }));
 
   return {
-    startIndex,
-    endIndex,
+    startIndex: bounds[0]!.startIndex,
+    endIndex: bounds.at(-1)!.endIndex,
     firstVisibleIndex,
-    messages: messages.slice(startIndex, endIndex),
+    messages: ranges.flatMap((range) => range.messages),
+    ranges,
     // The grid supplies the boundary gap beside each spacer. Keeping that gap
     // out of spacer heights prevents the virtual positions drifting per slice.
-    topSpacerHeight: Math.max(0, (offsets[startIndex] ?? 0) - chatMessageVirtualRowGap),
-    bottomSpacerHeight: Math.max(0, totalHeight - (offsets[endIndex] ?? totalHeight)),
+    topSpacerHeight: ranges[0]!.spacerHeightBefore,
+    bottomSpacerHeight: Math.max(0, totalHeight - offsets[bounds.at(-1)!.endIndex]!),
     totalHeight,
   };
 }

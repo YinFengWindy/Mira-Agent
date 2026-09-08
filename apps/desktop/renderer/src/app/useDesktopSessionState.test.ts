@@ -148,7 +148,7 @@ describe("desktop paginated session protocol", () => {
   it("merges an incremental message without replacing the currently loaded page", () => {
     const current = createSession([
       { id: "role:shiori:6", seq: 6, role: "user", content: "上一条" },
-      { role: "assistant", content: "流式内容", streaming: true, render_id: "stream-1" },
+      { role: "assistant", content: "完整", streaming: true, render_id: "stream-1" },
     ]);
     const update = parseSessionMessageUpdatePayload({
       session: {
