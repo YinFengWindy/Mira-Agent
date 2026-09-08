@@ -1,5 +1,5 @@
 import { BackIcon, ResetIcon, SaveIcon } from "../shared/icons";
-import { cx, iconButtonClass } from "../shared/styles";
+import { iconButtonClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
 import type { RoleCardImportState } from "../app/roleCardImportState";
 import { RoleCreateFields } from "./RoleCreateFields";
@@ -28,13 +28,13 @@ export function RoleCreatePage({ bridgeReady, creating, form, onBackToList, onCr
   return (
     <section className="role-create-page scrollbar-soft relative h-full overflow-y-auto bg-white" data-testid="role-create-page">
       <div className="mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-5 pb-8 pt-6 sm:px-8">
-        <div className="mb-7 flex items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4">
+        <div className="mb-7 flex items-center justify-between gap-3 border-b border-line-soft pb-4">
           <button className={actionClass} type="button" onClick={onBackToList} disabled={creating} aria-label="返回角色列表" title="返回角色列表"><BackIcon className="h-5 w-5 fill-current" /></button>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <RoleImportControls imported={roleCardImport} form={form} disabled={creating || !bridgeReady}
               onImport={onPreviewRoleCard} onCancel={onCancelRoleCardImport} onUpdateForm={onUpdateForm} />
             <button className={actionClass} type="button" onClick={onResetForm} disabled={creating || !formDirty} aria-label="重置新建角色表单" title="重置新建角色表单"><ResetIcon className="h-[18px] w-[18px] fill-current" /></button>
-            <button data-testid="create-role-button" className={cx(actionClass, "bg-[#F0F7F4]")} type="button" onClick={onCreateRole}
+            <button data-testid="create-role-button" className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-white/70 bg-gradient-accent text-ink shadow-soft transition-[filter] hover:brightness-[1.03] disabled:cursor-default disabled:opacity-40" type="button" onClick={onCreateRole}
               disabled={creating || !bridgeReady || roleCardImport.status === "previewing" || needsEmotionChoice} aria-label={creating ? "正在创建角色" : "创建角色"} title="创建角色"><SaveIcon className="h-5 w-5 fill-current" /></button>
           </div>
         </div>

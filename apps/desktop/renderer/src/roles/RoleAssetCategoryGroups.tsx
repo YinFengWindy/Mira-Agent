@@ -167,7 +167,7 @@ export function RoleAssetCategoryGroups({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between px-2 pb-3">
         <button
-          className="grid h-10 w-10 place-items-center rounded-full border border-black/8 bg-white text-[#111111] transition duration-200 hover:-translate-y-0.5 hover:border-black/14 hover:bg-[#F5F7FA] focus:outline-none"
+          className="grid h-10 w-10 place-items-center rounded-full border border-line-soft bg-white text-ink transition duration-200 hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface-hover focus:outline-none"
           type="button"
           aria-label="返回角色详情"
           title="返回角色详情"
@@ -176,7 +176,7 @@ export function RoleAssetCategoryGroups({
           <BackIcon className="h-5 w-5 fill-current" />
         </button>
         <button
-          className="grid h-10 w-10 place-items-center rounded-md border border-black/8 bg-white text-[#272536] transition hover:bg-[#F5F7FA] focus:outline-none"
+          className="grid h-10 w-10 place-items-center rounded-md border border-line-soft bg-white text-ink transition hover:bg-surface-hover focus:outline-none"
           type="button"
           aria-label="新建分类"
           title="新建分类"
@@ -190,7 +190,7 @@ export function RoleAssetCategoryGroups({
         <div className="mb-2 flex items-center gap-2 px-2">
           <input
             autoFocus
-            className="h-10 min-w-0 flex-1 rounded-md border border-[#D8DFE7] bg-white px-3 text-sm transition focus:border-[#B8BEC7] focus:outline-none"
+            className="h-10 min-w-0 flex-1 rounded-md border border-line-soft bg-white px-3 text-sm transition focus:outline-none"
             value={newCategoryName}
             placeholder="分类名称"
             onChange={(event) => setNewCategoryName(event.target.value)}
@@ -214,7 +214,7 @@ export function RoleAssetCategoryGroups({
             <section
               className={cx(
                 "mb-2 rounded-md border transition",
-                dropping ? "border-[#7C6EE6] bg-[#F6F4FF]" : "border-[#E2E6EB] bg-white",
+                dropping ? "border-[var(--lavender-500)] bg-[var(--lavender-50)]" : "border-line-soft bg-white",
               )}
               key={category.id}
               onDragOver={(event) => {
@@ -229,7 +229,7 @@ export function RoleAssetCategoryGroups({
             >
               <div className="flex min-h-12 items-center gap-2 px-2.5">
                 <button
-                  className="grid h-8 w-8 place-items-center rounded-md text-[#626B77] transition hover:bg-[#F2F4F7] focus:outline-none"
+                  className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition hover:bg-surface-hover focus:outline-none"
                   type="button"
                   aria-label={expanded ? `收起${category.name}` : `展开${category.name}`}
                   onClick={() => toggleCategory(category.id)}
@@ -237,7 +237,7 @@ export function RoleAssetCategoryGroups({
                   <CaretRightIcon className={cx("h-4 w-4 shrink-0 stroke-current transition-transform", expanded && "rotate-90")} />
                 </button>
                 <input
-            className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium transition focus:border-[#B8BEC7] focus:bg-white focus:outline-none"
+            className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-sm font-medium transition focus:bg-white focus:outline-none"
                   defaultValue={category.name}
                   aria-label={`${category.name}分类名称`}
                   onBlur={(event) => renameCategory(category, event.target.value)}
@@ -245,13 +245,13 @@ export function RoleAssetCategoryGroups({
                     if (event.key === "Enter") event.currentTarget.blur();
                   }}
                 />
-                <span className="min-w-6 text-center text-xs text-[#7A8593]">{assets.length}</span>
+                <span className="min-w-6 text-center text-xs text-ink-muted">{assets.length}</span>
                 <button
                   className={cx(
                     "grid h-8 w-8 place-items-center rounded-md transition focus:outline-none",
                     category.allow_role_send
-                      ? "bg-[#272536] text-white"
-                      : "text-[#8A94A2] hover:bg-[#F2F4F7] hover:text-[#272536]",
+                      ? "bg-gradient-accent text-ink shadow-soft"
+                      : "text-ink-faint hover:bg-surface-hover hover:text-ink",
                   )}
                   type="button"
                   aria-label={category.allow_role_send ? "禁止角色发送此分类" : "允许角色发送此分类"}
@@ -262,7 +262,7 @@ export function RoleAssetCategoryGroups({
                   <SendIcon className="h-4 w-4 fill-current" />
                 </button>
                 <button
-                  className="grid h-8 w-8 place-items-center rounded-md text-[#8A94A2] transition hover:bg-[#F2F4F7] hover:text-[#C16E4E] focus:outline-none"
+                  className="grid h-8 w-8 place-items-center rounded-md text-ink-faint transition hover:bg-surface-hover hover:text-danger-text focus:outline-none"
                   type="button"
                   aria-label={`删除分类${category.name}`}
                   disabled={!bridgeReady || saving || visibleCategories.length === 1}
@@ -272,15 +272,15 @@ export function RoleAssetCategoryGroups({
                 </button>
               </div>
               {expanded ? (
-                <div className="grid grid-cols-4 gap-2.5 border-t border-[#ECEFF3] p-3">
+                <div className="grid grid-cols-4 gap-2.5 border-t border-line-soft p-3">
                   {assets.map(({ relPath, absPath }) => (
                     <div className="group relative h-[82px] w-[82px]" key={relPath}>
                       <button
                         className={cx(
                           "h-[82px] w-[82px] overflow-hidden rounded-md border p-0 transition",
                           selectedAssetPath === relPath
-                            ? "border-[#272536] shadow-[0_8px_18px_rgba(39,37,54,0.14)]"
-                            : "border-[#D8DFE7] hover:border-[#9AA3B2]",
+                            ? "border-accent shadow-soft"
+                            : "border-line-soft hover:border-line-strong",
                         )}
                         type="button"
                         draggable
@@ -294,7 +294,7 @@ export function RoleAssetCategoryGroups({
                         <img className="h-full w-full object-cover" src={toFileUrl(absPath)} alt="role asset" />
                       </button>
                       <button
-                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md bg-white/92 text-[#5B6472] opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100"
+                        className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-md bg-white/92 text-ink-secondary opacity-0 shadow-soft transition group-hover:opacity-100 focus:opacity-100"
                         type="button"
                         aria-label="删除素材"
                         disabled={!bridgeReady || saving}
@@ -305,7 +305,7 @@ export function RoleAssetCategoryGroups({
                     </div>
                   ))}
                   <button
-                    className="grid h-[82px] w-[82px] place-items-center rounded-md border border-dashed border-[#C9D0D9] bg-[#FAFBFC] text-[#67717E] transition hover:border-[#9AA3B2] hover:bg-[#F4F6F8] focus:outline-none"
+                    className="grid h-[82px] w-[82px] place-items-center rounded-md border border-dashed border-line bg-surface-soft text-ink-muted transition hover:border-line-strong hover:bg-surface-hover focus:outline-none"
                     type="button"
                     aria-label={`上传到${category.name}`}
                     title={`上传到${category.name}`}

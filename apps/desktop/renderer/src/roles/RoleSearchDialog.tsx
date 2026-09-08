@@ -70,7 +70,7 @@ export function RoleSearchDialog({
         onClick={onClose}
       />
       <section
-        className="role-search-panel relative z-[1] grid max-h-[min(76vh,780px)] w-full max-w-[760px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl bg-[rgba(255,255,255,0.97)] shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
+        className="role-search-panel relative z-[1] grid max-h-[min(76vh,780px)] w-full max-w-[760px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl bg-[rgba(255,255,255,0.97)] shadow-pop"
         role="dialog"
         aria-modal="true"
         aria-label="搜索"
@@ -81,7 +81,7 @@ export function RoleSearchDialog({
               ref={inputRef}
               data-testid="role-search-input"
               className={cx(
-                "h-12 w-full rounded-md border border-transparent bg-[#F3F3F3] px-4 py-0 text-[15px] text-[#202020] outline-none transition-none placeholder:text-[#9A9A9A]",
+                "h-12 w-full rounded-md border border-transparent bg-surface-soft px-4 py-0 text-[15px] text-ink outline-none transition-none placeholder:text-ink-faint",
                 "hover:border-transparent focus:border-transparent focus:outline-none focus-visible:border-transparent focus-visible:outline-none",
               )}
               value={query}
@@ -96,7 +96,7 @@ export function RoleSearchDialog({
                   <button
                     key={`${result.roleId}:${result.matchedField}:${result.matchedMessageId ?? result.roleName}`}
                     data-testid={`role-search-result-${result.roleId}-${result.matchedMessageIndex ?? "role"}`}
-                    className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-3 rounded-lg border-0 bg-transparent px-2.5 py-2.5 text-left transition hover:bg-[#F4F6F8] focus-visible:bg-[#F4F6F8]"
+                    className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-3 rounded-lg border-0 bg-transparent px-2.5 py-2.5 text-left transition hover:bg-surface-hover focus-visible:bg-surface-hover"
                     type="button"
                     onClick={() => onSelectResult(result)}
                   >
@@ -113,16 +113,16 @@ export function RoleSearchDialog({
                     )}
                     <span className="grid min-w-0 gap-1">
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="min-w-0 truncate text-[14px] font-semibold text-[#202020]">{result.roleName}</span>
-                        <span className="rounded-full bg-[#F1F3F5] px-2 py-0.5 text-[11px] text-[#6B7280]">
+                        <span className="min-w-0 truncate text-[14px] font-semibold text-ink">{result.roleName}</span>
+                        <span className="rounded-full bg-surface-soft px-2 py-0.5 text-[11px] text-ink-muted">
                           {result.matchedField === "message" ? "消息" : "角色"}
                         </span>
                       </span>
-                      <span className="max-h-10 overflow-hidden whitespace-pre-wrap break-words text-[13px] leading-5 text-[#5E5E5E]">
+                      <span className="max-h-10 overflow-hidden whitespace-pre-wrap break-words text-[13px] leading-5 text-ink-secondary">
                         {result.matchedMessagePreview}
                       </span>
                       {result.matchedField === "message" && result.matchedMessageTimestamp ? (
-                        <span className="text-[11px] text-[#9A9A9A]">
+                        <span className="text-[11px] text-ink-faint">
                           {formatTimestamp(result.matchedMessageTimestamp)}
                         </span>
                       ) : null}
@@ -131,7 +131,7 @@ export function RoleSearchDialog({
                 ))}
               </div>
             ) : (
-              <div className="grid min-h-[200px] place-items-center px-4 text-center text-[13px] text-[#8A8A8A]">
+              <div className="grid min-h-[200px] place-items-center px-4 text-center text-[13px] text-ink-faint">
                 {emptyMessage}
               </div>
             )}

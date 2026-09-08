@@ -39,19 +39,19 @@ function CapabilityTile({
   const status = disabled ? (disabledStatus ?? "不可用") : checked ? "已启用" : "未启用";
 
   return (
-    <div className={cx("grid content-start gap-3 rounded-2xl p-5", disabled ? "bg-[#F5F6F8]" : tintClass)}>
+    <div className={cx("grid content-start gap-3 rounded-2xl p-5", disabled ? "bg-surface-soft" : tintClass)}>
       <div className="flex items-start justify-between gap-3">
-        <span className={cx("grid h-10 w-10 place-items-center rounded-xl bg-white/75", disabled ? "text-[#98A2B3]" : iconClass)} aria-hidden="true">
+        <span className={cx("grid h-10 w-10 place-items-center rounded-xl bg-white/75", disabled ? "text-ink-faint" : iconClass)} aria-hidden="true">
           <Icon className="h-5 w-5" weight="duotone" />
         </span>
         <SettingsToggleCard checked={checked} ariaLabel={label} disabled={disabled} onChange={onChange} />
       </div>
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-[#182230]">{label}</span>
-          <span className={cx("rounded-full bg-white/75 px-2 py-0.5 text-[11px] leading-4", disabled ? "text-[#98A2B3]" : checked ? "text-[#2E7D5B]" : "text-[#7B8794]")}>{status}</span>
+          <span className="text-sm font-semibold text-ink">{label}</span>
+          <span className={cx("rounded-full bg-white/75 px-2 py-0.5 text-[11px] leading-4", disabled ? "text-ink-faint" : checked ? "text-success-text" : "text-ink-muted")}>{status}</span>
         </div>
-        <p className="mt-1.5 text-xs leading-5 text-[#66707E]">{description}</p>
+        <p className="mt-1.5 text-xs leading-5 text-ink-muted">{description}</p>
       </div>
     </div>
   );
@@ -62,7 +62,7 @@ export function RoleCapabilitiesPanel({ activeRole, bridgeReady, roleForm, onUpd
   const desktopPetUnavailable = !bridgeReady || (!activeRole?.selected_pet_package_id && !roleForm.desktopPetEnabled);
 
   return (
-    <div className="grid gap-7 text-sm text-[#1F2937]">
+    <div className="grid gap-7 text-sm text-ink">
       <section aria-labelledby="role-capabilities-heading" className="grid gap-4">
         <div>
           <h2 className={roleSectionTitleClass} id="role-capabilities-heading">运行能力</h2>

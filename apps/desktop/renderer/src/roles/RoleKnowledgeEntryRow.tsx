@@ -20,7 +20,7 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
   const keywords = entry.primary_keys ?? entry.keywords ?? [];
 
   return (
-    <div className="border-b border-[#EEF2F5] last:border-b-0" data-testid={`knowledge-entry-${index}`}>
+    <div className="border-b border-line-soft last:border-b-0" data-testid={`knowledge-entry-${index}`}>
       <button
         className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-left focus:outline-none"
         type="button"
@@ -28,18 +28,18 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
         onClick={onToggle}
       >
         <span className="grid min-w-0 gap-1.5">
-          <span className="truncate text-sm font-medium text-[#182230]">{entry.title || `条目 ${index + 1}`}</span>
+          <span className="truncate text-sm font-medium text-ink">{entry.title || `条目 ${index + 1}`}</span>
           <span className="flex flex-wrap gap-1.5">
             {keywords.length
               ? keywords.map((keyword) => <span className={roleChipClass} key={keyword}>{keyword}</span>)
               : null}
           </span>
         </span>
-        <CaretDown className={cx("h-4 w-4 shrink-0 text-[#98A2B3] transition-transform", expanded && "rotate-180")} weight="bold" />
+        <CaretDown className={cx("h-4 w-4 shrink-0 text-ink-faint transition-transform", expanded && "rotate-180")} weight="bold" />
       </button>
       {expanded ? (
         <div className="grid gap-3 pb-4">
-          <label className="grid gap-1.5 text-xs text-[#667085]">
+          <label className="grid gap-1.5 text-xs text-ink-muted">
             <span>标题</span>
             <input
               className={roleFieldClass}
@@ -51,7 +51,7 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
           <RoleKeywordInput label="关键词" keywords={keywords} onChange={(primary_keys) => onUpdate((current) => ({ ...current, primary_keys }))} />
           <RoleKeywordInput label="次关键词" keywords={entry.secondary_keys ?? []} onChange={(secondary_keys) => onUpdate((current) => ({ ...current, secondary_keys }))} />
           <RoleKnowledgeEntryOptions entry={entry} onUpdate={onUpdate} />
-          <label className="grid gap-1.5 text-xs text-[#667085]">
+          <label className="grid gap-1.5 text-xs text-ink-muted">
             <span>内容</span>
             <textarea
               className={cx(roleFieldClass, "min-h-32 resize-none leading-6")}
@@ -61,7 +61,7 @@ export function RoleKnowledgeEntryRow({ entry, index, expanded, onToggle, onUpda
             />
           </label>
           <button
-            className="inline-flex w-fit items-center gap-1.5 text-xs text-[#B54747] transition hover:text-[#963B3B] focus:outline-none"
+            className="inline-flex w-fit items-center gap-1.5 text-xs text-danger-text transition hover:text-danger-text focus:outline-none"
             type="button"
             onClick={onRemove}
             aria-label={`删除条目 ${index + 1}`}

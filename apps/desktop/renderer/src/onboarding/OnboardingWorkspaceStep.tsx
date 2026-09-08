@@ -14,12 +14,12 @@ export function OnboardingWorkspaceStep({ roles, entering, onEnter }: {
   if (!role) return null;
   return (
     <div className="flex flex-col items-center gap-6 py-10 text-center">
-      <div className="grid h-32 w-32 shrink-0 place-items-center overflow-hidden rounded-md bg-[#EDF4F0] text-[#286451]">
+      <div className="grid h-32 w-32 shrink-0 place-items-center overflow-hidden rounded-md bg-accent-soft text-accent-text">
         {role.avatar_abs ? <img className="h-full w-full object-cover" src={window.miraDesktop.localAssetUrl(role.avatar_abs)} alt={role.name} /> : <User size={42} />}
       </div>
       <div className="w-full min-w-0">
-        <h2 className="break-words text-2xl font-medium text-[#182230]">{role.name}</h2>
-        {role.description ? <p className="mt-3 break-words text-sm leading-6 text-[#667085]">{role.description}</p> : null}
+        <h2 className="break-words text-2xl font-medium text-ink">{role.name}</h2>
+        {role.description ? <p className="mt-3 break-words text-sm leading-6 text-ink-muted">{role.description}</p> : null}
       </div>
       {roles.length > 1 ? <select aria-label="选择角色" value={role.id} onChange={(event) => setSelectedId(event.target.value)} disabled={entering}
         className="max-w-full rounded-md border border-line bg-surface p-2 text-sm">

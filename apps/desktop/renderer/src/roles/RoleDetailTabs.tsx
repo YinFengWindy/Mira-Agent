@@ -25,7 +25,7 @@ export function RoleDetailTabs({
           <button
             className={cx(
               "h-10 shrink-0 border-b-2 px-1 text-sm transition-colors focus:outline-none",
-              selected ? "border-[#2176FF] font-medium text-[#111827]" : "border-transparent text-[#6B7280] hover:text-[#111827]",
+              selected ? "border-accent font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink",
             )}
             key={tab.id}
             type="button"

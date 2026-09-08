@@ -29,7 +29,7 @@ export function RoleKeywordInput({ label, keywords, onChange }: RoleKeywordInput
   }
 
   return (
-    <label className="grid gap-1.5 text-xs text-[#667085]">
+    <label className="grid gap-1.5 text-xs text-ink-muted">
       <span>{label}</span>
       <input
         className={roleFieldClass}

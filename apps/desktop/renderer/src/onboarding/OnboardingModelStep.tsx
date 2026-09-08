@@ -31,7 +31,7 @@ export function OnboardingModelStep({ onSaved, onBusyChange }: { onSaved: () => 
   return (
     <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <fieldset disabled={saving} className="min-w-0"><ModelRegistrationFields registration={registration} onChange={setRegistration} /></fieldset>
-      {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error}</p> : null}
+      {error ? <p role="alert" className="mt-4 text-sm text-danger-text">{error}</p> : null}
       <div className="mt-8 flex justify-end"><button type="submit" className={onboardingActionClass} disabled={saving || !registration.model.trim() || !registration.provider.trim()}>
         {saving ? "正在保存" : "保存并继续"}<ArrowRight size={18} />
       </button></div>

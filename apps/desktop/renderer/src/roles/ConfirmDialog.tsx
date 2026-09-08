@@ -53,18 +53,18 @@ export function ConfirmDialog({
         disabled={busy}
       />
       <section
-        className="relative z-[1] w-full max-w-[460px] rounded-xl bg-[rgba(255,255,255,0.98)] p-6 shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
+        className="relative z-[1] w-full max-w-[460px] rounded-xl bg-[rgba(255,255,255,0.98)] p-6 shadow-pop"
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
-        <div className="text-[20px] font-semibold text-[#202020]">{title}</div>
-        <div className="mt-2 text-sm leading-6 text-[#5E5E5E]">{description}</div>
+        <div className="text-[20px] font-semibold text-ink">{title}</div>
+        <div className="mt-2 text-sm leading-6 text-ink-secondary">{description}</div>
         <div className="mt-6 flex justify-end gap-3">
           <button
             className={cx(
-              "rounded-md border border-[#D8DFE7] bg-white px-4 py-2.5 text-sm text-[#3B4652] transition",
-              "hover:border-[#C7D1DB] hover:bg-[#F7F9FB]",
+              "rounded-md border border-line-soft bg-white px-4 py-2.5 text-sm text-ink-secondary transition",
+              "hover:border-line hover:bg-surface-hover",
               focusResetClass,
               busy && "cursor-default opacity-60",
             )}
@@ -76,8 +76,8 @@ export function ConfirmDialog({
           </button>
           <button
             className={cx(
-              "rounded-md border border-[rgba(143,43,24,0.22)] bg-[rgba(143,43,24,0.92)] px-4 py-2.5 text-sm text-white transition",
-              "hover:bg-[rgba(143,43,24,1)]",
+              "rounded-md border border-transparent bg-danger px-4 py-2.5 text-sm text-white transition",
+              "hover:bg-[var(--danger-700)]",
               focusResetClass,
               busy && "cursor-default opacity-60",
             )}

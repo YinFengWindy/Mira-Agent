@@ -45,7 +45,7 @@ export function OnboardingRoleStep({ onSaved, onBusyChange }: { onSaved: () => P
       <div className="mb-5 flex justify-end"><RoleImportControls imported={draft.roleCardImport} form={draft.newRoleForm}
         disabled={creating || Boolean(createdId)} onImport={() => void draft.previewRoleCard()} onCancel={() => void draft.cancelRoleCardImport()} onUpdateForm={draft.updateNewRoleForm} /></div>
       <RoleCreateFields form={draft.newRoleForm} disabled={busy || Boolean(createdId)} importedAvatar={previewImagePath} onUpdateForm={draft.updateNewRoleForm} />
-      {feedback ? <p role="alert" className="mt-4 text-sm text-red-700">{feedback.message}</p> : null}
+      {feedback ? <p role="alert" className="mt-4 text-sm text-danger-text">{feedback.message}</p> : null}
       <div className="mt-8 flex justify-end"><button type="button" className={onboardingActionClass}
         disabled={busy || needsEmotionChoice || !draft.newRoleForm.name.trim()} onClick={() => void create()}>
         {creating ? "正在创建" : createdId ? "继续" : "创建角色"}<ArrowRight size={18} />

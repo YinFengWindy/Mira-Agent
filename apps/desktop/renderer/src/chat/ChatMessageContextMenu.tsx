@@ -5,6 +5,7 @@ import {
   type MessageContextMenuState,
 } from "./chatMessageActions";
 import { CopyIcon, QuoteIcon } from "../shared/icons";
+import { MenuItem, MenuPanel } from "../shared/ui/Menu";
 
 type ChatMessageContextMenuProps = {
   menu: MessageContextMenuState;
@@ -23,10 +24,10 @@ export function ChatMessageContextMenu({
   onQuote,
 }: ChatMessageContextMenuProps) {
   return (
-    <div
+    <MenuPanel
       ref={menuRef}
       data-testid="message-context-menu"
-      className="fixed z-50 min-w-[132px] overflow-hidden rounded-md border border-line-soft bg-white py-1 text-sm text-ink shadow-pop"
+      className="fixed z-50 min-w-[132px]"
       style={{ left: menu.x, top: menu.y }}
       role="menu"
       onClick={(event) => event.stopPropagation()}
@@ -35,28 +36,24 @@ export function ChatMessageContextMenu({
         event.stopPropagation();
       }}
     >
-      <button
+      <MenuItem
         data-testid="message-context-menu-copy"
-        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-surface-soft focus:bg-surface-soft focus:outline-none disabled:cursor-default disabled:opacity-45"
-        type="button"
         role="menuitem"
         onClick={onCopy}
         disabled={!getChatMessageCopyText(menu.message)}
       >
         <CopyIcon className="h-[14px] w-[14px] fill-current" />
         <span>复制</span>
-      </button>
-      <button
+      </MenuItem>
+      <MenuItem
         data-testid="message-context-menu-quote"
-        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-surface-soft focus:bg-surface-soft focus:outline-none disabled:cursor-default disabled:opacity-45"
-        type="button"
         role="menuitem"
         onClick={onQuote}
         disabled={!getChatMessageReplyContent(menu.message) || sending}
       >
         <QuoteIcon className="h-[14px] w-[14px] fill-current" />
         <span>引用</span>
-      </button>
-    </div>
+      </MenuItem>
+    </MenuPanel>
   );
 }
