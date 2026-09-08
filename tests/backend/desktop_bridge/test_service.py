@@ -22,6 +22,29 @@ from desktop_bridge.voice.voice_service import (
 from session.manager import SessionManager
 
 
+@pytest.mark.parametrize("delivery_key", ["", "missing"])
+async def test_registered_committed_push_requires_its_original_message(tmp_path, delivery_key):
+    role_store = RoleStore(tmp_path)
+    role_store.create_role(role_id="mira", name="Mira", system_prompt="test")
+    sessions = SessionManager(tmp_path)
+    push = MessagePushTool()
+    service = DesktopBridgeService(
+        workspace=tmp_path, role_store=role_store, session_manager=sessions,
+        agent_loop=SimpleNamespace(), event_bus=EventBus(), push_tool=push,
+    )
+    emitted = []
+    service.add_event_listener(emitted.append)
+    result = await push.execute(
+        channel="desktop", chat_id="role:mira", message="uncommitted",
+        push_delivery_key=delivery_key, push_message_already_persisted=True,
+    )
+    assert "发送失败" in result
+    assert "uncommitted delivery" in result
+    assert SessionManager(tmp_path).get_or_create("role:mira").messages == []
+    assert emitted == []
+    await service.aclose()
+
+
 @pytest.mark.asyncio
 async def test_injected_role_service_publishes_role_deleted(tmp_path) -> None:
     role_store = RoleStore(tmp_path)

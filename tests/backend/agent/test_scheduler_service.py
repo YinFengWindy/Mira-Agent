@@ -55,7 +55,8 @@ async def test_instant_push_receives_correct_args(
     await drain_tasks()
 
     mock_push.execute.assert_called_once_with(
-        channel="telegram", chat_id="999", message="喝水了", role_id="mira"
+        channel="telegram", chat_id="999", message="喝水了", role_id="mira",
+        push_delivery_key=svc._job_role_metadata(job)["delivery_key"],
     )
 
 
@@ -115,6 +116,8 @@ async def test_soft_sends_ai_response_via_push(
         chat_id=job.chat_id,
         message="北京今天晴，15°C",
         role_id="mira",
+        push_delivery_key=svc._job_role_metadata(job)["delivery_key"],
+        push_message_already_persisted=True,
     )
 
 
@@ -564,7 +567,7 @@ def test_legacy_role_job_metadata_gets_stable_context_defaults(
     metadata = svc._job_role_metadata(job)
 
     assert metadata["thread_id"] == f"thread:mira:scheduler:{job.id}"
-    assert metadata["delivery_key"] == job.id
+    assert metadata["delivery_key"] == f"scheduler:{job.id}:{job.fire_at.isoformat()}"
     assert metadata["role_work_kind"] == "scheduled_job"
 
 

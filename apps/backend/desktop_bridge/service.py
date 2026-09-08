@@ -373,11 +373,14 @@ class DesktopBridgeService:
             *,
             message: str = "",
             media: list[str] | None = None,
+            metadata: dict[str, object] | None = None,
         ) -> None:
             session = await self.app_service.apply_desktop_push(
                 chat_id,
                 message=message,
                 media=media,
+                delivery_key=str((metadata or {}).get("delivery_key") or ""),
+                already_persisted=(metadata or {}).get("already_persisted") is True,
             )
             await self._broadcast_session_updated(
                 request_id="proactive", session=session
@@ -385,8 +388,8 @@ class DesktopBridgeService:
 
         push_tool.register_channel(
             "desktop",
-            text=lambda chat_id, message: _emit_session_for_chat(
-                chat_id, message=message
+            text_with_metadata=lambda chat_id, message, metadata: _emit_session_for_chat(
+                chat_id, message=message, metadata=metadata
             ),
             file=lambda chat_id, file_path, _name=None: _emit_session_for_chat(
                 chat_id, media=[file_path]

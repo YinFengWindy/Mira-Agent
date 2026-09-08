@@ -101,6 +101,9 @@ class MessagePushTool(Tool):
         file: Callable[[str, str, str | None], Awaitable[None]] | None = None,
         image: Callable[[str, str], Awaitable[None]] | None = None,
         target_resolver: Callable[[str], str] | None = None,
+        text_with_metadata: (
+            Callable[[str, str, dict[str, object]], Awaitable[None]] | None
+        ) = None,
     ) -> None:
         """注册渠道的各类 sender。
         - text(chat_id, message)
@@ -108,6 +111,7 @@ class MessagePushTool(Tool):
         - file(chat_id, file_path, name=None)
         - image(chat_id, image_path_or_url)
         - target_resolver(chat_id) -> canonical chat_id
+        - text_with_metadata(chat_id, message, metadata) preserves delivery ownership
         """
         self._senders[channel] = {}
         self._retired_channels.discard(channel)
@@ -115,6 +119,8 @@ class MessagePushTool(Tool):
             self._senders[channel]["text"] = text
         if stream_text:
             self._senders[channel]["stream_text"] = stream_text
+        if text_with_metadata:
+            self._senders[channel]["text_with_metadata"] = text_with_metadata
         if file:
             self._senders[channel]["file"] = file
         if image:
@@ -184,9 +190,25 @@ class MessagePushTool(Tool):
         results: list[str] = []
         image_sent = False
         try:
-            if message and ("text" in senders or "stream_text" in senders):
-                sender_name = "stream_text" if "stream_text" in senders else "text"
-                await senders[sender_name](chat_id, message)
+            if message and any(
+                name in senders for name in ("text_with_metadata", "stream_text", "text")
+            ):
+                if "text_with_metadata" in senders:
+                    await senders["text_with_metadata"](
+                        chat_id,
+                        message,
+                        {
+                            "delivery_key": str(
+                                kwargs.get("push_delivery_key") or ""
+                            ).strip(),
+                            "already_persisted": _is_truthy(
+                                kwargs.get("push_message_already_persisted")
+                            ),
+                        },
+                    )
+                else:
+                    sender_name = "stream_text" if "stream_text" in senders else "text"
+                    await senders[sender_name](chat_id, message)
                 preview = message[:60] + "..." if len(message) > 60 else message
                 logger.info(f"[message_push] {channel}:{chat_id} ← text: {preview!r}")
                 results.append("文本已发送")
