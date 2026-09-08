@@ -53,12 +53,14 @@ class DesktopAppService:
         delivery_key: str = "",
         already_persisted: bool = False,
     ) -> Session:
-        """Persists new pushes; committed turn deliveries only refresh their session."""
+        """Validates pushes and persists only deliveries not owned by a turn commit."""
+        normalized_message = str(message or "")
+        normalized_media = [item for item in (media or []) if str(item).strip()]
+        if not normalized_message.strip() and not normalized_media:
+            raise ValueError("desktop push 必须包含非空文本或媒体")
         session_key = self.normalize_desktop_session_key(chat_id)
         role_id = self.role_id_from_desktop_session_key(session_key)
         session = self.session_manager.get_or_create(session_key)
-        normalized_message = str(message or "")
-        normalized_media = [item for item in (media or []) if str(item).strip()]
         if already_persisted:
             # A turn commit owns this message. A missing commit is an error, not
             # permission for the transport to become a second persistence owner.
