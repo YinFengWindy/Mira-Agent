@@ -29,6 +29,9 @@ window.addEventListener("click", (event) => {
 });
 
 const api: DesktopApi = {
+  applicationSessionId() {
+    return ipcRenderer.invoke("desktop:application-session-id") as Promise<string>;
+  },
   invoke(request) {
     return (ipcRenderer.invoke("desktop:invoke", request) as Promise<LocalAssetTransport<BridgeResponse>>)
       .then((transport) => localAssets.consume(transport));

@@ -258,6 +258,48 @@ async def test_cancel_invalidates_preview_without_creating_a_role(tmp_path) -> N
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("remove", [False, True])
+async def test_commit_can_replace_or_remove_imported_avatar(tmp_path, remove):
+    service, store = _service(tmp_path)
+    source = tmp_path / "private_runtime/imports/role-cards/card.png"
+    source.write_bytes(_png_role_card(_card()))
+    replacement = tmp_path / "replacement.png"
+    Image.new("RGB", (12, 12), (0, 255, 0)).save(replacement)
+    preview = await service.preview({"source": str(source)})
+
+    result = await service.commit(
+        {
+            "import_id": preview["import_id"],
+            "overrides": {"avatar_source": "" if remove else str(replacement)},
+        }
+    )
+
+    role = store.get_role(result["role"]["id"])
+    assert role is not None
+    if remove:
+        assert role.avatar is None
+    else:
+        assert role.avatar
+        with Image.open(store.assets_dir.parent / role.avatar) as avatar:
+            assert avatar.getpixel((0, 0)) == (0, 255, 0)
+
+
+@pytest.mark.asyncio
+async def test_avatar_failure_rolls_back_import_and_retains_retry(tmp_path):
+    service, store = _service(tmp_path)
+    preview = await service.preview({"source": str(_stage_card(tmp_path, _card()))})
+    with pytest.raises(FileNotFoundError):
+        await service.commit(
+            {
+                "import_id": preview["import_id"],
+                "overrides": {"avatar_source": str(tmp_path / "missing.png")},
+            }
+        )
+    assert store.list_roles() == []
+    assert (await service.commit({"import_id": preview["import_id"]}))["role"]["id"]
+
+
+@pytest.mark.asyncio
 async def test_commit_defaults_description_to_imported_card_description(
     tmp_path,
 ) -> None:

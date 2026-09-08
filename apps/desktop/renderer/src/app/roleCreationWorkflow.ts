@@ -3,6 +3,7 @@ import type { BridgeResponse } from "../../../src/bridge/shared";
 import type { AppMainView, NewRoleFormState, PendingRoleCardAction, RoleRecord } from "../shared/types";
 import { createEmptyNewRoleForm, createPendingRoleRecord, waitForMinimumRoleCardBusy } from "./appState";
 import type { NavigationEntry } from "./appState";
+import { buildRoleCreationRequest, createRoleFromDraft } from "../roles/roleCreation";
 
 /** Workspace dependencies used to activate and navigate to a created role. */
 export type RoleCreationControllerArgs = {
@@ -90,13 +91,10 @@ function restoreFailedCreation(pendingId: string, previousRoleId: string, args: 
 
 /** Creates a role through either bridge entry point, then refreshes and activates it once. */
 export async function runRoleCreation(form: NewRoleFormState, args: RoleCreationWorkflowArgs) {
-  const name = form.name.trim();
-  const character = form.profile?.character;
-  const systemPrompt = character
-    ? [character.behavior_rules, character.profile, character.personality, character.response_constraints].find((text) => text?.trim())?.trim() ?? ""
-    : form.systemPrompt.trim();
-  if (!name || (!form.importId && !systemPrompt)) {
-    const message = "角色名称和系统提示词不能为空。";
+  try {
+    buildRoleCreationRequest(form);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     args.setError(message);
     args.setWorkspaceFeedback({ tone: "error", message: `角色创建失败：${message}` });
     return false;
@@ -112,19 +110,7 @@ export async function runRoleCreation(form: NewRoleFormState, args: RoleCreation
   args.setWorkspaceFeedback(null);
   try {
     if (pendingId) startOptimisticCreation(form, pendingId, args);
-    const fields = {
-      name,
-      description: form.description,
-      ...(!imported || !form.profile ? { system_prompt: systemPrompt } : {}),
-      ...(form.profile ? { profile: form.profile } : {}),
-    };
-    const response = await args.invoke(imported ? {
-      method: "roles.cardImport.commit",
-      payload: { import_id: form.importId, overrides: fields, emotion_selections: form.emotionSelections ?? {} },
-    } : { method: "roles.create", payload: fields });
-    if (response.error) throw new Error(response.error.message);
-    createdRole = response.payload.role as RoleRecord;
-    if (!createdRole?.id) throw new Error("创建结果缺少角色信息");
+    createdRole = await createRoleFromDraft(form, args.invoke);
     if (pendingId) await (args.waitForBusy ?? waitForMinimumRoleCardBusy)(startedAt);
     await completeRoleCreation(createdRole, pendingId, imported, args);
     return true;

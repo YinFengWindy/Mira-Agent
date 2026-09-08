@@ -58,6 +58,8 @@ import type {
   SessionPayload,
 } from "./shared/types";
 import "./styles.css";
+import { useOnboardingController } from "./onboarding/useOnboardingController";
+import { OnboardingPage } from "./onboarding/OnboardingPage";
 
 type StoryRouteProps = {
   roles: RoleRecord[];
@@ -345,7 +347,7 @@ function App(): React.ReactElement {
     };
   }, [activeSessionKeyForImages, activeSessionUpdatedAtForImages]);
 
-  useDesktopBridgeLifecycle({
+  const bridgeLifecycle = useDesktopBridgeLifecycle({
     activeRoleId,
     activeIllustration,
     setActiveRoleId,
@@ -571,6 +573,11 @@ function App(): React.ReactElement {
     if (!detailRole) return;
     updateRoleForm(createRoleFormFromRole(detailRole));
     setNotice("角色表单已重置。");
+  }
+
+  const onboarding = useOnboardingController(openRole, bridgeLifecycle);
+  if (onboarding.visible) {
+    return <OnboardingPage controller={onboarding} windowMaximized={windowMaximized} />;
   }
 
   if (mainView.kind === "story") {

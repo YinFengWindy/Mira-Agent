@@ -5,6 +5,15 @@ import type { RoleProfileDraft } from "../shared/types";
 import { RoleCardProfileForm } from "./RoleCardProfileForm";
 
 describe("RoleCardProfileForm", () => {
+  it("folds optional creation fields without removing their values", async () => {
+    const view = await mountTestComponent(<RoleCardProfileForm collapseDetails profile={{ character: { personality: "细心" } }} onUpdate={() => undefined} />);
+    try {
+      const details = view.container.querySelector("details");
+      assert.ok(details);
+      assert.equal(details.open, false);
+      assert.equal(details.querySelector("textarea")?.value, "细心");
+    } finally { await view.cleanup(); }
+  });
   it("edits response constraints independently while retaining imported knowledge", async () => {
     const profile: RoleProfileDraft = {
       character: { profile: "档案管理员", behavior_rules: "诚实", response_constraints: "简洁" },

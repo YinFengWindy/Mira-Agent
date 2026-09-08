@@ -4,17 +4,7 @@ import { ModelRegistrationDetails } from "./ModelRegistrationDetails";
 import { ModelRegistrationList } from "./ModelRegistrationList";
 import { prepareModelRegistrationRemoval } from "./modelRegistrationRemoval";
 import type { SettingsSectionEditorProps } from "./settingsPageTypes";
-
-function createRegistration(): ModelRegistrationFormData {
-  return {
-    id: crypto.randomUUID(),
-    provider: "openai",
-    baseUrl: "",
-    apiKey: "",
-    model: "",
-    effort: "none",
-  };
-}
+import { createModelRegistration } from "./modelRegistration";
 
 /** Renders the model registration catalog as list and detail views. */
 export function ModelsSettingsSection({
@@ -41,7 +31,7 @@ export function ModelsSettingsSection({
   }
 
   function addRegistration(): void {
-    const registration = createRegistration();
+    const registration = createModelRegistration();
     updateDraft((current) => ({
       ...current,
       models: {
