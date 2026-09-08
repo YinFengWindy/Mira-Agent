@@ -429,6 +429,15 @@ export function DesktopAppFrame({
           )}
         </div>
         <main className="chat-pane relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-hidden rounded-l-lg border-b border-l border-t border-line-soft bg-[var(--chat-bg)] shadow-soft">
+          {sidebarState.collapsed ? (
+            <div
+              className="absolute inset-y-0 left-0 z-[7] w-[3px] cursor-col-resize transition-colors hover:bg-accent-soft"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="拖拽展开侧边栏"
+              onPointerDown={sidebarState.onBeginResize}
+            />
+          ) : null}
           {roleWorkspaceViewActive && workspaceFeedback ? (
             <div
               className={cx(

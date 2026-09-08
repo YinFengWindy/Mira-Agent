@@ -59,7 +59,7 @@ export function ChatImageLightbox({
   } | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const navigationButtonClass =
-    "pointer-events-auto grid h-10 w-10 place-items-center rounded-full border border-transparent bg-transparent text-[#4B5563] transition hover:border-black hover:bg-white/92 hover:text-[#1F2937] focus:outline-none disabled:cursor-default disabled:opacity-40";
+    "pointer-events-auto grid h-10 w-10 place-items-center rounded-full border border-transparent bg-transparent text-ink-secondary transition hover:border-black hover:bg-white/92 hover:text-ink focus:outline-none disabled:cursor-default disabled:opacity-40";
   const fittedImageSize = fitChatImageToStage(stageSize, imageNaturalSize);
 
   useEffect(() => {
@@ -185,13 +185,13 @@ export function ChatImageLightbox({
         onClick={onClose}
       />
       <section
-        className="relative z-[1] grid h-full max-h-[min(92vh,980px)] w-full max-w-[min(92vw,1400px)] min-h-0 min-w-0 place-items-center overflow-hidden rounded-[28px] bg-[#F4F7FB] p-5 shadow-[0_32px_90px_rgba(15,23,42,0.22)]"
+        className="relative z-[1] grid h-full max-h-[min(92vh,980px)] w-full max-w-[min(92vw,1400px)] min-h-0 min-w-0 place-items-center overflow-hidden rounded-[28px] bg-surface-soft p-5 shadow-pop"
         role="dialog"
         aria-modal="true"
         aria-label="聊天图片放大预览"
       >
         <button
-          className="absolute right-4 top-4 z-[3] grid h-10 w-10 place-items-center rounded-full border border-black/12 bg-white/94 text-[#272636] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:border-black hover:bg-white"
+          className="absolute right-4 top-4 z-[3] grid h-10 w-10 place-items-center rounded-full border border-line-soft bg-white/94 text-ink shadow-soft transition hover:border-black hover:bg-white"
           type="button"
           aria-label="关闭聊天图片弹层"
           onClick={onClose}
@@ -200,7 +200,7 @@ export function ChatImageLightbox({
         </button>
         <div
           ref={stageRef}
-          className="relative grid h-full w-full min-h-0 min-w-0 place-items-center overflow-hidden rounded-xl bg-[#F4F7FB]"
+          className="relative grid h-full w-full min-h-0 min-w-0 place-items-center overflow-hidden rounded-xl bg-surface-soft"
           onWheel={handleWheel}
         >
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] flex items-center pl-4">
@@ -258,7 +258,7 @@ export function ChatImageLightbox({
           </div>
           <div className="pointer-events-none absolute bottom-4 right-4 z-[2] flex items-center gap-3">
             <button
-              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-black/12 bg-white/94 text-[#272636] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
+              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-line-soft bg-white/94 text-ink shadow-soft transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
               type="button"
               aria-label="重新生成图片"
               title="重新生成图片"
@@ -268,7 +268,7 @@ export function ChatImageLightbox({
               <ArrowClockwise className={`h-5 w-5 ${regenerating ? "animate-spin" : ""}`} weight="bold" />
             </button>
             <button
-              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-black/12 bg-white/94 text-[#272636] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
+              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-line-soft bg-white/94 text-ink shadow-soft transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
               type="button"
               aria-label="定位到对应消息"
               onClick={onLocateMessage}
@@ -277,7 +277,7 @@ export function ChatImageLightbox({
               <LocateIcon className="h-5 w-5 fill-current" />
             </button>
             <button
-              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-black/12 bg-white/94 text-[#272636] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
+              className="pointer-events-auto grid h-11 w-11 place-items-center rounded-full border border-line-soft bg-white/94 text-ink shadow-soft transition hover:border-black hover:bg-white disabled:cursor-default disabled:opacity-40"
               type="button"
               aria-label="加入素材库"
               onClick={onAddToAssetLibrary}

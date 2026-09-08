@@ -41,11 +41,16 @@
     --pink-800: #852652;
     --pink-900: #5f1a3a;
 
-    /* powder blue tints (hue 240) — app-base gradient only */
+    /* powder blue tints (hue 240) — app-base gradient + accent gradient */
     --blue-50: #f6fbfe;
     --blue-100: #e9f5ff;
     --blue-150: #dcf0ff;
     --blue-200: #c9e8fe;
+    --blue-300: #a6d6f9;
+    /* accent-gradient endpoints: white text stays >=4.5:1 across the whole
+       blue->pink sweep (endpoints 4.78/5.20, oklab midpoint 4.93) */
+    --blue-grad: #1e79ad;
+    --pink-grad: #b93f76;
 
     /* lavender secondary (hue 302) */
     --lavender-50: #fbf9ff;
@@ -119,8 +124,15 @@
     --color-danger-text: var(--danger-700);     /* 6.0:1 */
 
     /* ---------- gradients ---------- */
-    --gradient-accent: linear-gradient(135deg in oklab, var(--pink-600), var(--lavender-grad));
-    --gradient-accent-soft: linear-gradient(135deg in oklab, var(--pink-100), var(--lavender-150));
+    /* pastel accent gradient: same blue->pink family as the app base, one
+       tint deeper so controls read as controls; pair with ink text (13:1) */
+    --gradient-accent: linear-gradient(135deg in oklab, var(--blue-150), var(--pink-150));
+    /* saturated variant for text gradients and thin data marks that would
+       vanish in pastel; white/ink both pass on it (see --blue-grad note) */
+    --gradient-accent-strong: linear-gradient(135deg in oklab, var(--blue-grad), var(--pink-grad));
+    --gradient-accent-soft: linear-gradient(135deg in oklab, var(--blue-50), var(--pink-50));
+    /* mid-tint sweep for meters/bars: pastel family but readable on soft tracks */
+    --gradient-accent-medium: linear-gradient(90deg in oklab, var(--blue-300), var(--pink-300));
     --gradient-app: linear-gradient(160deg in oklab, var(--blue-100), var(--lavender-50) 45%, var(--pink-100));
 
     /* ---------- radius ---------- */
@@ -212,7 +224,7 @@
 
 @layer utilities {
   .scrollbar-soft {
-    scrollbar-color: var(--neutral-200) transparent;
+    scrollbar-color: var(--pink-200) transparent;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
   }
@@ -228,7 +240,7 @@
   .scrollbar-soft::-webkit-scrollbar-thumb {
     border: 3px solid transparent;
     border-radius: 999px;
-    background: var(--neutral-200);
+    background: var(--pink-200);
     background-clip: padding-box;
   }
 
@@ -303,12 +315,20 @@
     background-image: var(--gradient-accent-soft);
   }
 
+  .bg-gradient-accent-strong {
+    background-image: var(--gradient-accent-strong);
+  }
+
+  .bg-gradient-accent-medium {
+    background-image: var(--gradient-accent-medium);
+  }
+
   .bg-gradient-app {
     background-image: var(--gradient-app);
   }
 
   .text-gradient-accent {
-    background-image: var(--gradient-accent);
+    background-image: var(--gradient-accent-strong);
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;

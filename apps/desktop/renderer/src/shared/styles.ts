@@ -25,7 +25,7 @@ export const textareaClass = cx(inputClass, "min-h-24 resize-y");
 
 /** Shared primary action button styling. */
 export const primaryButtonClass =
-  "cursor-pointer rounded-md border border-transparent bg-gradient-accent px-[18px] py-3 text-white shadow-soft transition-[box-shadow,filter] duration-150 hover:brightness-105 hover:shadow-panel active:brightness-95 disabled:cursor-default disabled:opacity-50 disabled:shadow-none";
+  "cursor-pointer rounded-md border border-white/70 bg-gradient-accent px-[18px] py-3 text-ink shadow-soft transition-[box-shadow,filter] duration-150 hover:brightness-[1.03] hover:shadow-panel active:brightness-[0.97] disabled:cursor-default disabled:opacity-50 disabled:shadow-none";
 
 /** Shared secondary action button styling. */
 export const ghostButtonClass =

@@ -14,9 +14,9 @@ export function RoleTaskList({ tasks, onCreate, onSelect }: {
   return (
     <div className={cx(chatSidebarPanelClass, "grid-rows-[auto_minmax(0,1fr)]")}>
       <div className={cx(chatSidebarHeaderClass, "gap-1")}>
-        <span className="font-semibold text-[#272536]">任务</span>
+        <span className="font-semibold text-ink">任务</span>
         <button
-          className={cx("grid h-7 w-7 place-items-center rounded-md text-[#667085] transition-colors hover:bg-white hover:text-[#272536]", focusResetClass)}
+          className={cx("grid h-7 w-7 place-items-center rounded-md text-ink-muted transition-colors hover:bg-white hover:text-ink", focusResetClass)}
           type="button"
           aria-label="新增计划任务"
           onClick={onCreate}
@@ -27,12 +27,12 @@ export function RoleTaskList({ tasks, onCreate, onSelect }: {
       <div className={cx(chatSidebarScrollableClass, "space-y-3")}>
         {groups.length ? groups.map((group) => (
           <section key={group.kind} data-testid="role-task-group" className="rounded-md p-2">
-            <div className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-medium tracking-wide text-[#667085]">
+            <div className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-medium tracking-wide text-ink-muted">
               {group.kind === "schedule" ? <CalendarDots className="h-3.5 w-3.5" weight="fill" /> : null}
               {group.kind === "subagent" ? <Robot className="h-3.5 w-3.5" weight="fill" /> : null}
               {group.kind === "memory_maintenance" ? <Brain className="h-3.5 w-3.5" weight="fill" /> : null}
               <span>{taskKindLabels[group.kind]}</span>
-              <span className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-md bg-[#EEF2F6] px-1 text-[10px] text-[#667085]">{group.tasks.length}</span>
+              <span className="ml-auto grid min-h-5 min-w-5 place-items-center rounded-md bg-surface-soft px-1 text-[10px] text-ink-muted">{group.tasks.length}</span>
             </div>
             {group.tasks.length ? group.tasks.map((task) => (
               <button
@@ -42,10 +42,10 @@ export function RoleTaskList({ tasks, onCreate, onSelect }: {
                 onClick={() => onSelect(task.id)}
               >
                 <span className="min-w-0">
-                  <span data-testid="role-task-title" className="block truncate text-[13px] font-semibold text-[#344054]">{task.label}</span>
-                  <span data-testid="role-task-summary" className="mt-1 block truncate text-[11px] text-[#7A8493]">{task.detail || "—"}</span>
+                  <span data-testid="role-task-title" className="block truncate text-[13px] font-semibold text-ink-secondary">{task.label}</span>
+                  <span data-testid="role-task-summary" className="mt-1 block truncate text-[11px] text-ink-muted">{task.detail || "—"}</span>
                 </span>
-                <CaretRight className="h-3.5 w-3.5 text-[#B0B8C4] transition-colors group-hover:text-[#667085]" />
+                <CaretRight className="h-3.5 w-3.5 text-ink-faint transition-colors group-hover:text-ink-muted" />
               </button>
             )) : null}
           </section>

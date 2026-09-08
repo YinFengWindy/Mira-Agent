@@ -26,7 +26,7 @@ export function ChatMessageContextMenu({
     <div
       ref={menuRef}
       data-testid="message-context-menu"
-      className="fixed z-50 min-w-[132px] overflow-hidden rounded-md border border-[#E4E7EC] bg-white py-1 text-sm text-[#1F2937] shadow-[0_16px_40px_rgba(15,23,42,0.16)]"
+      className="fixed z-50 min-w-[132px] overflow-hidden rounded-md border border-line-soft bg-white py-1 text-sm text-ink shadow-pop"
       style={{ left: menu.x, top: menu.y }}
       role="menu"
       onClick={(event) => event.stopPropagation()}
@@ -37,7 +37,7 @@ export function ChatMessageContextMenu({
     >
       <button
         data-testid="message-context-menu-copy"
-        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-[#F5F7FA] focus:bg-[#F5F7FA] focus:outline-none disabled:cursor-default disabled:opacity-45"
+        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-surface-soft focus:bg-surface-soft focus:outline-none disabled:cursor-default disabled:opacity-45"
         type="button"
         role="menuitem"
         onClick={onCopy}
@@ -48,7 +48,7 @@ export function ChatMessageContextMenu({
       </button>
       <button
         data-testid="message-context-menu-quote"
-        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-[#F5F7FA] focus:bg-[#F5F7FA] focus:outline-none disabled:cursor-default disabled:opacity-45"
+        className="flex h-8 w-full items-center gap-2 px-3 text-left transition hover:bg-surface-soft focus:bg-surface-soft focus:outline-none disabled:cursor-default disabled:opacity-45"
         type="button"
         role="menuitem"
         onClick={onQuote}
