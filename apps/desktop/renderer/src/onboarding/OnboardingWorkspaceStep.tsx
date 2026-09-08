@@ -22,7 +22,7 @@ export function OnboardingWorkspaceStep({ roles, entering, onEnter }: {
         {role.description ? <p className="mt-3 break-words text-sm leading-6 text-[#667085]">{role.description}</p> : null}
       </div>
       {roles.length > 1 ? <select aria-label="选择角色" value={role.id} onChange={(event) => setSelectedId(event.target.value)} disabled={entering}
-        className="max-w-full rounded-md border border-[#D8DCE2] bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+        className="max-w-full rounded-md border border-line bg-surface p-2 text-sm">
         {roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
       </select> : null}
       <button type="button" className={onboardingActionClass} disabled={entering} onClick={() => void onEnter(role)}>

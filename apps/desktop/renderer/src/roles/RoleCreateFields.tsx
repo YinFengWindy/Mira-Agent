@@ -12,7 +12,7 @@ export function RoleCreateFields({ form, disabled, importedAvatar, onUpdateForm 
   importedAvatar: string;
   onUpdateForm: React.Dispatch<React.SetStateAction<NewRoleFormState>>;
 }) {
-  const inputClass = cx(roleFieldClass, "rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary");
+  const inputClass = roleFieldClass;
   return (
     <fieldset disabled={disabled} className="grid min-w-0 gap-6">
       <RoleAvatarPicker source={form.avatarSource ?? importedAvatar} disabled={disabled}

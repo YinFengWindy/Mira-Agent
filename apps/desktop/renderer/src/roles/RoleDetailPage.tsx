@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { BackIcon, ResetIcon, SaveIcon } from "../shared/icons";
-import { cx } from "../shared/styles";
+import { cx, iconButtonClass } from "../shared/styles";
 import { Magnet } from "../shared/ui/reactBits/Magnet";
 import type { RoleFormState, RoleRecord } from "../shared/types";
 import { RoleCapabilitiesPanel } from "./RoleCapabilitiesPanel";
@@ -47,7 +47,7 @@ export function RoleDetailPage({
   const pageRef = useRef<HTMLElement | null>(null);
   const pendingScrollTopRef = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<RoleDetailTabId>("profile");
-  const floatingActionClass = "grid h-10 w-10 place-items-center rounded-full border border-[#E5E7EB] bg-white text-[#1F2937] shadow-[0_6px_16px_rgba(15,23,42,0.08)] transition hover:border-[#CBD5E1] hover:bg-[#F8FAFC] disabled:cursor-not-allowed disabled:border-[#E5E7EB] disabled:bg-[#F3F4F6] disabled:text-[#9CA3AF] disabled:opacity-100 disabled:shadow-none";
+  const floatingActionClass = cx(iconButtonClass, "shadow-soft disabled:cursor-not-allowed disabled:bg-surface-soft disabled:text-ink-faint disabled:opacity-100 disabled:shadow-none");
 
   useLayoutEffect(() => {
     pendingScrollTopRef.current = restoreRoleDetailScrollTop(pageRef.current, pendingScrollTopRef.current);

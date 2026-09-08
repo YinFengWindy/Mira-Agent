@@ -3,11 +3,11 @@ import type { WindowControlAction } from "../../../src/bridge/shared";
 import { cx } from "../shared/styles";
 
 const titlebarIconClass =
-  "[-webkit-app-region:no-drag] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#5f6b76] transition-colors hover:bg-black/5 hover:text-[#2c3440] disabled:text-[#b8b8b8] disabled:hover:bg-transparent disabled:hover:text-[#b8b8b8]";
+  "[-webkit-app-region:no-drag] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-ink-muted transition-colors hover:bg-white/60 hover:text-ink disabled:text-ink-faint/70 disabled:hover:bg-transparent disabled:hover:text-ink-faint/70";
 const titlebarSidebarIconClass =
   "relative h-[11px] w-3 rounded-[4px] border-[1.2px] border-current before:absolute before:w-px before:rounded-full before:bg-current before:content-['']";
 const windowControlClass =
-  "[-webkit-app-region:no-drag] m-0 grid h-[calc(var(--titlebar-height)_+_1px)] w-[46px] place-items-center border-0 bg-transparent p-0 text-[#5f6b76] transition-colors hover:bg-black/5 hover:text-[#2c3440]";
+  "[-webkit-app-region:no-drag] m-0 grid h-[calc(var(--titlebar-height)_+_1px)] w-[46px] place-items-center border-0 bg-transparent p-0 text-ink-muted transition-colors hover:bg-white/60 hover:text-ink";
 
 /** Renders the frameless desktop title bar and window controls. */
 export function TitleBar({
@@ -39,7 +39,7 @@ export function TitleBar({
   }
 
   return (
-    <header className="titlebar [-webkit-app-region:drag] flex h-[calc(var(--titlebar-height)+5px)] select-none items-center justify-between bg-transparent text-[#747474]">
+    <header className="titlebar [-webkit-app-region:drag] flex h-[calc(var(--titlebar-height)+5px)] select-none items-center justify-between bg-transparent text-ink-muted">
       <div className={cx("titlebar-left flex h-full items-center gap-0 pl-0.5", minimal && "invisible")} aria-hidden={minimal || undefined} inert={minimal || undefined}>
         <button
           className={cx("titlebar-icon titlebar-sidebar", titlebarIconClass)}

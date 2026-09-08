@@ -1,14 +1,13 @@
 import type { ModelRegistrationFormData } from "../../../src/bridge/shared";
 import { SettingsField as Field } from "./SettingsField";
 import { SettingsSecretInput, settingsInputClass } from "./SettingsFieldPrimitives";
-import { cx } from "../shared/styles";
 
 /** Model registration fields shared by the catalog and first-run setup. */
 export function ModelRegistrationFields({ registration, onChange }: {
   registration: ModelRegistrationFormData;
   onChange: (mutate: (registration: ModelRegistrationFormData) => ModelRegistrationFormData) => void;
 }) {
-  const inputClass = cx(settingsInputClass, "focus:ring-2 focus:ring-primary/20 focus:border-primary");
+  const inputClass = settingsInputClass;
   return (
     <div className="grid">
       <Field label="Provider">

@@ -6,8 +6,8 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 /** Shared card surface used by empty states and diagnostic rows. */
 export const cardClass = "rounded-lg border border-line-soft bg-surface shadow-soft";
 
-/** Shared background for secondary workspace navigation sidebars. */
-export const secondarySidebarSurfaceClass = "bg-surface-soft";
+/** Shared background for secondary workspace navigation sidebars: transparent so the app gradient shows through, matching the chat role sidebar. */
+export const secondarySidebarSurfaceClass = "bg-transparent";
 
 /** Shared interaction styling for sidebar navigation entries. */
 export const sidebarNavItemClass =
@@ -18,7 +18,7 @@ export const bodyTextClass = "text-body-sm";
 
 /** Shared input styling for form controls outside the chat composer. */
 export const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint focus:border-line-accent focus:outline-none focus:ring-2 focus:ring-accent-soft";
+  "w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint hover:border-line-strong";
 
 /** Shared textarea styling for role prompt fields. */
 export const textareaClass = cx(inputClass, "min-h-24 resize-y");
@@ -38,6 +38,10 @@ export const dangerButtonClass =
 /** Shared quiet destructive styling for inline delete affordances. */
 export const dangerGhostButtonClass =
   "cursor-pointer rounded-md border border-line bg-surface px-[18px] py-3 text-danger-text transition-colors hover:border-danger/40 hover:bg-danger-soft disabled:cursor-default disabled:opacity-50";
+
+/** Square icon-only action button (back, reset, tools): the one corner treatment for this role is rounded-md. */
+export const iconButtonClass =
+  "grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-ink-secondary transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-default disabled:opacity-40";
 
 /** Shared focus reset for controls that rely on their existing state styling. */
 export const focusResetClass = "focus:outline-none";

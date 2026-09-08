@@ -200,7 +200,7 @@ export function ChatImageLightbox({
         </button>
         <div
           ref={stageRef}
-          className="relative grid h-full w-full min-h-0 min-w-0 place-items-center overflow-hidden rounded-[22px] bg-[#F4F7FB]"
+          className="relative grid h-full w-full min-h-0 min-w-0 place-items-center overflow-hidden rounded-xl bg-[#F4F7FB]"
           onWheel={handleWheel}
         >
           <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] flex items-center pl-4">

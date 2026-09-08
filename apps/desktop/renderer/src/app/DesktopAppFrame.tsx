@@ -334,7 +334,7 @@ export function DesktopAppFrame({
   const navRailUnreadTotal = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
 
   return (
-    <div className="app-frame grid h-screen grid-rows-app overflow-hidden bg-[var(--app-bg)]">
+    <div className="app-frame grid h-screen grid-rows-app overflow-hidden bg-transparent">
       <TitleBar
         sidebarCollapsed={sidebarCollapsed}
         windowMaximized={windowMaximized}
@@ -428,14 +428,14 @@ export function DesktopAppFrame({
             />
           )}
         </div>
-        <main className="chat-pane relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-hidden rounded-l-[16px] border-b border-l border-t border-[#E4E4E4] bg-[var(--chat-bg)]">
+        <main className="chat-pane relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-hidden rounded-l-lg border-b border-l border-t border-line-soft bg-[var(--chat-bg)] shadow-soft">
           {roleWorkspaceViewActive && workspaceFeedback ? (
             <div
               className={cx(
-                "absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-[14px] border px-4 py-2.5 text-sm shadow-[0_8px_24px_rgba(15,23,42,0.08)]",
+                "absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-md border px-4 py-2.5 text-body-sm shadow-soft",
                 workspaceFeedback.tone === "success"
-                  ? "border-[rgba(26,106,58,0.18)] bg-[#edf8f0] text-[#1a6a3a]"
-                  : "border-[rgba(176,58,58,0.18)] bg-[#fff1f1] text-[#9a2f2f]",
+                  ? "border-[var(--success-300)] bg-success-soft text-success-text"
+                  : "border-[var(--danger-300)] bg-danger-soft text-danger-text",
               )}
               aria-live="polite"
             >

@@ -43,7 +43,7 @@ export function RoleManagementPage({
                   disabled={!bridgeReady || isPending}
                   onClick={() => onOpenRoleDetail(role.id)}
                   className={cx(
-                    "group relative grid h-[420px] w-full overflow-hidden rounded-[22px] border border-[#D9E0E8] bg-[#EEF1F5] text-left shadow-[0_14px_40px_rgba(31,41,55,0.06)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(31,41,55,0.1)] disabled:cursor-default disabled:opacity-60",
+                    "group relative grid h-[420px] w-full overflow-hidden rounded-xl border border-[#D9E0E8] bg-[#EEF1F5] text-left shadow-[0_14px_40px_rgba(31,41,55,0.06)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(31,41,55,0.1)] disabled:cursor-default disabled:opacity-60",
                     focusResetClass,
                     isActive && "shadow-[0_18px_44px_rgba(31,41,55,0.12)]",
                   )}

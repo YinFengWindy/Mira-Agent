@@ -14,9 +14,9 @@ export default {
       fontFamily: {
         sans: ["var(--font-sans)"],
         display: ["var(--font-display)"],
-        // Legacy: panel titles used font-serif (Georgia). Repointed to the
-        // display stack so old headings pick up the brand treatment.
-        serif: ["var(--font-display)"],
+        // Story mode relies on the serif face for its decorative text; leave
+        // it untouched and migrate headings to font-display per surface.
+        serif: ["Georgia", "Times New Roman", "serif"],
       },
       // Semantic type scale. Chinese body text needs >=14px; captions floor at 12px.
       fontSize: {
@@ -78,6 +78,7 @@ export default {
           text: "var(--color-danger-text)",
         },
         ring: "var(--color-ring)",
+        "ring-soft": "var(--color-ring-soft)",
 
         // ---- legacy tier (existing components; same rendered values) ----
         bg: "var(--bg)",

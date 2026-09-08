@@ -191,7 +191,7 @@ export function ImageFormPanel({
       </div>
 
       <div className="grid min-w-0 gap-2">
-        <div className="min-w-0 rounded-[18px] border border-[#E4EAF0] bg-white p-2.5">
+        <div className="min-w-0 rounded-lg border border-[#E4EAF0] bg-white p-2.5">
           <div className="relative z-20 mb-3 flex min-w-0 items-start gap-2" ref={settingsPanelRef}>
             <div className={cx(segmentedControlClassName, "max-w-[calc(100%-2.75rem)]")}>
               <button
@@ -312,7 +312,7 @@ export function ImageFormPanel({
           />
           <div>
             {form.baseImagePath ? (
-              <div className="relative overflow-hidden rounded-[18px] border border-[#D6DCE3] bg-transparent">
+              <div className="relative overflow-hidden rounded-lg border border-[#D6DCE3] bg-transparent">
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(13,18,28,0.08)_0%,rgba(13,18,28,0.16)_56%,rgba(13,18,28,0.22)_100%)]" />
                 <img
                   className="block h-[220px] w-full object-cover"
@@ -344,7 +344,7 @@ export function ImageFormPanel({
                   </div>
                 </div>
                 <div className="absolute inset-x-0 bottom-0 p-4">
-                  <div className="grid gap-3 rounded-[18px] bg-transparent px-1 py-1">
+                  <div className="grid gap-3 rounded-lg bg-transparent px-1 py-1">
                     <label className="grid gap-2">
                       <div className="flex items-center justify-between gap-3 text-[13px] font-semibold text-white">
                         <span>Strength</span>

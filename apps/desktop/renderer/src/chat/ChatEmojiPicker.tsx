@@ -67,7 +67,7 @@ export function ChatEmojiPicker({
       </button>
       {open ? (
         <div
-          className="absolute bottom-[calc(100%+10px)] right-0 z-[4] w-[232px] rounded-[18px] border border-[#E4E7EC] bg-[rgba(255,255,255,0.98)] p-3 shadow-[0_18px_42px_rgba(15,23,42,0.14)] backdrop-blur-[10px]"
+          className="absolute bottom-[calc(100%+10px)] right-0 z-[4] w-[232px] rounded-lg border border-[#E4E7EC] bg-[rgba(255,255,255,0.98)] p-3 shadow-[0_18px_42px_rgba(15,23,42,0.14)] backdrop-blur-[10px]"
           role="dialog"
           aria-label="常用表情面板"
         >

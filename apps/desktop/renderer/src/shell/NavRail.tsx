@@ -28,7 +28,7 @@ type NavRailProps = {
 };
 
 const railButtonClass =
-  "relative grid h-9 w-9 place-items-center rounded-md text-[#5f6b76] transition-colors focus:outline-none focus-visible:bg-white/80 hover:bg-white/80 hover:text-[#2c3440]";
+  "relative grid h-9 w-9 place-items-center rounded-md text-ink-muted transition-colors focus-visible:bg-white/70 hover:bg-white/70 hover:text-ink";
 
 /** Renders the primary icon navigation rail shown across every workspace. */
 export function NavRail({
@@ -59,7 +59,7 @@ export function NavRail({
         className={cx(
           railButtonClass,
           active
-            && "bg-white text-[#5f6b76] shadow-[0_1px_2px_rgba(15,23,42,0.06)] hover:bg-white hover:text-[#5f6b76]",
+            && "bg-white text-accent shadow-soft hover:bg-white hover:text-accent",
         )}
         type="button"
         aria-label={showBadge ? `${entry.label}（${unreadTotal} 条未读）` : entry.label}
@@ -70,7 +70,7 @@ export function NavRail({
         {entry.imageSrc ? <img className="h-[19px] w-[19px]" src={entry.imageSrc} alt="" /> : null}
         {!entry.imageSrc && Icon ? <Icon className="h-[19px] w-[19px]" weight="regular" aria-hidden="true" /> : null}
         {showBadge ? (
-          <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-[#DA4B4B]" aria-hidden="true" />
+          <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
         ) : null}
       </button>
     );

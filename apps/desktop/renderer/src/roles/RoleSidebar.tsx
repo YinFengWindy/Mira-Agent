@@ -29,10 +29,10 @@ export function RoleSidebar({
 }: RoleSidebarProps) {
   const roleCardClass = cx(
     sidebarNavItemClass,
-    "grid min-h-[42px] grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 px-2 text-left text-[13px] leading-none text-[#3a4453] disabled:cursor-default disabled:opacity-60",
+    "grid min-h-[42px] grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5 px-2 text-left text-[13px] leading-none text-ink-secondary disabled:cursor-default disabled:opacity-60",
   );
   const roleAvatarClass =
-    "role-avatar grid h-8 w-8 place-items-center rounded-full border border-[rgba(76,48,24,0.12)] object-cover";
+    "role-avatar grid h-8 w-8 place-items-center rounded-full border border-line-soft object-cover";
 
   return (
     <aside
@@ -49,7 +49,7 @@ export function RoleSidebar({
           <button
             key={role.id}
             data-testid={`role-card-${role.id}`}
-            className={cx(roleCardClass, role.id === activeRoleId && "active bg-white text-[#2c3440] shadow-[0_6px_18px_rgba(15,23,42,0.08)]")}
+            className={cx(roleCardClass, role.id === activeRoleId && "active bg-white text-ink shadow-soft")}
             type="button"
             disabled={!bridgeReady}
             onClick={() => onOpenRole(role.id)}
@@ -67,7 +67,7 @@ export function RoleSidebar({
             <span className="grid min-h-5 min-w-5 place-items-center">
               {unreadCounts[role.id] ? (
                 <span
-                  className="h-2.5 w-2.5 rounded-full bg-[#DA4B4B]"
+                  className="h-2.5 w-2.5 rounded-full bg-danger"
                   aria-label={`${role.name} 有未读主动消息`}
                   title={`${role.name} 有未读主动消息`}
                 />

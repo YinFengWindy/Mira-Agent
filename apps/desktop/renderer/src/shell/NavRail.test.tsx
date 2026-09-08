@@ -34,11 +34,11 @@ describe("NavRail", () => {
 
   it("only shows the unread badge on messages when unread traffic exists", () => {
     const quietMarkup = renderRail({ unreadTotal: 0 });
-    assert.doesNotMatch(quietMarkup, /bg-\[#DA4B4B\]/);
+    assert.doesNotMatch(quietMarkup, /bg-danger/);
 
     const unreadMarkup = renderRail({ unreadTotal: 3 });
     assert.match(unreadMarkup, /aria-label="消息（3 条未读）"/);
-    assert.match(unreadMarkup, /bg-\[#DA4B4B\]/);
+    assert.match(unreadMarkup, /bg-danger/);
   });
 
 });

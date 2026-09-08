@@ -20,7 +20,7 @@ export function RoleDifferenceGenerationPanel({
   const busy = state.status === "running";
 
   return (
-    <div className="mb-4 grid gap-3 rounded-[18px] border border-[#E4EAF0] bg-white px-4 py-3" data-testid="role-difference-generation-panel">
+    <div className="mb-4 grid gap-3 rounded-lg border border-[#E4EAF0] bg-white px-4 py-3" data-testid="role-difference-generation-panel">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-[#2A3440]">自动生成差分</div>

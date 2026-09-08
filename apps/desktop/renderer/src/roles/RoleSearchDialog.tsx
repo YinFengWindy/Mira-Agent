@@ -70,7 +70,7 @@ export function RoleSearchDialog({
         onClick={onClose}
       />
       <section
-        className="role-search-panel relative z-[1] grid max-h-[min(76vh,780px)] w-full max-w-[760px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[24px] bg-[rgba(255,255,255,0.97)] shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
+        className="role-search-panel relative z-[1] grid max-h-[min(76vh,780px)] w-full max-w-[760px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl bg-[rgba(255,255,255,0.97)] shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
         role="dialog"
         aria-modal="true"
         aria-label="搜索"
@@ -81,7 +81,7 @@ export function RoleSearchDialog({
               ref={inputRef}
               data-testid="role-search-input"
               className={cx(
-                "h-12 w-full rounded-[12px] border border-transparent bg-[#F3F3F3] px-4 py-0 text-[15px] text-[#202020] outline-none transition-none placeholder:text-[#9A9A9A]",
+                "h-12 w-full rounded-md border border-transparent bg-[#F3F3F3] px-4 py-0 text-[15px] text-[#202020] outline-none transition-none placeholder:text-[#9A9A9A]",
                 "hover:border-transparent focus:border-transparent focus:outline-none focus-visible:border-transparent focus-visible:outline-none",
               )}
               value={query}
@@ -96,7 +96,7 @@ export function RoleSearchDialog({
                   <button
                     key={`${result.roleId}:${result.matchedField}:${result.matchedMessageId ?? result.roleName}`}
                     data-testid={`role-search-result-${result.roleId}-${result.matchedMessageIndex ?? "role"}`}
-                    className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-3 rounded-[16px] border-0 bg-transparent px-2.5 py-2.5 text-left transition hover:bg-[#F4F6F8] focus-visible:bg-[#F4F6F8]"
+                    className="grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-3 rounded-lg border-0 bg-transparent px-2.5 py-2.5 text-left transition hover:bg-[#F4F6F8] focus-visible:bg-[#F4F6F8]"
                     type="button"
                     onClick={() => onSelectResult(result)}
                   >
