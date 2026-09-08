@@ -554,7 +554,7 @@ export function ChatSurface({
       </div>
       <div
         className={cx(
-          "relative h-full overflow-hidden border-l border-line-soft bg-transparent",
+          "relative h-full overflow-hidden border-l border-line-soft bg-gradient-app bg-fixed",
           chatLatestImageSidebarAnimating && "transition-[width] duration-[480ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           chatLatestImageSidebarResizing && !chatLatestImageSidebarAnimating && "transition-[width] duration-100 ease-out",
         )}
