@@ -121,7 +121,8 @@ class DesktopAppService:
         content: str,
         media: list[str],
         metadata: dict[str, object] | None,
-    ) -> Session:
+    ) -> dict[str, Any]:
+        """Persists a user message and returns it after all runtime effects finish."""
         original_length = len(session.messages)
         original_updated_at = session.updated_at
         session.add_message(
@@ -134,14 +135,16 @@ class DesktopAppService:
                 chat_id=session.key,
             ),
         )
+        # Other writers can append while persistence or runtime effects await.
+        persisted_message = session.messages[original_length]
         try:
-            await self.session_manager.append_messages(session, session.messages[-1:])
+            await self.session_manager.append_messages(session, [persisted_message])
         except Exception:
             del session.messages[original_length:]
             session.updated_at = original_updated_at
             raise
         self.sync_desktop_session_thread(session, role_id=role_id)
-        return await self._apply_post_persist_runtime_effects(
+        _ = await self._apply_post_persist_runtime_effects(
             session,
             record_presence=(
                 self.presence.record_user_message if self.presence is not None else None
@@ -152,6 +155,7 @@ class DesktopAppService:
                 else None
             ),
         )
+        return persisted_message
 
     def build_desktop_user_message_metadata(
         self,

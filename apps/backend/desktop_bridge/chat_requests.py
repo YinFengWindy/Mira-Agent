@@ -108,7 +108,7 @@ class DesktopChatRequestHandler:
             role_id=aggregate.role.id,
             chat_id=session.key,
         )
-        await self._app_service.persist_desktop_user_message(
+        persisted_message = await self._app_service.persist_desktop_user_message(
             session=session,
             role_id=aggregate.role.id,
             content=content,
@@ -127,7 +127,7 @@ class DesktopChatRequestHandler:
         )
         return {
             "session": self._session_presenter.serialize_summary(session),
-            "message": self._session_presenter.serialize_message(session.messages[-1]),
+            "message": self._session_presenter.serialize_message(persisted_message),
             "turn_id": turn_id,
             "events": [],
         }
