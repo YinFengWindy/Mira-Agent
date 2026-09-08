@@ -967,6 +967,74 @@ async def test_cancelled_chat_task_terminates_voice_lifecycle() -> None:
     with pytest.raises(asyncio.CancelledError):
         await task
 
+    assert not any(event["method"] in {"chat.done", "chat.error"} for event in emitted)
     assert [
         event["method"] for event in emitted if event["method"].startswith("voice.")
     ] == ["voice.reply.started", "voice.tts.finished"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", [None, "after_commit", "session_update"])
+async def test_chat_terminal_waits_for_turn_and_session_work(failure_stage):
+    event_bus = EventBus()
+    emitted = []
+    service = None
+
+    async def process_direct(*_args, **_kwargs):
+        await event_bus.fanout(TurnCommitted(
+            session_key="role:mira",
+            channel="desktop",
+            chat_id="role:mira",
+            input_message="hello",
+            persisted_user_message=None,
+            assistant_response="answer",
+            tools_used=[],
+        ))
+        assert emitted == []
+        if failure_stage == "after_commit":
+            raise RuntimeError("after_commit failed")
+        return "answer"
+
+    async def emit_session_updated(*, request_id, session, emit_event):
+        assert emitted == []
+        if failure_stage == "session_update":
+            raise RuntimeError("session_update failed")
+        emit_event({"method": "session.updated", "payload": {"session_key": session.key}})
+
+    def collect(payload):
+        assert not service.is_busy("role:mira")
+        emitted.append(payload)
+
+    async def emit_payload(emit_event, payload):
+        result = emit_event(payload)
+        if result is not None:
+            await result
+
+    service = DesktopChatService(
+        agent_loop=SimpleNamespace(process_direct=process_direct),
+        event_bus=event_bus,
+        session_manager=SimpleNamespace(get_or_create=Mock(return_value=Session(key="role:mira"))),
+        role_id_from_session_key=lambda _key: "mira",
+        sync_desktop_session_thread=Mock(),
+        emit_payload=emit_payload,
+        emit_session_updated=emit_session_updated,
+    )
+    service.start_chat_turn(
+        request_id="request-1",
+        turn_id="turn-1",
+        session_key="role:mira",
+        content="hello",
+        media=[],
+        metadata={},
+        omit_user_turn=True,
+        emit_event=collect,
+    )
+    await service.drain()
+
+    assert [event["method"] for event in emitted] == (
+        ["chat.error"] if failure_stage else ["chat.done", "session.updated"]
+    )
+    assert emitted[0]["payload"]["turn_id"] == "turn-1"
+    if failure_stage:
+        assert emitted[0]["payload"]["message"] == f"{failure_stage} failed"
+    assert event_bus._handlers == {}
