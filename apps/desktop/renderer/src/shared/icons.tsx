@@ -9,12 +9,11 @@ type DesktopIconProps = {
  * (the Shiori custom set) and are aliased below so pre-restyle call
  * sites render the new artwork without changes.
  *
- * Plus / Reset / Back / Send keep the original pre-restyle glyphs by
- * user request (the redrawn versions were rejected at acceptance).
+ * Plus / Reset / Back / Send / Save keep the original pre-restyle glyphs
+ * by user request (the redrawn versions were rejected at acceptance).
  */
 export {
   CaretRightIcon,
-  CheckIcon as SaveIcon,
   CircleNotchIcon as SpinnerIcon,
   CopyIcon,
   FileTextIcon as DocumentIcon,
@@ -26,6 +25,15 @@ export {
   XIcon as CloseIcon,
   XIcon as DeleteIcon,
 } from "./ui/icons";
+
+/** Renders the original desktop save glyph. */
+export function SaveIcon({ className = "h-4 w-4 fill-current" }: DesktopIconProps) {
+  return (
+    <svg viewBox="0 0 1024 1024" className={className} aria-hidden="true">
+      <path d="M382.4 876 7.4 501 43.1 465.4 380.9 803.2 983.6 149.7 1020.7 183.9Z" />
+    </svg>
+  );
+}
 
 /** Renders the original desktop reset/refresh glyph. */
 export function ResetIcon({ className = "h-4 w-4 fill-current" }: DesktopIconProps) {
