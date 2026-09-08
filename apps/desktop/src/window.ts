@@ -68,7 +68,8 @@ export function createDesktopWindow({ openLocalAttachment }: CreateDesktopWindow
     minWidth: 520,
     minHeight: 680,
     frame: false,
-    backgroundColor: "#EFF4F9",
+    // Matches the renderer's --color-bg-app (neutral-100) so launch doesn't flash a mismatched frame.
+    backgroundColor: "#F5F3F4",
     webPreferences: {
       preload: preloadScript,
       contextIsolation: true,
