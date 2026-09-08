@@ -77,9 +77,10 @@ async def test_run_turn_retry_preserves_persisted_history(
             *expected_history,
             {"role": "user", "content": msg.content},
         ]
-    assert [
-        attempt["history_window"] for attempt in result.context_retry["attempts"]
-    ] == expected_windows
+    attempts = result.context_retry["attempts"]
+    assert isinstance(attempts, list)
+    assert [attempt["history_window"] for attempt in attempts] == expected_windows
+    assert isinstance(result.reply, str)
     if success_attempt is None:
         expected_reply = (
             "安全审查" if error_type is ContentSafetyError else "上下文过长"
