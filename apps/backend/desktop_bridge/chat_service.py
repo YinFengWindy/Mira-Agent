@@ -588,9 +588,12 @@ class DesktopChatService:
                 failure_message=reply,
             )
             collected.append(bridge_event)
-            await self._emit_payload(emit_event, bridge_event.to_dict())
+            if bridge_event.method == "chat.done":
+                await self._emit_payload(emit_event, bridge_event.to_dict())
             for event in session_events:
                 await self._emit_payload(emit_event, event)
+            if bridge_event.method == "chat.error":
+                await self._emit_payload(emit_event, bridge_event.to_dict())
             return session, collected
         except asyncio.CancelledError:
             if tts is not None:
@@ -605,6 +608,11 @@ class DesktopChatService:
                     tts,
                     announce=_announce_voice_reply,
                 )
+            await self._emit_failed_session_update(
+                request_id=request_id,
+                session_key=session_key,
+                emit_event=emit_event,
+            )
             bridge_event = build_chat_terminal_event(
                 request_id=request_id,
                 turn_id=turn_id,
@@ -621,6 +629,28 @@ class DesktopChatService:
                 self._event_bus.off(ToolCallStarted, _on_tool_started)
                 self._event_bus.off(ToolCallCompleted, _on_tool_completed)
             self._event_bus.off(TurnCommitted, _on_done)
+
+    async def _emit_failed_session_update(
+        self,
+        *,
+        request_id: str,
+        session_key: str,
+        emit_event: EventEmitter,
+    ) -> None:
+        """Reconciles failed turns without replacing their original exception."""
+
+        try:
+            session_events: list[dict[str, Any]] = []
+            await self._emit_session_updated(
+                request_id=request_id,
+                session=self._session_manager.get_or_create(session_key),
+                emit_event=session_events.append,
+            )
+            for event in session_events:
+                await self._emit_payload(emit_event, event)
+        except Exception:
+            # Snapshot preparation is secondary to delivering the terminal error.
+            logger.exception("failed to publish failed-turn session: %s", session_key)
 
     def start_chat_turn(
         self,
@@ -643,7 +673,9 @@ class DesktopChatService:
         async def emit_turn_event(payload):
             # Completion enables the next send in the renderer. Publish it only
             # after the role turn and persistence have released their ownership.
-            if terminal_events or payload.get("method") in {"chat.done", "chat.error"}:
+            if terminal_events or payload.get("method") in {
+                "chat.done", "chat.error", "session.updated"
+            }:
                 terminal_events.append(payload)
             else:
                 await self._emit_payload(emit_event, payload)

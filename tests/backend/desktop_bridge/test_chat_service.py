@@ -1031,10 +1031,63 @@ async def test_chat_terminal_waits_for_turn_and_session_work(failure_stage):
     )
     await service.drain()
 
-    assert [event["method"] for event in emitted] == (
-        ["chat.error"] if failure_stage else ["chat.done", "session.updated"]
-    )
-    assert emitted[0]["payload"]["turn_id"] == "turn-1"
+    expected = {
+        None: ["chat.done", "session.updated"],
+        "after_commit": ["session.updated", "chat.error"],
+        "session_update": ["chat.error"],
+    }
+    assert [event["method"] for event in emitted] == expected[failure_stage]
+    terminal = next(event for event in emitted if event["method"].startswith("chat."))
+    assert terminal["payload"]["turn_id"] == "turn-1"
     if failure_stage:
-        assert emitted[0]["payload"]["message"] == f"{failure_stage} failed"
+        assert terminal["payload"]["message"] == f"{failure_stage} failed"
+    assert event_bus._handlers == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", ["session_lookup", "session_update"])
+async def test_failure_snapshot_cannot_replace_original_error(failure_stage, caplog):
+    original_error = RuntimeError("provider failed")
+    snapshot_error = RuntimeError("snapshot unavailable")
+    emitted = []
+    event_bus = EventBus()
+    lookup = Mock(return_value=Session(key="role:mira"))
+    update = AsyncMock()
+    if failure_stage == "session_lookup":
+        lookup.side_effect = snapshot_error
+    else:
+        update.side_effect = snapshot_error
+
+    async def emit_payload(emit_event, payload):
+        emit_event(payload)
+
+    service = DesktopChatService(
+        agent_loop=SimpleNamespace(process_direct=AsyncMock(side_effect=original_error)),
+        event_bus=event_bus,
+        session_manager=SimpleNamespace(get_or_create=lookup),
+        role_id_from_session_key=lambda _key: "mira",
+        sync_desktop_session_thread=Mock(),
+        emit_payload=emit_payload,
+        emit_session_updated=update,
+    )
+    with pytest.raises(RuntimeError) as raised:
+        await service.run_chat_turn(
+            request_id="request-1",
+            turn_id="turn-1",
+            session_key="role:mira",
+            content="hello",
+            media=[],
+            metadata={},
+            omit_user_turn=True,
+            emit_event=emitted.append,
+        )
+
+    assert raised.value is original_error
+    assert [event["method"] for event in emitted] == ["chat.error"]
+    assert emitted[0]["payload"] == {
+        "session_key": "role:mira",
+        "turn_id": "turn-1",
+        "message": "provider failed",
+    }
+    assert "snapshot unavailable" in caplog.text
     assert event_bus._handlers == {}

@@ -7,6 +7,7 @@ import {
   applyChatStreamDelta,
   applyChatToolCompleted,
   applyChatToolStarted,
+  failChatStream,
   finalizeChatCancellation,
   finishChatStream,
   interruptChatStream,
@@ -24,6 +25,34 @@ function session(): SessionPayload {
 }
 
 describe("chat streaming state", () => {
+  it("finishes failed text and tool traces before a later persisted reply", () => {
+    const streaming = applyChatToolStarted(applyChatStreamDelta(session(), "partial", "thinking"), {
+      iteration: 1, callId: "running", toolName: "web_search", arguments: { query: "test" },
+    });
+    const completed = applyChatToolCompleted(streaming, {
+      iteration: 1, callId: "completed", toolName: "read_file", arguments: {},
+      finalArguments: {}, status: "success", resultPreview: "result",
+    });
+    const laterReply = { id: "proactive-1", role: "assistant", content: "proactive" };
+    const withLaterReply = { ...completed, messages: [...completed.messages, laterReply] };
+    const failed = failChatStream(withLaterReply);
+    const trace = failed.messages[1]!;
+
+    assert.equal(trace.streaming, false);
+    assert.equal(trace.content, "partial");
+    assert.equal(trace.reasoning_content, "thinking");
+    assert.equal(trace.render_id, completed.messages[1]?.render_id);
+    assert.equal(trace.metadata?.streamed_reply, true);
+    assert.deepEqual(trace.tool_chain?.[0]?.calls.map((call) => call.status), ["error", "success"]);
+    assert.equal(trace.tool_chain?.[0]?.calls[1], completed.messages[1]?.tool_chain?.[0]?.calls[1]);
+    assert.equal(failed.messages[2], laterReply);
+    assert.equal(completed.messages[1]?.streaming, true);
+    assert.equal(completed.messages[1]?.tool_chain?.[0]?.calls[0]?.status, "running");
+    assert.equal(failChatStream(failed), failed);
+    const empty = session();
+    assert.equal(failChatStream(empty), empty);
+  });
+
   it("merges Thinking and content deltas into one transient assistant message", () => {
     const original = session();
     const thinking = applyChatStreamDelta(original, "", "先判断语气");
