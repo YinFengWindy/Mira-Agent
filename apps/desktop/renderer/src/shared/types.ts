@@ -302,6 +302,8 @@ export type NewRoleFormState = {
   name: string;
   description: string;
   systemPrompt: string;
+  /** Selected local image; an empty string explicitly removes an imported avatar. */
+  avatarSource?: string;
   profile?: RoleProfileDraft;
   /** Server-owned staging import id; never a renderer filesystem path. */
   importId?: string;

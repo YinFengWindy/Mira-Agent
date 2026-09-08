@@ -43,14 +43,16 @@ export function SettingsToggleField({
 export function SettingsSecretInput({
   value,
   onChange,
+  ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
+  ariaLabel?: string;
 }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="flex items-center gap-3">
-      <input className={cx(settingsInputClass, "flex-1")} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} />
+      <input aria-label={ariaLabel} className={cx(settingsInputClass, "min-w-0 flex-1 focus:ring-2 focus:ring-primary/20 focus:border-primary")} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} />
       <button
         className={settingsIconButtonClass}
         type="button"

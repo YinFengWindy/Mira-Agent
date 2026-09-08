@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp } from "node:fs/promises";
+import { resolve } from "node:path";
+import { _electron } from "playwright";
+
+const output = resolve(".test-tmp-root/onboarding-qa");
+await mkdir(output, { recursive: true });
+const isolated = await mkdtemp(resolve(output, "electron-run-"));
+const home = resolve(isolated, "home");
+await mkdir(home);
+async function launch() {
+  const app = await _electron.launch({
+    executablePath: resolve("apps/desktop/node_modules/electron/dist/electron.exe"),
+    args: [resolve("apps/desktop/tests/onboarding/electronBootstrap.cjs")],
+    env: { ...process.env, SHIORI_QA_HOME: home, SHIORI_DESKTOP_USER_DATA_DIR: resolve(isolated, "user-data"),
+      SHIORI_RENDERER_DEV_SERVER_URL: process.env.SHIORI_QA_URL ?? "http://127.0.0.1:5187" },
+  });
+  const page = await app.firstWindow();
+  page.setDefaultTimeout(20_000);
+  return { app, page };
+}
+let current = await launch();
+try {
+  await current.page.getByRole("heading", { name: "注册模型", exact: true }).waitFor();
+  await current.page.getByRole("button", { name: "暂时跳过" }).click();
+  await current.page.locator(".app-frame").waitFor();
+  await current.page.reload();
+  await current.page.locator(".app-frame").waitFor();
+  await current.app.close();
+  current = await launch();
+  await current.page.getByRole("heading", { name: "注册模型", exact: true }).waitFor();
+  await current.page.getByRole("textbox", { name: "模型", exact: true }).fill("onboarding-qa");
+  await current.page.getByRole("textbox", { name: "Base URL", exact: true }).fill("http://127.0.0.1:9/v1");
+  await current.page.getByLabel("API Key", { exact: true }).fill("local-test-only");
+  await current.page.getByRole("button", { name: "保存并继续" }).click();
+  await current.page.getByRole("heading", { name: "创建角色", exact: true }).waitFor();
+  await current.app.close();
+  current = await launch();
+  await current.page.getByRole("heading", { name: "创建角色", exact: true }).waitFor();
+  // Stub only the OS dialog selection; image import, capabilities, and backend persistence are real.
+  await current.app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+  }, resolve("assets/shiori-app-icon.png"));
+  await current.page.getByRole("button", { name: "上传头像" }).click();
+  await current.page.getByAltText("角色头像预览").waitFor();
+  await current.page.getByTestId("new-role-name").fill("新手引导验证");
+  await current.page.getByRole("textbox", { name: "角色设定", exact: true }).fill("安静、细心，回答简洁。");
+  await current.page.getByRole("button", { name: "创建角色", exact: true }).click();
+  await current.page.getByRole("heading", { name: "进入工作区", exact: true }).waitFor();
+  await current.app.close();
+  current = await launch();
+  await current.page.getByRole("heading", { name: "进入工作区", exact: true }).waitFor();
+  const avatar = current.page.getByAltText("新手引导验证");
+  await avatar.waitFor();
+  assert.ok(await avatar.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
+  await current.page.screenshot({ path: resolve(output, "electron-workspace.png") });
+  await current.page.getByRole("button", { name: "进入工作区", exact: true }).click();
+  await current.page.locator(".app-frame").waitFor();
+  await current.app.close();
+  current = await launch();
+  await current.page.locator(".app-frame").waitFor();
+  assert.equal(await current.page.getByTestId("onboarding-page").count(), 0);
+  console.log("PASS: real Electron and Python bridge, skip/reload, four relaunches, model registration, avatar import, role creation, workspace entry, completed restart");
+} finally { await current.app.close(); }

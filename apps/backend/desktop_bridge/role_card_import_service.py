@@ -109,8 +109,14 @@ class DesktopRoleCardImportService:
                     description=description,
                     system_prompt=system_prompt,
                     profile=profile,
-                    avatar_source=next(
-                        (path for asset, path in staged if asset.kind == "avatar"), None
+                    # An explicit empty override removes the card's default avatar.
+                    avatar_source=(
+                        str(overrides["avatar_source"]).strip() or None
+                        if "avatar_source" in overrides
+                        else next(
+                            (path for asset, path in staged if asset.kind == "avatar"),
+                            None,
+                        )
                     ),
                     illustration_sources=[path for _, path in staged],
                 )

@@ -116,6 +116,8 @@ export function registerDesktopIpc({
   onVoiceSettingsChanged,
   onPetVisibilityChanged,
 }: RegisterDesktopIpcOptions): void {
+  const applicationSessionId = randomUUID();
+  ipcMain.handle("desktop:application-session-id", () => applicationSessionId);
   ipcMain.handle("desktop:invoke", async (_event: IpcMainInvokeEvent, request: { method: string; payload: Record<string, unknown> }) => {
     if (request.method.startsWith("observation.")) {
       throw new Error("observation bridge methods are restricted to the main process");

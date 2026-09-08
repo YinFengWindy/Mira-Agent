@@ -220,6 +220,8 @@ export type RendererDiagnosticPayload = {
 };
 
 export type DesktopApi = {
+  /** Identifies one main-process lifetime, including renderer reloads. */
+  applicationSessionId(): Promise<string>;
   invoke(request: Omit<BridgeRequest, "id">): Promise<BridgeResponse>;
   onEvent(listener: (event: BridgeEvent) => void): () => void;
   pickImages(options?: { multiple?: boolean }): Promise<string[]>;

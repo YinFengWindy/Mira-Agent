@@ -1,7 +1,6 @@
 import { ArrowLeft, Trash } from "@phosphor-icons/react";
 import type { ModelRegistrationFormData } from "../../../src/bridge/shared";
-import { SettingsField as Field } from "./SettingsField";
-import { SettingsSecretInput, settingsInputClass } from "./SettingsFieldPrimitives";
+import { ModelRegistrationFields } from "./ModelRegistrationFields";
 
 type ModelRegistrationDetailsProps = {
   registration: ModelRegistrationFormData;
@@ -47,28 +46,7 @@ export function ModelRegistrationDetails({
           <Trash className="h-3.5 w-3.5" weight="bold" />
         </button>
       </header>
-      <div className="grid">
-        <Field label="Provider">
-          <input className={settingsInputClass} value={registration.provider} onChange={(event) => onChange((current) => ({ ...current, provider: event.target.value }))} />
-        </Field>
-        <Field label="模型">
-          <input className={settingsInputClass} value={registration.model} onChange={(event) => onChange((current) => ({ ...current, model: event.target.value }))} />
-        </Field>
-        <Field label="Effort">
-          <select className={settingsInputClass} value={registration.effort} onChange={(event) => onChange((current) => ({ ...current, effort: event.target.value as ModelRegistrationFormData["effort"] }))}>
-            <option value="none">none</option>
-            <option value="low">low</option>
-            <option value="high">high</option>
-            <option value="max">max</option>
-          </select>
-        </Field>
-        <Field label="Base URL">
-          <input className={settingsInputClass} value={registration.baseUrl} onChange={(event) => onChange((current) => ({ ...current, baseUrl: event.target.value }))} />
-        </Field>
-        <Field label="API Key">
-          <SettingsSecretInput value={registration.apiKey} onChange={(value) => onChange((current) => ({ ...current, apiKey: value }))} />
-        </Field>
-      </div>
+      <ModelRegistrationFields registration={registration} onChange={onChange} />
     </section>
   );
 }

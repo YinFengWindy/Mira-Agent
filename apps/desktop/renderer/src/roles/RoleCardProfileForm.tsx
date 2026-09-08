@@ -5,6 +5,8 @@ import { roleFieldClass } from "./roleEditorStyles";
 type RoleCardProfileFormProps = {
   profile: RoleProfileDraft;
   onUpdate: (next: RoleProfileDraft) => void;
+  /** Keeps optional profile fields folded while creating a role. */
+  collapseDetails?: boolean;
 };
 
 type ProfileFieldProps = {
@@ -23,7 +25,7 @@ function ProfileField({ label, value, placeholder, heightClass = "h-40", onChang
         <span className="text-sm font-medium text-[#182230]">{label}</span>
       </span>
       <textarea
-        className={cx(roleFieldClass, "scrollbar-soft resize-none overflow-y-auto leading-6", heightClass)}
+        className={cx(roleFieldClass, "scrollbar-soft resize-none overflow-y-auto rounded-md leading-6 focus:ring-2 focus:ring-primary/20 focus:border-primary", heightClass)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -36,6 +38,7 @@ function ProfileField({ label, value, placeholder, heightClass = "h-40", onChang
 export function RoleCardProfileForm({
   profile,
   onUpdate,
+  collapseDetails = false,
 }: RoleCardProfileFormProps) {
   const character = profile.character ?? {};
 
@@ -43,32 +46,28 @@ export function RoleCardProfileForm({
     onUpdate({ ...profile, character: { ...character, [field]: value } });
   }
 
+  const details = (
+    <div className="grid gap-5">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <ProfileField label="性格" value={character.personality ?? ""} onChange={(value) => updateCharacter("personality", value)} />
+        <ProfileField label="执行规则" value={character.behavior_rules ?? ""} onChange={(value) => updateCharacter("behavior_rules", value)} />
+      </div>
+      <ProfileField label="回复约束" value={character.response_constraints ?? ""} onChange={(value) => updateCharacter("response_constraints", value)} />
+    </div>
+  );
   return (
     <div className="grid gap-7">
       <div className="grid gap-5">
         <ProfileField
           label="角色设定"
           value={character.profile ?? ""}
-          heightClass="h-56"
+          heightClass={collapseDetails ? "h-40" : "h-56"}
           onChange={(value) => updateCharacter("profile", value)}
         />
-        <div className="grid gap-5 lg:grid-cols-2">
-          <ProfileField
-            label="性格"
-            value={character.personality ?? ""}
-            onChange={(value) => updateCharacter("personality", value)}
-          />
-          <ProfileField
-            label="执行规则"
-            value={character.behavior_rules ?? ""}
-            onChange={(value) => updateCharacter("behavior_rules", value)}
-          />
-        </div>
-        <ProfileField
-          label="回复约束"
-          value={character.response_constraints ?? ""}
-          onChange={(value) => updateCharacter("response_constraints", value)}
-        />
+        {collapseDetails ? <details className="group">
+          <summary className="cursor-pointer py-2 text-sm text-[#667085]">更多设定</summary>
+          <div className="pt-4">{details}</div>
+        </details> : details}
       </div>
     </div>
   );

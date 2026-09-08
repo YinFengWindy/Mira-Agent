@@ -7,7 +7,7 @@ export function selectRoleCreateState(form: NewRoleFormState, imported: RoleCard
   const character = form.profile?.character;
   const assets = imported.preview?.assets ?? [];
   return {
-    formDirty: Boolean(form.name.trim() || form.description.trim() || form.systemPrompt.trim()
+    formDirty: Boolean(form.avatarSource !== undefined || form.importId || form.name.trim() || form.description.trim() || form.systemPrompt.trim()
       || character?.profile?.trim() || character?.personality?.trim() || character?.behavior_rules?.trim()
       || character?.response_constraints?.trim() || form.profile?.knowledge_base?.entries?.length),
     needsEmotionChoice: hasUnselectedEmotions(assets, form.emotionSelections ?? {}),

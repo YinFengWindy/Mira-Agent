@@ -11,6 +11,7 @@ const windowControlClass =
 
 /** Renders the frameless desktop title bar and window controls. */
 export function TitleBar({
+  minimal = false,
   sidebarCollapsed,
   windowMaximized,
   canGoBack,
@@ -21,6 +22,8 @@ export function TitleBar({
   onGoForward,
   onRefreshSession,
 }: {
+  /** Hides workspace navigation while retaining native window controls during setup. */
+  minimal?: boolean;
   sidebarCollapsed: boolean;
   windowMaximized: boolean;
   canGoBack: boolean;
@@ -37,7 +40,7 @@ export function TitleBar({
 
   return (
     <header className="titlebar [-webkit-app-region:drag] flex h-[calc(var(--titlebar-height)+5px)] select-none items-center justify-between bg-transparent text-[#747474]">
-      <div className="titlebar-left flex h-full items-center gap-0 pl-0.5">
+      <div className={cx("titlebar-left flex h-full items-center gap-0 pl-0.5", minimal && "invisible")} aria-hidden={minimal || undefined} inert={minimal || undefined}>
         <button
           className={cx("titlebar-icon titlebar-sidebar", titlebarIconClass)}
           type="button"

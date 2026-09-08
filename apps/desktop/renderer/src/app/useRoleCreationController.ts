@@ -3,23 +3,14 @@ import { createEmptyNewRoleForm } from "./appState";
 import { useLatestRef } from "../shared/useLatestRef";
 import { cancelRoleCreation, resetRoleCreationForm, runRoleCreation } from "./roleCreationWorkflow";
 import type { RoleCreationControllerArgs } from "./roleCreationWorkflow";
-import { useRoleCardImport } from "./useRoleCardImport";
-import type { NewRoleFormState } from "../shared/types";
+import { useRoleCreationDraft } from "../roles/useRoleCreationDraft";
 
 /** Assembles the new-role draft, import lifecycle, and creation workflow. */
 export function useRoleCreationController(args: RoleCreationControllerArgs) {
-  const [newRoleForm, setNewRoleForm] = useState(createEmptyNewRoleForm);
   const [creating, setCreating] = useState(false);
-  const newRoleFormRef = useLatestRef(newRoleForm);
   const creatingRef = useLatestRef(creating);
-
-  function updateNewRoleForm(next: React.SetStateAction<NewRoleFormState>) {
-    const resolved = typeof next === "function" ? next(newRoleFormRef.current) : next;
-    newRoleFormRef.current = resolved;
-    setNewRoleForm(resolved);
-  }
-
-  const imports = useRoleCardImport({ updateNewRoleForm, setWorkspaceFeedback: args.setWorkspaceFeedback });
+  const imports = useRoleCreationDraft(args.setWorkspaceFeedback);
+  const { newRoleForm, newRoleFormRef, updateNewRoleForm } = imports;
   const formActions = { ...args, updateNewRoleForm };
 
   function resetNewRoleForm() {
