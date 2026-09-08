@@ -16,6 +16,7 @@ from bus.events_lifecycle import (
     TurnCommitted,
 )
 from desktop_bridge.models import BridgeEvent
+from desktop_bridge.chat_completion import build_chat_terminal_event
 from desktop_bridge.voice.role_tts_settings import resolve_role_tts_settings
 from desktop_bridge.tool_call_preview import truncate_desktop_tool_result
 from desktop_bridge.voice.tts_coordinator import TtsTurnCoordinator
@@ -425,6 +426,7 @@ class DesktopChatService:
     ) -> tuple[Session, list[BridgeEvent]]:
         turn_id = turn_id or request_id
         collected: list[BridgeEvent] = []
+        committed: TurnCommitted | None = None
         tts = self._create_tts_coordinator(
             request_id=request_id,
             session_key=session_key,
@@ -478,25 +480,12 @@ class DesktopChatService:
                 tts.push(event.content_delta)
 
         async def _on_done(event: TurnCommitted) -> None:
+            nonlocal committed
             if event.session_key != session_key:
                 return
-            bridge_event = BridgeEvent(
-                id=request_id,
-                type="event",
-                method="chat.done",
-                payload={
-                    "session_key": event.session_key,
-                    "turn_id": turn_id,
-                    "role_id": self._role_id_from_session_key(event.session_key),
-                    "reply": event.assistant_response,
-                    "thinking": event.thinking,
-                    "tools_used": list(event.tools_used),
-                    "total_tokens": event.total_tokens,
-                    "thinking_duration_ms": event.thinking_duration_ms,
-                },
-            )
-            collected.append(bridge_event)
-            await self._emit_payload(emit_event, bridge_event.to_dict())
+            # Later lifecycle modules and session synchronization can still fail.
+            # Resolve the terminal event only after all awaited turn work succeeds.
+            committed = event
             if (
                 tts is not None
                 and not tts_received_streamed_content
@@ -563,7 +552,7 @@ class DesktopChatService:
             self._event_bus.on(ToolCallCompleted, _on_tool_completed)
         self._event_bus.on(TurnCommitted, _on_done)
         try:
-            _ = await self._agent_loop.process_direct(
+            reply = await self._agent_loop.process_direct(
                 content,
                 session_key=session_key,
                 channel="desktop",
@@ -582,11 +571,26 @@ class DesktopChatService:
             role_id = self._role_id_from_session_key(session_key)
             if role_id:
                 self._sync_desktop_session_thread(session, role_id=role_id)
+            # Prepare the durable session update before reporting success, while
+            # retaining chat.done -> session.updated ordering for the renderer.
+            session_events: list[dict[str, Any]] = []
             await self._emit_session_updated(
                 request_id=request_id,
                 session=session,
-                emit_event=emit_event,
+                emit_event=session_events.append,
             )
+            bridge_event = build_chat_terminal_event(
+                request_id=request_id,
+                turn_id=turn_id,
+                session_key=session_key,
+                role_id=role_id,
+                committed=committed,
+                failure_message=reply,
+            )
+            collected.append(bridge_event)
+            await self._emit_payload(emit_event, bridge_event.to_dict())
+            for event in session_events:
+                await self._emit_payload(emit_event, event)
             return session, collected
         except asyncio.CancelledError:
             if tts is not None:
@@ -601,15 +605,12 @@ class DesktopChatService:
                     tts,
                     announce=_announce_voice_reply,
                 )
-            bridge_event = BridgeEvent(
-                id=request_id,
-                type="event",
-                method="chat.error",
-                payload={
-                    "session_key": session_key,
-                    "turn_id": turn_id,
-                    "message": str(exc),
-                },
+            bridge_event = build_chat_terminal_event(
+                request_id=request_id,
+                turn_id=turn_id,
+                session_key=session_key,
+                role_id="",
+                failure_message=str(exc),
             )
             collected.append(bridge_event)
             await self._emit_payload(emit_event, bridge_event.to_dict())
