@@ -30,7 +30,7 @@ export function RoleAvatarPicker({ source, disabled, onChange }: {
       <div className="flex items-end gap-2">
         <button type="button" aria-label={source ? "更换头像" : "上传头像"} title={source ? "更换头像" : "上传头像"}
           disabled={disabled || picking} onClick={() => void pick()}
-          className="group relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-md border border-[#D8DCE2] bg-[#F2F5F9] text-[#667085] transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+          className="group relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-surface-soft text-ink-muted transition hover:border-line-accent disabled:opacity-50">
           {source ? <img src={window.miraDesktop.localAssetUrl(source)} alt="角色头像预览" className="h-full w-full object-cover" /> : <Camera size={28} />}
         </button>
         {source ? <button type="button" aria-label="移除头像" title="移除头像" disabled={disabled || picking}

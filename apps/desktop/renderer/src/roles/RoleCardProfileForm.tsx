@@ -25,7 +25,7 @@ function ProfileField({ label, value, placeholder, heightClass = "h-40", onChang
         <span className="text-sm font-medium text-[#182230]">{label}</span>
       </span>
       <textarea
-        className={cx(roleFieldClass, "scrollbar-soft resize-none overflow-y-auto rounded-md leading-6 focus:ring-2 focus:ring-primary/20 focus:border-primary", heightClass)}
+        className={cx(roleFieldClass, "scrollbar-soft resize-none overflow-y-auto leading-6", heightClass)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}

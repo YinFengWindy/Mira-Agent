@@ -6,7 +6,7 @@ import { SettingsToggleCard } from "./SettingsToggleCard";
 import { cx } from "../shared/styles";
 
 /** Shared compact field styling for editable settings values. */
-export const settingsInputClass = "w-full rounded-md border border-[#D8DCE2] bg-[#F7F9FB] px-2.5 py-2 text-[13px] text-[#182230] transition placeholder:text-[#98A2B3] focus:border-[#D8DCE2] focus:outline-none";
+export const settingsInputClass = "w-full rounded-md border border-line bg-surface-soft px-2.5 py-2 text-body-sm text-ink transition placeholder:text-ink-faint hover:border-line-strong focus:bg-surface";
 
 /** Shared icon-only action styling for compact settings controls. */
 export const settingsIconButtonClass = "grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#667085] transition hover:bg-[#F3F6FA] hover:text-[#182230] focus:outline-none";
@@ -52,7 +52,7 @@ export function SettingsSecretInput({
   const [visible, setVisible] = useState(false);
   return (
     <div className="flex items-center gap-3">
-      <input aria-label={ariaLabel} className={cx(settingsInputClass, "min-w-0 flex-1 focus:ring-2 focus:ring-primary/20 focus:border-primary")} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} />
+      <input aria-label={ariaLabel} className={cx(settingsInputClass, "min-w-0 flex-1")} type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} />
       <button
         className={settingsIconButtonClass}
         type="button"

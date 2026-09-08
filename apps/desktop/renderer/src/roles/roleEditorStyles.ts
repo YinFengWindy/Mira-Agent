@@ -1,10 +1,10 @@
 /** Unified input/select surface for the role editor tabs and create page. */
 export const roleFieldClass =
-  "w-full rounded-lg border border-transparent bg-[#F2F5F9] px-3.5 py-2.5 text-sm text-[#182230] transition placeholder:text-[#98A2B3] hover:bg-[#EDF1F6] focus:border-[#A9C6F2] focus:bg-white focus:outline-none";
+  "w-full rounded-md border border-transparent bg-surface-soft px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint hover:bg-surface-hover focus:bg-surface";
 
 /** Input/select surface rendered inside tinted capability and delivery tiles. */
 export const roleTileFieldClass =
-  "w-full rounded-lg border border-transparent bg-white/75 px-3.5 py-2.5 text-sm text-[#182230] transition placeholder:text-[#98A2B3] focus:border-[#A9C6F2] focus:bg-white focus:outline-none";
+  "w-full rounded-md border border-transparent bg-white/75 px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint focus:bg-surface";
 
 /** Field label wrapper with the shared caption color. */
 export const roleFieldLabelClass = "grid gap-1.5 text-xs text-[#667085]";
