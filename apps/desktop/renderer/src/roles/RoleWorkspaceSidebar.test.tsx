@@ -17,7 +17,7 @@ describe("RoleWorkspaceSidebar", () => {
       />,
     );
 
-    assert.match(markup, /bg-\[#EFF4F9\]/);
+    assert.match(markup, /bg-surface-soft/);
     assert.doesNotMatch(markup, /bg-\[#EEF1F5\]/);
   });
 });

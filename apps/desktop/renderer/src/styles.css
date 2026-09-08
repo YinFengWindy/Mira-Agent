@@ -5,20 +5,164 @@
 @layer base {
   :root {
     color-scheme: light;
-    --bg: #eff4f9;
-    --bg-soft: #f6f9fc;
-    --chat-bg: #ffffff;
-    --panel: rgba(255, 255, 255, 0.92);
-    --panel-strong: #ffffff;
-    --text: #1f1a15;
-    --muted: #766554;
-    --accent: #339CFF;
-    --accent-deep: #1468BF;
-    --stroke: rgba(76, 48, 24, 0.14);
-    --shadow: 0 28px 60px rgba(75, 43, 18, 0.12);
+
+    /* ============================================================
+       Shiori design tokens — primitives (hue-named, never used in
+       components directly). Generated in OKLCH: constant hue per
+       ramp, even perceived lightness, chroma peaking mid-ramp.
+       Every semantic pair below is contrast-verified (WCAG AA).
+       Dark theme later overrides the semantic tier only.
+       ============================================================ */
+
+    /* warm mauve neutral (hue 345) */
+    --neutral-50: #fbf9fa;
+    --neutral-100: #f5f3f4;
+    --neutral-150: #efebed;
+    --neutral-200: #e7e1e4;
+    --neutral-300: #d5cdd1;
+    --neutral-400: #beb4b9;
+    --neutral-500: #a0949a;
+    --neutral-600: #83787e;
+    --neutral-700: #70666b;
+    --neutral-800: #554d51;
+    --neutral-900: #3c3639;
+    --neutral-950: #272225;
+
+    /* sakura pink accent (hue 356) */
+    --pink-50: #fff8fa;
+    --pink-100: #ffeef4;
+    --pink-150: #ffe5ed;
+    --pink-200: #ffd6e4;
+    --pink-300: #ffb8d1;
+    --pink-400: #ff8eba;
+    --pink-500: #e6659c;
+    --pink-600: #c5467f;
+    --pink-700: #aa386c;
+    --pink-800: #852652;
+    --pink-900: #5f1a3a;
+
+    /* powder blue tints (hue 240) — app-base gradient only */
+    --blue-50: #f6fbfe;
+    --blue-100: #e9f5ff;
+    --blue-150: #dcf0ff;
+    --blue-200: #c9e8fe;
+
+    /* lavender secondary (hue 302) */
+    --lavender-50: #fbf9ff;
+    --lavender-100: #f6f1ff;
+    --lavender-150: #f0e8ff;
+    --lavender-200: #e9dcff;
+    --lavender-300: #dac3ff;
+    --lavender-400: #c5a5f7;
+    --lavender-500: #a981e0;
+    --lavender-600: #8c65c0;
+    --lavender-700: #7754a6;
+    /* darker gradient endpoint: keeps white text ≥4.5:1 along the
+       whole accent gradient (midpoint verified at 4.66:1) */
+    --lavender-grad: #8861bc;
+
+    /* status ramps (soft bg / border / solid / text) */
+    --success-100: #e6f9ea;
+    --success-300: #a2e1b2;
+    --success-600: #239350;
+    --success-700: #167d41;
+    --warning-100: #fff1e2;
+    --warning-300: #f6c58d;
+    --warning-600: #aa6c03;
+    --warning-800: #704500;
+    --danger-100: #ffefed;
+    --danger-300: #ffbcb4;
+    --danger-600: #cd4840;
+    --danger-700: #b13a33;
+
+    /* ---------- semantic: surfaces ---------- */
+    --color-bg-app: var(--neutral-100);
+    --color-bg-soft: var(--neutral-50);
+    --color-bg-surface: #ffffff;
+    --color-bg-glass: rgba(255, 255, 255, 0.82);
+    --color-bg-glass-strong: rgba(255, 255, 255, 0.92);
+    --color-bg-hover: var(--pink-50);
+    --color-bg-active: var(--pink-100);
+
+    /* ---------- semantic: text ---------- */
+    --color-text-primary: var(--neutral-950);   /* 15.6:1 on surface */
+    --color-text-secondary: var(--neutral-800); /* 8.2:1 */
+    --color-text-muted: var(--neutral-700);     /* 5.5:1 */
+    --color-text-faint: var(--neutral-600);     /* 4.2:1, placeholder/decorative only */
+    --color-text-on-accent: #ffffff;
+    --color-text-accent: var(--pink-700);       /* 6.0:1 on surface, 5.4:1 on accent-soft */
+    --color-text-lavender: var(--lavender-700); /* 5.8:1 */
+
+    /* ---------- semantic: borders ---------- */
+    --color-border-soft: var(--neutral-200);
+    --color-border: var(--neutral-300);
+    --color-border-strong: var(--neutral-400);
+    --color-border-accent: var(--pink-300);
+    --color-ring: var(--pink-500);              /* 3.1:1 on surface */
+
+    /* ---------- semantic: accent ---------- */
+    --color-accent-solid: var(--pink-600);      /* white text 4.6:1 */
+    --color-accent-hover: var(--pink-700);      /* white text 6.0:1 */
+    --color-accent-soft: var(--pink-100);
+    --color-accent-softer: var(--pink-50);
+
+    /* ---------- semantic: status ---------- */
+    --color-success-soft: var(--success-100);
+    --color-success-solid: var(--success-600);
+    --color-success-text: var(--success-700);   /* 5.2:1 */
+    --color-warning-soft: var(--warning-100);
+    --color-warning-solid: var(--warning-600);
+    --color-warning-text: var(--warning-800);   /* 8.3:1 */
+    --color-danger-soft: var(--danger-100);
+    --color-danger-solid: var(--danger-600);    /* white text 4.6:1 */
+    --color-danger-text: var(--danger-700);     /* 6.0:1 */
+
+    /* ---------- gradients ---------- */
+    --gradient-accent: linear-gradient(135deg in oklab, var(--pink-600), var(--lavender-grad));
+    --gradient-accent-soft: linear-gradient(135deg in oklab, var(--pink-100), var(--lavender-150));
+    --gradient-app: linear-gradient(160deg in oklab, var(--blue-100), var(--lavender-50) 45%, var(--pink-100));
+
+    /* ---------- radius ---------- */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+
+    /* ---------- shadows (warm, pink-tinted) ---------- */
+    --shadow-soft: 0 2px 8px rgba(95, 26, 58, 0.05), 0 8px 24px rgba(95, 26, 58, 0.06);
+    --shadow-panel: 0 12px 40px rgba(95, 26, 58, 0.1);
+    --shadow-pop: 0 4px 12px rgba(95, 26, 58, 0.08), 0 20px 48px rgba(95, 26, 58, 0.14);
+
+    /* ---------- typography ---------- */
+    /* --font-brand slot: swap in bundled family (MiSans / HarmonyOS
+       Sans SC) once chosen; empty custom family names are invalid,
+       so the stack starts at the system tier until then. */
+    --font-sans: "Segoe UI Variable Text", "Segoe UI", "MiSans", "HarmonyOS Sans SC", "Microsoft YaHei UI", "PingFang SC", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Segoe UI Variable Display", var(--font-sans);
+
+    /* ---------- motion ---------- */
+    --ease-out-soft: cubic-bezier(0.23, 1, 0.32, 1);
+    --duration-fast: 140ms;
+    --duration-base: 220ms;
+
+    /* ---------- legacy aliases (pre-restyle var names still used
+       by tailwind.config + older components; keep pointing at the
+       semantic tier so both routes render identically) ---------- */
+    --bg: var(--color-bg-app);
+    --bg-soft: var(--color-bg-soft);
+    --chat-bg: var(--color-bg-surface);
+    --panel: var(--color-bg-glass-strong);
+    --panel-strong: var(--color-bg-surface);
+    --text: var(--color-text-primary);
+    --muted: var(--color-text-muted);
+    --accent: var(--color-accent-solid);
+    --accent-deep: var(--color-accent-hover);
+    --stroke: var(--color-border-soft);
+    --shadow: var(--shadow-panel);
+    --app-bg: var(--color-bg-app);
+
     --titlebar-height: 30px;
-    --app-bg: #eff4f9;
-    font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    font-family: var(--font-sans);
   }
 
   html,
@@ -30,8 +174,9 @@
 
   body {
     margin: 0;
-    background: var(--app-bg);
+    background: var(--app-bg) var(--gradient-app) fixed;
     color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
 
   button,
@@ -46,11 +191,16 @@
     word-break: break-word;
     color: var(--muted);
   }
+
+  ::selection {
+    background: var(--pink-200);
+    color: var(--neutral-950);
+  }
 }
 
 @layer utilities {
   .scrollbar-soft {
-    scrollbar-color: #DEE1E6 transparent;
+    scrollbar-color: var(--neutral-200) transparent;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
   }
@@ -66,17 +216,17 @@
   .scrollbar-soft::-webkit-scrollbar-thumb {
     border: 3px solid transparent;
     border-radius: 999px;
-    background: #DEE1E6;
+    background: var(--neutral-200);
     background-clip: padding-box;
   }
 
   .scrollbar-soft-accent::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--accent) 68%, transparent);
+    background: color-mix(in srgb, var(--color-accent-solid) 68%, transparent);
     background-clip: padding-box;
   }
 
   .story-archive-readable {
-    font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    font-family: var(--font-sans);
     -webkit-text-stroke: 0.12px rgba(255, 255, 255, 0.62);
     text-shadow: 0 1px 1px rgba(255, 255, 255, 0.72);
   }
@@ -114,14 +264,54 @@
   }
 
   .scrollbar-soft-muted::-webkit-scrollbar-thumb:hover {
-    background: rgba(143, 91, 120, 0.7);
+    background: color-mix(in srgb, var(--pink-700) 60%, transparent);
     background-clip: padding-box;
+  }
+
+  /* Glass panel: translucent surface + blur; use over image/tinted backdrops. */
+  .surface-glass {
+    background: var(--color-bg-glass);
+    backdrop-filter: blur(16px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .surface-glass-strong {
+    background: var(--color-bg-glass-strong);
+    backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .bg-gradient-accent {
+    background-image: var(--gradient-accent);
+  }
+
+  .bg-gradient-accent-soft {
+    background-image: var(--gradient-accent-soft);
+  }
+
+  .bg-gradient-app {
+    background-image: var(--gradient-app);
+  }
+
+  .text-gradient-accent {
+    background-image: var(--gradient-accent);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
   }
 }
 
-*:focus,
-*:focus-visible {
+/* Keyboard focus stays visible; only pointer focus is quiet. */
+:focus {
   outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .chat-thinking-content {
@@ -129,7 +319,7 @@
   grid-template-rows: 0fr;
   opacity: 0;
   overflow: hidden;
-  transition: grid-template-rows 240ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition: grid-template-rows 240ms var(--ease-out-soft), opacity 200ms var(--ease-out-soft);
 }
 
 .chat-thinking-content-expanded {
@@ -147,7 +337,7 @@
   display: grid;
   grid-template-rows: 0fr;
   opacity: 0;
-  transition: grid-template-rows 220ms cubic-bezier(0.23, 1, 0.32, 1), opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition: grid-template-rows 220ms var(--ease-out-soft), opacity 180ms var(--ease-out-soft);
 }
 
 .chat-tool-call-content-expanded,
@@ -165,7 +355,7 @@
 }
 
 .chat-thinking-label-streaming {
-  background: linear-gradient(90deg, #8B95A7 35%, #343B47 50%, #8B95A7 65%);
+  background: linear-gradient(90deg, var(--neutral-500) 35%, var(--pink-700) 50%, var(--neutral-500) 65%);
   background-size: 200% 100%;
   background-clip: text;
   color: transparent;
