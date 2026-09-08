@@ -42,21 +42,6 @@ function Swatch({ varName, label }: { varName: string; label: string }) {
   );
 }
 
-function IconCell({ name, Comp }: { name: string; Comp: React.ComponentType<{ className?: string }> }) {
-  return (
-    <div className="flex flex-col items-center gap-1.5 rounded-md border border-line-soft bg-surface p-2.5">
-      <div className="flex items-center gap-2 text-ink-secondary">
-        <Comp className="h-4 w-4" />
-        <Comp className="h-6 w-6" />
-        <span className="text-accent">
-          <Comp className="h-6 w-6" />
-        </span>
-      </div>
-      <span className="max-w-24 truncate text-[10px] text-ink-muted">{name.replace(/Icon$/, "")}</span>
-    </div>
-  );
-}
-
 const FONT_CANDIDATES = [
   { label: "现状优化栈(0MB)", stack: '"Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif' },
   { label: "MiSans(需打包 ≈9MB)", stack: '"MiSans", "Microsoft YaHei UI", sans-serif' },
@@ -66,12 +51,9 @@ const FONT_CANDIDATES = [
 const SAMPLE_TEXT = "让角色拥有自己的生活——吟风等你回来,记得汇报今天的锻炼。0123456789 AaGg";
 
 function App() {
-  const iconEntries = Object.entries(Icons).filter(
+  const brand = Object.entries(Icons).filter(
     ([name, value]) => name.endsWith("Icon") && typeof value === "function",
   ) as Array<[string, React.ComponentType<{ className?: string }>]>;
-  const brandNames = ["SparkleIcon", "WingIcon", "RibbonIcon", "PetalIcon"];
-  const brand = iconEntries.filter(([n]) => brandNames.includes(n));
-  const functional = iconEntries.filter(([n]) => !brandNames.includes(n));
 
   return (
     <div className="min-h-screen overflow-auto bg-gradient-app p-10 text-body text-ink">
@@ -186,13 +168,6 @@ function App() {
           </div>
         </Section>
 
-        <Section title={`图标 contact sheet(${functional.length} 个,16px / 24px / 强调色)`}>
-          <div className="grid grid-cols-6 gap-2 lg:grid-cols-8">
-            {functional.map(([name, Comp]) => (
-              <IconCell key={name} name={name} Comp={Comp} />
-            ))}
-          </div>
-        </Section>
       </div>
     </div>
   );
