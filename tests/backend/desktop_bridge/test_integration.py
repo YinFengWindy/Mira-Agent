@@ -254,22 +254,13 @@ async def test_desktop_bridge_chat_send_merges_reply_context_for_agent(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_desktop_bridge_role_create_initializes_role_first_self(tmp_path: Path):
+async def test_desktop_bridge_role_create_prepares_default_self(tmp_path: Path, monkeypatch):
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
 
-    class _SelfSeed:
-        def generate(self, role) -> str:
-            return (
-                "# 我是谁\n\n"
-                "## 我的性格与形象\n"
-                f"- 我是{role.name}。\n\n"
-                "## 我对你的理解\n"
-                "- 我会谨慎认识你。\n\n"
-                "## 我们的关系\n"
-                "- 我们的关系仍在建立中。\n"
-            )
+    generate = AsyncMock(side_effect=AssertionError("role creation must not seed"))
+    monkeypatch.setattr("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate)
 
     from core.roles import RoleAggregateService
 
@@ -283,7 +274,6 @@ async def test_desktop_bridge_role_create_initializes_role_first_self(tmp_path: 
             workspace=tmp_path,
             role_store=role_store,
             session_manager=session_manager,
-            self_seed_generator=_SelfSeed(),
         ),
     )
 
@@ -308,31 +298,21 @@ async def test_desktop_bridge_role_create_initializes_role_first_self(tmp_path: 
     assert "## 我的性格与形象" in self_text
     assert "## 我对你的理解" in self_text
     assert "## 我们的关系" in self_text
+    assert created.payload["role"]["runtime_config"]["dialogue_model_registration_id"] == ""
+    assert created.payload["role"]["memory_init_state"]["self_seed"]["status"] == "pending"
+    generate.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_desktop_bridge_role_create_initializes_self_with_async_seed_configured(
-    tmp_path: Path,
+async def test_desktop_bridge_bound_role_create_and_open_do_not_seed(
+    tmp_path: Path, monkeypatch,
 ):
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
 
-    class _AsyncSelfSeed:
-        async def agenerate(self, role) -> str:
-            await asyncio.sleep(0)
-            return (
-                "# 我是谁\n\n"
-                "## 我的性格与形象\n"
-                f"- 我是{role.name}。\n\n"
-                "## 我对你的理解\n"
-                "- 我会谨慎认识你。\n\n"
-                "## 我们的关系\n"
-                "- 我们的关系仍在建立中。\n"
-            )
-
-        def generate(self, role) -> str:
-            raise AssertionError("事件循环中的桌面桥不应回退到同步 generate")
+    generate = AsyncMock(side_effect=AssertionError("opening a role must not seed"))
+    monkeypatch.setattr("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate)
 
     from core.roles import RoleAggregateService
 
@@ -346,7 +326,6 @@ async def test_desktop_bridge_role_create_initializes_self_with_async_seed_confi
             workspace=tmp_path,
             role_store=role_store,
             session_manager=session_manager,
-            self_seed_generator=_AsyncSelfSeed(),
         ),
     )
 
@@ -365,6 +344,9 @@ async def test_desktop_bridge_role_create_initializes_self_with_async_seed_confi
 
     assert created.error is None
     role_id = created.payload["role"]["id"]
+    await service.role_service.update_role_async(role_id, runtime_config={"dialogue_model_registration_id": "selected"})
+    await service.role_service.open_role_async(role_id)
+    generate.assert_not_called()
     self_path = tmp_path / "roles" / role_id / "memory" / "SELF.md"
     self_text = self_path.read_text(encoding="utf-8")
 

@@ -87,22 +87,25 @@ def pending_body(content: str) -> str:
 def replace_memory_section(path: Path, heading: str, body: str) -> None:
     """Replaces one canonical SELF or MEMORY section without touching its peers."""
 
-    filename = path.name
+    current = path.read_text(encoding="utf-8") if path.exists() else ""
+    path.write_text(
+        render_memory_section(path.name, current, heading, body), encoding="utf-8"
+    )
+
+
+def render_memory_section(filename: str, content: str, heading: str, body: str) -> str:
+    """Renders a section replacement without writing a memory document."""
+
     sections = DOCUMENT_SECTIONS.get(filename)
     if sections is None or heading not in sections:
         raise ValueError(f"unsupported memory section: {filename} {heading}")
-    current = path.read_text(encoding="utf-8") if path.exists() else ""
-    lines = normalize_memory_document(filename, current).rstrip().splitlines()
+    lines = normalize_memory_document(filename, content).rstrip().splitlines()
     if heading not in lines:
         clean_body = str(body or "").strip()
         appended = [heading]
         if clean_body:
             appended.extend(["", *clean_body.splitlines()])
-        path.write_text(
-            "\n".join([*lines, "", *appended]).strip() + "\n",
-            encoding="utf-8",
-        )
-        return
+        return "\n".join([*lines, "", *appended]).strip() + "\n"
 
     start = lines.index(heading)
     end = len(lines)
@@ -115,4 +118,4 @@ def replace_memory_section(path: Path, heading: str, body: str) -> None:
     if clean_body:
         replacement.extend(["", *clean_body.splitlines()])
     updated = [*lines[:start], *replacement, "", *lines[end:]]
-    path.write_text("\n".join(updated).strip() + "\n", encoding="utf-8")
+    return "\n".join(updated).strip() + "\n"

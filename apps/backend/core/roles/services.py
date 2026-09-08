@@ -12,7 +12,6 @@ from session.manager import Session, SessionManager
 from .store import RoleRecord, RoleStore
 from .models import now_iso as _now_iso, normalize_role_id as _clean_role_id
 from .memory_service import RoleMemoryService as RoleMemoryService
-from .memory_service import RoleSelfSeedGenerator as RoleSelfSeedGenerator
 
 
 def _binding_key(channel: str, chat_id: str) -> str:
@@ -356,15 +355,10 @@ class RoleAggregateService:
         workspace: Path,
         role_store: RoleStore,
         session_manager: SessionManager,
-        self_seed_generator: RoleSelfSeedGenerator | None = None,
-        model_available: Callable[[str], bool] | None = None,
         on_role_deleted: Callable[[str], None] | None = None,
     ) -> "RoleAggregateService":
         repository = RoleRepository(role_store)
-        memory = RoleMemoryService(
-            workspace, self_seed_generator=self_seed_generator,
-            model_available=model_available,
-        )
+        memory = RoleMemoryService(workspace)
         bindings = RoleBindingService(workspace, repository)
         return cls(
             repository=repository,
@@ -398,7 +392,7 @@ class RoleAggregateService:
             avatar_source=avatar_source,
             illustration_sources=illustration_sources,
         )
-        memory_state = self.memory.seed_role_memory(role)
+        memory_state = self.memory.prepare_memory(role)
         if memory_state != role.memory_init_state:
             role = self.repository.update_role(role.id, memory_init_state=memory_state)
         session = self.sessions.open_by_role(role)
@@ -420,7 +414,7 @@ class RoleAggregateService:
         illustration_sources: Sequence[str | Path] | None = None,
     ) -> RoleAggregate:
         """异步创建角色，供运行中事件循环内的入口调用。"""
-        role = self.repository.create_role(
+        return self.create_role(
             name=name,
             description=description,
             system_prompt=system_prompt,
@@ -431,17 +425,10 @@ class RoleAggregateService:
             avatar_source=avatar_source,
             illustration_sources=illustration_sources,
         )
-        memory_state = await self.memory.seed_role_memory_async(role)
-        if memory_state != role.memory_init_state:
-            role = self.repository.update_role(role.id, memory_init_state=memory_state)
-        session = self.sessions.open_by_role(role)
-        return RoleAggregate(
-            role=role, session=session, memory_root=self.memory.memory_root(role.id)
-        )
 
     def update_role(self, role_id: str, **updates: Any) -> RoleAggregate:
         role = self.repository.update_role(role_id, **updates)
-        memory_state = self.memory.seed_role_memory(role)
+        memory_state = self.memory.prepare_memory(role)
         if memory_state != role.memory_init_state:
             role = self.repository.update_role(role.id, memory_init_state=memory_state)
         session = self.sessions.open_by_role(role)
@@ -451,14 +438,7 @@ class RoleAggregateService:
 
     async def update_role_async(self, role_id: str, **updates: Any) -> RoleAggregate:
         """异步更新角色，供运行中事件循环内的入口调用。"""
-        role = self.repository.update_role(role_id, **updates)
-        memory_state = await self.memory.seed_role_memory_async(role)
-        if memory_state != role.memory_init_state:
-            role = self.repository.update_role(role.id, memory_init_state=memory_state)
-        session = self.sessions.open_by_role(role)
-        return RoleAggregate(
-            role=role, session=session, memory_root=self.memory.memory_root(role.id)
-        )
+        return self.update_role(role_id, **updates)
 
     def delete_role(self, role_id: str) -> tuple[bool, bool]:
         clean_role_id = _clean_role_id(role_id)
@@ -473,7 +453,7 @@ class RoleAggregateService:
 
     def open_role(self, role_id: str) -> RoleAggregate:
         role = self.repository.get_required(role_id)
-        memory_state = self.memory.seed_role_memory(role)
+        memory_state = self.memory.prepare_memory(role)
         if memory_state != role.memory_init_state:
             role = self.repository.update_role(role.id, memory_init_state=memory_state)
         session = self.sessions.open_by_role(role)
@@ -483,14 +463,7 @@ class RoleAggregateService:
 
     async def open_role_async(self, role_id: str) -> RoleAggregate:
         """异步打开角色，供运行中事件循环内的入口调用。"""
-        role = self.repository.get_required(role_id)
-        memory_state = await self.memory.seed_role_memory_async(role)
-        if memory_state != role.memory_init_state:
-            role = self.repository.update_role(role.id, memory_init_state=memory_state)
-        session = self.sessions.open_by_role(role)
-        return RoleAggregate(
-            role=role, session=session, memory_root=self.memory.memory_root(role.id)
-        )
+        return self.open_role(role_id)
 
     def update_relationship_baseline(
         self,

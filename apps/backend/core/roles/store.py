@@ -26,12 +26,7 @@ from .profile_models import RoleProfile
 class RoleStore:
     """Compatibility facade for persisted role records and owned sub-stores."""
 
-    def __init__(
-        self,
-        workspace: Path,
-        *,
-        default_dialogue_registration_id: str = "",
-    ) -> None:
+    def __init__(self, workspace: Path) -> None:
         self.workspace = workspace
         self._repository = RoleManifestRepository(workspace)
         self.roles_dir = self._repository.roles_dir
@@ -41,9 +36,6 @@ class RoleStore:
         self._assets = RoleAssetStore(self.roles_dir, self.assets_dir)
         self._bindings = RoleBindingPolicy()
         self._pets = RolePetStateStore(self._repository)
-        self._default_dialogue_registration_id = (
-            default_dialogue_registration_id.strip()
-        )
 
     @property
     def lock(self):
@@ -55,10 +47,6 @@ class RoleStore:
 
     def get_role(self, role_id: str) -> RoleRecord | None:
         return self._repository.get_role(role_id)
-
-    def set_default_dialogue_registration(self, registration_id: str) -> None:
-        """Updates the creation default after publishing a configuration generation."""
-        self._default_dialogue_registration_id = registration_id.strip()
 
     def migrate_model_selections(
         self,
@@ -120,7 +108,7 @@ class RoleStore:
             # Persist explicit absence so a later startup migration cannot bind it.
             resolved_runtime_config.setdefault(
                 "dialogue_model_registration_id",
-                self._default_dialogue_registration_id,
+                "",
             )
             resolved_runtime_config.setdefault("visual_model_registration_id", "")
             record = RoleRecord(

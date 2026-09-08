@@ -32,7 +32,6 @@ from core.roles import (
     RoleStore,
 )
 from core.roles.role_runtime import RoleRuntimeRegistry
-from core.roles.self_seed import LlmRoleSelfSeedGenerator
 from core.roles.model_runtime import ModelConfigurationError, RoleModelRuntime
 from desktop_bridge.app_service import DesktopAppService
 from desktop_bridge.chat_requests import DesktopChatRequestHandler
@@ -134,16 +133,11 @@ class DesktopBridgeService:
         self._event_listeners: set[
             Callable[[dict[str, Any]], Awaitable[None] | None]
         ] = set()
-        self._self_seed_generator = self._build_self_seed_generator()
         self._role_deleted_listener = self._on_role_deleted
         self.role_service = role_service or RoleAggregateService.from_runtime(
             workspace=workspace,
             role_store=role_store,
             session_manager=session_manager,
-            self_seed_generator=self._self_seed_generator,
-            model_available=(
-                lambda role_id: self.model_resolver.availability(role_id)["available"]
-            ) if self.model_resolver is not None else None,
         )
         self.role_service.add_role_deleted_listener(self._role_deleted_listener)
         self.conversation_service = ConversationService(
@@ -356,8 +350,6 @@ class DesktopBridgeService:
         ]
         if self.model_resolver is not None and self._owns_model_resolver:
             steps.append(("desktop.models.close", self.model_resolver.aclose))
-        if self._self_seed_provider is not None:
-            steps.append(("desktop.self_seed.close", self._self_seed_provider.aclose))
         await run_cleanup_steps(*steps)
 
     def start_background_tasks(self) -> None:
@@ -641,20 +633,6 @@ class DesktopBridgeService:
             store=self.novelai_store,
             role_store=self.role_store,
             workspace=self.workspace,
-        )
-
-    def _build_self_seed_generator(self) -> LlmRoleSelfSeedGenerator | None:
-        self._self_seed_provider = None
-        if self.model_resolver is None:
-            return None
-        from bootstrap.providers import build_providers
-
-        provider, _light, _agent = build_providers(self.config)
-        self._self_seed_provider = provider
-        return LlmRoleSelfSeedGenerator(
-            provider=provider,
-            model=self.config.model,
-            role_runtime_registry=self.role_runtime_registry,
         )
 
     async def handle(

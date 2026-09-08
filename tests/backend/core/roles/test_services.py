@@ -4,67 +4,55 @@ import pytest
 
 from core.roles import RoleAggregateService, RoleStore
 from session.manager import SessionManager
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
-from core.roles.self_seed import LlmRoleSelfSeedGenerator
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
-async def test_unavailable_model_defers_self_generation_until_configuration_repair(tmp_path):
-    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁\n\n角色自我认知")))
-    available = False
+@pytest.mark.parametrize("binding", ["", "selected"])
+async def test_role_lifecycle_prepares_local_memory_without_model_calls(tmp_path, binding):
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
         session_manager=SessionManager(tmp_path),
-        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
-        model_available=lambda role_id: available,
     )
-    created = await service.create_role_async(role_id="mira", name="Mira", system_prompt="mira")
-    await service.open_role_async("mira")
-    provider.chat.assert_not_awaited()
+    with patch("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", new_callable=AsyncMock) as generate:
+        created = await service.create_role_async(
+            role_id="mira", name="Mira", system_prompt="mira",
+            runtime_config={"dialogue_model_registration_id": binding},
+        )
+        await service.open_role_async("mira")
+        await service.update_role_async("mira", description="updated")
+        generate.assert_not_awaited()
     assert (created.memory_root / "SELF.md").exists()
-    assert created.role.memory_init_state["seed_self_pending"] is True
-
-    available = True
-    repaired = await service.open_role_async("mira")
-    provider.chat.assert_awaited_once()
-    assert repaired.role.memory_init_state["seed_self_ready"] is True
-    assert "seed_self_pending" not in repaired.role.memory_init_state
-    await service.open_role_async("mira")
-    provider.chat.assert_awaited_once()
+    assert created.role.memory_init_state["self_seed"]["status"] == "pending"
+    assert created.role.runtime_config["dialogue_model_registration_id"] == binding
 
 
 def test_sync_unavailable_model_initializes_local_memory_without_provider_call(tmp_path):
-    provider = SimpleNamespace(chat=AsyncMock())
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path, role_store=RoleStore(tmp_path), session_manager=SessionManager(tmp_path),
-        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
-        model_available=lambda role_id: False,
     )
-    created = service.create_role(role_id="mira", name="Mira", system_prompt="mira")
-    assert created.role.memory_init_state["seed_self_pending"] is True
-    provider.chat.assert_not_called()
+    with patch("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", new_callable=AsyncMock) as generate:
+        created = service.create_role(role_id="mira", name="Mira", system_prompt="mira")
+        service.open_role("mira")
+        service.update_role("mira", description="updated")
+        generate.assert_not_called()
+    assert created.role.memory_init_state["self_seed"]["status"] == "pending"
 
 
 @pytest.mark.asyncio
-async def test_new_role_generates_self_from_profile_and_profile_edits_preserve_it(tmp_path):
-    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁\n\n角色自我认知")))
+async def test_profile_edits_preserve_user_self_content(tmp_path):
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
         session_manager=SessionManager(tmp_path),
-        self_seed_generator=LlmRoleSelfSeedGenerator(provider=provider, model="test"),
     )
     aggregate = await service.create_role_async(
         role_id="mira", name="Mira", system_prompt="旧规则", background="旧背景",
         profile={"character": {"profile": "{{char}}的新资料", "response_constraints": "回答简洁"}},
     )
-    prompt = provider.chat.await_args.kwargs["messages"][1]["content"]
-    assert "Mira的新资料" in prompt
-    assert "回答简洁" in prompt
-    assert "旧背景" not in prompt and "旧规则" not in prompt
     self_path = aggregate.memory_root / "SELF.md"
+    self_path.write_text("# 我是谁\n\n自己编辑的内容\n", encoding="utf-8")
     saved_self = self_path.read_text(encoding="utf-8")
     history_path = aggregate.memory_root / "HISTORY.md"
     saved_history = history_path.read_text(encoding="utf-8")
@@ -72,7 +60,6 @@ async def test_new_role_generates_self_from_profile_and_profile_edits_preserve_i
     await service.update_role_async("mira", profile={"character": {"profile": "再次更新的资料"}})
     await service.open_role_async("mira")
 
-    provider.chat.assert_awaited_once()
     assert self_path.read_text(encoding="utf-8") == saved_self
     assert history_path.read_text(encoding="utf-8") == saved_history
 

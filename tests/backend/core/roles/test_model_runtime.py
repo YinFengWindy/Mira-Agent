@@ -25,7 +25,6 @@ def test_empty_runtime_keeps_roles_browsable_and_reports_missing_capability(tmp_
     store = RoleStore(tmp_path)
     store.create_role(name="Mira", system_prompt="mira", role_id="mira")
     runtime = RoleModelRuntime(role_store=store, registrations=[])
-    assert runtime.first_registration_id == ""
     assert runtime.availability("mira")["reason"] == "no_models"
     with pytest.raises(ModelConfigurationError) as caught:
         runtime.resolve("mira", "chat")
@@ -44,8 +43,8 @@ def test_runtime_reports_unbound_and_dangling_model_choices(tmp_path, binding, r
 
 
 def test_availability_does_not_construct_provider_and_reports_incomplete_fields(tmp_path):
-    store = RoleStore(tmp_path, default_dialogue_registration_id="model")
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "model"})
     runtime = RoleModelRuntime(role_store=store, registrations=[replace(
         registration("model", "chat"), api_key="${MISSING_KEY}", model="",
     )])
@@ -56,8 +55,8 @@ def test_availability_does_not_construct_provider_and_reports_incomplete_fields(
 
 
 def test_accepted_snapshot_is_retained_for_nested_activation(tmp_path):
-    store = RoleStore(tmp_path, default_dialogue_registration_id="first")
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "first"})
     runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
     with runtime.activate("mira", "chat") as accepted:
         store.update_role("mira", runtime_config={"dialogue_model_registration_id": ""})
@@ -69,8 +68,8 @@ def test_accepted_snapshot_is_retained_for_nested_activation(tmp_path):
 
 @pytest.mark.asyncio
 async def test_generation_reuses_provider_and_releases_it_once_on_close(tmp_path):
-    store = RoleStore(tmp_path, default_dialogue_registration_id="first")
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "first"})
     runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
     with patch("core.roles.model_runtime.LLMProvider") as provider_class:
         provider_class.return_value.aclose = AsyncMock()
@@ -86,8 +85,8 @@ async def test_generation_reuses_provider_and_releases_it_once_on_close(tmp_path
 def test_runtime_resolves_dialogue_and_visual_fallback(tmp_path) -> None:
     dialogue = registration("00000000-0000-4000-a000-000000000001", "chat-model")
     visual = registration("00000000-0000-4000-a000-000000000002", "vision-model")
-    store = RoleStore(tmp_path, default_dialogue_registration_id=dialogue.id)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": dialogue.id})
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[dialogue, visual],
@@ -111,8 +110,8 @@ def test_runtime_resolves_dialogue_and_visual_fallback(tmp_path) -> None:
 def test_runtime_snapshot_stays_stable_after_role_selection_changes(tmp_path) -> None:
     first = registration("00000000-0000-4000-a000-000000000001", "first-model")
     second = registration("00000000-0000-4000-a000-000000000002", "second-model")
-    store = RoleStore(tmp_path, default_dialogue_registration_id=first.id)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": first.id})
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[first, second],
@@ -143,8 +142,8 @@ def test_runtime_uses_role_dialogue_effort_override(tmp_path) -> None:
         model="vision-model",
         effort="low",
     )
-    store = RoleStore(tmp_path, default_dialogue_registration_id=dialogue.id)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira")
+    store = RoleStore(tmp_path)
+    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": dialogue.id})
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[dialogue, visual],

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -8,6 +7,7 @@ import pytest
 
 from core.roles.self_seed import LlmRoleSelfSeedGenerator
 from core.roles import RoleStore
+from core.roles.model_runtime import RoleModelSnapshot
 
 
 @pytest.mark.asyncio
@@ -15,26 +15,7 @@ async def test_self_seed_uses_the_role_dialogue_model_snapshot(tmp_path) -> None
     selected_provider = SimpleNamespace(
         chat=AsyncMock(return_value=SimpleNamespace(content="# 角色自我认知"))
     )
-    fallback_provider = SimpleNamespace(
-        chat=AsyncMock(side_effect=AssertionError("fallback"))
-    )
-    activations: list[tuple[str, str]] = []
-
-    class _RoleRuntimeRegistry:
-        async def get(self, role_id: str):
-            self.role_id = role_id
-            return self
-
-        @contextmanager
-        def activate_model(self, purpose: str):
-            activations.append((self.role_id, purpose))
-            yield SimpleNamespace(provider=selected_provider, model="role-model")
-
-    generator = LlmRoleSelfSeedGenerator(
-        provider=fallback_provider,
-        model="base-model",
-        role_runtime_registry=_RoleRuntimeRegistry(),
-    )
+    generator = LlmRoleSelfSeedGenerator()
     role = RoleStore(tmp_path).create_role(
         role_id="mira",
         name="Mira",
@@ -43,12 +24,12 @@ async def test_self_seed_uses_the_role_dialogue_model_snapshot(tmp_path) -> None
         system_prompt="用中文回复",
     )
 
-    result = await generator.agenerate(role)
+    result = await generator.agenerate(role, RoleModelSnapshot(
+        "selected", selected_provider, "role-model", "none", role_id=role.id,
+    ))
 
     assert result == "# 角色自我认知"
-    assert activations == [("mira", "chat")]
     assert selected_provider.chat.await_args.kwargs["model"] == "role-model"
-    fallback_provider.chat.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -69,10 +50,26 @@ async def test_self_seed_compiles_stable_profile_without_transient_knowledge(tmp
         },
     )
 
-    await LlmRoleSelfSeedGenerator(provider=provider, model="test").agenerate(role)
+    await LlmRoleSelfSeedGenerator().agenerate(role, RoleModelSnapshot(
+        "selected", provider, "test", "none", role_id=role.id,
+    ))
 
     prompt = provider.chat.await_args.kwargs["messages"][1]["content"]
     assert "小栞是用户的向导" in prompt
     assert "温柔" in prompt and "诚实" in prompt and "简洁" in prompt
     assert "旧提示词" not in prompt and "旧背景" not in prompt
     assert "当前聊天知识" not in prompt and "Mood Output Contract" not in prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("response", ["", "   ", RuntimeError("provider unavailable"), TimeoutError()])
+async def test_self_seed_propagates_failures_and_rejects_empty_content(tmp_path, response):
+    provider = SimpleNamespace(chat=AsyncMock(
+        side_effect=response if isinstance(response, Exception) else None,
+        return_value=SimpleNamespace(content=response),
+    ))
+    role = RoleStore(tmp_path).create_role(name="Mira", system_prompt="mira")
+    with pytest.raises(type(response) if isinstance(response, Exception) else ValueError):
+        await LlmRoleSelfSeedGenerator().agenerate(role, RoleModelSnapshot(
+            "selected", provider, "test", "none", role_id=role.id,
+        ))
