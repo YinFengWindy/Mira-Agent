@@ -1,5 +1,5 @@
 import { BackIcon, ResetIcon, SaveIcon } from "../shared/icons";
-import { cx } from "../shared/styles";
+import { cx, iconButtonClass } from "../shared/styles";
 import type { NewRoleFormState } from "../shared/types";
 import type { RoleCardImportState } from "../app/roleCardImportState";
 import { RoleCreateFields } from "./RoleCreateFields";
@@ -19,7 +19,7 @@ type RoleCreatePageProps = {
   onCancelRoleCardImport: () => void;
 };
 
-const actionClass = "grid h-10 w-10 shrink-0 place-items-center rounded-md border border-[#E5E7EB] bg-white text-[#1F2937] transition hover:bg-[#F8FAFC] disabled:opacity-40";
+const actionClass = iconButtonClass;
 
 /** Renders regular role creation using the same identity and import editors as onboarding. */
 export function RoleCreatePage({ bridgeReady, creating, form, onBackToList, onCreateRole, onResetForm,

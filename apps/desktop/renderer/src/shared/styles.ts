@@ -39,6 +39,10 @@ export const dangerButtonClass =
 export const dangerGhostButtonClass =
   "cursor-pointer rounded-md border border-line bg-surface px-[18px] py-3 text-danger-text transition-colors hover:border-danger/40 hover:bg-danger-soft disabled:cursor-default disabled:opacity-50";
 
+/** Square icon-only action button (back, reset, tools): the one corner treatment for this role is rounded-md. */
+export const iconButtonClass =
+  "grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface text-ink-secondary transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-default disabled:opacity-40";
+
 /** Shared focus reset for controls that rely on their existing state styling. */
 export const focusResetClass = "focus:outline-none";
 

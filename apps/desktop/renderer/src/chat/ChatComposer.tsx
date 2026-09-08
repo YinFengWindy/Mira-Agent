@@ -138,7 +138,7 @@ export const ChatComposer = React.memo(function ChatComposer({
   return (
     <div className="composer-wrap pointer-events-none absolute inset-x-0 bottom-10 z-[2] flex min-w-0 justify-center overflow-visible">
       <div className="pointer-events-auto mx-auto w-full max-w-[700px] px-5 md:px-6">
-        <div className="composer grid w-full flex-none gap-1.5 rounded-[18px] border border-[#E4E4E4] bg-[#FFFEFF] px-3 pb-2 pt-2.5">
+        <div className="composer grid w-full flex-none gap-1.5 rounded-lg border border-[#E4E4E4] bg-[#FFFEFF] px-3 pb-2 pt-2.5">
           {replyTarget ? (
             <div className="flex min-w-0 items-start gap-2 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] px-2.5 py-2 text-left">
               {replyTarget.messageId ? (
@@ -196,9 +196,9 @@ export const ChatComposer = React.memo(function ChatComposer({
                 ) : (
                   <span
                     key={path}
-                    className="relative inline-flex max-w-[220px] items-center gap-2 rounded-[16px] border border-black/8 bg-[#F6F7FA] px-3 py-2 text-left text-[#4B5563]"
+                    className="relative inline-flex max-w-[220px] items-center gap-2 rounded-lg border border-black/8 bg-[#F6F7FA] px-3 py-2 text-left text-[#4B5563]"
                   >
-                    <span className="grid h-9 w-9 flex-none place-items-center rounded-[12px] bg-white text-[#6B7280] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
+                    <span className="grid h-9 w-9 flex-none place-items-center rounded-md bg-white text-[#6B7280] shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]">
                       <DocumentIcon className="h-4 w-4 stroke-current" />
                     </span>
                     <span className="min-w-0 flex-1 pr-4">

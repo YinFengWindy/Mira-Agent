@@ -36,9 +36,9 @@ const agentAvatarClass =
   "message-avatar grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full border border-black/10 bg-[#f6f6f6] object-cover";
 const chatMinorTextClass = "text-[12px]";
 const assistantMessageBubbleClass =
-  "message-bubble w-fit max-w-full rounded-[14px] border border-[rgba(228,228,228,0.66)] bg-[rgba(255,255,255,0.78)] px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors duration-150 group-hover:bg-[rgba(255,255,255,0.9)]";
+  "message-bubble w-fit max-w-full rounded-md border border-[rgba(228,228,228,0.66)] bg-[rgba(255,255,255,0.78)] px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors duration-150 group-hover:bg-[rgba(255,255,255,0.9)]";
 const userMessageBubbleClass =
-  "message-bubble w-fit max-w-full rounded-[14px] border border-[#E4E4E4] bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+  "message-bubble w-fit max-w-full rounded-md border border-[#E4E4E4] bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
 
 /** Renders one independently memoized chat message so unaffected Markdown stays out of updates. */
 export const ChatMessageRow = React.memo(function ChatMessageRow({
@@ -67,7 +67,7 @@ export const ChatMessageRow = React.memo(function ChatMessageRow({
   const toolChain = presentation.toolChain;
   const hasToolCalls = toolChain.some((group) => group.calls.length > 0);
   const bubbleClass = isError
-    ? "message-bubble w-fit max-w-full rounded-[14px] border border-[rgba(176,58,58,0.22)] bg-[rgba(255,244,244,0.96)] px-3.5 py-2.5 text-left text-[#8f2d2d] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+    ? "message-bubble w-fit max-w-full rounded-md border border-[rgba(176,58,58,0.22)] bg-[rgba(255,244,244,0.96)] px-3.5 py-2.5 text-left text-[#8f2d2d] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
     : isUser
       ? userMessageBubbleClass
       : assistantMessageBubbleClass;

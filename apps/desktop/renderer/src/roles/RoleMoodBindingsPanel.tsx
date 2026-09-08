@@ -33,8 +33,8 @@ export function RoleMoodBindingsPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="grid min-h-[360px] flex-1 gap-4 rounded-[20px] bg-white p-5">
-        <div className="relative grid min-h-[260px] place-items-center overflow-hidden rounded-[18px] bg-[#F2F5F8]">
+      <div className="grid min-h-[360px] flex-1 gap-4 rounded-xl bg-white p-5">
+        <div className="relative grid min-h-[260px] place-items-center overflow-hidden rounded-lg bg-[#F2F5F8]">
           {selectedAssetPath ? (
             <>
               <button

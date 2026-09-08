@@ -120,7 +120,7 @@ export function RoleAssetsPage({
       data-testid="role-assets-page"
     >
       <div className="mx-auto flex min-h-full w-full max-w-[1280px] flex-col gap-5 px-8 pb-10 pt-6">
-        <div className="grid min-h-[680px] grid-cols-[428px_minmax(0,1fr)] overflow-hidden rounded-[18px] bg-white/92 shadow-[0_18px_48px_rgba(31,41,55,0.08)]">
+        <div className="grid min-h-[680px] grid-cols-[428px_minmax(0,1fr)] overflow-hidden rounded-lg bg-white/92 shadow-[0_18px_48px_rgba(31,41,55,0.08)]">
           <div className="flex min-h-0 flex-col bg-[#FBFCFE] p-4">
             <div className="hidden mt-5 grid grid-cols-4 content-start gap-2.5">
               {assetPairs.map(({ relPath, absPath }, index) => {
@@ -135,7 +135,7 @@ export function RoleAssetsPage({
                     <button
                       data-testid={`role-asset-card-${index}`}
                       className={cx(
-                        "h-[90px] w-[90px] overflow-hidden rounded-[18px] border p-0 text-left transition",
+                        "h-[90px] w-[90px] overflow-hidden rounded-lg border p-0 text-left transition",
                         isSelected ? "border-[#272536] shadow-[0_8px_24px_rgba(39,37,54,0.16)]" : "border-[#D8DFE7] bg-white hover:border-[#9AA3B2]",
                       )}
                       type="button"
@@ -163,7 +163,7 @@ export function RoleAssetsPage({
               })}
               <button
                 data-testid="pick-role-assets-button"
-                className="grid h-[90px] w-[90px] place-items-center overflow-hidden rounded-[18px] border border-[#D8DFE7] bg-white text-[#272536] transition hover:border-[#9AA3B2] hover:bg-[#F5F7FA] disabled:cursor-default disabled:border-black/6 disabled:bg-white/60 disabled:text-[#b8b8b8]"
+                className="grid h-[90px] w-[90px] place-items-center overflow-hidden rounded-lg border border-[#D8DFE7] bg-white text-[#272536] transition hover:border-[#9AA3B2] hover:bg-[#F5F7FA] disabled:cursor-default disabled:border-black/6 disabled:bg-white/60 disabled:text-[#b8b8b8]"
                 type="button"
                 disabled={!bridgeReady}
                 onClick={() => onPickAssets("default")}
@@ -189,7 +189,7 @@ export function RoleAssetsPage({
           </div>
           <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-white p-6">
             <div className="flex min-h-0 flex-col">
-              <div className="flex h-full min-h-[420px] flex-col rounded-[24px] border border-[#E4EAF0] bg-[#FAFBFD] p-5">
+              <div className="flex h-full min-h-[420px] flex-col rounded-xl border border-[#E4EAF0] bg-[#FAFBFD] p-5">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div className="text-sm font-medium text-[#2A3440]">
                     {selectionMode === "avatar" ? "头像效果" : selectionMode === "chat-background" ? "立绘效果" : "差分效果"}
@@ -248,7 +248,7 @@ export function RoleAssetsPage({
                   </div>
                 ) : selectedAsset ? (
                   selectionMode === "avatar" ? (
-                    <div className="relative grid min-h-[360px] flex-1 place-items-center rounded-[20px] bg-white p-8">
+                    <div className="relative grid min-h-[360px] flex-1 place-items-center rounded-xl bg-white p-8">
                       <button
                         className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white/92 text-[#5B6472] transition hover:border-[#9AA3B2] hover:bg-white hover:text-[#272536] focus:outline-none"
                         type="button"
@@ -260,7 +260,7 @@ export function RoleAssetsPage({
                       <img className="h-[140px] w-[140px] rounded-[32px] object-cover shadow-[0_10px_24px_rgba(15,23,42,0.08)]" src={toFileUrl(selectedAsset.absPath)} alt="avatar preview" />
                     </div>
                   ) : (
-                    <div className="relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden rounded-[20px] bg-white p-6">
+                    <div className="relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden rounded-xl bg-white p-6">
                       <button
                         className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white/92 text-[#5B6472] transition hover:border-[#9AA3B2] hover:bg-white hover:text-[#272536] focus:outline-none"
                         type="button"
@@ -277,7 +277,7 @@ export function RoleAssetsPage({
                     </div>
                   )
                 ) : (
-                  <div className="grid min-h-[360px] flex-1 place-items-center rounded-[20px] bg-[#F2F5F8] text-sm text-[#74808D]">
+                  <div className="grid min-h-[360px] flex-1 place-items-center rounded-xl bg-[#F2F5F8] text-sm text-[#74808D]">
                     {selectionMode === "avatar" ? "当前未设置头像" : "当前未设置立绘"}
                   </div>
                 )}

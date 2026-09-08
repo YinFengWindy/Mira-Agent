@@ -53,7 +53,7 @@ export function ConfirmDialog({
         disabled={busy}
       />
       <section
-        className="relative z-[1] w-full max-w-[460px] rounded-[24px] bg-[rgba(255,255,255,0.98)] p-6 shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
+        className="relative z-[1] w-full max-w-[460px] rounded-xl bg-[rgba(255,255,255,0.98)] p-6 shadow-[0_28px_80px_rgba(15,23,42,0.18)]"
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -14,7 +14,7 @@ export function ImageHistoryPanel({
   onSelect,
 }: ImageHistoryPanelProps) {
   return (
-    <section className="flex h-full min-h-0 flex-col gap-3 rounded-[20px] bg-white p-3">
+    <section className="flex h-full min-h-0 flex-col gap-3 rounded-xl bg-white p-3">
       <div className="flex items-center justify-between px-1 pt-1">
         <div className="text-sm font-medium text-[#20242A]">History</div>
       </div>
@@ -27,13 +27,13 @@ export function ImageHistoryPanel({
             <button
               key={item.id}
               className={cx(
-                "rounded-[16px] border p-2 text-left transition focus:outline-none",
+                "rounded-lg border p-2 text-left transition focus:outline-none",
                 selected ? "border-black bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)]" : "border-transparent bg-white hover:bg-white",
               )}
               type="button"
               onClick={() => onSelect(item)}
             >
-              <div className="aspect-square w-full overflow-hidden rounded-[14px] bg-white">
+              <div className="aspect-square w-full overflow-hidden rounded-md bg-white">
                 {previewPath ? (
                   <img className="h-full w-full object-contain" src={toFileUrl(previewPath)} alt="history preview" />
                 ) : null}
@@ -41,7 +41,7 @@ export function ImageHistoryPanel({
             </button>
           );
         }) : (
-          <div className="rounded-[14px] bg-white px-3 py-5 text-center text-[12px] text-[#737781] shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+          <div className="rounded-md bg-white px-3 py-5 text-center text-[12px] text-[#737781] shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
             暂无绘图记录
           </div>
         )}
