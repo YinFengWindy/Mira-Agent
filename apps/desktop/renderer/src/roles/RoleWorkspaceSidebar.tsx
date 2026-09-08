@@ -23,10 +23,10 @@ export function RoleWorkspaceSidebar({
 }: RoleWorkspaceSidebarProps) {
   const sidebarActionClass = cx(
     sidebarNavItemClass,
-    "flex min-h-[38px] items-center justify-between px-3 text-left text-sm text-[#3a4453]",
+    "flex min-h-[38px] items-center justify-between px-3 text-left text-sm text-ink-secondary",
   );
   const activeSectionClass =
-    "bg-white/90 font-medium text-[#3a4453] shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:bg-white focus-visible:bg-white";
+    "bg-white/90 font-medium text-ink shadow-soft hover:bg-white focus-visible:bg-white";
 
   return (
     <aside
