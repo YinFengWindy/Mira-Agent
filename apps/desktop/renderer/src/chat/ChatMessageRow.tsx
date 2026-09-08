@@ -33,12 +33,12 @@ type ChatMessageRowProps = {
 };
 
 const agentAvatarClass =
-  "message-avatar grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full border border-black/10 bg-[#f6f6f6] object-cover";
+  "message-avatar grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full border border-line-soft bg-surface-soft object-cover";
 const chatMinorTextClass = "text-[12px]";
 const assistantMessageBubbleClass =
-  "message-bubble w-fit max-w-full rounded-md border border-[rgba(228,228,228,0.66)] bg-[rgba(255,255,255,0.78)] px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors duration-150 group-hover:bg-[rgba(255,255,255,0.9)]";
+  "message-bubble w-fit max-w-full rounded-lg border border-white/70 bg-white/80 px-3.5 py-2.5 text-left shadow-soft transition-colors duration-150 group-hover:bg-white/95";
 const userMessageBubbleClass =
-  "message-bubble w-fit max-w-full rounded-md border border-[#E4E4E4] bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]";
+  "message-bubble w-fit max-w-full rounded-lg border border-line-soft bg-white px-3.5 py-2.5 text-left shadow-soft";
 
 /** Renders one independently memoized chat message so unaffected Markdown stays out of updates. */
 export const ChatMessageRow = React.memo(function ChatMessageRow({
@@ -67,7 +67,7 @@ export const ChatMessageRow = React.memo(function ChatMessageRow({
   const toolChain = presentation.toolChain;
   const hasToolCalls = toolChain.some((group) => group.calls.length > 0);
   const bubbleClass = isError
-    ? "message-bubble w-fit max-w-full rounded-md border border-[rgba(176,58,58,0.22)] bg-[rgba(255,244,244,0.96)] px-3.5 py-2.5 text-left text-[#8f2d2d] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+    ? "message-bubble w-fit max-w-full rounded-lg border border-[var(--danger-300)] bg-danger-soft px-3.5 py-2.5 text-left text-danger-text shadow-soft"
     : isUser
       ? userMessageBubbleClass
       : assistantMessageBubbleClass;
@@ -103,9 +103,9 @@ export const ChatMessageRow = React.memo(function ChatMessageRow({
             </span>
           )
         ) : null}
-        <div className={cx("message-body flex min-w-0 w-full max-w-[82%] flex-col text-sm leading-6 text-[#1f1f1f]", isUser && "ml-auto items-end")}>
+        <div className={cx("message-body flex min-w-0 w-full max-w-[82%] flex-col text-sm leading-6 text-ink", isUser && "ml-auto items-end")}>
           {!isUser ? (
-            <div className={cx("message-author mb-1 font-medium leading-none text-[#b9b9b9]", chatMinorTextClass)}>
+            <div className={cx("message-author mb-1 font-medium leading-none text-ink-faint", chatMinorTextClass)}>
               {authorLabel}
             </div>
           ) : null}
@@ -118,7 +118,7 @@ export const ChatMessageRow = React.memo(function ChatMessageRow({
               && !hasToolCalls
               && !presentation.hasIntermediateNarrative
               && "hidden",
-            isHighlighted && "message-bubble-highlight ring-2 ring-[#111827]/10",
+            isHighlighted && "message-bubble-highlight ring-2 ring-ring-soft",
           )}>
             {storedReplyPreview ? (
               storedReplyPreview.messageId ? (
@@ -128,19 +128,19 @@ export const ChatMessageRow = React.memo(function ChatMessageRow({
                   aria-label="跳转到被引用消息"
                   onClick={() => onJumpToMessage(storedReplyPreview.messageId)}
                 >
-                  <div className="border-l-2 border-[#AEB7C5] pl-2.5">
+                  <div className="border-l-2 border-line-accent pl-2.5">
                     {storedReplyPreview.sender ? (
-                      <div className="truncate text-[11px] font-medium leading-4 text-[#6B7280]">{storedReplyPreview.sender}</div>
+                      <div className="truncate text-[11px] font-medium leading-4 text-ink-muted">{storedReplyPreview.sender}</div>
                     ) : null}
-                    <div className="line-clamp-2 text-[12px] leading-5 text-[#7B8190]">{storedReplyPreview.preview}</div>
+                    <div className="line-clamp-2 text-[12px] leading-5 text-ink-faint">{storedReplyPreview.preview}</div>
                   </div>
                 </button>
               ) : (
-                <div className="mb-2 max-w-[420px] border-l-2 border-[#AEB7C5] pl-2.5 text-left">
+                <div className="mb-2 max-w-[420px] border-l-2 border-line-accent pl-2.5 text-left">
                   {storedReplyPreview.sender ? (
-                    <div className="truncate text-[11px] font-medium leading-4 text-[#6B7280]">{storedReplyPreview.sender}</div>
+                    <div className="truncate text-[11px] font-medium leading-4 text-ink-muted">{storedReplyPreview.sender}</div>
                   ) : null}
-                  <div className="line-clamp-2 text-[12px] leading-5 text-[#7B8190]">{storedReplyPreview.preview}</div>
+                  <div className="line-clamp-2 text-[12px] leading-5 text-ink-faint">{storedReplyPreview.preview}</div>
                 </div>
               )
             ) : null}

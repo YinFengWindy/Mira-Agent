@@ -33,20 +33,20 @@ export function ChatStatusSidebar({
             decoding="async"
           />
         ) : (
-          <div className="grid h-full w-full place-items-center rounded-md bg-[#EEF2F6] text-[12px] text-[#98A2B3]">
+          <div className="grid h-full w-full place-items-center rounded-md bg-accent-softer text-[12px] text-ink-faint">
             {visualsActive ? "当前状态图还没生成" : "窗口隐藏时已暂停图片渲染"}
           </div>
         )}
       </div>
       <div className="text-center">
-        <div className="text-[11px] uppercase tracking-[0.16em] text-[#7A8593]">当前状态</div>
-        <div className="mt-1 text-sm font-semibold text-[#1F2937]">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-ink-faint">当前状态</div>
+        <div className="mt-1 text-sm font-semibold text-accent-text">
           {currentMood || "未生成"}
         </div>
       </div>
       <div className="rounded-md px-3 py-3 text-left">
-        <div className="text-[11px] uppercase tracking-[0.16em] text-[#7A8593]">当下想法</div>
-        <div className="mt-2 text-[13px] leading-6 text-[#334155]">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-ink-faint">当下想法</div>
+        <div className="mt-2 text-[13px] leading-6 text-ink-secondary">
           {roleSelfView || "我还在慢慢整理自己现在对你的想法。"}
         </div>
       </div>
@@ -55,23 +55,23 @@ export function ChatStatusSidebar({
           {relationshipTags.map((tag) => (
             <span
               key={tag}
-              className="rounded-md px-2.5 py-1 text-[11px] leading-none text-[#556070]"
+              className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] leading-none text-accent-text"
             >
               {tag}
             </span>
           ))}
         </div>
       ) : (
-        <div className="text-[11px] text-[#8A94A3]">关系标签还在生成中</div>
+        <div className="text-[11px] text-ink-faint">关系标签还在生成中</div>
       )}
       <div className="rounded-md px-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-[#7A8593]">寂寞值</div>
-          <div className="text-sm font-semibold text-[#1F2937]">{Math.round(normalizedLoneliness)}</div>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-ink-faint">寂寞值</div>
+          <div className="text-sm font-semibold tabular-nums text-ink">{Math.round(normalizedLoneliness)}</div>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E6EBF2]">
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-accent-soft">
           <div
-            className="h-full rounded-full bg-[linear-gradient(90deg,#A6B8D6_0%,#65758E_100%)] transition-[width] duration-300"
+            className="h-full rounded-full bg-gradient-accent transition-[width] duration-300"
             style={{ width: `${normalizedLoneliness}%` }}
           />
         </div>

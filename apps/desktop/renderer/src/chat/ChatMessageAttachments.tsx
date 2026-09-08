@@ -36,7 +36,7 @@ export function ChatMessageAttachments({
         isChatImageAsset(item) ? (
           <button
             key={`${messageKey}:${mediaIndex}:${item}`}
-            className="block w-fit max-w-full cursor-grab overflow-hidden rounded-md border border-black/8 bg-white/70 p-0 text-left transition hover:bg-white active:cursor-grabbing focus:outline-none"
+            className="block w-fit max-w-full cursor-grab overflow-hidden rounded-md border border-line-soft bg-white/70 p-0 text-left transition hover:bg-white active:cursor-grabbing focus:outline-none"
             type="button"
             draggable
             onDragStart={(event) => handleAttachmentDragStart(event, item)}
@@ -50,11 +50,11 @@ export function ChatMessageAttachments({
             href={toFileUrl(item)}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex max-w-[280px] cursor-grab items-center gap-2.5 rounded-full border border-black/8 bg-[#F7F7F8] px-3 py-2 text-[12px] text-[#1F2937] transition hover:bg-white active:cursor-grabbing focus:outline-none"
+            className="inline-flex max-w-[280px] cursor-grab items-center gap-2.5 rounded-full border border-line-soft bg-surface-soft px-3 py-2 text-[12px] text-ink transition hover:bg-white active:cursor-grabbing focus:outline-none"
             draggable
             onDragStart={(event) => handleAttachmentDragStart(event, item)}
           >
-            <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-transparent text-[#8B95A7]">
+            <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-transparent text-ink-faint">
               <DocumentIcon className="h-[13px] w-[13px] stroke-current" />
             </span>
             <span className="truncate font-medium">{getChatAttachmentName(item)}</span>

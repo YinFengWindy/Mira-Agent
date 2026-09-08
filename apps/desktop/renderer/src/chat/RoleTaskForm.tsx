@@ -34,7 +34,7 @@ const scheduleTriggerOptions = [
   { value: "every", label: "循环执行" },
 ] as const;
 
-const sectionHeadingClass = "text-[11px] font-semibold tracking-[0.12em] text-[#7A8593]";
+const sectionHeadingClass = "text-[11px] font-semibold tracking-[0.12em] text-ink-muted";
 
 /** Renders the create/edit form for a scheduled role task. */
 export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave }: {
@@ -68,7 +68,7 @@ export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave
         <button className={chatSidebarBackButtonClass} type="button" aria-label="返回" disabled={saving} onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <span className="font-semibold text-[#272536]">{title}</span>
+        <span className="font-semibold text-ink">{title}</span>
       </div>
       <div className={cx(chatSidebarScrollableClass, "space-y-5 px-1 pb-5")}>
         <section className="grid gap-3">
@@ -79,9 +79,9 @@ export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave
             <RoleTaskFieldError message={errors.name} />
           </label>
         </section>
-        <section className="grid gap-3 border-t border-[#E1E7EF] pt-4">
+        <section className="grid gap-3 border-t border-line-soft pt-4">
           <h3 className={sectionHeadingClass}>执行设置</h3>
-          <div className="grid gap-1.5 text-xs text-[#667085]">
+          <div className="grid gap-1.5 text-xs text-ink-muted">
             <span>执行模式</span>
             <RoleTaskSegmentedControl
               label="执行模式"
@@ -91,7 +91,7 @@ export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave
               onChange={(tier: ScheduleTaskTier) => setData((current) => ({ ...current, tier }))}
             />
           </div>
-          <div className="grid gap-1.5 text-xs text-[#667085]">
+          <div className="grid gap-1.5 text-xs text-ink-muted">
             <span>触发方式</span>
             <RoleTaskSegmentedControl
               label="触发方式"
@@ -111,7 +111,7 @@ export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave
             onRecurringRuleChange={setRecurringRule}
           />
         </section>
-        <section className="grid gap-3 border-t border-[#E1E7EF] pt-4">
+        <section className="grid gap-3 border-t border-line-soft pt-4">
           <h3 className={sectionHeadingClass}>任务内容</h3>
           <label className={roleTaskFieldLabelClass}>
             <span>执行内容</span>
@@ -127,10 +127,10 @@ export function RoleTaskForm({ title, initialData, saving, error, onBack, onSave
             <RoleTaskFieldError message={errors.content} />
           </label>
         </section>
-        {error ? <div className="text-xs text-[#B42318]">{error}</div> : null}
+        {error ? <div className="text-xs text-danger-text">{error}</div> : null}
       </div>
       <div className="pt-3">
-        <button className={cx("flex h-10 w-full items-center justify-center rounded-md bg-[#272536] px-4 text-xs font-medium text-white shadow-[0_4px_12px_rgba(39,37,54,0.14)] transition-colors hover:bg-[#3B394D] disabled:opacity-50", focusResetClass)} type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</button>
+        <button className={cx("flex h-10 w-full items-center justify-center rounded-md bg-gradient-accent px-4 text-xs font-medium text-white shadow-soft transition-[filter] hover:brightness-105 disabled:opacity-50", focusResetClass)} type="submit" disabled={saving}>{saving ? "保存中…" : "保存"}</button>
       </div>
     </form>
   );

@@ -463,7 +463,7 @@ export function ChatSurface({
   return (
     <section className="chat-surface relative grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] overflow-hidden bg-[var(--chat-bg)]">
       <button
-        className="absolute right-4 top-4 z-[5] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#747474] transition hover:bg-black/5 hover:text-[#4B4B4B] focus:outline-none"
+        className="absolute right-4 top-4 z-[5] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-ink-muted transition hover:bg-black/5 hover:text-ink-secondary focus:outline-none"
         type="button"
         aria-label={chatLatestImageSidebarCollapsed ? "展开最新图片侧栏" : "收起最新图片侧栏"}
         aria-expanded={!chatLatestImageSidebarCollapsed}
@@ -507,7 +507,7 @@ export function ChatSurface({
         onOpenRoleDetail={handleOpenRoleDetail}
       />
       <section className="conversation-panel relative z-[1] h-full min-h-0 overflow-hidden bg-transparent">
-        {notice ? <div className="notice-chip absolute left-1/2 top-4 z-[2] -translate-x-1/2 rounded-md border border-[rgba(26,106,58,0.18)] bg-[#edf8f0] px-3.5 py-2.5 text-[#1a6a3a]">{notice}</div> : null}
+        {notice ? <div className="notice-chip absolute left-1/2 top-4 z-[2] -translate-x-1/2 rounded-md border border-[var(--success-300)] bg-success-soft px-3.5 py-2.5 text-success-text">{notice}</div> : null}
         <ChatMessageList
           activeRole={activeRole}
           sessionKey={activeSession?.key ?? ""}
@@ -526,7 +526,7 @@ export function ChatSurface({
         {showScrollToBottom ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-[132px] z-[2] flex justify-center">
             <button
-              className="pointer-events-auto grid h-9 w-9 place-items-center rounded-full border border-[#E4E4E4] bg-[rgba(255,255,255,0.96)] text-[#4b5563] shadow-[0_10px_24px_rgba(17,24,39,0.08)] transition hover:border-[#d5d5d5] hover:bg-white hover:text-[#1f2937] focus:outline-none"
+              className="pointer-events-auto grid h-9 w-9 place-items-center rounded-full border border-line-soft bg-[rgba(255,255,255,0.96)] text-ink-secondary shadow-soft transition hover:border-line hover:bg-white hover:text-ink focus:outline-none"
               type="button"
               aria-label="滑到最下方"
               onClick={handleScrollToBottom}
@@ -554,7 +554,7 @@ export function ChatSurface({
       </div>
       <div
         className={cx(
-          "relative h-full overflow-hidden border-l border-[#E0E6EE] bg-[rgba(244,247,251,0.92)]",
+          "relative h-full overflow-hidden border-l border-line-soft bg-transparent",
           chatLatestImageSidebarAnimating && "transition-[width] duration-[480ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           chatLatestImageSidebarResizing && !chatLatestImageSidebarAnimating && "transition-[width] duration-100 ease-out",
         )}
@@ -562,7 +562,7 @@ export function ChatSurface({
       >
         {!chatLatestImageSidebarCollapsed ? (
           <div
-            className="absolute inset-y-0 left-0 z-[3] w-3 -translate-x-1/2 cursor-col-resize before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-[#D8DEE8] before:content-['']"
+            className="absolute inset-y-0 left-0 z-[3] w-3 -translate-x-1/2 cursor-col-resize before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-line-soft before:content-['']"
             onPointerDown={onBeginChatLatestImageSidebarResize}
           />
         ) : null}
@@ -596,12 +596,12 @@ export function ChatSurface({
                 onGoToPreviousImage={onGoToPreviousChatImage}
                 onOpenImageLightbox={onOpenChatImageLightbox}
               />
-              <div className="justify-self-center inline-flex w-fit rounded-full border border-[#D8DFE7] bg-[#F6F8FB] p-1">
+              <div className="justify-self-center inline-flex w-fit rounded-full border border-line-soft bg-surface-soft p-1">
                 <button
                   className={cx(
                     sidebarModeButtonClass,
-                    sidebarMode === "status" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]",
-                    !hasStatusContent && "cursor-default opacity-45 hover:text-[#5B6472]",
+                    sidebarMode === "status" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink",
+                    !hasStatusContent && "cursor-default opacity-45 hover:text-ink-secondary",
                   )}
                   type="button"
                   aria-label="状态侧栏"
@@ -613,7 +613,7 @@ export function ChatSurface({
                   </svg>
                 </button>
                 <button
-                  className={cx(sidebarModeButtonClass, sidebarMode === "tasks" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]")}
+                  className={cx(sidebarModeButtonClass, sidebarMode === "tasks" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink")}
                   type="button"
                   aria-label="任务侧栏"
                   onClick={() => setSidebarMode("tasks")}
@@ -623,7 +623,7 @@ export function ChatSurface({
                 <button
                   className={cx(
                     sidebarModeButtonClass,
-                    sidebarMode === "images" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]",
+                    sidebarMode === "images" ? "bg-gradient-accent text-white shadow-soft" : "text-ink-secondary hover:text-ink",
                   )}
                   type="button"
                   aria-label="图片侧栏"

@@ -146,7 +146,7 @@ describe("ChatSurface", () => {
     const bubbleClass = markup.match(/class="([^"]*message-bubble[^"]*)"/)?.[1];
 
     assert.ok(bubbleClass);
-    assert.match(bubbleClass, /bg-\[rgba\(255,255,255,0\.78\)\]/);
+    assert.match(bubbleClass, /bg-white\/80/);
     assert.doesNotMatch(bubbleClass, /backdrop-blur/);
   });
 
@@ -221,7 +221,7 @@ describe("ChatSurface", () => {
 
     assert.match(markup, /class="group w-full"/);
     assert.match(markup, /message-row flex w-full items-start gap-3/);
-    assert.match(markup, /message-body flex min-w-0 w-full max-w-\[82%\] flex-col text-sm leading-6 text-\[#1f1f1f\]/);
+    assert.match(markup, /message-body flex min-w-0 w-full max-w-\[82%\] flex-col text-sm leading-6 text-ink/);
     assert.match(markup, /ml-auto items-end/);
   });
 

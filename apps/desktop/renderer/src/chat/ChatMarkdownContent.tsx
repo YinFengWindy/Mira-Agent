@@ -28,19 +28,19 @@ const markdownComponents: Components = {
     return <div className="my-2 max-w-full overflow-x-auto"><table>{children}</table></div>;
   },
   pre({ children }) {
-    return <pre className="my-2 max-w-full overflow-x-auto rounded-md bg-[#F4F5F7] p-3 font-mono text-[12px] leading-5">{children}</pre>;
+    return <pre className="my-2 max-w-full overflow-x-auto rounded-md bg-surface-soft p-3 font-mono text-[12px] leading-5">{children}</pre>;
   },
   code({ className, children }) {
     const isBlock = Boolean(className);
     return isBlock
       ? <code className={className}>{children}</code>
-      : <code className="rounded-md bg-[#F0F1F3] px-1 py-0.5 font-mono text-[0.9em]">{children}</code>;
+      : <code className="rounded-md bg-surface-soft px-1 py-0.5 font-mono text-[0.9em]">{children}</code>;
   },
   blockquote({ children }) {
-    return <blockquote className="my-2 border-l-2 border-[#C9CED8] pl-3 text-[#626A78]">{children}</blockquote>;
+    return <blockquote className="my-2 border-l-2 border-line pl-3 text-ink-muted">{children}</blockquote>;
   },
   hr() {
-    return <hr className="my-3 border-0 border-t border-[#D8DDE5]" />;
+    return <hr className="my-3 border-0 border-t border-line-soft" />;
   },
   h1({ children }) { return <h1 className="my-3 text-lg font-semibold">{children}</h1>; },
   h2({ children }) { return <h2 className="my-2.5 text-base font-semibold">{children}</h2>; },

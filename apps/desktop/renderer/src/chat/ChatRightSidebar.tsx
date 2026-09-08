@@ -54,7 +54,7 @@ export const ChatRightSidebar = React.memo(function ChatRightSidebar({
   onOpenImageLightbox,
 }: ChatRightSidebarProps) {
   const navButtonClass =
-    "pointer-events-auto grid h-9 w-9 place-items-center rounded-md border border-[#DCE3EC] bg-white/75 text-[#4B5563] shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-colors hover:border-[#B8C2CE] hover:bg-white hover:text-[#1F2937] focus:outline-none focus:ring-0 disabled:cursor-default disabled:opacity-40";
+    "pointer-events-auto grid h-9 w-9 place-items-center rounded-md border border-line-soft bg-white/75 text-ink-secondary shadow-soft transition-colors hover:border-line hover:bg-white hover:text-ink focus:outline-none focus:ring-0 disabled:cursor-default disabled:opacity-40";
   if (mode === "status") {
     return (
       <ChatStatusSidebar
@@ -97,7 +97,7 @@ export const ChatRightSidebar = React.memo(function ChatRightSidebar({
         ) : (
           <div className="grid gap-2 px-6 text-center">
             <div className="mx-auto h-10 w-10 rounded-md bg-white/70" />
-            <div className="text-[12px] text-[#6B7280]">当前聊天里出现的图片会显示在这里</div>
+            <div className="text-[12px] text-ink-muted">当前聊天里出现的图片会显示在这里</div>
           </div>
         )}
         <div className="pointer-events-none absolute inset-y-0 right-0 z-[2] flex items-center pr-3">
