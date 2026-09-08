@@ -323,6 +323,7 @@ class DefaultReasoner(
                     "disabled_sections": sorted(plan["disabled_sections"]),
                 }
             )
+            # 重试只裁剪请求上下文，保留完整会话历史和记忆整合位置。
             history_for_attempt = self._slice_history(
                 source_history,
                 plan["history_window"],
@@ -374,22 +375,15 @@ class DefaultReasoner(
                 tools_used = list(result.metadata.get("tools_used") or [])
                 tools_unlocked = list(result.metadata.get("tools_unlocked") or [])
                 tool_chain = list(result.metadata.get("tool_chain") or [])
+                retry_trace["selected_plan"] = plan["name"]
+                retry_trace["trimmed_sections"] = sorted(plan["disabled_sections"])
                 if attempt > 0:
-                    window = plan["history_window"]
-                    retry_trace["selected_plan"] = plan["name"]
-                    retry_trace["trimmed_sections"] = sorted(plan["disabled_sections"])
                     logger.warning(
-                        "重试成功 plan=%s window=%d disabled=%s，修剪 session 历史",
+                        "重试成功 plan=%s window=%d disabled=%s",
                         plan["name"],
-                        window,
+                        plan["history_window"],
                         sorted(plan["disabled_sections"]),
                     )
-                    if window == 0:
-                        session.messages.clear()
-                    else:
-                        session.messages = session.messages[-window:]
-                    session.last_consolidated = 0
-                    await self._session_manager.save_async(cast(Any, session))
 
                 if self._tool_search_enabled and (tools_used or tools_unlocked):
                     self._discovery.update(
@@ -397,9 +391,6 @@ class DefaultReasoner(
                         [*tools_unlocked, *tools_used],
                         self._tools.get_always_on_names(),
                     )
-                if attempt == 0:
-                    retry_trace["selected_plan"] = plan["name"]
-                    retry_trace["trimmed_sections"] = sorted(plan["disabled_sections"])
                 if isinstance(llm_user_content, (str, list)):
                     retry_trace["llm_user_content"] = llm_user_content
                 if isinstance(llm_context_frame, str) and llm_context_frame.strip():
@@ -451,7 +442,7 @@ class DefaultReasoner(
                         sorted(next_plan["disabled_sections"]),
                     )
                 else:
-                    logger.warning("上下文超长：所有窗口均失败，清空历史后仍超长")
+                    logger.warning("上下文超长：所有窗口均失败，请求不带历史仍超长")
                     return TurnRunResult(
                         reply="上下文过长无法处理，请尝试新建对话。",
                         context_retry=retry_trace,
