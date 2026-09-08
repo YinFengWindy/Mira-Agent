@@ -616,6 +616,7 @@ class SchedulerService:
                     chat_id=job.chat_id,
                     message=job.message,
                     role_id=job.role_id,
+                    push_delivery_key=self._job_role_metadata(job)["delivery_key"],
                 ),
             )
             logger.info(f"[scheduler] instant 推送完成 {label!r}: {result}")
@@ -651,6 +652,8 @@ class SchedulerService:
                         chat_id=job.chat_id,
                         message=content,
                         role_id=job.role_id,
+                        push_delivery_key=self._job_role_metadata(job)["delivery_key"],
+                        push_message_already_persisted=True,
                     ),
                 )
                 logger.info(f"[scheduler] soft 推送完成 {label!r}: {result}")
@@ -673,7 +676,9 @@ class SchedulerService:
             "role_id": job.role_id,
             "role_config_version": job.role_config_version,
             "thread_id": job.thread_id or f"thread:{job.role_id}:scheduler:{job.id}",
-            "delivery_key": job.delivery_key or job.id,
+            # The creating turn may own several jobs. Identify this job occurrence,
+            # keeping nominal fire time stable across retries and process restarts.
+            "delivery_key": f"scheduler:{job.id}:{job.fire_at.isoformat()}",
             "transport_channel": job.channel,
             "transport_chat_id": job.chat_id,
             "role_source": "scheduler",

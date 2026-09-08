@@ -50,8 +50,10 @@ class DesktopAppService:
         *,
         message: str = "",
         media: list[str] | None = None,
+        delivery_key: str = "",
+        already_persisted: bool = False,
     ) -> Session:
-        """Persists a nonempty push before synchronizing desktop runtime state."""
+        """Validates pushes and persists only deliveries not owned by a turn commit."""
         normalized_message = str(message or "")
         normalized_media = [item for item in (media or []) if str(item).strip()]
         if not normalized_message.strip() and not normalized_media:
@@ -59,16 +61,23 @@ class DesktopAppService:
         session_key = self.normalize_desktop_session_key(chat_id)
         role_id = self.role_id_from_desktop_session_key(session_key)
         session = self.session_manager.get_or_create(session_key)
+        if already_persisted:
+            # A turn commit owns this message. A missing commit is an error, not
+            # permission for the transport to become a second persistence owner.
+            if not delivery_key or not self._has_delivery(session, delivery_key):
+                raise ValueError("Desktop push references an uncommitted delivery")
+            return await self._finish_desktop_push(session, role_id=role_id)
         if self._is_existing_desktop_push(
             session,
             message=normalized_message,
             media=normalized_media,
+            delivery_key=delivery_key,
         ):
             return session
         original_length = len(session.messages)
         original_updated_at = session.updated_at
         message_metadata = self.build_desktop_user_message_metadata(
-            None,
+            {"delivery_key": delivery_key} if delivery_key else None,
             role_id=role_id,
             chat_id=session.key,
         )
@@ -86,6 +95,9 @@ class DesktopAppService:
             del session.messages[original_length:]
             session.updated_at = original_updated_at
             raise
+        return await self._finish_desktop_push(session, role_id=role_id)
+
+    async def _finish_desktop_push(self, session: Session, *, role_id: str) -> Session:
         self.sync_desktop_session_thread(session, role_id=role_id)
         return await self._apply_post_persist_runtime_effects(
             session,
@@ -204,12 +216,23 @@ class DesktopAppService:
         return session
 
     @staticmethod
+    def _has_delivery(session: Session, delivery_key: str) -> bool:
+        return any(
+            item.get("role") == "assistant"
+            and (item.get("metadata") or {}).get("delivery_key") == delivery_key
+            for item in session.messages
+        )
+
+    @staticmethod
     def _is_existing_desktop_push(
         session: Session,
         *,
         message: str,
         media: list[str],
+        delivery_key: str = "",
     ) -> bool:
+        if delivery_key:
+            return DesktopAppService._has_delivery(session, delivery_key)
         if not session.messages:
             return False
         last_message = session.messages[-1]
