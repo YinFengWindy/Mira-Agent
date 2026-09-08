@@ -208,7 +208,8 @@ class RoleRuntime:
                 return await operation()
             with self.activate_model("chat") as snapshot:
                 await self._self_initializer.ensure_seeded(self.role_id, snapshot)
-                return await operation()
+            # Restore the accepted turn snapshot before entering the conversation.
+            return await operation()
 
         return await self.execute_thread(context, initialized_turn)
 

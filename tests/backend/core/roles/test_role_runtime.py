@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -103,7 +103,8 @@ async def test_unbound_first_turn_stops_before_seed_and_can_retry_after_binding(
 
 
 @pytest.mark.asyncio
-async def test_seed_and_text_reply_share_the_accepted_model_snapshot(tmp_path, monkeypatch):
+@pytest.mark.parametrize("accepted_before_seed", [True, False])
+async def test_text_reply_respects_when_its_model_snapshot_is_accepted(tmp_path, monkeypatch, accepted_before_seed):
     store = RoleStore(tmp_path)
     role = store.create_role(role_id="mira", name="Mira", system_prompt="test", runtime_config={
         "dialogue_model_registration_id": "first",
@@ -126,10 +127,53 @@ async def test_seed_and_text_reply_share_the_accepted_model_snapshot(tmp_path, m
         with (await registry.get(role.id)).activate_model("chat") as snapshot:
             return snapshot.model
 
-    assert await registry.dispatch_passive_turn(_context(role), reply) == "first"
+    scope = models.activate(role.id, "chat") if accepted_before_seed else nullcontext()
+    with scope:
+        assert await registry.dispatch_passive_turn(_context(role), reply) == (
+            "first" if accepted_before_seed else "second"
+        )
     assert await registry.dispatch_passive_turn(_context(role), reply) == "second"
     provider.chat.assert_awaited_once()
     await models.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("already_seeded", [False, True])
+@pytest.mark.parametrize("next_visual", ["new-vision", "missing-registration"])
+async def test_image_reply_preserves_accepted_snapshot_after_initialization(
+    tmp_path, monkeypatch, already_seeded, next_visual,
+):
+    store = RoleStore(tmp_path)
+    role = store.create_role(role_id="mira", name="Mira", system_prompt="test", runtime_config={
+        "dialogue_model_registration_id": "dialogue", "visual_model_registration_id": "old-vision",
+    })
+    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="self")), aclose=AsyncMock())
+    monkeypatch.setattr("core.roles.model_runtime.LLMProvider", lambda **kwargs: provider)
+    models = RoleModelRuntime(role_store=store, registrations=[
+        ModelRegistration(id=key, provider="openai", model=key, api_key="fake", base_url="")
+        for key in ("dialogue", "old-vision", "new-vision")
+    ])
+    initializer = RoleSelfInitializer(store, LlmRoleSelfSeedGenerator())
+    registry = RoleRuntimeRegistry(RoleRepository(store), model_resolver=models, self_initializer=initializer)
+    if already_seeded:
+        await initializer.ensure_seeded(role.id, models.resolve(role.id, "chat"))
+
+    async def reply():
+        assert store.get_role(role.id).memory_init_state["self_seed"]["status"] == "generated"
+        with (await registry.get(role.id)).activate_model("vision") as snapshot:
+            return snapshot
+
+    try:
+        with models.activate(role.id, "vision") as accepted:
+            # The request was accepted before a settings change while waiting for its turn.
+            store.update_role(role.id, runtime_config={
+                "dialogue_model_registration_id": "dialogue", "visual_model_registration_id": next_visual,
+            })
+            assert await registry.dispatch_passive_turn(_context(role), reply) is accepted
+        provider.chat.assert_awaited_once()
+        assert provider.chat.await_args.kwargs["model"] == "dialogue"
+    finally:
+        await models.aclose()
 
 
 @pytest.mark.asyncio
