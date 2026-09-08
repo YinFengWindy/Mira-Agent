@@ -56,6 +56,7 @@ def _config(model=""):
 async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_path, monkeypatch):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
     calls = []
+    seed_calls = []
     entered = asyncio.Event()
     finish = asyncio.Event()
     hold = False
@@ -63,6 +64,8 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
     async def fake_chat(self, **kwargs):
         model = kwargs["model"]
         calls.append(model)
+        if "首版 SELF.md" in str(kwargs["messages"][0].get("content")):
+            seed_calls.append(model)
         if hold and model == "first":
             entered.set()
             await finish.wait()
@@ -88,6 +91,7 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
         created = await request("roles.create", {"name": "Role", "system_prompt": "Role prompt"})
         role_id = created["role"]["id"]
         await request("session.openByRole", {"role_id": role_id})
+        assert calls == []
         unbound = await service.handle({"method": "chat.send", "payload": {"role_id": role_id, "content": "hi"}},
                                        emit_event=events.append)
         assert unbound.error.code == "model_configuration_required"
@@ -98,6 +102,7 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
         await request("roles.update", {"role_id": role_id, "runtime_config": {
             "dialogue_model_registration_id": _REGISTRATION,
         }})
+        assert calls == []
         hold = True
         await request("chat.send", {"role_id": role_id, "content": "old task", "turn_id": "old"})
         await asyncio.wait_for(entered.wait(), 5)
@@ -113,6 +118,8 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
         await request("chat.send", {"role_id": role_id, "content": "new task", "turn_id": "new"})
         await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
         assert calls[-1] == "second"
+        assert seed_calls == ["first"]
+        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["status"] == "generated"
         assert any(item["method"] == "chat.done" for item in events)
         await request("runtime.apply", {"config_toml": _config(), "operation_id": "empty",
                                         "expected_generation": 3,
@@ -146,6 +153,63 @@ async def test_invalid_apply_and_generation_conflict_preserve_active_files(tmp_p
             assert response.error.code == code
             assert path.read_text(encoding="utf-8") == _config()
             assert app.generation == 1
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_first_chat_seed_failure_reports_error_and_next_chat_retries(tmp_path, monkeypatch):
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
+    seeds, replies = [], []
+    fail_seed = True
+
+    async def fake_chat(self, **kwargs):
+        if "首版 SELF.md" in str(kwargs["messages"][0].get("content")):
+            seeds.append(kwargs["model"])
+            if fail_seed:
+                raise RuntimeError("seed provider unavailable")
+            return LLMResponse(content="# 我是谁\n\n我是本地测试角色。")
+        replies.append(kwargs["model"])
+        return LLMResponse(content="你好。")
+
+    monkeypatch.setattr(LLMProvider, "chat", fake_chat)
+    path = tmp_path / "config.toml"
+    path.write_text(_config("selected"), encoding="utf-8")
+    app = AppRuntime(load_config_text(_config("selected")), tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    await app.start()
+    service = ReloadableDesktopService(app, path, RoleStore(tmp_path))
+    events = []
+
+    async def request(method, payload):
+        response = await service.handle({"id": method, "method": method, "payload": payload}, emit_event=events.append)
+        assert response.error is None, response.error
+        return response.payload
+
+    try:
+        created = await request("roles.create", {"name": "Mira", "system_prompt": "Be Mira"})
+        role_id = created["role"]["id"]
+        assert created["role"]["runtime_config"]["dialogue_model_registration_id"] == ""
+        await request("roles.update", {"role_id": role_id, "runtime_config": {"dialogue_model_registration_id": _REGISTRATION}})
+        await request("session.openByRole", {"role_id": role_id})
+        assert seeds == replies == []
+        self_path = tmp_path / "roles" / role_id / "memory/SELF.md"
+        default = self_path.read_text(encoding="utf-8")
+        await request("chat.send", {"role_id": role_id, "content": "你好", "turn_id": "first"})
+        await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
+        assert seeds == ["selected"] and replies == []
+        assert any(event["method"] == "chat.error" for event in events)
+        assert self_path.read_text(encoding="utf-8") == default
+        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["last_error"] == "seed provider unavailable"
+        fail_seed = False
+        for turn_id in ("retry", "subsequent"):
+            await request("chat.send", {"role_id": role_id, "content": "你好", "turn_id": turn_id})
+            await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
+        assert seeds == ["selected", "selected"]
+        assert len(replies) >= 2
+        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["status"] == "generated"
+        assert any(event["method"] == "chat.done" for event in events)
     finally:
         await service.aclose()
         await app.shutdown()

@@ -2,16 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-from agent.memory import DEFAULT_SELF_MD
-from agent.provider import LLMProvider
-
-from .store import RoleRecord
+from .models import RoleRecord
+from .model_runtime import RoleModelSnapshot
 from .role_prompt_compiler import RolePromptCompiler
-
-if TYPE_CHECKING:
-    from core.roles.role_runtime import RoleRuntimeRegistry
 
 _SELF_SEED_SYSTEM = (
     "你正在为一个新创建的角色生成首版 SELF.md。"
@@ -50,55 +43,30 @@ _SELF_SEED_PROMPT = """\
 
 @dataclass
 class LlmRoleSelfSeedGenerator:
-    provider: LLMProvider
-    model: str
+    """Generates SELF content using the dialogue snapshot accepted by the turn."""
+
     timeout_s: float = 60.0
-    role_runtime_registry: RoleRuntimeRegistry | None = None
 
-    def generate(self, role: RoleRecord) -> str:
-        return asyncio.run(self.agenerate(role))
-
-    async def agenerate(self, role: RoleRecord) -> str:
-        if self.role_runtime_registry is not None:
-            runtime = await self.role_runtime_registry.get(role.id)
-            with runtime.activate_model("chat") as snapshot:
-                return await self._agenerate(
-                    role,
-                    provider=snapshot.provider,
-                    model=snapshot.model,
-                )
-        return await self._agenerate(
-            role,
-            provider=self.provider,
-            model=self.model,
-        )
-
-    async def _agenerate(
-        self,
-        role: RoleRecord,
-        *,
-        provider: LLMProvider,
-        model: str,
-    ) -> str:
+    async def agenerate(self, role: RoleRecord, snapshot: RoleModelSnapshot) -> str:
+        """Returns generated content, propagating provider failures and empty responses."""
         prompt = _SELF_SEED_PROMPT.format(
             role_name=role.name or role.id,
             role_description=role.description.strip() or "（无）",
             role_prompt=RolePromptCompiler().compile(role).content,
         )
-        try:
-            response = await asyncio.wait_for(
-                provider.chat(
-                    messages=[
-                        {"role": "system", "content": _SELF_SEED_SYSTEM},
-                        {"role": "user", "content": prompt},
-                    ],
-                    tools=[],
-                    model=model,
-                    max_tokens=2048,
-                ),
-                timeout=self.timeout_s,
-            )
-            text = (response.content or "").strip()
-            return text or DEFAULT_SELF_MD.strip()
-        except Exception:
-            return DEFAULT_SELF_MD.strip()
+        response = await asyncio.wait_for(
+            snapshot.provider.chat(
+                messages=[
+                    {"role": "system", "content": _SELF_SEED_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+                tools=[],
+                model=snapshot.model,
+                max_tokens=2048,
+            ),
+            timeout=self.timeout_s,
+        )
+        text = (response.content or "").strip()
+        if not text:
+            raise ValueError("SELF.md 初始化返回了空内容")
+        return text

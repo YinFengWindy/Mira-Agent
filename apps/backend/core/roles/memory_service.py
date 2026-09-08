@@ -1,25 +1,15 @@
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any
 
 from core.memory.markdown_schema import (
     ensure_memory_documents,
-    normalize_memory_document,
     replace_memory_section,
 )
 
 from .models import RoleRecord, now_iso as _now_iso, normalize_role_id
-
-
-class RoleSelfSeedGenerator(Protocol):
-    """Produces the initial role self-document from its profile."""
-
-    def generate(self, role: RoleRecord) -> str:
-        """Generates a role-specific SELF.md document."""
-        ...
+from .self_seed_state import resolve_self_seed_state, self_fingerprint
 
 
 class RoleMemoryService:
@@ -33,16 +23,8 @@ class RoleMemoryService:
         "RECENT_CONTEXT.md",
     )
 
-    def __init__(
-        self,
-        workspace: Path,
-        *,
-        self_seed_generator: RoleSelfSeedGenerator | None = None,
-        model_available: Callable[[str], bool] | None = None,
-    ) -> None:
+    def __init__(self, workspace: Path) -> None:
         self._workspace = Path(workspace)
-        self._self_seed_generator = self_seed_generator
-        self._model_available = model_available
 
     def memory_root(self, role_id: str) -> Path:
         return self._workspace / "roles" / normalize_role_id(role_id) / "memory"
@@ -52,77 +34,35 @@ class RoleMemoryService:
         ensure_memory_documents(root)
         return root
 
-    def seed_role_memory(self, role: RoleRecord) -> dict[str, Any]:
-        """同步初始化角色记忆，供非事件循环调用方使用。"""
-        needs_self_seed = self._needs_self_seed(role)
-        root = self.ensure_initialized(role)
-        state = dict(role.memory_init_state or {})
-        changed = False
-
-        self_path = root / "SELF.md"
-        if needs_self_seed and self._can_generate_self(role, state):
-            seeded_self = str(self._self_seed_generator.generate(role) or "").strip()
-            if seeded_self:
-                self_path.write_text(
-                    normalize_memory_document("SELF.md", seeded_self),
-                    encoding="utf-8",
-                )
-                state["seed_self_ready"] = True
-                state.pop("seed_self_pending", None)
-                changed = True
-
-        return self._finalize_seed_state(role, root, state, changed)
-
-    async def seed_role_memory_async(self, role: RoleRecord) -> dict[str, Any]:
-        """异步初始化角色记忆，避免在运行中的事件循环里再次调用 asyncio.run。"""
-        needs_self_seed = self._needs_self_seed(role)
-        root = self.ensure_initialized(role)
-        state = dict(role.memory_init_state or {})
-        changed = False
-
-        self_path = root / "SELF.md"
-        if needs_self_seed and self._can_generate_self(role, state):
-            seeded_self = str(await self._generate_self_async(role) or "").strip()
-            if seeded_self:
-                self_path.write_text(
-                    normalize_memory_document("SELF.md", seeded_self),
-                    encoding="utf-8",
-                )
-                state["seed_self_ready"] = True
-                state.pop("seed_self_pending", None)
-                changed = True
-
-        return self._finalize_seed_state(role, root, state, changed)
-
-    def _can_generate_self(self, role: RoleRecord, state: dict[str, Any]) -> bool:
-        if self._self_seed_generator is None:
-            return False
-        if self._model_available is not None and not self._model_available(role.id):
-            # Retry after configuration repair even though local templates now exist.
-            state["seed_self_pending"] = True
-            return False
-        return True
-
-    def _needs_self_seed(self, role: RoleRecord) -> bool:
-        # Inspect before creating the default template, which is itself nonempty.
+    def prepare_memory(self, role: RoleRecord) -> dict[str, Any]:
+        """Prepares local defaults without making model calls or replacing user edits."""
         path = self.memory_root(role.id) / "SELF.md"
-        return bool(role.memory_init_state.get("seed_self_pending")) or (
-            not path.exists() or not path.read_text(encoding="utf-8").strip()
-        )
+        content = path.read_text(encoding="utf-8") if path.exists() else ""
+        seed = resolve_self_seed_state(role, content)
+        root = self.ensure_initialized(role)
+        state = dict(role.memory_init_state or {})
+        state["self_seed"] = seed
+        state.pop("seed_self_pending", None)
+        state.pop("seed_self_ready", None)
+        if seed["status"] == "pending":
+            state = self._prepare_defaults(role, root, state)
+            state["self_seed"]["fingerprint"] = self_fingerprint(
+                path.read_text(encoding="utf-8")
+            )
+        return state
 
-    def _finalize_seed_state(
+    def _prepare_defaults(
         self,
         role: RoleRecord,
         root: Path,
         state: dict[str, Any],
-        changed: bool,
     ) -> dict[str, Any]:
+        changed = False
         background = role.background.strip()
         previous_background = str(state.get("seed_background_value") or "").strip()
         if (
             background
             and background != previous_background
-            and not state.get("seed_self_ready")
         ):
             self._write_stable_background(root / "SELF.md", background)
             if previous_background:
@@ -152,19 +92,6 @@ class RoleMemoryService:
         if changed:
             state["last_memory_initialized_at"] = _now_iso()
         return state
-
-    async def _generate_self_async(self, role: RoleRecord) -> str:
-        generator = self._self_seed_generator
-        if generator is None:
-            return ""
-        agenerate = getattr(generator, "agenerate", None)
-        if callable(agenerate):
-            async_generate = cast(
-                Callable[[RoleRecord], Awaitable[object]],
-                agenerate,
-            )
-            return str(await async_generate(role) or "")
-        return str(await asyncio.to_thread(generator.generate, role) or "")
 
     def update_relationship_baseline(
         self,

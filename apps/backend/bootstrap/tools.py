@@ -64,6 +64,8 @@ from core.roles import (
     RoleRuntimeRegistry,
 )
 from core.roles.model_runtime import RoleModelRuntime
+from core.roles.self_initializer import RoleSelfInitializer
+from core.roles.self_seed import LlmRoleSelfSeedGenerator
 from infra.screen_capture import PrimaryScreenCapture
 from conversation.push_sync import ExternalImageSyncService
 from proactive_v2.presence import PresenceStore
@@ -398,10 +400,7 @@ def build_core_runtime(
     default_registration_id = (
         config.model_registrations[0].id if config.model_registrations else ""
     )
-    role_store = shared.role_runtime_registry.repository.store if shared else RoleStore(
-        workspace,
-        default_dialogue_registration_id=default_registration_id,
-    )
+    role_store = shared.role_runtime_registry.repository.store if shared else RoleStore(workspace)
     if shared is None:
         role_store.migrate_model_selections(
             dialogue_registration_id=default_registration_id,
@@ -418,6 +417,7 @@ def build_core_runtime(
         role_repository,
         model_resolver=role_model_resolver,
         shared_execution=shared.role_runtime_registry if shared else None,
+        self_initializer=RoleSelfInitializer(role_store, LlmRoleSelfSeedGenerator()),
     )
     loop_ref: dict[str, AgentLoop] = {}
     tools, push_tool, scheduler, mcp_registry, memory_runtime, screen_observation = (

@@ -579,23 +579,10 @@ def test_role_store_clears_selected_assets_when_underlying_asset_removed(
 def test_role_aggregate_service_initializes_role_first_memory_space(
     tmp_path: Path,
 ):
-    class _SelfSeed:
-        def generate(self, role) -> str:
-            return (
-                "# 我是谁\n\n"
-                "## 我的性格与形象\n"
-                f"- 我是{role.name}。\n\n"
-                "## 我对你的理解\n"
-                "- 我会谨慎认识你。\n\n"
-                "## 我们的关系\n"
-                "- 我们的关系仍在建立中。\n"
-            )
-
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
         session_manager=SessionManager(tmp_path),
-        self_seed_generator=_SelfSeed(),
     )
 
     aggregate = service.create_role(
@@ -610,12 +597,12 @@ def test_role_aggregate_service_initializes_role_first_memory_space(
     assert aggregate.memory_root.is_dir()
     self_text = (aggregate.memory_root / "SELF.md").read_text(encoding="utf-8").strip()
     assert self_text.startswith("# 我是谁")
-    assert "我是Mira。" in self_text
+    assert "来自深海城的向导。" in self_text
     assert "## 我对你的理解" in self_text
     assert "## 我们的关系" in self_text
     assert "内部底座" not in self_text
     assert (aggregate.memory_root / "MEMORY.md").read_text(encoding="utf-8")
-    assert aggregate.role.memory_init_state["seed_self_ready"] is True
+    assert aggregate.role.memory_init_state["self_seed"]["status"] == "pending"
     assert aggregate.role.memory_init_state["seed_first_impression_ready"] is True
     assert aggregate.role.runtime_config == {
         "dialogue_model_registration_id": "",
@@ -648,15 +635,10 @@ def test_role_aggregate_service_updates_background_without_losing_history(
 
 
 def test_role_self_seed_generator_does_not_override_existing_self(tmp_path: Path):
-    class _SelfSeed:
-        def generate(self, role) -> str:
-            return "# 角色自我认知\n\n## 人格与形象\n- 新生成内容\n"
-
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
         session_manager=SessionManager(tmp_path),
-        self_seed_generator=_SelfSeed(),
     )
     aggregate = service.create_role(
         role_id="mira",

@@ -45,15 +45,8 @@ class RoleModelRuntime:
     ) -> None:
         self._roles = role_store
         self._registrations = {item.id: item for item in registrations}
-        self._first_registration_id = registrations[0].id if registrations else ""
         self._dev_mode = dev_mode
         self._providers: dict[tuple[str, str], LLMProvider] = {}
-
-    @property
-    def first_registration_id(self) -> str:
-        """Returns the default dialogue registration for newly created roles."""
-
-        return self._first_registration_id
 
     def resolve(self, role_id: str, purpose: ModelPurpose) -> RoleModelSnapshot:
         """Captures the role selection once for chat or image-bearing input."""

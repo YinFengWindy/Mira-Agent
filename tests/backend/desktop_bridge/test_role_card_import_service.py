@@ -6,7 +6,7 @@ import json
 import zipfile
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, create_autospec
+from unittest.mock import AsyncMock, Mock, create_autospec
 
 import pytest
 from PIL import Image, PngImagePlugin
@@ -140,17 +140,17 @@ async def test_memory_initialization_failure_rolls_back_already_persisted_role(
     service, store = _service(tmp_path, on_role_deleted=deleted_roles.append)
     preview = await service.preview({"source": str(_stage_card(tmp_path, _card()))})
     memory = service._role_service.memory
-    original_seed = memory.seed_role_memory_async
+    original_seed = memory.prepare_memory
     monkeypatch.setattr(
         memory,
-        "seed_role_memory_async",
-        AsyncMock(side_effect=RuntimeError("seed unavailable")),
+        "prepare_memory",
+        Mock(side_effect=RuntimeError("seed unavailable")),
     )
     with pytest.raises(RuntimeError, match="seed unavailable"):
         await service.commit({"import_id": preview["import_id"]})
     assert len(deleted_roles) == 1
     assert store.list_roles() == []
-    monkeypatch.setattr(memory, "seed_role_memory_async", original_seed)
+    monkeypatch.setattr(memory, "prepare_memory", original_seed)
     assert (await service.commit({"import_id": preview["import_id"]}))["role"]["id"]
 
 

@@ -15,6 +15,7 @@ from .store import RoleRecord
 
 if TYPE_CHECKING:
     from .model_runtime import ModelPurpose, RoleModelRuntime, RoleModelSnapshot
+    from .self_initializer import RoleSelfInitializer
 
 
 T = TypeVar("T")
@@ -112,9 +113,11 @@ class RoleRuntime:
         *,
         model_resolver: RoleModelRuntime | None = None,
         execution_state: RoleExecutionState | None = None,
+        self_initializer: RoleSelfInitializer | None = None,
     ) -> None:
         self._role = role
         self._model_resolver = model_resolver
+        self._self_initializer = self_initializer
         # A role session is shared by every transport, so all mutable role work
         # must enter one role-wide turn gate regardless of its source thread.
         self._execution = execution_state or RoleExecutionState()
@@ -199,7 +202,16 @@ class RoleRuntime:
     async def run_passive_turn(self, context: RoleExecutionContext, operation: Callable[[], Awaitable[T]]) -> T:
         """Runs the role's inbound conversation capability."""
         self._require_work_kind(context, "passive_turn")
-        return await self.execute_thread(context, operation)
+
+        async def initialized_turn():
+            if self._self_initializer is None:
+                return await operation()
+            with self.activate_model("chat") as snapshot:
+                await self._self_initializer.ensure_seeded(self.role_id, snapshot)
+            # Restore the accepted turn snapshot before entering the conversation.
+            return await operation()
+
+        return await self.execute_thread(context, initialized_turn)
 
     async def run_proactive_tick(self, context: RoleExecutionContext, operation: Callable[[], Awaitable[T]]) -> T:
         """Runs the role's proactive capability."""
@@ -245,9 +257,11 @@ class RoleRuntimeRegistry:
         *,
         model_resolver: RoleModelRuntime | None = None,
         shared_execution: RoleRuntimeRegistry | None = None,
+        self_initializer: RoleSelfInitializer | None = None,
     ) -> None:
         self._repository = repository
         self._model_resolver = model_resolver
+        self._self_initializer = self_initializer
         self._runtimes: dict[str, RoleRuntime] = {}
         self._lock = asyncio.Lock()
         self._execution_states = (
@@ -278,6 +292,7 @@ class RoleRuntimeRegistry:
                 role,
                 model_resolver=self._model_resolver,
                 execution_state=execution,
+                self_initializer=self._self_initializer,
             )
             self._runtimes[role.id] = runtime
             return runtime
