@@ -23,6 +23,39 @@ from session.manager import SessionManager
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["image", "file"])
+@pytest.mark.parametrize("message", ["", "valid text"])
+async def test_push_tool_blank_media_cannot_create_empty_desktop_messages(
+    tmp_path, field, message,
+):
+    role_store = RoleStore(tmp_path)
+    role_store.create_role(role_id="mira", name="Mira", system_prompt="You are Mira.")
+    manager = SessionManager(tmp_path)
+    push_tool = MessagePushTool()
+    service = DesktopBridgeService(
+        workspace=tmp_path,
+        role_store=role_store,
+        session_manager=manager,
+        agent_loop=SimpleNamespace(),
+        event_bus=EventBus(),
+        push_tool=push_tool,
+    )
+    try:
+        result = await push_tool.execute(
+            channel="desktop", chat_id="mira", message=message, **{field: "   "},
+        )
+
+        persisted = SessionManager(tmp_path).get_or_create("role:mira").messages
+        assert [item["content"] for item in persisted] == ([message] if message else [])
+        if message:
+            assert result == "文本已发送"
+        else:
+            assert result == "错误：message、file、image 至少提供一个"
+    finally:
+        await service.aclose()
+
+
+@pytest.mark.asyncio
 async def test_injected_role_service_publishes_role_deleted(tmp_path) -> None:
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
