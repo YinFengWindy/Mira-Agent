@@ -41,6 +41,12 @@
     --pink-800: #852652;
     --pink-900: #5f1a3a;
 
+    /* powder blue tints (hue 240) — app-base gradient only */
+    --blue-50: #f6fbfe;
+    --blue-100: #e9f5ff;
+    --blue-150: #dcf0ff;
+    --blue-200: #c9e8fe;
+
     /* lavender secondary (hue 302) */
     --lavender-50: #fbf9ff;
     --lavender-100: #f6f1ff;
@@ -114,7 +120,7 @@
     /* ---------- gradients ---------- */
     --gradient-accent: linear-gradient(135deg in oklab, var(--pink-600), var(--lavender-grad));
     --gradient-accent-soft: linear-gradient(135deg in oklab, var(--pink-100), var(--lavender-150));
-    --gradient-app: linear-gradient(160deg in oklab, var(--pink-50), var(--neutral-100) 45%, var(--lavender-50));
+    --gradient-app: linear-gradient(160deg in oklab, var(--blue-100), var(--lavender-50) 45%, var(--pink-100));
 
     /* ---------- radius ---------- */
     --radius-sm: 8px;
@@ -168,7 +174,7 @@
 
   body {
     margin: 0;
-    background: var(--app-bg);
+    background: var(--app-bg) var(--gradient-app) fixed;
     color: var(--text);
     -webkit-font-smoothing: antialiased;
   }
