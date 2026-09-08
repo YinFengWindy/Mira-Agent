@@ -128,6 +128,7 @@ class MessagePushTool(Tool):
         )
 
     async def execute(self, **kwargs: Any) -> str:
+        """Sends nonblank payload fields and reports validation or transport errors."""
         if self._transport_lock is None:
             return await self._execute_send(**kwargs)
         async with self._transport_lock:
@@ -151,9 +152,9 @@ class MessagePushTool(Tool):
         if channel in self._retired_channels and not self._has_retired_transport(channel):
             return f"渠道 {channel!r} 已停用"
         requested_chat_id = str(kwargs["chat_id"])
-        message: str | None = kwargs.get("message")
-        file: str | None = kwargs.get("file")
-        image: str | None = kwargs.get("image")
+        message = _nonblank_payload(kwargs.get("message"))
+        file = _nonblank_payload(kwargs.get("file"))
+        image = _nonblank_payload(kwargs.get("image"))
         role_id = str(kwargs.get("role_id") or "").strip()
         session_key = str(kwargs.get("session_key") or "").strip()
 
@@ -240,6 +241,11 @@ class MessagePushTool(Tool):
             )
 
         return "；".join(results) if results else f"渠道 {channel!r} 没有可用的 sender"
+
+
+def _nonblank_payload(value: str | None) -> str | None:
+    # Preserve meaningful text formatting and paths; only empty fields are absent.
+    return value if value and value.strip() else None
 
 
 def _is_truthy(value: object) -> bool:
