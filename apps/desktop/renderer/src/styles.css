@@ -99,6 +99,7 @@
     --color-border-strong: var(--neutral-400);
     --color-border-accent: var(--pink-300);
     --color-ring: var(--pink-500);              /* 3.1:1 on surface */
+    --color-ring-soft: rgba(230, 101, 156, 0.22); /* pink-500 @ 22%, halo around focused fields */
 
     /* ---------- semantic: accent ---------- */
     --color-accent-solid: var(--pink-600);      /* white text 4.6:1 */
@@ -311,7 +312,14 @@
 :focus-visible {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
-  border-radius: 2px;
+}
+
+/* Form fields carry their own focus styling (border + ring shadow);
+   the global outline would double up on top of it. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 .chat-thinking-content {

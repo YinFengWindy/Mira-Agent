@@ -18,7 +18,7 @@ export const bodyTextClass = "text-body-sm";
 
 /** Shared input styling for form controls outside the chat composer. */
 export const inputClass =
-  "w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint focus:border-line-accent focus:outline-none focus:ring-2 focus:ring-accent-soft";
+  "w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-body text-ink transition placeholder:text-ink-faint hover:border-line-strong focus:border-line-accent focus:outline-none focus:ring-2 focus:ring-ring-soft focus:hover:border-line-accent";
 
 /** Shared textarea styling for role prompt fields. */
 export const textareaClass = cx(inputClass, "min-h-24 resize-y");

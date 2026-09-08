@@ -78,6 +78,7 @@ export default {
           text: "var(--color-danger-text)",
         },
         ring: "var(--color-ring)",
+        "ring-soft": "var(--color-ring-soft)",
 
         // ---- legacy tier (existing components; same rendered values) ----
         bg: "var(--bg)",
