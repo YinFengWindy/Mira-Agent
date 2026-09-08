@@ -90,7 +90,7 @@ export function RoleCapabilitiesPanel({ activeRole, bridgeReady, roleForm, onUpd
           <CapabilityTile
             icon={Monitor}
             tintClass="bg-[#FBF5EB]"
-            iconClass="text-[#B08340]"
+            iconClass="text-[var(--warning-600)]"
             label="桌宠"
             description="让角色以桌面宠物形式陪伴和互动。"
             checked={roleForm.desktopPetEnabled}

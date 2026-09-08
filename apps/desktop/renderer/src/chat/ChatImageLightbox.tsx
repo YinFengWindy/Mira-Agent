@@ -185,7 +185,7 @@ export function ChatImageLightbox({
         onClick={onClose}
       />
       <section
-        className="relative z-[1] grid h-full max-h-[min(92vh,980px)] w-full max-w-[min(92vw,1400px)] min-h-0 min-w-0 place-items-center overflow-hidden rounded-[28px] bg-surface-soft p-5 shadow-pop"
+        className="relative z-[1] grid h-full max-h-[min(92vh,980px)] w-full max-w-[min(92vw,1400px)] min-h-0 min-w-0 place-items-center overflow-hidden rounded-xl bg-surface-soft p-5 shadow-pop"
         role="dialog"
         aria-modal="true"
         aria-label="聊天图片放大预览"

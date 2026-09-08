@@ -107,7 +107,7 @@ export function RoleSearchDialog({
                         alt={`${result.roleName} avatar`}
                       />
                     ) : (
-                      <span className="grid h-11 w-11 place-items-center rounded-full border border-[rgba(76,48,24,0.12)] bg-[#F5F5F5] text-sm font-bold text-[#7A4B2C]">
+                      <span className="grid h-11 w-11 place-items-center rounded-full border border-line-soft bg-surface-soft text-sm font-bold text-accent-text">
                         {result.roleName.slice(0, 1).toUpperCase()}
                       </span>
                     )}
