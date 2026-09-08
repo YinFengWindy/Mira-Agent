@@ -11,7 +11,8 @@ type RoleProfilePanelProps = {
   onUpdate: (next: React.SetStateAction<RoleFormState>) => void;
 };
 
-const identityInputClass = "w-full border-0 border-b border-transparent bg-transparent px-0 py-1 transition hover:border-[#E5E7EB] focus:border-[#2176FF] focus:outline-none";
+// Underline-style field: opts out of the global focus halo (shadow-none) so only the bottom line responds.
+const identityInputClass = "w-full border-0 border-b border-transparent bg-transparent px-0 py-1 transition hover:border-line focus:border-accent focus:shadow-none focus:outline-none";
 
 /** Edits persisted role identity and structured runtime fields. */
 export function RoleProfilePanel({
@@ -35,7 +36,7 @@ export function RoleProfilePanel({
 
   return (
     <div className="grid gap-7" data-testid="role-detail-form-panel">
-      <div className="grid gap-6 border-b border-[#E7ECF1] pb-7 sm:grid-cols-[112px_minmax(0,1fr)]">
+      <div className="grid gap-6 border-b border-line-soft pb-7 sm:grid-cols-[112px_minmax(0,1fr)]">
         <TiltedCard className="h-fit overflow-hidden rounded-xl border border-[#E7ECF1] shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
           <button
             className="group relative block h-28 w-28 overflow-hidden bg-[#F2F5F9] text-left focus:outline-none"

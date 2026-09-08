@@ -6,8 +6,8 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 /** Shared card surface used by empty states and diagnostic rows. */
 export const cardClass = "rounded-lg border border-line-soft bg-surface shadow-soft";
 
-/** Shared background for secondary workspace navigation sidebars. */
-export const secondarySidebarSurfaceClass = "bg-surface-soft";
+/** Shared background for secondary workspace navigation sidebars: transparent so the app gradient shows through, matching the chat role sidebar. */
+export const secondarySidebarSurfaceClass = "bg-transparent";
 
 /** Shared interaction styling for sidebar navigation entries. */
 export const sidebarNavItemClass =

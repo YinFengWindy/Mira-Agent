@@ -42,7 +42,7 @@ describe("ImageStudioSidebar", () => {
       />,
     );
 
-    assert.match(markup, /bg-surface-soft/);
+    assert.match(markup, /bg-transparent/);
     assert.doesNotMatch(markup, /bg-\[#EEF1F5\]/);
   });
 });
