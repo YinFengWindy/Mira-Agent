@@ -113,6 +113,9 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
     assert all(event["payload"]["message"] == expected for event in terminals)
     assert busy_on_terminal == [False, False]
     assert len([event for event in emitted if event["method"] == "session.updated"]) == 2
+    assert [event["method"] for event in emitted] == [
+        "session.updated", "chat.error", "session.updated", "chat.error",
+    ]
     assert not service.is_busy("role:mira")
     assert session_manager.get_or_create("role:mira").messages == []
     assert SessionManager(tmp_path).get_or_create("role:mira").messages == []
@@ -120,10 +123,13 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
 
 
 @pytest.mark.asyncio
-async def test_desktop_chat_service_emits_chat_error_event(tmp_path):
+async def test_desktop_chat_service_reconciles_persisted_user_before_chat_error(tmp_path):
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
     emitted: list[dict] = []
+    session = session_manager.get_or_create("role:mira")
+    session.add_message("user", "hi")
+    await session_manager.append_messages(session, session.messages[:])
 
     class _Loop:
         async def process_direct(self, *args, **kwargs):
@@ -139,7 +145,12 @@ async def test_desktop_chat_service_emits_chat_error_event(tmp_path):
         session,
         emit_event,
     ) -> None:
-        raise AssertionError("error path should not emit session.updated")
+        await _emit_payload(emit_event, {
+            "id": request_id,
+            "type": "event",
+            "method": "session.updated",
+            "payload": {"session_key": session.key, "messages": session.messages[:]},
+        })
 
     service = DesktopChatService(
         agent_loop=_Loop(),  # type: ignore[arg-type]
@@ -162,7 +173,12 @@ async def test_desktop_chat_service_emits_chat_error_event(tmp_path):
             emit_event=emitted.append,
         )
 
-    assert emitted == [
+    assert emitted[0]["method"] == "session.updated"
+    persisted = SessionManager(tmp_path).get_or_create("role:mira")
+    assert emitted[0]["payload"]["messages"] == persisted.messages
+    assert persisted.messages[0]["role"] == "user"
+    assert persisted.messages[0]["content"] == "hi"
+    assert emitted[1:] == [
         {
             "id": "1",
             "type": "event",

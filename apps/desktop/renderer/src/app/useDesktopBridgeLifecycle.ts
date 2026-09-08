@@ -3,6 +3,7 @@ import {
   applyChatStreamDelta,
   applyChatToolCompleted,
   applyChatToolStarted,
+  failChatStream,
   finishChatStream,
 } from "../chat/chatStreamingState";
 import { useLatestRef } from "../shared/useLatestRef";
@@ -297,6 +298,10 @@ export function useDesktopBridgeLifecycle({
           const cancelling = callbacks.isChatTurnCancelling(eventSessionKey, eventTurnId);
           const currentSession = activeSessionRef.current;
           if (!cancelling && currentSession && eventSessionKey === currentSession.key) {
+            callbacks.updateCommittedActiveSession((current) => {
+              if (!current || current.key !== eventSessionKey) return current;
+              return failChatStream(current);
+            });
             const message = String(event.payload.message ?? "对话失败");
             setError(message);
             callbacks.appendSessionErrorMessage(currentSession.key, message);

@@ -37,11 +37,37 @@ export function finishChatStream(
   const last = session.messages[lastIndex];
   if (!last || last.role !== "assistant" || !last.streaming) return session;
   const messages = [...session.messages];
-  messages[lastIndex] = {
-    ...last,
+  messages[lastIndex] = finishAssistantMessage(last, metrics);
+  return { ...session, messages };
+}
+
+/** Ends failed-turn traces, including rows followed by a persisted proactive reply. */
+export function failChatStream(session: SessionPayload): SessionPayload {
+  let changed = false;
+  const messages = session.messages.map((message) => {
+    if (message.role !== "assistant" || !message.streaming) return message;
+    changed = true;
+    return {
+      ...finishAssistantMessage(message),
+      ...(message.tool_chain ? {
+        tool_chain: message.tool_chain.map((group) => ({
+          ...group,
+          calls: group.calls.map((call) => call.status === "running"
+            ? { ...call, status: "error" }
+            : call),
+        })),
+      } : {}),
+    };
+  });
+  return changed ? { ...session, messages } : session;
+}
+
+function finishAssistantMessage(message: SessionMessage, metrics: ChatTurnMetrics = {}) {
+  return {
+    ...message,
     streaming: false,
     metadata: {
-      ...last.metadata,
+      ...message.metadata,
       streamed_reply: true,
       ...(metrics.total_tokens !== undefined || metrics.thinking_duration_ms !== undefined
         ? {
@@ -53,7 +79,6 @@ export function finishChatStream(
         : {}),
     },
   };
-  return { ...session, messages };
 }
 
 /** Marks a cancelled transient assistant reply complete while retaining its local trace for the next turn. */
