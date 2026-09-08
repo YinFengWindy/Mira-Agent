@@ -16,7 +16,7 @@ export function ImageHistoryPanel({
   return (
     <section className="flex h-full min-h-0 flex-col gap-3 rounded-xl bg-white p-3">
       <div className="flex items-center justify-between px-1 pt-1">
-        <div className="text-sm font-medium text-[#20242A]">History</div>
+        <div className="text-sm font-medium text-ink">History</div>
       </div>
       <div className="scrollbar-soft flex-1 min-h-0 overflow-y-auto pr-1">
         <div className="grid content-start gap-2">
@@ -28,7 +28,7 @@ export function ImageHistoryPanel({
               key={item.id}
               className={cx(
                 "rounded-lg border p-2 text-left transition focus:outline-none",
-                selected ? "border-black bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)]" : "border-transparent bg-white hover:bg-white",
+                selected ? "border-accent bg-accent-soft shadow-soft" : "border-transparent bg-white hover:bg-white",
               )}
               type="button"
               onClick={() => onSelect(item)}
@@ -41,7 +41,7 @@ export function ImageHistoryPanel({
             </button>
           );
         }) : (
-          <div className="rounded-md bg-white px-3 py-5 text-center text-[12px] text-[#737781] shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+          <div className="rounded-md bg-white px-3 py-5 text-center text-[12px] text-ink-muted shadow-soft">
             暂无绘图记录
           </div>
         )}

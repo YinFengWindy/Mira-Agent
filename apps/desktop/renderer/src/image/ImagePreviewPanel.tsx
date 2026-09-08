@@ -28,15 +28,15 @@ export function ImagePreviewPanel({
             />
           </div>
         ) : generating ? (
-          <div className="grid h-full min-h-[420px] place-items-center text-sm text-[#6B7280]">生成中...</div>
+          <div className="grid h-full min-h-[420px] place-items-center text-sm text-ink-muted">生成中...</div>
         ) : (
-          <div className="grid h-full min-h-[420px] place-items-center text-sm text-[#6B7280]">等待生成</div>
+          <div className="grid h-full min-h-[420px] place-items-center text-sm text-ink-muted">等待生成</div>
         )}
       </div>
 
       <div className="grid gap-3">
         {error ? (
-          <div className="rounded-md border border-[rgba(176,58,58,0.18)] bg-[#FFF1F1] px-3 py-2 text-[12px] leading-5 text-[#9A2F2F]">
+          <div className="rounded-md border border-[var(--danger-300)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger-text">
             {error}
           </div>
         ) : null}

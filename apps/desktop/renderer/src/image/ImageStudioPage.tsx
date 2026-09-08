@@ -71,7 +71,7 @@ export function ImageStudioPage({
         />
       </button>
       <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-0">
-        <div className="min-h-0 overflow-hidden bg-white px-4 pb-4 pt-4">
+        <div className="min-h-0 overflow-hidden bg-gradient-app bg-fixed px-4 pb-4 pt-4">
           <div className="mx-auto grid h-full min-h-0 w-full max-w-none">
             <ImagePreviewPanel
               activeRecord={activeRecord}
@@ -83,7 +83,7 @@ export function ImageStudioPage({
         </div>
         <div
           className={cx(
-            "relative h-full overflow-hidden border-l border-[#E0E6EE] bg-white",
+            "relative h-full overflow-hidden border-l border-line-soft bg-gradient-app bg-fixed",
             historySidebarAnimating && "transition-[width] duration-[480ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
             historySidebarResizing && !historySidebarAnimating && "transition-[width] duration-100 ease-out",
           )}
@@ -91,7 +91,7 @@ export function ImageStudioPage({
         >
           {!historySidebarCollapsed ? (
             <div
-              className="absolute inset-y-0 left-0 z-[3] w-3 -translate-x-1/2 cursor-col-resize before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-[#D8DEE8] before:content-['']"
+              className="absolute inset-y-0 left-0 z-[3] w-3 -translate-x-1/2 cursor-col-resize before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-line-soft before:content-['']"
               onPointerDown={onBeginHistorySidebarResize}
             />
           ) : null}
