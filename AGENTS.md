@@ -24,7 +24,7 @@
 - 页面入口、`main.tsx`、`page.tsx`、顶层容器组件默认只做状态装配、依赖拼接和视图分发，不要继续堆业务细节。
 - 桥接事件、会话切换、搜索索引、角色 CRUD、素材管理、图片预览、导航历史这类职责必须分散到独立 hook / module，不能长期共存于同一入口文件。
 - 一个文件同时承担 3 类及以上职责时，必须拆分；不要以“还能读”作为不拆的理由。
-- 超过 600 行的业务文件视为需要强制评估拆分；超过 800 行时，若不是纯数据/生成文件，默认应继续拆到合理边界。
+- 超过 600 行的业务文件，在答复里提一句“这个文件偏大、可能值得拆”即可，是否真拆由用户决定；不要因为路过就自行发起大重构。
 - 超过 120 行的 hook / service / 组件，如果内部还能明显分出独立子职责，应继续拆分，不要把大文件问题从页面平移到 hook。
 - 同目录下若出现 `XxxPage/XxxState/XxxActions/XxxSelectors` 这类天然边界，优先沿边界拆，不要把无关逻辑混在一起。
 
@@ -36,7 +36,9 @@
 - 尽量不要手写显式返回类型，除非 TypeScript 推断不稳或公共契约需要。
 - 同一文件内出现大量 `setX` / `ref.current` / effect 同步胶水代码时，要优先考虑抽成 `useLatestRef`、selector、controller hook 或 state adapter，而不是继续往下堆。
 - 视图层中的派生计算（dirty 判断、header title、preview 数据、可见状态等）应优先抽到 selector / pure helper，避免散落在页面主体。
-- 单元测试要严格镜像源码目录结构，每个测试文件只测试对应源文件的行为。
+- 每个测试文件只测试对应源文件的行为，对应关系必须一目了然：
+  - TypeScript 单测与被测源文件**同目录并列**（`main.ts` / `main.test.ts`）；Electron、onboarding 这类 e2e 放 `apps/desktop/tests/`。
+  - Python 单测放 `tests/backend/`，目录结构镜像 `apps/backend/`。
 - 测试要能证明问题真实存在；不要只写“会通过但证明不了什么”的测试。
 
 ## React 与状态管理
@@ -52,10 +54,14 @@
 
 ## UI 与前端约束
 
+- 设计系统（三层 token、共享类名、排版阶梯、legacy 别名清单）详见 `docs/_handbook/design-system.md`；下面几条是必须记住的硬约束。
 - 前端页面不要产生对功能进行叙述的文字。
-- input 样式不要使用 daisy UI，优先使用 transition focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary。
-- 默认圆角使用 rounded-md。
-- 需要 Icon 时使用 phosophorIcon。
+- 表单控件、按钮、卡片优先复用 `renderer/src/shared/styles.ts` 里的共享类名（`inputClass`、`textareaClass`、`primaryButtonClass`、`ghostButtonClass`、`cardClass` 等），不要另起一套手写 Tailwind 串。
+- 颜色、圆角、阴影、动效一律走语义 token 或 Tailwind 语义类（`bg-surface`、`text-ink-muted`、`rounded-md`、`shadow-soft`），不要写死色值；`--bg`、`--panel`、`--accent`、`*-primary` 这类是 restyle 前的 legacy 别名，新代码不要再用。
+- 字段 focus 态由 `styles.css` 里全局的 `input/textarea/select:focus` 规则统一提供，组件里不要再手写 `focus:ring-*` / `focus:border-*` 覆盖；确有理由退出的（如 chat composer 的 `ring-0`）需在注释里说明。
+- 默认圆角使用 rounded-md（对应 `--radius-md`）；纯圆形与胶囊用 rounded-full。
+- 新增循环动画或较大位移的过渡时，必须同时在 `styles.css` 的 `prefers-reduced-motion` 块里给出降级。
+- 功能图标一律用 `shared/icons.tsx` 里的既有图形或 `@phosphor-icons/react`，不要自绘；`shared/ui/icons` 只放品牌装饰母题（星芒、翅膀、蝴蝶结、樱瓣），用于空状态、加载、成就等情绪点缀。
 
 ## 代码与平台注意事项
 
@@ -63,6 +69,11 @@
 - 文本文件统一使用 UTF-8 保存。
 - 通过脚本或命令写文件时显式指定编码，避免默认 ANSI 或 GBK 造成乱码。
 - 发现乱码先检查文件编码与终端解码设置，必要时重存为 UTF-8。
+- 验证当轮改动的命令（PowerShell 下逐条执行，不要用 `&&` 串联）：
+  - 桌面端：`pnpm test`（单测）、`pnpm typecheck`、`pnpm lint`。
+  - 后端：`uv run pytest`；testpaths 固定为 `tests/backend`，且开了 `-W error`，任何警告都会判失败。
+  - 后端类型检查有两套配置：源码用 `pyrightconfig.json`，测试用 `pyrightconfig.tests.json`（`--project` 指定）。
+- Python 代码风格走 ruff（`select = ["E4", "E7", "E9", "F"]`）+ black，line-length 88。
 - Python 命令、测试和质量工具必须使用仓库 `.venv`，禁止依赖 PATH 中的系统 Python：Windows 使用 `.venv\\Scripts\\python.exe`、`.venv\\Scripts\\pytest.exe`、`.venv\\Scripts\\ruff.exe` 等；跨平台文档和脚本统一使用 `uv run ...`。
 - 不要直接运行裸 `python`、`pytest`、`ruff` 或 `pyright` 来验证 Shiori；使用.venv来进行测试。
 - `pnpm dev` 的 Python bridge 必须继续由 `apps/desktop/src/bridge/bridgeClient.ts` 启动项目 `.venv` 中的解释器，不得改成依赖系统 PATH 的 `python`。
@@ -70,13 +81,13 @@
 ## 仓库特定约束
 
 - Node 依赖统一通过根目录的固定版本 pnpm workspace 管理；只维护 `pnpm-lock.yaml`，不要新增根目录或 `apps/desktop/` 的 `package-lock.json`。
-- 每完成一轮答复（实现、修改、修复）后，对当轮对话变更的代码立即进行 git commit。
+- 在功能分支上，每完成一轮有实际代码改动的答复后即刻小步 commit；`main` 分支上一律不直接提交。
 - 涉及代码变更的功能分支，默认先推送远端并创建 Draft PR；未经用户明确要求，不得直接推送或合并到 `main`。
 - PR 必须关联对应 Issue，并写明变更摘要、实际验证结果和已知阻塞项；相关测试与构建通过且阻塞项清零后，才可转为 Ready 或合并。
-- 没有特定要求时不要调用方案设计。
-- PowerShell不要用&&
+- 没有明确要求时不要自行发起方案设计 / 规划流程（Plan、spec 撰写等），直接按需求实现。
+- PowerShell 不要用 `&&` 串联命令，改为分条执行或用 `;`。
 - `docs/specs/` 和 `docs/plan/` 不进 git 仓库
-- 搜索前必须先明确搜索范围；默认限制在当前主仓库相关目录内，避免全局命中无关文档、.worktrees 或其他代理工作区。
+- 搜索前必须先明确搜索范围；默认限制在当前主仓库相关目录内，避免全局命中无关文档、`.squad/worktrees/`（内含各 issue 的完整仓库副本，最容易误命中）、`node_modules`、`dist` / `renderer-dist` 等构建产物。
 
 ## Agent skills
 

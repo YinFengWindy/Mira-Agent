@@ -1,0 +1,209 @@
+# Shiori 设计系统
+
+## 先理解它是什么
+
+Shiori 的视觉是**三层单向依赖**：色阶原语 → 语义 token → Tailwind 语义类 / 共享类名。
+组件只碰最外层，永远不直接写死颜色、圆角、阴影。
+
+```
+第一层  primitives            --pink-500 / --neutral-800 / --lavender-300
+        （styles.css 顶部，色相命名，组件里禁止直接使用）
+          ↓
+第二层  semantic tokens       --color-accent-solid / --color-text-muted / --radius-md
+        （styles.css 中段，按用途命名，对比度已逐条校验）
+          ↓
+第三层  Tailwind 语义类        bg-surface / text-ink-muted / rounded-md / shadow-soft
+        共享类名              inputClass / primaryButtonClass / cardClass
+        （tailwind.config.ts + shared/styles.ts，组件只用这一层）
+```
+
+**为什么要三层**：暗色主题落地时只需要覆盖第二层，第一层色阶和第三层组件代码都不用动。
+任何绕过分层的写法（组件里出现 `#ffb8d1`、`rounded-[14px]`、`var(--pink-300)`）都会让这个前提失效。
+
+**权威文件**（本文档是导读，冲突时以代码为准）：
+
+| 文件 | 内容 |
+|---|---|
+| `apps/desktop/renderer/src/styles.css` | 全部 token 定义、全局 base 规则、工具类、动效 |
+| `apps/desktop/renderer/tailwind.config.ts` | token → Tailwind 语义类的映射、排版阶梯 |
+| `apps/desktop/renderer/src/shared/styles.ts` | 组件级共享类名常量 |
+| `apps/desktop/renderer/src/shared/ui/icons/SPEC.md` | 品牌母题图形的绘制规则 |
+
+**活的样式手册**：`apps/desktop/renderer/styleguide.html`（入口 `src/styleguide/main.tsx`）能把全部色阶、
+共享类名、图标渲染出来。它**没有**进 `vite.config.ts` 的 build inputs，是 dev-only 的，
+跑 `pnpm desktop:dev` 后在 vite dev server 上开 `/styleguide.html` 查看。改动 token 或共享类名后应该去这里目测一遍。
+
+## 第一层：primitives
+
+在 OKLCH 空间生成：每条色阶恒定色相、感知亮度均匀、彩度在中段达峰。**组件里不要直接引用。**
+
+| 色阶 | 色相 | 档位 | 用途 |
+|---|---|---|---|
+| `--neutral-*` | 345（暖木兰灰） | 50–950 | 文本、边框、中性背景 |
+| `--pink-*` | 356（樱粉） | 50–900 | 品牌强调色、hover/active、选区 |
+| `--blue-*` | 240（粉蓝） | 50–300 | 应用底色渐变、强调渐变的冷端 |
+| `--lavender-*` | 302（薰衣草） | 50–700 | 次级强调 |
+| `--success-* / --warning-* / --danger-*` | — | soft / 300 / solid / text 四档 | 状态 |
+
+两个特例：`--blue-grad` / `--pink-grad` / `--lavender-grad` 是**渐变专用端点**，比同族色阶更深，
+目的是让白字在整条渐变扫过时都保持 ≥4.5:1（端点 4.78 / 5.20，oklab 中点 4.93 —— 数值见 `styles.css:50`）。
+
+## 第二层：semantic tokens
+
+按用途命名，注释里带对比度实测值。新增语义 token 时必须同样标注对比度。
+
+**表面**：`--color-bg-app`（应用底）、`-soft`、`-surface`（纯白卡片）、`-glass` / `-glass-strong`（半透明）、`-hover`、`-active`
+
+**文本**（对比度基于 `--color-bg-surface`）：
+
+| token | 对比度 | 用途 |
+|---|---|---|
+| `--color-text-primary` | 15.6:1 | 正文主色 |
+| `--color-text-secondary` | 8.2:1 | 次级文本 |
+| `--color-text-muted` | 5.5:1 | 弱化说明 |
+| `--color-text-faint` | 4.2:1 | **仅限 placeholder 与装饰**，不达 AA 正文标准 |
+| `--color-text-accent` | 6.0:1 | 强调文本 |
+| `--color-text-lavender` | 5.8:1 | 次级强调文本 |
+
+**边框**：`--color-border-soft` / `--color-border` / `--color-border-strong` / `--color-border-accent`
+**焦点**：`--color-ring`（3.1:1，键盘焦点描边）、`--color-ring-soft`（22% 透明的字段光晕）
+**强调**：`--color-accent-solid`（白字 4.6:1）、`-hover`（6.0:1）、`-soft`、`-softer`
+**状态**：每族三件套 `-soft`（背景）/ `-solid`（实心）/ `-text`（文本）
+
+**渐变**：
+
+| token | 场景 |
+|---|---|
+| `--gradient-app` | 应用整体底色（body 上 `fixed`） |
+| `--gradient-accent` | 主操作按钮等控件面，配 ink 文字（13:1） |
+| `--gradient-accent-strong` | 文字渐变、细数据标记（浅色版会消失的场景） |
+| `--gradient-accent-soft` | 极浅底纹 |
+| `--gradient-accent-medium` | 进度条 / 计量条 |
+
+**圆角**：`--radius-sm` 8px / `--radius-md` 12px / `--radius-lg` 16px / `--radius-xl` 20px
+**阴影**：`--shadow-soft`（常规抬起）/ `--shadow-panel`（面板）/ `--shadow-pop`（弹出层），全部带粉调
+**动效**：`--duration-fast` 140ms / `--duration-base` 220ms / `--ease-out-soft`
+**字体**：`--font-sans`（正文）/ `--font-display`（标题）
+
+## 第三层：Tailwind 语义类
+
+`tailwind.config.ts` 把第二层映射成语义类名。**新代码只用这一层。**
+
+| 类名族 | 档位 | 对应 |
+|---|---|---|
+| `bg-surface` | `-soft` `-app` `-hover` `-active` | 表面 token |
+| `text-ink` | `-secondary` `-muted` `-faint` | 文本 token |
+| `border-line` | `-soft` `-strong` `-accent` | 边框 token |
+| `*-accent` | `-hover` `-soft` `-softer` `-text` | 强调 token |
+| `*-lavender` | `-soft` `-text` | 次级强调 |
+| `*-success` / `*-warning` / `*-danger` | `-soft` `-text` | 状态 |
+| `rounded-{sm,md,lg,xl}` | — | 圆角 token（`rounded-full` 走 Tailwind 默认的 9999px） |
+| `shadow-{soft,panel,pop}` | — | 阴影 token |
+| `ease-out-soft` | — | 缓动 token |
+
+**排版阶梯**（中文正文不低于 14px，caption 下限 12px）：
+
+```
+caption 12px · body-sm 13px · body 14px · body-lg 15px
+title-sm 16px/600 · title 18px/600 · headline 22px/650 · display 28px/700
+```
+
+标题用 `font-display`，正文用默认 `font-sans`。story 模块保留 `font-serif` 作为装饰面，不要迁移。
+
+## legacy 别名：不要在新代码里用
+
+restyle 之前的一批变量名仍然存在，它们都已指回语义层，渲染结果与新写法完全一致，只是命名不表意：
+
+- CSS 变量：`--bg` `--bg-soft` `--chat-bg` `--panel` `--panel-strong` `--text` `--muted` `--accent` `--accent-deep` `--stroke` `--shadow` `--app-bg`
+- Tailwind 类：`bg-bg` `bg-panel` `text-text` `text-muted` `border-stroke` `*-primary` `*-accent-deep`
+
+碰到就顺手换成语义写法，但不要为此单开重构。
+
+## 共享类名（`shared/styles.ts`）
+
+控件外观的唯一来源，**不要在组件里另起一套手写串**。
+
+| 常量 | 用途 |
+|---|---|
+| `cx(...)` | 零依赖的条件类名拼接 |
+| `inputClass` / `textareaClass` | 聊天输入框以外的所有表单字段 |
+| `primaryButtonClass` | 主操作（渐变面 + ink 文字） |
+| `ghostButtonClass` | 次级操作 |
+| `dangerButtonClass` / `dangerGhostButtonClass` | 破坏性操作的实心版 / 安静版 |
+| `iconButtonClass` | 纯图标方形按钮（返回、重置、工具），统一 `rounded-md` |
+| `cardClass` | 空状态、诊断行等卡片面 |
+| `badgeClass` | 状态与标签胶囊 |
+| `panelHeadClass` / `panelTitleClass` | 面板头部布局与标题 |
+| `sidebarNavItemClass` / `secondarySidebarSurfaceClass` | 侧栏导航项与次级侧栏背景 |
+| `bodyTextClass` | 非标题栏内容的小号正文 |
+| `focusResetClass` | 自带状态样式的控件的 focus 复位 |
+
+需要变体时用 `cx(inputClass, "min-h-24 resize-y")` 这种叠加写法（`textareaClass` 本身就是这么来的），
+不要复制粘贴整串再改。
+
+## 工具类（`styles.css` 的 `@layer utilities`）
+
+- `surface-glass` / `surface-glass-strong` —— 玻璃面板（半透明 + 模糊），用在图片或有色背景之上
+- `bg-gradient-accent` / `-soft` / `-strong` / `-medium` / `bg-gradient-app` —— 渐变面
+- `text-gradient-accent` —— 渐变文字（内部用 strong 版，浅色版做文字会看不见）
+- `scrollbar-soft` —— 细滚动条 + `scrollbar-gutter: stable`；`scrollbar-soft-accent` / `-muted` 是 hover 变体
+- `story-*` —— story 模块专属的玻璃底与文字可读性描边，**尚未 token 化**，别往其他模块搬
+
+## focus 与无障碍
+
+焦点样式有**单一来源**，组件里不要重复实现：
+
+1. `styles.css:204` —— `input / textarea / select` 的 `:focus` 统一给"强调色边框 + 一层柔光晕"。
+   用 `:where()` 包住让特异性归零，所以刻意无边框的控件（如聊天输入区的 `ring-0`）能用工具类覆盖掉。
+2. `styles.css:343` —— 全局 `:focus-visible` 给 2px 的 `--color-ring` 描边，键盘焦点始终可见；
+   指针点击不显示描边。
+3. `styles.css:350` —— 表单字段和 `button[role="combobox"]` 单独关掉上面那层全局描边，避免和自己的
+   边框+光晕叠成双环。
+
+**所以**：组件里出现 `focus:ring-*` / `focus:border-*` / `focus:outline-none` 时，默认是错的。
+确有理由退出统一样式的，在注释里写明原因。
+
+其他基线：正文文本对齐 WCAG AA；`--color-text-faint` 只能给 placeholder 和装饰；
+新增语义色对时把实测对比度写进注释。
+
+## 动效
+
+- 时长走 `--duration-fast` / `--duration-base`，缓动走 `--ease-out-soft`（Tailwind 里是 `ease-out-soft`）
+- 展开/收起用 `grid-template-rows: 0fr → 1fr` 的写法（见 `.chat-thinking-content`），不要用 max-height 猜数值
+- **`styles.css:425` 有统一的 `prefers-reduced-motion` 块**：新增循环动画或较大位移的过渡时，
+  必须同时在这个块里给出降级（`animation: none` 或退化成 opacity 过渡）
+
+## 图标
+
+两套用途完全不同的图形，别混：
+
+| 来源 | 内容 | 规则 |
+|---|---|---|
+| `shared/icons.tsx` + `@phosphor-icons/react` | 功能图标（保存、删除、上传、发送、关闭……） | **一律复用，不要自绘。** 2026-09 视觉验收时自绘功能图标被逐一打回 |
+| `shared/ui/icons`（`brand.tsx`） | 品牌装饰母题：星芒、恶魔翅膀、蝴蝶结、樱瓣 | 只用于空状态、加载、成就等情绪点缀 |
+
+新增品牌母题时按 `shared/ui/icons/SPEC.md`：`viewBox="0 0 24 24"`、活动区 20×20、
+线性为主（`fill="none"` + `stroke="currentColor"` + `strokeWidth={1.7}` + 圆头）、
+duotone 副形用 `fill="currentColor"` + `opacity={0.15}`、颜色只用 `currentColor`、
+签名 `({ className = "h-4 w-4" }: IconProps)`、svg 带 `aria-hidden="true"`。
+
+Phosphor 在 `vite.config.ts:25` 被单独拆成 `icons-vendor` chunk，按需引入即可，不必担心体积。
+
+## 动手前的检查清单
+
+- [ ] 颜色 / 圆角 / 阴影 / 时长是不是都走了 token 或语义类？有没有漏下的写死值？
+- [ ] 这个控件在 `shared/styles.ts` 里是不是已经有共享类名了？
+- [ ] 有没有手写 `focus:*` 覆盖全局焦点样式？
+- [ ] 新增动画有没有在 `prefers-reduced-motion` 块里降级？
+- [ ] 新语义色对有没有标对比度？文本是不是在 AA 之上？
+- [ ] 图标走的是功能图标那一套，还是误用了品牌母题？
+- [ ] 跑 `pnpm desktop:dev` 开 `/styleguide.html` 目测过没有？
+
+## 已知遗留
+
+- **暗色主题尚未实现**：`:root` 固定 `color-scheme: light`，全文件无 `prefers-color-scheme` 分支。
+  设计上已经预留（`styles.css:14`："dark theme later overrides the semantic tier only"），
+  但前提是新代码不绕过语义层——每一处写死颜色都是将来暗色主题的一处返工。
+- **`--font-brand` 槽位空着**：MiSans / HarmonyOS Sans SC 还没定，字体栈目前从系统层起步（`styles.css:150`）。
+- **legacy 别名仍在服役**：`tailwind.config.ts` 的 legacy 色名和一批老组件还在用。
+- **story 模块自成一套**：`story-*` 工具类里的玻璃底、描边、阴影都是写死值，没有接入 token。
