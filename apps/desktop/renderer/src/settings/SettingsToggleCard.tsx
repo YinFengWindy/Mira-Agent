@@ -21,7 +21,7 @@ export function SettingsToggleCard({
       className={cx(
         "relative inline-flex shrink-0 appearance-none rounded-full border-0 p-0 outline-none transition-colors duration-200 focus:outline-none",
         compact ? "h-5 w-9" : "h-6 w-11",
-        checked ? "bg-primary" : "bg-[#D6DDE7]",
+        checked ? "bg-primary" : "bg-line",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
       )}
       type="button"

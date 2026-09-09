@@ -94,7 +94,7 @@ export function VoiceInputSettingsSection({ draft, updateDraft }: VoiceInputSett
             {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || device.deviceId}</option>)}
           </select>
           <button
-            className={cx(settingsIconButtonClass, testing && "text-[#C83E3E] hover:bg-[#FFF1F1] hover:text-[#C83E3E]")}
+            className={cx(settingsIconButtonClass, testing && "text-danger-text hover:bg-danger-soft hover:text-danger-text")}
             type="button"
             aria-label={testing ? "停止麦克风测试" : "测试麦克风"}
             title={testing ? "停止麦克风测试" : "测试麦克风"}
@@ -104,7 +104,7 @@ export function VoiceInputSettingsSection({ draft, updateDraft }: VoiceInputSett
           </button>
         </div>
       </Field>
-      {testError ? <div className="text-[11px] text-[#8f2d2d]">{testError}</div> : null}
+      {testError ? <div className="text-[11px] text-danger-text">{testError}</div> : null}
     </SettingsSectionCard>
   );
 }

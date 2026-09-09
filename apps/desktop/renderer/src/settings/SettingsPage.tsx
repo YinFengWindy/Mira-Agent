@@ -16,10 +16,10 @@ type SettingsPageProps = {
 };
 
 /** Shared surface style for every settings page state. */
-export const settingsPageSurfaceClass = "settings-page bg-white";
+export const settingsPageSurfaceClass = "settings-page bg-gradient-app bg-fixed";
 
 /** Responsive spacing for the scrollable settings content. */
-export const settingsContentClass = "relative scrollbar-soft overflow-y-auto bg-white px-4 py-8 sm:px-10 lg:px-16 lg:py-10";
+export const settingsContentClass = "relative scrollbar-soft overflow-y-auto px-4 py-8 sm:px-10 lg:px-16 lg:py-10";
 
 /** Renders the active settings domain and delegates persistence to its controller. */
 export function SettingsPage({
@@ -34,7 +34,7 @@ export function SettingsPage({
   if (controller.loadError) {
     return (
       <section className={cx(settingsPageSurfaceClass, "grid h-full place-items-center")} data-testid="settings-page">
-        <div className={cx(cardClass, "mx-8 max-w-[680px] p-6 text-sm leading-6 text-[#8f2d2d]")}>
+        <div className={cx(cardClass, "mx-8 max-w-[680px] p-6 text-sm leading-6 text-danger-text")}>
           设置加载失败：{controller.loadError}
         </div>
       </section>
@@ -44,7 +44,7 @@ export function SettingsPage({
   if (!controller.draft) {
     return (
       <section className={cx(settingsPageSurfaceClass, "grid h-full place-items-center")} data-testid="settings-page">
-        <div className="text-sm text-[#737781]">正在加载设置...</div>
+        <div className="text-sm text-ink-muted">正在加载设置…</div>
       </section>
     );
   }
@@ -78,12 +78,12 @@ export function SettingsPage({
       <div className={settingsContentClass}>
         <div className="mx-auto w-full max-w-[840px]">
           {!currentSection ? (
-            <div className={cx(cardClass, "grid min-h-[240px] place-items-center border-dashed text-sm text-[#7f8490]")}>
+            <div className={cx(cardClass, "grid min-h-[240px] place-items-center border-dashed text-sm text-ink-muted")}>
               没有匹配的设置项
             </div>
           ) : (
             <header className="mb-6">
-              <h2 className="m-0 text-[22px] font-normal leading-tight text-[#182230]">{currentSection.label}</h2>
+              <h2 className="m-0 font-display text-headline text-ink">{currentSection.label}</h2>
               {visibleSubsections.length > 1 ? (
                 <nav className="mt-7 flex max-w-full gap-7 overflow-x-auto" aria-label="设置子区">
                   {visibleSubsections.map((item) => (
@@ -91,8 +91,8 @@ export function SettingsPage({
                       className={cx(
                         "relative shrink-0 border-0 bg-transparent px-0 pb-2 text-[13px] transition focus:outline-none",
                         item.id === currentSubsectionId
-                          ? "font-medium text-[#182230] after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-[#182230]"
-                          : "text-[#98A2B3] hover:text-[#3a4453]",
+                          ? "font-medium text-ink after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-accent"
+                          : "text-ink-faint hover:text-ink-secondary",
                       )}
                       key={item.id}
                       type="button"
