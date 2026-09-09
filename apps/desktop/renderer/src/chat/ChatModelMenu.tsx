@@ -10,6 +10,7 @@ import {
   type RoleModelSelection,
 } from "./chatModelSelection";
 import { getChatModelMenuPosition } from "./chatModelMenuLayout";
+import { MenuItem, MenuPanel, menuLabelClass } from "../shared/ui/Menu";
 
 type ChatModelMenuProps = {
   activeRoleId: string;
@@ -121,32 +122,32 @@ export function ChatModelMenu({ activeRoleId, bridgeReady }: ChatModelMenuProps)
       </button>
       {open && selection && menuPosition ? createPortal(
         <div ref={menuRef} className="fixed z-50 flex items-end gap-1.5" style={menuPosition}>
-          <div className="grid w-[112px] content-start gap-1 rounded-md border border-line-soft bg-white p-1.5 shadow-pop">
+          <MenuPanel className="grid w-[112px] content-start gap-1">
             {(["dialogue", "visual"] as const).map((kind) => (
-              <button key={kind} type="button" className={`flex h-9 items-center justify-between rounded-md px-2 text-left text-xs transition ${submenu === kind ? "bg-surface-soft text-ink" : "text-ink-secondary hover:bg-surface-soft"}`} aria-current={submenu === kind ? "true" : undefined} onMouseEnter={() => { setSubmenu(kind); setHoveredModelId(null); }} onClick={() => { setSubmenu(kind); setHoveredModelId(null); }}>
+              <MenuItem key={kind} className="h-9 justify-between" selected={submenu === kind} onMouseEnter={() => { setSubmenu(kind); setHoveredModelId(null); }} onClick={() => { setSubmenu(kind); setHoveredModelId(null); }}>
                 <span>{kind === "dialogue" ? "聊天模型" : "识图模型"}</span><CaretRight className="h-3 w-3" weight="bold" aria-hidden="true" />
-              </button>
+              </MenuItem>
             ))}
-          </div>
+          </MenuPanel>
           {submenu ? (
-            <div className="relative min-w-[132px] rounded-md border border-line-soft bg-white p-1.5 shadow-pop">
+            <MenuPanel className="relative min-w-[132px]">
               <div className="grid gap-1">
                 {(submenu === "visual" ? [{ id: "", model: "沿用对话模型" }, ...registrations] : registrations).map((registration) => (
-                  <button key={registration.id || "dialogue-fallback"} type="button" className={`flex h-9 items-center justify-between gap-2 rounded-md px-2 text-left text-xs transition ${(submenu === "dialogue" ? selection.dialogueId : selection.visualId) === registration.id ? "bg-surface-soft text-ink" : "text-ink-secondary hover:bg-surface-soft"}`} aria-current={(submenu === "dialogue" ? selection.dialogueId : selection.visualId) === registration.id ? "true" : undefined} onMouseEnter={() => setHoveredModelId(registration.id)} onClick={() => void updateSelection(submenu, registration.id)}>
+                  <MenuItem key={registration.id || "dialogue-fallback"} className="h-9 justify-between" selected={(submenu === "dialogue" ? selection.dialogueId : selection.visualId) === registration.id} onMouseEnter={() => setHoveredModelId(registration.id)} onClick={() => void updateSelection(submenu, registration.id)}>
                     <span className="max-w-[150px] truncate">{registration.model}</span><span className="flex items-center gap-1" aria-hidden="true">{(submenu === "dialogue" ? selection.dialogueId : selection.visualId) === registration.id ? <Check className="h-3 w-3" weight="bold" /> : null}<CaretRight className="h-3 w-3" weight="bold" /></span>
-                  </button>
+                  </MenuItem>
                 ))}
               </div>
               {hoveredModelId !== null ? (
-                <div className="absolute left-full top-0 ml-1 grid min-w-[150px] gap-1 rounded-md border border-line-soft bg-white p-1.5 shadow-pop">
-                  <span className="px-2 py-1 text-[11px] text-ink-muted">思考强度</span>
+                <MenuPanel className="absolute left-full top-0 ml-1 grid min-w-[150px] gap-1">
+                  <span className={menuLabelClass}>思考强度</span>
                   {(["none", "low", "high", "max"] as const).map((effort) => {
                     const selected = (submenu === "dialogue" ? selection.dialogueEffort : selection.visualEffort) === effort;
-                    return <button key={effort} type="button" className={`flex items-center justify-between rounded-md px-2 py-2 text-left text-xs transition ${selected ? "bg-surface-soft text-ink" : "text-ink-secondary hover:bg-surface-soft"}`} aria-current={selected ? "true" : undefined} onClick={() => void updateSelection(submenu === "dialogue" ? "dialogueEffort" : "visualEffort", effort)}><span>{effort === "none" ? "关闭" : effort === "low" ? "低" : effort === "high" ? "高" : "最大"}</span>{selected ? <Check className="h-3 w-3" weight="bold" aria-hidden="true" /> : null}</button>;
+                    return <MenuItem key={effort} className="justify-between" selected={selected} onClick={() => void updateSelection(submenu === "dialogue" ? "dialogueEffort" : "visualEffort", effort)}><span>{effort === "none" ? "关闭" : effort === "low" ? "低" : effort === "high" ? "高" : "最大"}</span>{selected ? <Check className="h-3 w-3" weight="bold" aria-hidden="true" /> : null}</MenuItem>;
                   })}
-                </div>
+                </MenuPanel>
               ) : null}
-            </div>
+            </MenuPanel>
           ) : null}
         </div>,
         document.body,

@@ -22,7 +22,7 @@ function ProfileField({ label, value, placeholder, heightClass = "h-40", onChang
   return (
     <label className="grid content-start gap-2">
       <span className="grid gap-0.5">
-        <span className="text-sm font-medium text-[#182230]">{label}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
       </span>
       <textarea
         className={cx(roleFieldClass, "scrollbar-soft resize-none overflow-y-auto leading-6", heightClass)}
@@ -65,7 +65,7 @@ export function RoleCardProfileForm({
           onChange={(value) => updateCharacter("profile", value)}
         />
         {collapseDetails ? <details className="group">
-          <summary className="cursor-pointer py-2 text-sm text-[#667085]">更多设定</summary>
+          <summary className="cursor-pointer py-2 text-sm text-ink-muted">更多设定</summary>
           <div className="pt-4">{details}</div>
         </details> : details}
       </div>

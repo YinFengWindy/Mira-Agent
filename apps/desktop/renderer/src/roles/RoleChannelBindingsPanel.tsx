@@ -34,15 +34,15 @@ function ChannelBindingRow({ activeRoleId, binding, index, bindingsCount, onUpda
       <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/75 text-xs font-medium text-[#4B6B88]" aria-label={`投递顺序 ${index + 1}`}>{index + 1}</span>
       <div className="grid min-w-0 gap-3">
         <div className="grid gap-3 sm:grid-cols-[132px_minmax(0,1fr)]">
-          <label className="grid gap-1.5 text-xs text-[#667085]"><span>渠道</span><select className={roleDeliveryFieldClass} value={binding.channel} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? changeRoleBindingChannel(item, event.target.value, activeRoleId) : item))}><option value="telegram">Telegram</option><option value="qq">QQ</option><option value="qqbot">QQBot</option><option value="desktop">桌面端</option></select></label>
-          <label className="grid min-w-0 gap-1.5 text-xs text-[#667085]"><span>会话 / 群组 ID</span><input className={roleDeliveryFieldClass} value={binding.chat_id} placeholder="输入会话或群组 ID" readOnly={desktopBinding} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, chat_id: event.target.value } : item))} /></label>
+          <label className="grid gap-1.5 text-xs text-ink-muted"><span>渠道</span><select className={roleDeliveryFieldClass} value={binding.channel} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? changeRoleBindingChannel(item, event.target.value, activeRoleId) : item))}><option value="telegram">Telegram</option><option value="qq">QQ</option><option value="qqbot">QQBot</option><option value="desktop">桌面端</option></select></label>
+          <label className="grid min-w-0 gap-1.5 text-xs text-ink-muted"><span>会话 / 群组 ID</span><input className={roleDeliveryFieldClass} value={binding.chat_id} placeholder="输入会话或群组 ID" readOnly={desktopBinding} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, chat_id: event.target.value } : item))} /></label>
         </div>
-        {!desktopBinding ? <label className="grid gap-1.5 text-xs text-[#667085]"><span>{roleBindingAllowFromLabel(binding.channel)}</span><input className={roleDeliveryFieldClass} value={binding.allow_from[0] ?? ""} placeholder="输入唯一联系人 ID" onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, allow_from: event.target.value.trim() ? [event.target.value.trim()] : [] } : item))} /></label> : <p className="text-xs text-[#7B8794]">{roleBindingChannelLabel(binding.channel)}使用当前角色的桌面对话。</p>}
+        {!desktopBinding ? <label className="grid gap-1.5 text-xs text-ink-muted"><span>{roleBindingAllowFromLabel(binding.channel)}</span><input className={roleDeliveryFieldClass} value={binding.allow_from[0] ?? ""} placeholder="输入唯一联系人 ID" onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, allow_from: event.target.value.trim() ? [event.target.value.trim()] : [] } : item))} /></label> : <p className="text-xs text-ink-muted">{roleBindingChannelLabel(binding.channel)}使用当前角色的桌面对话。</p>}
       </div>
       <div className="flex items-start gap-0.5 pt-5 sm:pt-6">
         <button className={roleDeliveryIconButtonClass} type="button" onClick={() => onUpdateBindings((current) => moveRoleChannelBinding(current, index, "up"))} disabled={index === 0} aria-label={`上移${roleBindingChannelLabel(binding.channel)}绑定`} title="上移"><CaretUp className="h-4 w-4" weight="bold" /></button>
         <button className={roleDeliveryIconButtonClass} type="button" onClick={() => onUpdateBindings((current) => moveRoleChannelBinding(current, index, "down"))} disabled={index === bindingsCount - 1} aria-label={`下移${roleBindingChannelLabel(binding.channel)}绑定`} title="下移"><CaretDown className="h-4 w-4" weight="bold" /></button>
-        <button className={roleDeliveryIconButtonClass} type="button" onClick={() => onUpdateBindings((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除${roleBindingChannelLabel(binding.channel)}绑定`} title="移除"><Trash className="h-4 w-4 text-[#B54747]" weight="bold" /></button>
+        <button className={roleDeliveryIconButtonClass} type="button" onClick={() => onUpdateBindings((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除${roleBindingChannelLabel(binding.channel)}绑定`} title="移除"><Trash className="h-4 w-4 text-danger-text" weight="bold" /></button>
       </div>
     </div>
   );
@@ -59,12 +59,12 @@ export function RoleChannelBindingsPanel({ activeRoleId, bindings, onUpdate }: R
   }
 
   return (
-    <section className="grid gap-5 text-sm text-[#1F2937]" data-testid="role-channel-config">
+    <section className="grid gap-5 text-sm text-ink" data-testid="role-channel-config">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#F0F5FB] text-[#4B6B88]" aria-hidden="true"><ChatCircleDots className="h-5 w-5" weight="duotone" /></span><div><h2 className="text-sm font-semibold text-[#182230]">渠道绑定</h2><p className="mt-1 text-xs text-[#7B8794]">{bindings.length ? `已配置 ${bindings.length} 个投递位置，可调整回退顺序。` : "维护角色可使用的会话与群组。"}</p></div></div>
+        <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#F0F5FB] text-[#4B6B88]" aria-hidden="true"><ChatCircleDots className="h-5 w-5" weight="duotone" /></span><div><h2 className="text-sm font-semibold text-ink">渠道绑定</h2><p className="mt-1 text-xs text-ink-muted">{bindings.length ? `已配置 ${bindings.length} 个投递位置，可调整回退顺序。` : "维护角色可使用的会话与群组。"}</p></div></div>
         <button className={rolePanelGhostButtonClass} type="button" onClick={() => updateBindings((current) => [...current, createRoleChannelBinding(activeRoleId)])} aria-label="添加渠道绑定" title="添加渠道绑定"><Plus className="h-4 w-4" weight="bold" />添加</button>
       </div>
-      {bindings.length ? <div className="grid gap-3">{bindings.map((binding, index) => <ChannelBindingRow activeRoleId={activeRoleId} binding={binding} index={index} bindingsCount={bindings.length} onUpdateBindings={updateBindings} key={`${binding.channel}:${binding.chat_id}:${index}`} />)}</div> : <div className="rounded-2xl border border-dashed border-[#C9D7E6] bg-[#F7FAFD] py-8 text-center text-xs text-[#7B8794]">尚未绑定渠道</div>}
+      {bindings.length ? <div className="grid gap-3">{bindings.map((binding, index) => <ChannelBindingRow activeRoleId={activeRoleId} binding={binding} index={index} bindingsCount={bindings.length} onUpdateBindings={updateBindings} key={`${binding.channel}:${binding.chat_id}:${index}`} />)}</div> : <div className="rounded-2xl border border-dashed border-[#C9D7E6] bg-[#F7FAFD] py-8 text-center text-xs text-ink-muted">尚未绑定渠道</div>}
     </section>
   );
 }

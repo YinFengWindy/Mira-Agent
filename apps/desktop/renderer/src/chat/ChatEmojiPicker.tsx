@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { commonChatEmojis } from "./chatEmojiState";
 import { SmileyIcon } from "../shared/icons";
+import { MenuPanel } from "../shared/ui/Menu";
 
 type ChatEmojiPickerProps = {
   disabled: boolean;
@@ -66,8 +67,8 @@ export function ChatEmojiPicker({
         <SmileyIcon className="h-[16px] w-[16px] stroke-current" />
       </button>
       {open ? (
-        <div
-          className="absolute bottom-[calc(100%+10px)] right-0 z-[4] w-[232px] rounded-lg border border-line-soft bg-[rgba(255,255,255,0.98)] p-3 shadow-pop backdrop-blur-[10px]"
+        <MenuPanel
+          className="absolute bottom-[calc(100%+10px)] right-0 z-[4] w-[232px] p-3"
           role="dialog"
           aria-label="常用表情面板"
         >
@@ -85,7 +86,7 @@ export function ChatEmojiPicker({
               </button>
             ))}
           </div>
-        </div>
+        </MenuPanel>
       ) : null}
     </div>
   );

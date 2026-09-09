@@ -37,9 +37,9 @@ export function RoleProfilePanel({
   return (
     <div className="grid gap-7" data-testid="role-detail-form-panel">
       <div className="grid gap-6 border-b border-line-soft pb-7 sm:grid-cols-[112px_minmax(0,1fr)]">
-        <TiltedCard className="h-fit overflow-hidden rounded-xl border border-[#E7ECF1] shadow-[0_10px_24px_rgba(15,23,42,0.1)]">
+        <TiltedCard className="h-fit overflow-hidden rounded-xl border border-line-soft shadow-soft">
           <button
-            className="group relative block h-28 w-28 overflow-hidden bg-[#F2F5F9] text-left focus:outline-none"
+            className="group relative block h-28 w-28 overflow-hidden bg-surface-soft text-left focus:outline-none"
             data-testid="open-role-assets-button"
             data-has-preview-avatar={previewAvatar ? "true" : "false"}
             type="button"
@@ -49,7 +49,7 @@ export function RoleProfilePanel({
             {previewAvatar ? (
               <img className="h-full w-full object-cover transition duration-500 group-hover:scale-105" src={toFileUrl(previewAvatar)} alt={`${activeRole?.name || "角色"} avatar`} />
             ) : (
-              <span className="grid h-full w-full place-items-center text-4xl font-semibold text-[#98A2B3]">
+              <span className="grid h-full w-full place-items-center text-4xl font-semibold text-ink-faint">
                 {activeRole?.name.slice(0, 1).toUpperCase() || "R"}
               </span>
             )}
@@ -59,8 +59,8 @@ export function RoleProfilePanel({
           </button>
         </TiltedCard>
         <div className="grid content-center gap-2">
-          <input aria-label="角色名称" className={`${identityInputClass} text-2xl font-semibold text-[#111827] placeholder:text-[#9CA3AF]`} data-testid="edit-role-name" value={roleForm.name} placeholder="未命名角色" onChange={(event) => onUpdate((current) => ({ ...current, name: event.target.value }))} />
-          <input aria-label="角色简介" className={`${identityInputClass} text-sm leading-6 text-[#6B7280] placeholder:text-[#9CA3AF]`} data-testid="edit-role-description" value={roleForm.description} placeholder="添加一行角色简介" onChange={(event) => onUpdate((current) => ({ ...current, description: event.target.value }))} />
+          <input aria-label="角色名称" className={`${identityInputClass} text-2xl font-semibold text-ink placeholder:text-ink-faint`} data-testid="edit-role-name" value={roleForm.name} placeholder="未命名角色" onChange={(event) => onUpdate((current) => ({ ...current, name: event.target.value }))} />
+          <input aria-label="角色简介" className={`${identityInputClass} text-sm leading-6 text-ink-muted placeholder:text-ink-faint`} data-testid="edit-role-description" value={roleForm.description} placeholder="添加一行角色简介" onChange={(event) => onUpdate((current) => ({ ...current, description: event.target.value }))} />
         </div>
       </div>
       <RoleCardProfileForm profile={profile} onUpdate={updateProfile} />

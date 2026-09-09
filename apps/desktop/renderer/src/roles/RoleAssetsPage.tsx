@@ -120,8 +120,8 @@ export function RoleAssetsPage({
       data-testid="role-assets-page"
     >
       <div className="mx-auto flex min-h-full w-full max-w-[1280px] flex-col gap-5 px-8 pb-10 pt-6">
-        <div className="grid min-h-[680px] grid-cols-[428px_minmax(0,1fr)] overflow-hidden rounded-lg bg-white/92 shadow-[0_18px_48px_rgba(31,41,55,0.08)]">
-          <div className="flex min-h-0 flex-col bg-[#FBFCFE] p-4">
+        <div className="grid min-h-[680px] grid-cols-[428px_minmax(0,1fr)] overflow-hidden rounded-lg bg-white/92 shadow-pop">
+          <div className="flex min-h-0 flex-col bg-surface-soft p-4">
             <div className="hidden mt-5 grid grid-cols-4 content-start gap-2.5">
               {assetPairs.map(({ relPath, absPath }, index) => {
                 const isSelected = selectionMode === "mood-binding"
@@ -136,7 +136,7 @@ export function RoleAssetsPage({
                       data-testid={`role-asset-card-${index}`}
                       className={cx(
                         "h-[90px] w-[90px] overflow-hidden rounded-lg border p-0 text-left transition",
-                        isSelected ? "border-[#272536] shadow-[0_8px_24px_rgba(39,37,54,0.16)]" : "border-[#D8DFE7] bg-white hover:border-[#9AA3B2]",
+                        isSelected ? "border-accent shadow-soft" : "border-line-soft bg-white hover:border-line-strong",
                       )}
                       type="button"
                       disabled={!bridgeReady}
@@ -145,7 +145,7 @@ export function RoleAssetsPage({
                       <img className="h-full w-full object-cover" src={toFileUrl(absPath)} alt="role asset" />
                     </button>
                     <button
-                      className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full border border-black/10 bg-white/92 text-[#5B6472] shadow-[0_4px_12px_rgba(15,23,42,0.12)] transition hover:border-[#9AA3B2] hover:bg-white hover:text-[#272536]"
+                      className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full border border-line-soft bg-white/92 text-ink-secondary shadow-soft transition hover:border-line-strong hover:bg-white hover:text-ink"
                       type="button"
                       aria-label="删除素材"
                       disabled={!bridgeReady || savingSelection}
@@ -163,7 +163,7 @@ export function RoleAssetsPage({
               })}
               <button
                 data-testid="pick-role-assets-button"
-                className="grid h-[90px] w-[90px] place-items-center overflow-hidden rounded-lg border border-[#D8DFE7] bg-white text-[#272536] transition hover:border-[#9AA3B2] hover:bg-[#F5F7FA] disabled:cursor-default disabled:border-black/6 disabled:bg-white/60 disabled:text-[#b8b8b8]"
+                className="grid h-[90px] w-[90px] place-items-center overflow-hidden rounded-lg border border-line-soft bg-white text-ink transition hover:border-line-strong hover:bg-surface-hover disabled:cursor-default disabled:border-black/6 disabled:bg-white/60 disabled:text-ink-faint"
                 type="button"
                 disabled={!bridgeReady}
                 onClick={() => onPickAssets("default")}
@@ -189,17 +189,17 @@ export function RoleAssetsPage({
           </div>
           <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-white p-6">
             <div className="flex min-h-0 flex-col">
-              <div className="flex h-full min-h-[420px] flex-col rounded-xl border border-[#E4EAF0] bg-[#FAFBFD] p-5">
+              <div className="flex h-full min-h-[420px] flex-col rounded-xl border border-line-soft bg-surface-soft p-5">
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <div className="text-sm font-medium text-[#2A3440]">
+                  <div className="text-sm font-medium text-ink">
                     {selectionMode === "avatar" ? "头像效果" : selectionMode === "chat-background" ? "立绘效果" : "差分效果"}
                   </div>
-                  <div className="inline-flex rounded-full border border-[#D8DFE7] bg-[#F6F8FB] p-1">
+                  <div className="inline-flex rounded-full border border-line-soft bg-surface-soft p-1">
                     <button
                       data-testid="selection-mode-avatar"
                       className={cx(
                         "rounded-full px-4 py-2 text-sm transition",
-                        selectionMode === "avatar" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]",
+                        selectionMode === "avatar" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink",
                       )}
                       type="button"
                       onClick={() => switchSelectionMode("avatar")}
@@ -210,7 +210,7 @@ export function RoleAssetsPage({
                       data-testid="selection-mode-featured"
                       className={cx(
                         "rounded-full px-4 py-2 text-sm transition",
-                        selectionMode === "chat-background" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]",
+                        selectionMode === "chat-background" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink",
                       )}
                       type="button"
                       onClick={() => switchSelectionMode("chat-background")}
@@ -221,7 +221,7 @@ export function RoleAssetsPage({
                       data-testid="selection-mode-mood-binding"
                       className={cx(
                         "rounded-full px-4 py-2 text-sm transition",
-                        selectionMode === "mood-binding" ? "bg-[#272536] text-white shadow-[0_6px_16px_rgba(39,37,54,0.18)]" : "text-[#5B6472] hover:text-[#272536]",
+                        selectionMode === "mood-binding" ? "bg-gradient-accent text-ink shadow-soft" : "text-ink-secondary hover:text-ink",
                       )}
                       type="button"
                       onClick={() => switchSelectionMode("mood-binding")}
@@ -250,19 +250,19 @@ export function RoleAssetsPage({
                   selectionMode === "avatar" ? (
                     <div className="relative grid min-h-[360px] flex-1 place-items-center rounded-xl bg-white p-8">
                       <button
-                        className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white/92 text-[#5B6472] transition hover:border-[#9AA3B2] hover:bg-white hover:text-[#272536] focus:outline-none"
+                        className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-line-soft bg-white/92 text-ink-secondary transition hover:border-line-strong hover:bg-white hover:text-ink focus:outline-none"
                         type="button"
                         onClick={() => saveSingleSelection("avatar", "")}
                         aria-label="取消选中头像"
                       >
                         <CloseIcon className="h-4 w-4 stroke-current" />
                       </button>
-                      <img className="h-[140px] w-[140px] rounded-[32px] object-cover shadow-[0_10px_24px_rgba(15,23,42,0.08)]" src={toFileUrl(selectedAsset.absPath)} alt="avatar preview" />
+                      <img className="h-[140px] w-[140px] rounded-[32px] object-cover shadow-soft" src={toFileUrl(selectedAsset.absPath)} alt="avatar preview" />
                     </div>
                   ) : (
                     <div className="relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden rounded-xl bg-white p-6">
                       <button
-                        className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-black/10 bg-white/92 text-[#5B6472] transition hover:border-[#9AA3B2] hover:bg-white hover:text-[#272536] focus:outline-none"
+                        className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-line-soft bg-white/92 text-ink-secondary transition hover:border-line-strong hover:bg-white hover:text-ink focus:outline-none"
                         type="button"
                         onClick={() => saveSingleSelection("chat-background", "")}
                         aria-label="取消选中立绘"
@@ -277,7 +277,7 @@ export function RoleAssetsPage({
                     </div>
                   )
                 ) : (
-                  <div className="grid min-h-[360px] flex-1 place-items-center rounded-xl bg-[#F2F5F8] text-sm text-[#74808D]">
+                  <div className="grid min-h-[360px] flex-1 place-items-center rounded-xl bg-surface-soft text-sm text-ink-muted">
                     {selectionMode === "avatar" ? "当前未设置头像" : "当前未设置立绘"}
                   </div>
                 )}

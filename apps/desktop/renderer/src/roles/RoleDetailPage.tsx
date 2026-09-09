@@ -72,15 +72,15 @@ export function RoleDetailPage({
   );
 
   return (
-    <section ref={pageRef} className="role-detail-page scrollbar-soft scrollbar-soft-accent relative h-full overflow-y-auto bg-white" data-testid="role-detail-page" data-has-featured-image="false">
+    <section ref={pageRef} className="role-detail-page scrollbar-soft scrollbar-soft-accent relative h-full overflow-y-auto bg-gradient-app bg-fixed" data-testid="role-detail-page" data-has-featured-image="false">
       <div className="relative mx-auto flex min-h-full w-full max-w-[1120px] flex-col px-5 pb-8 pt-6 sm:px-8">
         <div data-testid="role-detail-info-card">
-          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-[#E5E7EB] pb-4">
+          <div className="mb-6 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft pb-4">
             <button className={cx(floatingActionClass, "hover:-translate-x-0.5")} data-testid="role-detail-back-button" type="button" onClick={onBackToList} aria-label="返回角色列表"><BackIcon className="h-5 w-5 fill-current" /></button>
             <RoleDetailTabs activeTab={activeTab} onChange={setActiveTab} />
             <div className="flex items-center gap-2">
               <button className={floatingActionClass} type="button" onClick={onResetRoleForm} disabled={!roleFormDirty} aria-label="重置角色表单"><ResetIcon className="h-[18px] w-[18px] fill-current" /></button>
-              <Magnet disabled={savingRole || !roleFormDirty || !bridgeReady} padding={52} strength={9}><button className={cx(floatingActionClass, "bg-[#fff7f0] hover:shadow-[0_10px_28px_rgba(255,217,184,0.32)]")} data-testid="save-role-button" type="button" onClick={onSaveRole} disabled={savingRole || !roleFormDirty || !bridgeReady} aria-label={savingRole ? "正在保存角色" : "保存角色"}><SaveIcon className="h-5 w-5 fill-current" /></button></Magnet>
+              <Magnet disabled={savingRole || !roleFormDirty || !bridgeReady} padding={52} strength={9}><button className={cx(floatingActionClass, "border-white/70 bg-gradient-accent hover:shadow-panel")} data-testid="save-role-button" type="button" onClick={onSaveRole} disabled={savingRole || !roleFormDirty || !bridgeReady} aria-label={savingRole ? "正在保存角色" : "保存角色"}><SaveIcon className="h-5 w-5 fill-current" /></button></Magnet>
             </div>
           </div>
           <AnimatePresence mode="wait" initial={false}>

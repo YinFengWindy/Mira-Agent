@@ -84,7 +84,7 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
     <div className="grid gap-6" data-testid="role-knowledge-panel">
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#F0F5FB] text-[#4B6B88]" aria-hidden="true">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent-text" aria-hidden="true">
             <BookOpenText className="h-5 w-5" weight="duotone" />
           </span>
           <div>
@@ -93,10 +93,10 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
         </div>
       </div>
 
-      <div className="grid gap-4 border-y border-[#E7ECF1] py-4">
+      <div className="grid gap-4 border-y border-line-soft py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-medium text-[#182230]">启用知识库</h3>
+            <h3 className="text-sm font-medium text-ink">启用知识库</h3>
           </div>
           <SettingsToggleCard checked={enabled} ariaLabel="启用知识库" onChange={(checked) => updateKnowledge((current) => ({ ...current, enabled: checked }))} />
         </div>
@@ -104,7 +104,7 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
 
       <div className="grid gap-1">
         <div className="flex items-center justify-between gap-4">
-          <h3 className="text-sm font-medium text-[#182230]">条目 · {entries.length}</h3>
+          <h3 className="text-sm font-medium text-ink">条目 · {entries.length}</h3>
           <button className={rolePanelGhostButtonClass} type="button" onClick={addEntry} aria-label="添加知识库条目" data-testid="add-knowledge-entry-button">
             <PlusIcon className="h-4 w-4 fill-current" />
             添加条目
@@ -125,9 +125,9 @@ export function RoleKnowledgePanel({ roleForm, onUpdate }: RoleKnowledgePanelPro
             ))}
           </div>
         ) : (
-          <div className="mt-2 grid justify-items-center gap-2 border-y border-dashed border-[#DDE5EC] py-8 text-center">
-            <BookOpenText className="h-6 w-6 text-[#C3CDD7]" weight="duotone" aria-hidden="true" />
-            <p className="text-xs text-[#7B8794]">当前没有知识库条目</p>
+          <div className="mt-2 grid justify-items-center gap-2 border-y border-dashed border-line-soft py-8 text-center">
+            <BookOpenText className="h-6 w-6 text-ink-faint" weight="duotone" aria-hidden="true" />
+            <p className="text-xs text-ink-muted">当前没有知识库条目</p>
           </div>
         )}
       </div>

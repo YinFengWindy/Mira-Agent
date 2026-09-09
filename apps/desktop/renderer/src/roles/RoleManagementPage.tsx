@@ -43,9 +43,9 @@ export function RoleManagementPage({
                   disabled={!bridgeReady || isPending}
                   onClick={() => onOpenRoleDetail(role.id)}
                   className={cx(
-                    "group relative grid h-[420px] w-full overflow-hidden rounded-xl border border-[#D9E0E8] bg-[#EEF1F5] text-left shadow-[0_14px_40px_rgba(31,41,55,0.06)] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(31,41,55,0.1)] disabled:cursor-default disabled:opacity-60",
+                    "group relative grid h-[420px] w-full overflow-hidden rounded-xl border border-line-soft bg-surface-soft text-left shadow-soft transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-pop disabled:cursor-default disabled:opacity-60",
                     focusResetClass,
-                    isActive && "shadow-[0_18px_44px_rgba(31,41,55,0.12)]",
+                    isActive && "shadow-pop",
                   )}
                   style={coverImage ? { backgroundImage: `url("${coverImage}")`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
                 >
@@ -97,8 +97,8 @@ export function RoleManagementPage({
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-[22px] font-semibold leading-none text-[#1f1f1f]">{role.name}</div>
-                      <div className={cx(bodyTextClass, "mt-2 line-clamp-2 text-sm leading-6 text-[#5f6873]")}>
+                      <div className="truncate text-[22px] font-semibold leading-none text-ink">{role.name}</div>
+                      <div className={cx(bodyTextClass, "mt-2 line-clamp-2 text-sm leading-6 text-ink-secondary")}>
                         {role.description || "未填写角色简介"}
                       </div>
                     </div>
@@ -108,7 +108,7 @@ export function RoleManagementPage({
             })}
           </div>
         ) : (
-          <div className={cx(cardClass, "grid min-h-[280px] place-items-center border-dashed p-8 text-center text-sm text-[#7f7f7f]")}>
+          <div className={cx(cardClass, "grid min-h-[280px] place-items-center border-dashed p-8 text-center text-sm text-ink-muted")}>
             暂无角色，先创建一个角色开始管理。
           </div>
         )}

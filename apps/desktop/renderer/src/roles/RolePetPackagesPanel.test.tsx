@@ -53,7 +53,7 @@ describe("RolePetPackagesPanel", () => {
     assert.match(markup, /aria-pressed="true"/);
     assert.match(markup, /class="h-full w-full object-contain"/);
     assert.match(markup, /Mira Pet/);
-    assert.match(markup, /border-\[#4B5563\]/);
+    assert.match(markup, /border-accent/);
     assert.doesNotMatch(markup, /border-primary|text-\[#8B4B4B\]/);
   });
 });

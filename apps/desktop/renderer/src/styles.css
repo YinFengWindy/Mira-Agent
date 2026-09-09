@@ -206,7 +206,7 @@
   select:where(:focus) {
     outline: none;
     border-color: var(--color-border-accent);
-    box-shadow: 0 0 0 2.5px var(--color-ring-soft);
+    box-shadow: 0 0 0 1px var(--color-ring-soft);
   }
 
   pre {
