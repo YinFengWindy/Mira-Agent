@@ -257,7 +257,7 @@ export function RoleAssetsPage({
                       >
                         <CloseIcon className="h-4 w-4 stroke-current" />
                       </button>
-                      <img className="h-[140px] w-[140px] rounded-[32px] object-cover shadow-soft" src={toFileUrl(selectedAsset.absPath)} alt="avatar preview" />
+                      <img className="h-[140px] w-[140px] rounded-xl object-cover shadow-soft" src={toFileUrl(selectedAsset.absPath)} alt="avatar preview" />
                     </div>
                   ) : (
                     <div className="relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden rounded-xl bg-white p-6">

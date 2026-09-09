@@ -64,7 +64,7 @@ export function RoleManagementPage({
                     </span>
                   ) : null}
                   {coverImage ? null : (
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,#F6F8FB_0%,#E8EEF5_100%)]" />
+                    <div className="absolute inset-0 bg-gradient-accent-soft" />
                   )}
                   <button
                     data-testid={`delete-role-card-${role.id}`}

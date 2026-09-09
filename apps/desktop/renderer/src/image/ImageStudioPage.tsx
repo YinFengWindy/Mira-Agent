@@ -53,9 +53,9 @@ export function ImageStudioPage({
   }, [historySidebarCollapsed]);
 
   return (
-    <section className="image-studio-page relative h-full overflow-hidden bg-[linear-gradient(180deg,#F7F8FB_0%,#EEF2F7_100%)]">
+    <section className="image-studio-page relative h-full overflow-hidden bg-gradient-app bg-fixed">
       <button
-        className="absolute right-4 top-4 z-[5] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-[#747474] transition hover:bg-black/5 hover:text-[#4B4B4B] focus:outline-none"
+        className="absolute right-4 top-4 z-[5] m-0 grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent p-0 text-ink-muted transition hover:bg-white/60 hover:text-ink focus:outline-none"
         type="button"
         aria-label={historySidebarCollapsed ? "展开历史侧栏" : "收起历史侧栏"}
         aria-expanded={!historySidebarCollapsed}

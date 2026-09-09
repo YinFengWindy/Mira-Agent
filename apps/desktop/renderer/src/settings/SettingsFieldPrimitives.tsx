@@ -9,7 +9,7 @@ import { cx } from "../shared/styles";
 export const settingsInputClass = "w-full rounded-md border border-line bg-surface-soft px-2.5 py-2 text-body-sm text-ink transition placeholder:text-ink-faint hover:border-line-strong focus:bg-surface";
 
 /** Shared icon-only action styling for compact settings controls. */
-export const settingsIconButtonClass = "grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#667085] transition hover:bg-[#F3F6FA] hover:text-[#182230] focus:outline-none";
+export const settingsIconButtonClass = "grid h-8 w-8 shrink-0 place-items-center rounded-md text-ink-muted transition hover:bg-surface-hover hover:text-ink focus:outline-none";
 
 /** Renders a settings row containing the shared toggle control. */
 export function SettingsToggleField({
