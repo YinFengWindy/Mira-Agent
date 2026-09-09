@@ -1,0 +1,39 @@
+import { useCallback, useEffect, useState } from "react";
+import type { DesktopUpdateState } from "../../../src/updateContract.js";
+
+/** Subscribes to desktop updates without coupling them to backend settings loading. */
+export function useDesktopUpdates() {
+  const [state, setState] = useState<DesktopUpdateState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const acceptState = useCallback((next: DesktopUpdateState) => {
+    setState((current) => current && current.revision >= next.revision ? current : next);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let receivedEvent = false;
+    const unsubscribe = window.miraDesktop.updates.onState((next) => {
+      receivedEvent = true;
+      acceptState(next);
+      setError(null);
+    });
+    void window.miraDesktop.updates.getState().then((snapshot) => {
+      if (active) acceptState(snapshot);
+    }).catch((reason: unknown) => {
+      if (active && !receivedEvent) setError(reason instanceof Error ? reason.message : String(reason));
+    });
+    return () => { active = false; unsubscribe(); };
+  }, [acceptState]);
+
+  async function runCommand(command: "check" | "install") {
+    setError(null);
+    try {
+      if (command === "check") acceptState(await window.miraDesktop.updates.check());
+      else await window.miraDesktop.updates.install();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  }
+
+  return { state, error: error ?? state?.error, check: () => runCommand("check"), install: () => runCommand("install") };
+}

@@ -220,6 +220,8 @@ export type RendererDiagnosticPayload = {
 };
 
 export type DesktopApi = {
+  /** Reads and controls the Electron application update lifecycle. */
+  updates: import("../updateContract.js").DesktopUpdateApi;
   /** Identifies one main-process lifetime, including renderer reloads. */
   applicationSessionId(): Promise<string>;
   invoke(request: Omit<BridgeRequest, "id">): Promise<BridgeResponse>;

@@ -7,7 +7,8 @@ export type SettingsSectionId =
   | "memory"
   | "integrations"
   | "voice"
-  | "advanced";
+  | "advanced"
+  | "about";
 
 export const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
   { id: "models", label: "模型" },
@@ -16,6 +17,7 @@ export const settingsSections: Array<{ id: SettingsSectionId; label: string }> =
   { id: "integrations", label: "集成" },
   { id: "voice", label: "语音" },
   { id: "advanced", label: "高级" },
+  { id: "about", label: "关于" },
 ];
 
 type SettingsSidebarProps = {

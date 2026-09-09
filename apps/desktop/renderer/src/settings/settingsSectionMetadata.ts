@@ -29,6 +29,7 @@ export const settingsSubsections: Record<SettingsSectionId, SettingsSubsection[]
   advanced: [
     { id: "general", label: "基础" },
   ],
+  about: [{ id: "updates", label: "应用更新" }],
 };
 
 /** Builds the initial active subsection for each settings domain. */
@@ -40,6 +41,7 @@ export function createInitialSettingsSubsectionState(): Record<SettingsSectionId
     integrations: settingsSubsections.integrations[0]?.id ?? "",
     voice: settingsSubsections.voice[0]?.id ?? "",
     advanced: settingsSubsections.advanced[0]?.id ?? "",
+    about: settingsSubsections.about[0]?.id ?? "",
   };
 }
 
