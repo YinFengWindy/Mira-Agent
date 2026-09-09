@@ -42,7 +42,7 @@ export function Select({ value, options, onValueChange, disabled, id, name, clas
         {...aria}
         className={cx(
           className ?? inputClass,
-          "flex min-w-0 items-center justify-between gap-2 text-left transition focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:cursor-default disabled:opacity-50",
+          "flex min-w-0 items-center justify-between gap-2 text-left transition disabled:cursor-default disabled:opacity-50",
         )}
       >
         <SelectPrimitive.Value className="min-h-[1lh] min-w-0 truncate" />

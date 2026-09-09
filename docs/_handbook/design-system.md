@@ -153,7 +153,7 @@ restyle 之前的一批变量名仍然存在，它们都已指回语义层，渲
 
 焦点样式有**单一来源**，组件里不要重复实现：
 
-1. `styles.css:204` —— `input / textarea / select` 的 `:focus` 统一给"强调色边框 + 一层柔光晕"。
+1. `styles.css:204` —— `input / textarea / select / button[role="combobox"]` 的 `:focus` 统一给"强调色边框 + 一层柔光晕"。
    用 `:where()` 包住让特异性归零，所以刻意无边框的控件（如聊天输入区的 `ring-0`）能用工具类覆盖掉。
 2. `styles.css:343` —— 全局 `:focus-visible` 给 2px 的 `--color-ring` 描边，键盘焦点始终可见；
    指针点击不显示描边。
