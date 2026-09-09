@@ -203,7 +203,8 @@
      (e.g. the chat composer's ring-0) can still opt out via utilities. */
   input:where(:focus),
   textarea:where(:focus),
-  select:where(:focus) {
+  select:where(:focus),
+  button:where([role="combobox"]:focus) {
     outline: none;
     border-color: var(--color-border-accent);
     box-shadow: 0 0 0 1px var(--color-ring-soft);
