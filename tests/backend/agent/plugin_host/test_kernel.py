@@ -191,6 +191,28 @@ async def test_disabled_marker_skips_plugin(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_config_enabled_false_skips_plugin(tmp_path: Path):
+    """启停(issue #174)的来源是配置状态，不是 plugin.disabled 文件。"""
+    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    kernel = make_kernel(
+        [tmp_path], event_bus=EventBus(), plugin_configs={"hello": {"enabled": False}},
+    )
+    await kernel.load_all()
+
+    assert kernel.loaded_count == 0
+    assert any(item["state"] == PluginState.DISABLED.name for item in kernel.states())
+
+
+@pytest.mark.asyncio
+async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
+    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+
+    assert kernel.loaded_count == 1
+
+
+@pytest.mark.asyncio
 async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
     kernel = make_kernel([FIXTURES_DIR, FIXTURES_DIR], event_bus=EventBus())
     records = kernel.discover()

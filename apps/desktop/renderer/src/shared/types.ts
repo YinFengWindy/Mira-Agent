@@ -410,7 +410,8 @@ export type AppMainView =
   | { kind: "role-create" }
   | { kind: "role-detail"; roleId: string }
   | { kind: "role-assets"; roleId: string }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "plugin-page"; pageId: string };
 
 export type {
   SettingsFormData,

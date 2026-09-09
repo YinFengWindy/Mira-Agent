@@ -13,3 +13,14 @@ export type SettingsSectionEditorProps = {
   subsectionId: string;
   updateDraft: SettingsDraftUpdater;
 };
+
+/** One tab within a settings section's sub-navigation. */
+export type SettingsSubsection = {
+  id: string;
+  label: string;
+};
+
+/** Props for a settings section that owns its own data (no shared draft). */
+export type StandaloneSettingsSectionProps = {
+  subsectionId: string;
+};

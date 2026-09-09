@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import tomllib
 from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,72 @@ class RuntimeApplyError(ValueError):
         super().__init__(message)
         self.code = error_code
         self.details = details
+
+
+def read_plugin_table(config_toml: str, plugin_id: str) -> dict[str, Any]:
+    """Returns the ``[plugins.<plugin_id>]`` table from a config document.
+
+    Callers that derive a new table from the current one need to read it
+    inside the settings lock (see ``RuntimeSettingsApplication.apply``'s
+    ``build_config_toml``), so they parse the text they were handed rather
+    than the runtime's possibly-newer ``AppRuntime.config``.
+    """
+
+    try:
+        document = tomllib.loads(config_toml)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeApplyError(
+            "plugin_config_unrepresentable", f"当前配置无法解析: {exc}",
+        ) from exc
+    return dict(document.get("plugins", {}).get(plugin_id, {}))
+
+
+def assert_plugin_table_isolated(
+    plugin_id: str, original_text: str, merged_text: str,
+) -> dict[str, Any]:
+    """Rejects a ``[plugins.<plugin_id>]`` merge that touched anything else.
+
+    Shared by every caller that text-splices one plugin's table
+    (``plugin.config.set``, the plugin enable/disable toggle) so the same
+    "parses both documents, only the target table may differ" guard is not
+    reimplemented per caller. Schema-specific re-validation (pydantic
+    round-trip) is the caller's own concern on top of this; this function
+    only proves the merge did not corrupt anything *outside* the target
+    table. Returns the merged document's own ``plugins.<plugin_id>`` table
+    (``{}`` when absent) for the caller to validate further.
+    """
+
+    try:
+        before = tomllib.loads(original_text)
+    except tomllib.TOMLDecodeError as exc:
+        # The pre-merge text is the config the runtime is already running
+        # with, so a decode failure here indicates a bug upstream of this
+        # module rather than a user mistake — but never assume anything
+        # about it and refuse the write regardless.
+        raise RuntimeApplyError(
+            "plugin_config_unrepresentable", f"当前配置无法解析: {exc}",
+        ) from exc
+    try:
+        after = tomllib.loads(merged_text)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeApplyError(
+            "plugin_config_unrepresentable", f"合并后的配置无法解析: {exc}",
+        ) from exc
+    if _without_plugin_table(before, plugin_id) != _without_plugin_table(after, plugin_id):
+        raise RuntimeApplyError(
+            "plugin_config_unrepresentable",
+            "合并后配置中出现了与目标插件无关的改动，写入已取消",
+        )
+    return dict(after.get("plugins", {}).get(plugin_id, {}))
+
+
+def _without_plugin_table(document: dict[str, Any], plugin_id: str) -> dict[str, Any]:
+    """Returns a shallow copy of ``document`` with ``plugins.<plugin_id>`` removed."""
+    rest = dict(document)
+    plugins = dict(rest.get("plugins", {}))
+    plugins.pop(plugin_id, None)
+    rest["plugins"] = plugins
+    return rest
 
 
 class RuntimeSettingsApplication:

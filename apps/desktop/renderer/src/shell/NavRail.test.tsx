@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { NavRail } from "./NavRail.js";
+import { NavRail, pluginNavRailViewId } from "./NavRail.js";
 
 function renderRail(overrides?: Partial<Parameters<typeof NavRail>[0]>) {
   return renderToStaticMarkup(
@@ -41,4 +41,13 @@ describe("NavRail", () => {
     assert.match(unreadMarkup, /bg-danger/);
   });
 
+  it("renders a plugin nav.page entry between story and settings, active when selected", () => {
+    const markup = renderRail({
+      activeView: pluginNavRailViewId("demo"),
+      pluginEntries: [{ pageId: "demo", label: "Demo 页面", onSelect: () => undefined }],
+    });
+
+    assert.match(markup, /aria-label="Demo 页面"/);
+    assert.match(markup, /aria-label="Demo 页面"[^>]*aria-current="page"/);
+  });
 });

@@ -45,10 +45,13 @@ def make_kernel(
     tools: ToolRegistry | None = None,
     namespace: str = "",
     strict: bool = False,
+    plugin_configs: dict[str, dict] | None = None,
 ) -> PluginKernel:
     return PluginKernel(
         plugin_dirs,
-        services=HostServices(event_bus=event_bus, tool_registry=tools),
+        services=HostServices(
+            event_bus=event_bus, tool_registry=tools, plugin_configs=plugin_configs or {},
+        ),
         namespace=namespace,
         strict=strict,
     )

@@ -4,21 +4,43 @@ import { cx } from "../shared/styles";
 
 const novelAiLogoDark = new URL("../assets/novelai-logo-dark.svg", import.meta.url).href;
 
-/** Identifies the workspace a rail entry points to; null when no view entry is active. */
-export type NavRailViewId = "messages" | "roles" | "image" | "story" | "settings";
+/**
+ * Identifies the workspace a rail entry points to; null when no view entry
+ * is active. Widened to a plain string so a plugin's nav.page (identified
+ * as `plugin:<id>`) can be an active target alongside the fixed built-in
+ * surfaces without another exhaustive union to maintain.
+ */
+export type NavRailViewId = string;
+
+/** Builds the stable rail id for a plugin's nav.page entry. */
+export function pluginNavRailViewId(pageId: string): NavRailViewId {
+  return `plugin:${pageId}`;
+}
+
+/** Icon contract shared by built-in phosphor icons and a plugin's own icon component. */
+type NavRailIcon = React.ComponentType<{ className?: string }>;
 
 type NavRailEntry = {
   id: NavRailViewId | "search";
   label: string;
-  icon?: typeof Chats;
+  icon?: NavRailIcon;
   imageSrc?: string;
   onSelect: () => void;
   showUnreadBadge?: boolean;
 };
 
+/** A plugin-contributed nav.page entry rendered alongside the built-in rail icons. */
+export type NavRailPluginEntry = {
+  pageId: string;
+  label: string;
+  icon?: NavRailIcon;
+  onSelect: () => void;
+};
+
 type NavRailProps = {
   activeView: NavRailViewId | null;
   unreadTotal: number;
+  pluginEntries?: NavRailPluginEntry[];
   onOpenSearch: () => void;
   onBackToChat: () => void;
   onOpenRolesWorkspace: () => void;
@@ -34,6 +56,7 @@ const railButtonClass =
 export function NavRail({
   activeView,
   unreadTotal,
+  pluginEntries = [],
   onOpenSearch,
   onBackToChat,
   onOpenRolesWorkspace,
@@ -47,6 +70,12 @@ export function NavRail({
     { id: "roles", label: "角色", icon: Users, onSelect: onOpenRolesWorkspace },
     { id: "image", label: "生图", imageSrc: novelAiLogoDark, onSelect: onOpenImageStudio },
     { id: "story", label: "故事", icon: BookOpenText, onSelect: onOpenStory },
+    ...pluginEntries.map((entry) => ({
+      id: pluginNavRailViewId(entry.pageId),
+      label: entry.label,
+      icon: entry.icon,
+      onSelect: entry.onSelect,
+    })),
   ];
 
   function renderEntry(entry: NavRailEntry): React.ReactNode {
@@ -68,7 +97,7 @@ export function NavRail({
         onClick={entry.onSelect}
       >
         {entry.imageSrc ? <img className="h-[19px] w-[19px]" src={entry.imageSrc} alt="" /> : null}
-        {!entry.imageSrc && Icon ? <Icon className="h-[19px] w-[19px]" weight="regular" aria-hidden="true" /> : null}
+        {!entry.imageSrc && Icon ? <span aria-hidden="true"><Icon className="h-[19px] w-[19px]" /></span> : null}
         {showBadge ? (
           <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-danger" aria-hidden="true" />
         ) : null}

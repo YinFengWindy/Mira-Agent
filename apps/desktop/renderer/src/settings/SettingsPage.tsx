@@ -1,19 +1,21 @@
 import { useState } from "react";
+import { pluginUiRegistry } from "../plugins/pluginUiRegistry";
 import { SettingsSaveFeedback } from "./SettingsSaveFeedback";
 import { SettingsSectionContent } from "./SettingsSectionContent";
-import { type SettingsSectionId, settingsSections } from "./SettingsSidebar";
+import type { SettingsSectionId } from "./SettingsSidebar";
 import {
   createInitialSettingsSubsectionState,
+  getSettingsSubsections,
   resolveSettingsSubsectionId,
-  settingsSubsections,
 } from "./settingsSectionMetadata";
 import { useSettingsPageController } from "./useSettingsPageController";
 import { cardClass, cx } from "../shared/styles";
-import { AboutSettingsPage } from "./AboutSettingsPage";
 
 type SettingsPageProps = {
   bridgeReady: boolean;
   section: SettingsSectionId;
+  /** Hides a plugin's section immediately once its plugin is disabled (issue #174 AC 3). */
+  isSectionVisible?: (sectionId: SettingsSectionId) => boolean;
 };
 
 /** Shared surface style for every settings page state. */
@@ -22,17 +24,31 @@ export const settingsPageSurfaceClass = "settings-page bg-gradient-app bg-fixed"
 /** Responsive spacing for the scrollable settings content. */
 export const settingsContentClass = "relative scrollbar-soft overflow-y-auto px-4 py-8 sm:px-10 lg:px-16 lg:py-10";
 
-/** Renders the active settings domain and delegates persistence to its controller. */
+/**
+ * Renders the active settings domain and delegates persistence to its
+ * controller. A "standalone" section (About, and any plugin-contributed
+ * settings.section — both own their data end to end) renders immediately,
+ * without waiting on or depending on the shared settings draft; an
+ * "editor" section shares the draft/autosave controller mounted below.
+ */
 export function SettingsPage({
   bridgeReady,
   section,
+  isSectionVisible = () => true,
 }: SettingsPageProps) {
-  return section === "about" ? <AboutSettingsPage /> : <EditableSettingsPage bridgeReady={bridgeReady} section={section} />;
+  const entry = isSectionVisible(section) ? pluginUiRegistry.getSettingsSection(section) : undefined;
+  if (entry?.kind === "standalone") {
+    const StandaloneComponent = entry.Component;
+    const subsectionId = entry.subsections[0]?.id ?? "";
+    return <StandaloneComponent subsectionId={subsectionId} />;
+  }
+  return <EditableSettingsPage bridgeReady={bridgeReady} section={section} isSectionVisible={isSectionVisible} />;
 }
 
 function EditableSettingsPage({
   bridgeReady,
   section,
+  isSectionVisible = () => true,
 }: SettingsPageProps) {
   const [activeSubsections, setActiveSubsections] = useState<Record<SettingsSectionId, string>>(
     createInitialSettingsSubsectionState,
@@ -57,9 +73,9 @@ function EditableSettingsPage({
     );
   }
 
-  const currentSection = settingsSections.find((item) => item.id === section) ?? settingsSections[0] ?? null;
+  const currentSection = isSectionVisible(section) ? pluginUiRegistry.getSettingsSection(section) : undefined;
   const currentId = currentSection?.id ?? null;
-  const visibleSubsections = currentId ? settingsSubsections[currentId] : [];
+  const visibleSubsections = currentId ? getSettingsSubsections(currentId) : [];
   const currentSubsectionId = currentId
     ? resolveSettingsSubsectionId(currentId, activeSubsections)
     : null;
@@ -114,7 +130,7 @@ function EditableSettingsPage({
               ) : null}
             </header>
           )}
-          {currentId && currentId !== "about" && currentSubsectionId ? (
+          {currentId && currentSubsectionId ? (
             <SettingsSectionContent
               sectionId={currentId}
               subsectionId={currentSubsectionId}

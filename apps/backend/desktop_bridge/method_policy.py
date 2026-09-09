@@ -40,6 +40,7 @@ class Handler(Enum):
     SETTINGS = "settings"
     ROLE_TASKS = "role_tasks"
     PLUGIN_CONFIG = "plugin_config"
+    PLUGIN_MANAGEMENT = "plugin_management"
 
 
 class OwnerRouting(Enum):
@@ -75,6 +76,13 @@ METHOD_POLICIES: dict[str, MethodPolicy] = {
     "plugin.config.set": MethodPolicy(
         # 写入复用设置事务自己的串行锁，语义与 runtime.apply 一致
         concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
+    ),
+    "plugins.list": MethodPolicy(
+        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.PLUGIN_MANAGEMENT,
+    ),
+    "plugins.setEnabled": MethodPolicy(
+        # 同样复用设置事务自己的串行锁：启停一律走一次完整的生成代切换
+        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_MANAGEMENT,
     ),
     "roles.tasks.list": MethodPolicy(
         concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.ROLE_TASKS,

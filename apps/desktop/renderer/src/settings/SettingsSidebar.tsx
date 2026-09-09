@@ -1,26 +1,29 @@
 import type React from "react";
+import { pluginUiRegistry } from "../plugins/pluginUiRegistry";
 import { cx, secondarySidebarSurfaceClass, sidebarNavItemClass } from "../shared/styles";
+import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSections";
 
-export type SettingsSectionId =
-  | "models"
-  | "channels"
-  | "memory"
-  | "integrations"
-  | "voice"
-  | "advanced"
-  | "about";
+registerBuiltinSettingsSections();
 
-export const settingsSections: Array<{ id: SettingsSectionId; label: string }> = [
-  { id: "models", label: "模型" },
-  { id: "channels", label: "频道" },
-  { id: "memory", label: "记忆" },
-  { id: "integrations", label: "集成" },
-  { id: "voice", label: "语音" },
-  { id: "advanced", label: "高级" },
-  { id: "about", label: "关于" },
-];
+/**
+ * Identifies a settings.section registry entry. Widened from a fixed
+ * literal union to a plain string because sections are no longer an
+ * exhaustive, hand-enumerated set: plugins register their own ids into
+ * `pluginUiRegistry` at build time.
+ */
+export type SettingsSectionId = string;
+
+/** Sidebar entries for every currently registered settings section. */
+export function listSettingsSidebarSections(
+  isPluginEnabled?: (pluginId: string) => boolean,
+): Array<{ id: SettingsSectionId; label: string }> {
+  return pluginUiRegistry
+    .listSettingsSections(isPluginEnabled)
+    .map((entry) => ({ id: entry.id, label: entry.label }));
+}
 
 type SettingsSidebarProps = {
+  sections?: Array<{ id: SettingsSectionId; label: string }>;
   activeSection: SettingsSectionId;
   collapsed: boolean;
   animating: boolean;
@@ -30,6 +33,7 @@ type SettingsSidebarProps = {
 };
 
 export function SettingsSidebar({
+  sections = listSettingsSidebarSections(),
   activeSection,
   collapsed,
   animating,
@@ -55,7 +59,7 @@ export function SettingsSidebar({
     >
       <nav className="scrollbar-soft grid min-h-0 content-start gap-1 overflow-y-auto px-2 pr-0">
         <div className="grid gap-1">
-          {settingsSections.map((section) => <button
+          {sections.map((section) => <button
               key={section.id}
               className={cx(
                 sidebarActionClass,

@@ -1,4 +1,5 @@
 import type { DesktopApi, SettingsFormData, SettingsSaveOptions, SettingsSnapshot } from "../../../src/bridge/shared.js";
+import { SerialDraftQueue } from "../shared/serialDraftQueue.js";
 import { cloneSettings, saveSettingsPageData, settingsEqual } from "./settingsPersistence.js";
 import type { SettingsSavePhase } from "./settingsPageTypes.js";
 
@@ -8,79 +9,56 @@ type SaveQueueOptions = {
   onStatus: (phase: SettingsSavePhase, message: string) => void;
 };
 
+// Error codes the user can still fix by editing further, without reloading first.
+const _RECOVERABLE_WITHOUT_RELOAD = [
+  "settings_validation_error", "runtime_config_invalid", "runtime_apply_failed", "runtime_invalid_request",
+];
+
+type Applied = { snapshot: SettingsSnapshot; nextDraft: SettingsFormData };
+
 /** Serializes automatic saves and retains a failed transaction's identity for explicit retries. */
 export class SettingsSaveQueue {
   private generation?: number;
-  private running = false;
-  private failed = false;
-  private paused = false;
-  private queued: SettingsFormData | null = null;
-  private attempted: SettingsFormData | null = null;
-  private attemptOptions: SettingsSaveOptions | null = null;
+  private readonly core: SerialDraftQueue<SettingsFormData, Applied>;
 
-  constructor(private readonly options: SaveQueueOptions) {}
+  constructor(private readonly options: SaveQueueOptions) {
+    this.core = new SerialDraftQueue<SettingsFormData, Applied>({
+      isEqual: settingsEqual,
+      clone: cloneSettings,
+      attempt: (draft, operationId) => this.attempt(draft, operationId),
+      onApplied: (applied, submitted) => this.options.onApplied(applied.snapshot, submitted, applied.nextDraft),
+      onStatus: (phase, message) => this.options.onStatus(phase, message),
+    });
+  }
 
   /** Seeds the version from a freshly loaded backend snapshot. */
-  reset(generation: number | undefined) {
+  reset(generation: number | undefined): void {
     this.generation = generation;
-    this.failed = false;
-    this.paused = false;
-    this.queued = null;
-    this.attempted = null;
-    this.attemptOptions = null;
+    this.core.reset();
   }
 
   /** Schedules the newest draft; failed requests pause subsequent writes until retry or reload. */
-  enqueue(draft: SettingsFormData, persisted?: SettingsFormData) {
-    if (!this.running && !this.failed && settingsEqual(persisted ?? null, draft)) {
-      this.queued = null;
-      return;
-    }
-    if (settingsEqual(this.attempted, draft)) {
-      this.queued = null;
-      return;
-    }
-    this.queued = cloneSettings(draft);
-    if (!this.running && !this.paused) void this.drain();
+  enqueue(draft: SettingsFormData, persisted?: SettingsFormData): void {
+    this.core.enqueue(draft, persisted);
   }
 
   /** Retries the exact failed transaction before processing any newer queued edits. */
-  retry() {
-    if (this.running || !this.failed || !this.attempted) return;
-    this.failed = false;
-    void this.drain(this.attempted);
+  retry(): void {
+    this.core.retry();
   }
 
-  private async drain(retry?: SettingsFormData) {
-    const draft = retry ?? this.queued;
-    if (!draft) return;
-    if (!retry) {
-      this.queued = null;
-      this.attempted = cloneSettings(draft);
-      this.attemptOptions = { expectedGeneration: this.generation, operationId: crypto.randomUUID() };
+  private async attempt(draft: SettingsFormData, operationId: string) {
+    const attemptOptions: SettingsSaveOptions = { expectedGeneration: this.generation, operationId };
+    const result = await saveSettingsPageData(this.options.api, draft, attemptOptions);
+    if (!result.saveResult.ok || !result.snapshot) {
+      const code = result.saveResult.error?.code ?? "";
+      return {
+        ok: false as const,
+        retryable: _RECOVERABLE_WITHOUT_RELOAD.includes(code),
+        message: result.saveResult.error?.message ?? "配置应用失败。",
+      };
     }
-    this.running = true;
-    this.failed = false;
-    this.options.onStatus("saving", "");
-    try {
-      const result = await saveSettingsPageData(this.options.api, draft, this.attemptOptions ?? undefined);
-      if (!result.saveResult.ok || !result.snapshot) {
-        this.failed = true;
-        this.paused = !["settings_validation_error", "runtime_config_invalid", "runtime_apply_failed", "runtime_invalid_request"].includes(result.saveResult.error?.code ?? "");
-        this.options.onStatus("error", result.saveResult.error?.message ?? "配置应用失败。");
-        return;
-      }
-      this.generation = result.saveResult.generation;
-      this.paused = false;
-      this.options.onApplied(result.snapshot, draft, result.nextDraft);
-      this.options.onStatus("idle", "");
-    } catch (error) {
-      this.failed = true;
-      this.paused = true;
-      this.options.onStatus("error", error instanceof Error ? error.message : String(error));
-    } finally {
-      this.running = false;
-      if (!this.paused && this.queued) void this.drain();
-    }
+    this.generation = result.saveResult.generation;
+    return { ok: true as const, result: { snapshot: result.snapshot, nextDraft: result.nextDraft } };
   }
 }

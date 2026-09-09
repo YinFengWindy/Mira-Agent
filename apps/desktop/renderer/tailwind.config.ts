@@ -8,6 +8,10 @@ export default {
   content: [
     resolve(here, "index.html"),
     resolve(here, "src/**/*.{ts,tsx}"),
+    // Plugin UI lives outside renderer/ (top-level plugins/<id>/ui/, see
+    // issue #174); without this Tailwind never scans it and any class name
+    // used only there is silently dropped from the production build.
+    resolve(here, "../../../plugins/*/ui/**/*.{ts,tsx}"),
   ],
   theme: {
     extend: {

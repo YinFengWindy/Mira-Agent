@@ -24,6 +24,7 @@ from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
 from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.runtime.plugin_config import RuntimePluginConfig
+from desktop_bridge.runtime.plugin_management import RuntimePluginManagement
 from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 from desktop_bridge.service import DesktopBridgeService
 
@@ -50,6 +51,7 @@ class ReloadableDesktopService:
         self.settings = RuntimeSettingsApplication(app, config_path, roles)
         self.role_tasks = RuntimeRoleTasks(app, roles)
         self.plugin_config = RuntimePluginConfig(app, self.settings)
+        self.plugin_management = RuntimePluginManagement(app, self.settings)
         lease = app.pin()
         self._current = _ServiceGeneration(build_desktop_service(lease.core, roles), lease)
         self._entries = [self._current]
@@ -124,6 +126,21 @@ class ReloadableDesktopService:
                         payload, prepare_service=self._prepare, publish_service=self._publish,
                     )
                 )
+                return BridgeResponse(request_id, "response", method, result)
+            except RuntimeApplyError as exc:
+                return BridgeResponse(request_id, "response", method,
+                                      error=BridgeError(exc.code, str(exc), exc.details))
+        if policy.handler is Handler.PLUGIN_MANAGEMENT:
+            try:
+                result = (
+                    self.plugin_management.list(payload) if method == "plugins.list"
+                    else await self.plugin_management.set_enabled(
+                        payload, prepare_service=self._prepare, publish_service=self._publish,
+                    )
+                )
+                if method == "plugins.setEnabled":
+                    await self.publish_event({"id": request_id, "type": "event",
+                                              "method": "plugins.updated", "payload": result})
                 return BridgeResponse(request_id, "response", method, result)
             except RuntimeApplyError as exc:
                 return BridgeResponse(request_id, "response", method,

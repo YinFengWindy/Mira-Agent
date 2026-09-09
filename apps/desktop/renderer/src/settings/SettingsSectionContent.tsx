@@ -1,33 +1,27 @@
-import { AdvancedSettingsSection } from "./AdvancedSettingsSection";
-import { ChannelsSettingsSection } from "./ChannelsSettingsSection";
-import { IntegrationsSettingsSection } from "./IntegrationsSettingsSection";
-import { MemorySettingsSection } from "./MemorySettingsSection";
-import { ModelsSettingsSection } from "./ModelsSettingsSection";
-import { VoiceSettingsSection } from "./VoiceSettingsSection";
+import { pluginUiRegistry } from "../plugins/pluginUiRegistry";
+import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSections";
 import type { SettingsSectionId } from "./SettingsSidebar";
 import type { SettingsSectionEditorProps } from "./settingsPageTypes";
 
+registerBuiltinSettingsSections();
+
 type SettingsSectionContentProps = SettingsSectionEditorProps & {
-  sectionId: Exclude<SettingsSectionId, "about">;
+  sectionId: SettingsSectionId;
 };
 
-/** Routes the active settings domain to its focused editor component. */
+/**
+ * Routes the active settings domain to its registered "editor" component.
+ * Replaces the previous exhaustive switch: sections are looked up in
+ * `pluginUiRegistry` instead of being an enumerable, hand-maintained set,
+ * so a plugin's own draft-backed section (if it ever needs one) resolves
+ * the same way a built-in one does.
+ */
 export function SettingsSectionContent({
   sectionId,
   ...editorProps
 }: SettingsSectionContentProps) {
-  switch (sectionId) {
-    case "models":
-      return <ModelsSettingsSection {...editorProps} />;
-    case "channels":
-      return <ChannelsSettingsSection {...editorProps} />;
-    case "memory":
-      return <MemorySettingsSection {...editorProps} />;
-    case "integrations":
-      return <IntegrationsSettingsSection {...editorProps} />;
-    case "voice":
-      return <VoiceSettingsSection {...editorProps} />;
-    case "advanced":
-      return <AdvancedSettingsSection {...editorProps} />;
-  }
+  const entry = pluginUiRegistry.getSettingsSection(sectionId);
+  if (!entry || entry.kind !== "editor") return null;
+  const Component = entry.Component;
+  return <Component {...editorProps} />;
 }
