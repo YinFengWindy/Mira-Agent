@@ -19,6 +19,7 @@ test("the about route stays available while the backend is offline", async () =>
   try {
     await view.render(<SettingsPage bridgeReady={false} section="about" />);
     assert.match(view.container.textContent ?? "", /当前版本 v0.2.0/);
+    assert.doesNotMatch(view.container.textContent ?? "", /开发模式/);
     assert.equal(view.container.querySelector("button")?.disabled, true);
     assert.equal(settingsReads, 0);
   } finally { await view.cleanup(); }

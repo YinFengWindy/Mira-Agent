@@ -10,6 +10,7 @@ test("the visible update action checks, reports progress and installs only a rea
   let notify!: (state: DesktopUpdateState) => void;
   let checks = 0;
   let installs = 0;
+  const opened: string[] = [];
   const snapshot: DesktopUpdateState = { revision: 0, currentVersion: "0.2.0", phase: "idle", latestVersion: null, progress: 0, error: null };
   const api: DesktopUpdateApi = {
     getState: async () => snapshot,
@@ -17,7 +18,10 @@ test("the visible update action checks, reports progress and installs only a rea
     install: async () => { installs += 1; },
     onState: (listener) => { notify = listener; return () => undefined; },
   };
-  Object.defineProperty(window, "miraDesktop", { configurable: true, value: { updates: api } });
+  Object.defineProperty(window, "miraDesktop", { configurable: true, value: {
+    updates: api,
+    openExternal: async (url: string) => { opened.push(url); return { ok: true, error: null }; },
+  } });
   try {
     await view.render(<AboutSettingsPage />);
     assert.match(view.container.textContent ?? "", /当前版本 v0.2.0/);
@@ -34,6 +38,12 @@ test("the visible update action checks, reports progress and installs only a rea
     assert.equal(button.disabled, false);
     await act(async () => button.click());
     assert.equal(installs, 1);
+    for (const link of Array.from(view.container.querySelectorAll("a"))) await act(async () => link.click());
+    assert.deepEqual(opened, [
+      "https://github.com/YinFengWindy/Shiori-Agent/releases/latest",
+      "https://github.com/YinFengWindy/Shiori-Agent",
+      "mailto:3174898512@qq.com",
+    ]);
   } finally { await view.cleanup(); }
 });
 
