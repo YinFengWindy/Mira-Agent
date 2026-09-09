@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SerialDraftQueue } from "../shared/serialDraftQueue";
-import type { SettingsSavePhase } from "../settings/settingsPageTypes";
+import { SerialDraftQueue, type DraftSavePhase } from "../shared/serialDraftQueue";
 import { PluginBridgeError, createPluginBridgeClient, type PluginConfigSaveResult, type PluginConfigSnapshot } from "./pluginBridgeClient";
 
 type PluginConfigValues = Record<string, unknown>;
@@ -8,7 +7,7 @@ type PluginConfigValues = Record<string, unknown>;
 // A validation rejection is the only failure the user can fix by editing
 // further without reloading; anything else (TOML round-trip issues,
 // unexpected backend errors) pauses until an explicit retry or reload.
-const _RECOVERABLE_WITHOUT_RELOAD = new Set(["plugin_config_invalid"]);
+const RECOVERABLE_WITHOUT_RELOAD = new Set(["plugin_config_invalid"]);
 
 function cloneValues(values: PluginConfigValues): PluginConfigValues {
   return JSON.parse(JSON.stringify(values)) as PluginConfigValues;
@@ -32,7 +31,7 @@ export function usePluginConfigController(pluginId: string) {
   const [snapshot, setSnapshot] = useState<PluginConfigSnapshot | null>(null);
   const [draft, setDraft] = useState<PluginConfigValues | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [savePhase, setSavePhase] = useState<SettingsSavePhase>("idle");
+  const [savePhase, setSavePhase] = useState<DraftSavePhase>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const loadRequestIdRef = useRef(0);
   const client = useMemo(() => createPluginBridgeClient(), []);
@@ -48,7 +47,7 @@ export function usePluginConfigController(pluginId: string) {
         if (error instanceof PluginBridgeError) {
           return {
             ok: false,
-            retryable: _RECOVERABLE_WITHOUT_RELOAD.has(error.code),
+            resumesAutomatically: RECOVERABLE_WITHOUT_RELOAD.has(error.code),
             message: error.message,
           };
         }

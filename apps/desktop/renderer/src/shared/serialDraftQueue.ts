@@ -1,9 +1,24 @@
-import type { SettingsSavePhase } from "../settings/settingsPageTypes.js";
+/**
+ * Status of one draft's save lifecycle. Owned here (not in a settings-domain
+ * module) because `SerialDraftQueue` itself is domain-agnostic — plugin
+ * config autosave uses it too — and `shared/` must not depend on any
+ * specific domain module. `settings/settingsPageTypes.ts` re-exports this
+ * under its historical name, `SettingsSavePhase`, for its own consumers.
+ */
+export type DraftSavePhase = "idle" | "saving" | "error";
 
-/** Outcome of one submission attempt against the backend. */
+/**
+ * Outcome of one submission attempt against the backend. `resumesAutomatically`
+ * names what it actually controls: whether the *next* edit the user makes is
+ * enough to try again on its own (true), or whether nothing but an explicit
+ * `retry()` (or a reload) will submit anything further (false). The
+ * previous name, `retryable`, was backwards in practice — a `retryable:
+ * false` outcome is exactly the one that can *only* move forward through
+ * `retry()`; the `true` case never needs it at all.
+ */
 export type DraftAttemptOutcome<TResult> =
   | { ok: true; result: TResult }
-  | { ok: false; message: string; retryable: boolean };
+  | { ok: false; message: string; resumesAutomatically: boolean };
 
 export type SerialDraftQueueOptions<TDraft, TResult> = {
   /** Structural equality used to collapse no-op edits and detect obsolete queued drafts. */
@@ -14,7 +29,7 @@ export type SerialDraftQueueOptions<TDraft, TResult> = {
   attempt: (draft: TDraft, operationId: string) => Promise<DraftAttemptOutcome<TResult>>;
   /** Called once an attempt succeeds, with the backend result and the draft that produced it. */
   onApplied: (result: TResult, submitted: TDraft) => void;
-  onStatus: (phase: SettingsSavePhase, message: string) => void;
+  onStatus: (phase: DraftSavePhase, message: string) => void;
 };
 
 /**
@@ -65,7 +80,7 @@ export class SerialDraftQueue<TDraft, TResult> {
     void this.drain(this.attempted);
   }
 
-  private async drain(retry?: TDraft): Promise<void> {
+  private async drain(retry?: TDraft) {
     const draft = retry ?? this.queued;
     if (!draft) return;
     if (!retry) {
@@ -80,7 +95,7 @@ export class SerialDraftQueue<TDraft, TResult> {
       const outcome = await this.options.attempt(draft, this.attemptOperationId!);
       if (!outcome.ok) {
         this.failed = true;
-        this.paused = !outcome.retryable;
+        this.paused = !outcome.resumesAutomatically;
         this.options.onStatus("error", outcome.message);
         return;
       }

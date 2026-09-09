@@ -4,13 +4,17 @@ import { cx } from "../shared/styles";
 
 const novelAiLogoDark = new URL("../assets/novelai-logo-dark.svg", import.meta.url).href;
 
+/** The rail's fixed built-in workspace targets (excludes the "search" action button, which never becomes an active view). */
+export type BuiltinNavRailViewId = "messages" | "roles" | "image" | "story" | "settings";
+
 /**
  * Identifies the workspace a rail entry points to; null when no view entry
- * is active. Widened to a plain string so a plugin's nav.page (identified
- * as `plugin:<id>`) can be an active target alongside the fixed built-in
- * surfaces without another exhaustive union to maintain.
+ * is active. Also accepts a plugin's `plugin:<id>` nav.page id alongside the
+ * fixed built-in surfaces, without another exhaustive union to maintain.
+ * `(string & {})` (rather than plain `string`) keeps compile-time literal
+ * narrowing for the built-in ids instead of collapsing to `string`.
  */
-export type NavRailViewId = string;
+export type NavRailViewId = BuiltinNavRailViewId | (string & {});
 
 /** Builds the stable rail id for a plugin's nav.page entry. */
 export function pluginNavRailViewId(pageId: string): NavRailViewId {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SettingsField } from "../settings/SettingsField";
 import {
   SettingsSecretInput,
@@ -8,7 +8,7 @@ import {
 } from "../settings/SettingsFieldPrimitives";
 import { SettingsSaveFeedback } from "../settings/SettingsSaveFeedback";
 import { parseSettingsNumber } from "../settings/settingsSectionUtils";
-import { cardClass, cx, ghostButtonClass } from "../shared/styles";
+import { cardClass, cx, ghostButtonClass, textareaClass } from "../shared/styles";
 import { describePluginConfigFields, type PluginConfigField } from "./jsonSchemaForm";
 import { usePluginConfigController } from "./usePluginConfigController";
 
@@ -77,28 +77,46 @@ function FieldRow({ field, value, onChange }: FieldRowProps) {
   );
 }
 
-/** Raw JSON editor for fields whose shape (array/object/$ref) has no dedicated control. */
+/**
+ * Raw JSON editor for fields whose shape (array/object/$ref) has no
+ * dedicated control. Resyncs its text from `value` whenever that value
+ * changed for a reason other than this field's own last edit (e.g.
+ * `reloadConfig` replacing the whole draft) — otherwise a reload after this
+ * field mounted would leave the textarea showing stale content.
+ */
 function JsonFieldRow({ field, value, onChange }: FieldRowProps) {
   const [text, setText] = useState(() => JSON.stringify(value ?? null, null, 2));
   const [invalid, setInvalid] = useState(false);
+  const pendingLocalEditRef = useRef(false);
+
+  useEffect(() => {
+    if (pendingLocalEditRef.current) {
+      pendingLocalEditRef.current = false;
+      return;
+    }
+    setText(JSON.stringify(value ?? null, null, 2));
+    setInvalid(false);
+  }, [value]);
 
   return (
     <SettingsField label={field.label} hint={field.hint} layout="stack">
       <textarea
-        className={cx(settingsInputClass, "min-h-[120px] font-mono text-[12px]", invalid && "border-danger")}
+        className={cx(textareaClass, "font-mono text-body-sm", invalid && "border-danger")}
         value={text}
         onChange={(event) => {
           const nextText = event.target.value;
           setText(nextText);
           try {
-            onChange(JSON.parse(nextText));
+            const parsed = JSON.parse(nextText);
+            pendingLocalEditRef.current = true;
+            onChange(parsed);
             setInvalid(false);
           } catch {
             setInvalid(true);
           }
         }}
       />
-      {invalid ? <p className="mt-1 text-[11px] text-danger-text">JSON 格式无效，未保存的更改暂不会生效。</p> : null}
+      {invalid ? <p className="mt-1 text-caption text-danger-text">JSON 格式无效</p> : null}
     </SettingsField>
   );
 }

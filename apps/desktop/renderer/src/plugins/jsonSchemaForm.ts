@@ -12,7 +12,13 @@
  * writes correctly because the backend re-validates the whole submission.
  */
 
-/** A JSON Schema fragment, permissive enough to cover pydantic's exports. */
+/**
+ * A JSON Schema fragment, permissive enough to cover pydantic's exports.
+ * Only lists the fields this module actually reads: a raw JSON Schema may
+ * carry `items`/`$ref`/`$defs`/`default` too, but nothing here inspects
+ * them (an unresolved `$ref`/array/object property already falls back to
+ * the raw JSON field kind without needing to resolve it further).
+ */
 export type JsonSchema = {
   type?: string | string[];
   properties?: Record<string, JsonSchema>;
@@ -20,10 +26,6 @@ export type JsonSchema = {
   enum?: unknown[];
   title?: string;
   description?: string;
-  default?: unknown;
-  items?: JsonSchema;
-  $ref?: string;
-  $defs?: Record<string, JsonSchema>;
   anyOf?: JsonSchema[];
 };
 
@@ -39,16 +41,16 @@ export type PluginConfigField = {
   options?: string[];
 };
 
-const _SECRET_NAME_HINTS = ["secret", "token", "password"];
+const SECRET_NAME_HINTS = ["secret", "token", "password"];
 
 /** Heuristically flags a string field as sensitive so it renders masked. */
-function looksLikeSecret(key: string): boolean {
+function looksLikeSecret(key: string) {
   const lowered = key.toLowerCase();
-  return _SECRET_NAME_HINTS.some((hint) => lowered.includes(hint));
+  return SECRET_NAME_HINTS.some((hint) => lowered.includes(hint));
 }
 
 /** Resolves the effective type/enum for a property, unwrapping a simple `anyOf` (Optional[X]). */
-function resolveEffective(property: JsonSchema): JsonSchema {
+function resolveEffective(property: JsonSchema) {
   if (property.type || property.enum) return property;
   if (Array.isArray(property.anyOf)) {
     const candidate = property.anyOf.find((item) => item.type && item.type !== "null");
@@ -57,7 +59,7 @@ function resolveEffective(property: JsonSchema): JsonSchema {
   return property;
 }
 
-function fieldKind(key: string, property: JsonSchema): PluginConfigFieldKind {
+function fieldKind(key: string, property: JsonSchema) {
   const effective = resolveEffective(property);
   if (Array.isArray(effective.enum) && effective.enum.every((item) => typeof item === "string")) return "enum";
   const type = Array.isArray(effective.type) ? effective.type[0] : effective.type;

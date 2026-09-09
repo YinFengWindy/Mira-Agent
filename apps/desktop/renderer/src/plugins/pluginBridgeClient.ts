@@ -1,15 +1,10 @@
+import { BridgeError, invokeBridgePayload, type DesktopInvoke } from "../shared/bridgeInvoke";
 import type { JsonSchema } from "./jsonSchemaForm";
 
-type DesktopInvoke = typeof window.miraDesktop.invoke;
-
 /** Stable error exposed by the plugin bridge client. */
-export class PluginBridgeError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly details?: Record<string, unknown>,
-  ) {
-    super(message);
+export class PluginBridgeError extends BridgeError {
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, details);
     this.name = "PluginBridgeError";
   }
 }
@@ -44,10 +39,8 @@ export type PluginSetEnabledResult = {
   generation: number;
 };
 
-async function invokePayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>): Promise<T> {
-  const response = await invoke({ method, payload });
-  if (response.error) throw new PluginBridgeError(response.error.message, response.error.code, response.error.details);
-  return response.payload as T;
+function invokePluginPayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>): Promise<T> {
+  return invokeBridgePayload<T>(invoke, method, payload, PluginBridgeError);
 }
 
 /** Calls the `plugin.config.*` and `plugins.*` management bridge contracts. */
@@ -66,26 +59,32 @@ export interface PluginBridgeClient {
   ): Promise<PluginSetEnabledResult>;
 }
 
-/** Creates the renderer client for the plugin config and management bounded context. */
-export function createPluginBridgeClient(invoke: DesktopInvoke = window.miraDesktop.invoke): PluginBridgeClient {
+/**
+ * Creates the renderer client for the plugin config and management bounded
+ * context. `invoke` resolves lazily (inside each call, not eagerly at
+ * creation time) for the same reason as `createPluginRpcClient`: building
+ * this client must not require `window.miraDesktop` to already exist.
+ */
+export function createPluginBridgeClient(invoke?: DesktopInvoke): PluginBridgeClient {
+  const resolveInvoke = () => invoke ?? window.miraDesktop.invoke;
   return {
     async getConfig(pluginId) {
-      const payload = await invokePayload<{ plugin_id: string; schema: JsonSchema | null; values: Record<string, unknown> }>(
-        invoke, "plugin.config.get", { plugin_id: pluginId },
+      const payload = await invokePluginPayload<{ plugin_id: string; schema: JsonSchema | null; values: Record<string, unknown> }>(
+        resolveInvoke(), "plugin.config.get", { plugin_id: pluginId },
       );
       return { pluginId: payload.plugin_id, schema: payload.schema, values: payload.values };
     },
     async setConfig(pluginId, values, options) {
-      const payload = await invokePayload<{ plugin_id: string; values: Record<string, unknown>; generation: number }>(
-        invoke, "plugin.config.set", { plugin_id: pluginId, values, operation_id: options.operationId },
+      const payload = await invokePluginPayload<{ plugin_id: string; values: Record<string, unknown>; generation: number }>(
+        resolveInvoke(), "plugin.config.set", { plugin_id: pluginId, values, operation_id: options.operationId },
       );
       return { pluginId: payload.plugin_id, values: payload.values, generation: payload.generation };
     },
     async listPlugins() {
-      const payload = await invokePayload<{ plugins: Array<{
+      const payload = await invokePluginPayload<{ plugins: Array<{
         id: string; name: string; version: string; description: string;
         enabled: boolean; state: string; error: string; has_config_schema: boolean;
-      }> }>(invoke, "plugins.list", {});
+      }> }>(resolveInvoke(), "plugins.list", {});
       return payload.plugins.map((item) => ({
         id: item.id,
         name: item.name,
@@ -98,19 +97,36 @@ export function createPluginBridgeClient(invoke: DesktopInvoke = window.miraDesk
       }));
     },
     async setEnabled(pluginId, enabled, options) {
-      const payload = await invokePayload<{ plugin_id: string; enabled: boolean; generation: number }>(
-        invoke, "plugins.setEnabled", { plugin_id: pluginId, enabled, operation_id: options.operationId },
+      const payload = await invokePluginPayload<{ plugin_id: string; enabled: boolean; generation: number }>(
+        resolveInvoke(), "plugins.setEnabled", { plugin_id: pluginId, enabled, operation_id: options.operationId },
       );
       return { pluginId: payload.plugin_id, enabled: payload.enabled, generation: payload.generation };
     },
   };
 }
 
-/** Creates a client scoped to one plugin's own `plugin.<id>.*` RPC namespace. */
-export function createPluginRpcClient(pluginId: string, invoke: DesktopInvoke = window.miraDesktop.invoke) {
+/**
+ * Restricted handle injected into plugin-authored UI components (see
+ * `pluginUiModuleContract.tsx`). `call` can only reach methods under that
+ * plugin's own `plugin.<id>.*` namespace — the namespace prefix is baked in
+ * by `createPluginRpcClient`, not supplied by the caller, so a plugin
+ * component cannot address another plugin's methods even by mistake.
+ */
+export type PluginRpcClient = {
+  call<T>(method: string, payload?: Record<string, unknown>): Promise<T>;
+};
+
+/**
+ * Creates a client scoped to one plugin's own `plugin.<id>.*` RPC namespace.
+ * `invoke` resolves lazily (only inside `call`, not eagerly at creation
+ * time) so building this client — e.g. once per plugin at UI registration —
+ * never requires `window.miraDesktop` to already exist, and pure unit tests
+ * that never actually invoke a method don't need a DOM/bridge stub either.
+ */
+export function createPluginRpcClient(pluginId: string, invoke?: DesktopInvoke): PluginRpcClient {
   return {
     async call<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
-      return invokePayload<T>(invoke, `plugin.${pluginId}.${method}`, payload);
+      return invokePluginPayload<T>(invoke ?? window.miraDesktop.invoke, `plugin.${pluginId}.${method}`, payload);
     },
   };
 }

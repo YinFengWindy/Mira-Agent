@@ -1,6 +1,8 @@
+import type { DraftSavePhase } from "../shared/serialDraftQueue";
 import type { SettingsFormData } from "../shared/types";
 
-export type SettingsSavePhase = "idle" | "saving" | "error";
+/** Historical name for `DraftSavePhase`, kept for this domain's existing consumers. */
+export type SettingsSavePhase = DraftSavePhase;
 
 /** Applies one immutable update to the current settings draft. */
 export type SettingsDraftUpdater = (

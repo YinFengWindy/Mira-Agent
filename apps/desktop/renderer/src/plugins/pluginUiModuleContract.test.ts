@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { applyPluginUiModules, type PluginUiModule } from "./pluginUiModuleContract.js";
 import { PluginUiRegistry } from "./pluginUiRegistry.js";
+import type { PluginRpcClient } from "./pluginBridgeClient.js";
+
+/**
+ * Invokes a function component directly and returns the React element it
+ * produced, without mounting a DOM: a function component is just a
+ * function, and JSX compiles to a plain `createElement` call, so `.props`
+ * on the returned element is enough to inspect what was passed down.
+ */
+function renderElement<TProps>(
+  Component: (props: TProps) => { type: unknown; props: Record<string, unknown> },
+  props: TProps,
+): { type: unknown; props: Record<string, unknown> } {
+  return Component(props);
+}
 
 describe("applyPluginUiModules", () => {
   it("registers a schema-driven settings.section under the plugin's own id", () => {
@@ -37,8 +51,76 @@ describe("applyPluginUiModules", () => {
 
     applyPluginUiModules(modules, registry);
 
-    assert.equal(registry.getSettingsSection("demo")?.Component, CustomSection);
-    assert.equal(registry.getNavPage("demo")?.Component, NavPage);
+    // The registry entry now wraps the plugin's own component (issue #174
+    // spec: plugin UI only uses an injected client, never window/IPC
+    // directly), so the registered Component is no longer the plugin's bare
+    // function reference — it is a binder that renders it with a client.
+    const sectionComponent = registry.getSettingsSection("demo")?.Component;
+    const navComponent = registry.getNavPage("demo")?.Component;
+    assert.ok(sectionComponent, "expected a settings.section Component");
+    assert.ok(navComponent, "expected a nav.page Component");
+    assert.notEqual(sectionComponent, CustomSection);
+    assert.notEqual(navComponent, NavPage);
+
+    const sectionElement = renderElement(sectionComponent as never, { subsectionId: "default" });
+    const navElement = renderElement(navComponent as never, { pageId: "demo" });
+    assert.equal(sectionElement.type, CustomSection);
+    assert.equal(navElement.type, NavPage);
+  });
+
+  it("injects into each component a client scoped to only its own plugin's RPC namespace", async () => {
+    const registry = new PluginUiRegistry();
+    function CustomSection() { return null; }
+    function NavPage() { return null; }
+    const modules: Record<string, { default: PluginUiModule }> = {
+      "/plugins/demo/ui/index.tsx": {
+        default: {
+          pluginId: "demo",
+          settingsSection: { kind: "component", label: "Demo", component: CustomSection },
+          navPage: { label: "Demo Page", component: NavPage },
+        },
+      },
+    };
+
+    applyPluginUiModules(modules, registry);
+
+    const sectionComponent = registry.getSettingsSection("demo")?.Component as never;
+    const navComponent = registry.getNavPage("demo")?.Component as never;
+    const sectionProps = renderElement(sectionComponent, { subsectionId: "default" }).props;
+    const navProps = renderElement(navComponent, { pageId: "demo" }).props;
+
+    // The base slot props (subsectionId/pageId) still pass through untouched...
+    assert.equal(sectionProps.subsectionId, "default");
+    assert.equal(navProps.pageId, "demo");
+
+    // ...and both also received an injected `client`, without the plugin
+    // module ever constructing one or naming itself.
+    const sectionClient = sectionProps.client as PluginRpcClient;
+    const navClient = navProps.client as PluginRpcClient;
+    assert.equal(typeof sectionClient.call, "function");
+    assert.equal(typeof navClient.call, "function");
+
+    const calls: string[] = [];
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {
+      miraDesktop: {
+        invoke: async ({ method }: { method: string }) => {
+          calls.push(method);
+          return { id: "1", type: "response", method, error: null, payload: {} };
+        },
+      },
+    };
+    try {
+      await sectionClient.call("readSomething");
+      await navClient.call("doSomething");
+    } finally {
+      (globalThis as { window?: unknown }).window = originalWindow;
+    }
+
+    // Every call the plugin makes — from either slot — is confined to
+    // "plugin.demo.*"; the plugin never supplies (and cannot override) that
+    // prefix itself.
+    assert.deepEqual(calls, ["plugin.demo.readSomething", "plugin.demo.doSomething"]);
   });
 
   it("skips a malformed module instead of throwing", () => {

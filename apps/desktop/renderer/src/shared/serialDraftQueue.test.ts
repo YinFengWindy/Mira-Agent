@@ -27,7 +27,7 @@ describe("SerialDraftQueue", () => {
     assert.deepEqual(calls, ["first", "second"]);
   });
 
-  it("keeps a non-retryable failure paused until an explicit retry", async () => {
+  it("keeps a failure that does not resume automatically paused until an explicit retry", async () => {
     const attempts: string[] = [];
     const statuses: string[] = [];
     const queue = new SerialDraftQueue<string, string>({
@@ -35,7 +35,7 @@ describe("SerialDraftQueue", () => {
       clone: (draft) => draft,
       attempt: async (draft) => {
         attempts.push(draft);
-        return { ok: false, retryable: false, message: "boom" };
+        return { ok: false, resumesAutomatically: false, message: "boom" };
       },
       onApplied: () => assert.fail("should not apply a failed attempt"),
       onStatus: (phase) => statuses.push(phase),
@@ -53,7 +53,7 @@ describe("SerialDraftQueue", () => {
     assert.deepEqual(statuses, ["saving", "error", "saving", "error"]);
   });
 
-  it("keeps retrying edits after a retryable failure without requiring an explicit retry", async () => {
+  it("keeps trying new edits after a failure that resumes automatically, without an explicit retry", async () => {
     const attempts: string[] = [];
     const queue = new SerialDraftQueue<string, string>({
       isEqual: (a, b) => a === b,
@@ -61,7 +61,7 @@ describe("SerialDraftQueue", () => {
       attempt: async (draft) => {
         attempts.push(draft);
         return draft === "invalid"
-          ? { ok: false, retryable: true, message: "invalid" }
+          ? { ok: false, resumesAutomatically: true, message: "invalid" }
           : { ok: true, result: draft };
       },
       onApplied: () => undefined,
@@ -84,7 +84,7 @@ describe("SerialDraftQueue", () => {
       clone: (draft) => draft,
       attempt: async (draft, operationId) => {
         operationIds.push(operationId);
-        if (shouldFail) return { ok: false, retryable: false, message: "boom" };
+        if (shouldFail) return { ok: false, resumesAutomatically: false, message: "boom" };
         return { ok: true, result: draft };
       },
       onApplied: () => undefined,

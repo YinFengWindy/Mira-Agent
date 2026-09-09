@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import { act } from "react";
 import { changeInputValue, mountTestComponent } from "../shared/testing/domTestHarness";
 
 let PluginSchemaSettingsSection: typeof import("./PluginSchemaSettingsSection").PluginSchemaSettingsSection;
@@ -53,6 +54,66 @@ describe("PluginSchemaSettingsSection", () => {
       await changeInputValue(input, "app-123");
 
       assert.ok(calls.some((call) => call.method === "plugin.config.set" && call.payload.values && (call.payload.values as Record<string, unknown>).app_id === "app-123"));
+    } finally {
+      await view.cleanup();
+    }
+  });
+
+  it("resyncs a JSON field's textarea when reloadConfig replaces the draft, not just on first mount", async () => {
+    const view = await mountTestComponent(null);
+    let stored: Record<string, unknown> = { tags: ["initial"] };
+    let nextSetFails = false;
+    Object.defineProperty(window, "miraDesktop", {
+      configurable: true,
+      value: {
+        invoke: async ({ method, payload }: { method: string; payload: Record<string, unknown> }) => {
+          if (method === "plugin.config.get") {
+            return {
+              id: "1", type: "response", method, error: null,
+              payload: {
+                plugin_id: "demo",
+                schema: { title: "DemoConfig", properties: { tags: { type: "array" } } },
+                values: stored,
+              },
+            };
+          }
+          if (method === "plugin.config.set") {
+            if (nextSetFails) {
+              return {
+                id: "1", type: "response", method,
+                error: { code: "plugin_config_invalid", message: "保存失败" }, payload: null,
+              };
+            }
+            stored = { ...stored, ...(payload.values as Record<string, unknown>) };
+            return { id: "1", type: "response", method, error: null, payload: { plugin_id: "demo", values: stored, generation: 2 } };
+          }
+          throw new Error(`unexpected method ${method}`);
+        },
+      },
+    });
+
+    try {
+      await view.render(<PluginSchemaSettingsSection pluginId="demo" />);
+      const textarea = view.container.querySelector("textarea") as HTMLTextAreaElement;
+      assert.ok(textarea, "expected a JSON textarea for the array field");
+      assert.match(textarea.value, /initial/);
+
+      // Edit locally, but make the save fail so the reload affordance shows
+      // up, and the reloaded server value differs from this local edit.
+      nextSetFails = true;
+      await changeInputValue(textarea, JSON.stringify({ tags: ["unsaved-local-edit"] }));
+      assert.match(textarea.value, /unsaved-local-edit/, "the field must still reflect the user's own typing");
+
+      stored = { tags: ["reloaded-from-server"] };
+      const reloadButton = view.container.querySelector('button[aria-label="放弃草稿并重新加载"]') as HTMLButtonElement;
+      assert.ok(reloadButton, "expected a reload action once the save failed");
+      await act(async () => { reloadButton.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+
+      // Before the fix this textarea kept showing "unsaved-local-edit"
+      // forever: its text state was seeded once from `useState(() => ...)`
+      // and never resynced when the `value` prop changed underneath it.
+      assert.match(textarea.value, /reloaded-from-server/);
+      assert.doesNotMatch(textarea.value, /unsaved-local-edit/);
     } finally {
       await view.cleanup();
     }

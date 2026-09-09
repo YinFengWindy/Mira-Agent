@@ -10,7 +10,7 @@ type SaveQueueOptions = {
 };
 
 // Error codes the user can still fix by editing further, without reloading first.
-const _RECOVERABLE_WITHOUT_RELOAD = [
+const RECOVERABLE_WITHOUT_RELOAD = [
   "settings_validation_error", "runtime_config_invalid", "runtime_apply_failed", "runtime_invalid_request",
 ];
 
@@ -54,7 +54,7 @@ export class SettingsSaveQueue {
       const code = result.saveResult.error?.code ?? "";
       return {
         ok: false as const,
-        retryable: _RECOVERABLE_WITHOUT_RELOAD.includes(code),
+        resumesAutomatically: RECOVERABLE_WITHOUT_RELOAD.includes(code),
         message: result.saveResult.error?.message ?? "配置应用失败。",
       };
     }

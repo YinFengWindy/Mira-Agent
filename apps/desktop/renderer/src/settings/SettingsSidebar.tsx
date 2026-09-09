@@ -5,13 +5,26 @@ import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSectio
 
 registerBuiltinSettingsSections();
 
+/** The eight settings.section ids registered by `registerBuiltinSettingsSections`. */
+export type BuiltinSettingsSectionId =
+  | "models"
+  | "channels"
+  | "memory"
+  | "integrations"
+  | "voice"
+  | "advanced"
+  | "plugins"
+  | "about";
+
 /**
- * Identifies a settings.section registry entry. Widened from a fixed
- * literal union to a plain string because sections are no longer an
- * exhaustive, hand-enumerated set: plugins register their own ids into
- * `pluginUiRegistry` at build time.
+ * Identifies a settings.section registry entry. Sections are no longer an
+ * exhaustive, hand-enumerated set — plugins register their own ids into
+ * `pluginUiRegistry` at build time — so this also accepts any string.
+ * `(string & {})` (rather than plain `string`) keeps compile-time literal
+ * narrowing/autocomplete for the built-in ids instead of collapsing the
+ * whole union down to `string`.
  */
-export type SettingsSectionId = string;
+export type SettingsSectionId = BuiltinSettingsSectionId | (string & {});
 
 /** Sidebar entries for every currently registered settings section. */
 export function listSettingsSidebarSections(

@@ -48,18 +48,20 @@ describe("describePluginConfigFields", () => {
   it("unwraps an Optional[str]-shaped anyOf into its non-null member", () => {
     const fields = describePluginConfigFields({
       properties: {
-        label: { anyOf: [{ type: "string" }, { type: "null" }], default: null },
+        label: { anyOf: [{ type: "string" }, { type: "null" }] },
       },
     });
 
     assert.equal(fields[0]?.kind, "string");
   });
 
-  it("falls back to a raw json field for arrays, objects and unresolved refs", () => {
+  it("falls back to a raw json field for arrays and unresolved refs", () => {
     const fields = describePluginConfigFields({
       properties: {
-        groups: { type: "array", items: { $ref: "#/$defs/Group" } },
-        nested: { $ref: "#/$defs/Nested" },
+        groups: { type: "array" },
+        // An unresolved `$ref` (or any other shape this module doesn't
+        // model) has no recognizable `type`/`enum` at all.
+        nested: {},
       },
     });
 

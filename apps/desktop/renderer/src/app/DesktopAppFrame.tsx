@@ -15,8 +15,7 @@ import { RoleManagementPage } from "../roles/RoleManagementPage";
 import { RoleSearchDialog } from "../roles/RoleSearchDialog";
 import { RoleSidebar } from "../roles/RoleSidebar";
 import { RoleWorkspaceSidebar, type RoleWorkspaceSectionId } from "../roles/RoleWorkspaceSidebar";
-import { pluginUiRegistry } from "../plugins/pluginUiRegistry";
-import { usePluginEnabledState } from "../plugins/usePluginEnabledState";
+import { usePluginUiVisibility } from "./usePluginUiVisibility";
 import { SettingsPage } from "../settings/SettingsPage";
 import { SettingsSidebar, type SettingsSectionId } from "../settings/SettingsSidebar";
 import { cx } from "../shared/styles";
@@ -341,15 +340,12 @@ export function DesktopAppFrame({
   // nav.page entries are compiled in statically (see pluginUiModules.ts); listed here
   // rather than threaded through props, matching how this frame already owns view
   // dispatch and keeps the (already very large) prop surface from growing further.
-  // isPluginEnabled hides a disabled plugin's entries immediately (issue #174 AC 3).
-  const isPluginEnabled = usePluginEnabledState();
-  const pluginNavPages = pluginUiRegistry.listNavPages(isPluginEnabled);
+  // Visibility (hiding a disabled plugin's entries immediately, issue #174 AC 3)
+  // is centralized in usePluginUiVisibility so it isn't recomputed per call site.
+  const { pluginNavPages, settingsSidebarSections, isSectionVisible, resolveVisibleNavPage } = usePluginUiVisibility();
   const activePluginNavPage = mainView.kind === "plugin-page"
-    ? pluginUiRegistry.getNavPage(mainView.pageId)
+    ? resolveVisibleNavPage(mainView.pageId)
     : undefined;
-  const activePluginNavPageVisible = Boolean(
-    activePluginNavPage && (!activePluginNavPage.pluginId || isPluginEnabled(activePluginNavPage.pluginId)),
-  );
 
   return (
     <div className="app-frame grid h-screen grid-rows-app overflow-hidden bg-transparent">
@@ -398,7 +394,7 @@ export function DesktopAppFrame({
         >
           {mainView.kind === "settings" ? (
             <SettingsSidebar
-              sections={pluginUiRegistry.listSettingsSections(isPluginEnabled).map((entry) => ({ id: entry.id, label: entry.label }))}
+              sections={settingsSidebarSections}
               activeSection={settingsSection}
               animating={sidebarState.animating && !sidebarState.resizing}
               collapsed={sidebarState.collapsed}
@@ -611,13 +607,10 @@ export function DesktopAppFrame({
             <SettingsPage
               bridgeReady={bridgeReady}
               section={settingsSection}
-              isSectionVisible={(id) => {
-                const entry = pluginUiRegistry.getSettingsSection(id);
-                return Boolean(entry && (!entry.pluginId || isPluginEnabled(entry.pluginId)));
-              }}
+              isSectionVisible={isSectionVisible}
             />
           ) : null}
-          {mainView.kind === "plugin-page" && activePluginNavPage && activePluginNavPageVisible ? (
+          {mainView.kind === "plugin-page" && activePluginNavPage ? (
             <activePluginNavPage.Component pageId={mainView.pageId} />
           ) : null}
         </main>

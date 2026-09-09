@@ -1,7 +1,20 @@
 import type React from "react";
 import type { SettingsSubsection, StandaloneSettingsSectionProps } from "../settings/settingsPageTypes";
 import { createPluginSchemaSettingsSection } from "./PluginSchemaSettingsSection";
+import { createPluginRpcClient, type PluginRpcClient } from "./pluginBridgeClient";
 import { pluginUiRegistry, type PluginNavPageProps } from "./pluginUiRegistry";
+
+/**
+ * Props a plugin-authored nav.page component receives: the base slot props
+ * plus its injected, namespace-scoped RPC client.
+ */
+export type PluginNavPageComponentProps = PluginNavPageProps & { client: PluginRpcClient };
+
+/**
+ * Props a plugin-authored custom settings.section component receives: the
+ * base slot props plus its injected, namespace-scoped RPC client.
+ */
+export type PluginSettingsSectionComponentProps = StandaloneSettingsSectionProps & { client: PluginRpcClient };
 
 /** One plugin's settings.section contribution: either a schema auto-form or a custom component. */
 export type PluginSettingsSectionContribution =
@@ -10,13 +23,13 @@ export type PluginSettingsSectionContribution =
     kind: "component";
     label: string;
     subsections?: SettingsSubsection[];
-    component: React.ComponentType<StandaloneSettingsSectionProps>;
+    component: React.ComponentType<PluginSettingsSectionComponentProps>;
   };
 
 export type PluginNavPageContribution = {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
-  component: React.ComponentType<PluginNavPageProps>;
+  component: React.ComponentType<PluginNavPageComponentProps>;
 };
 
 /**
@@ -32,8 +45,27 @@ export type PluginUiModule = {
   navPage?: PluginNavPageContribution;
 };
 
+/** Narrows an unknown default export down to a well-formed PluginUiModule, without an unsafe cast. */
 function isPluginUiModule(value: unknown): value is PluginUiModule {
-  return Boolean(value) && typeof value === "object" && typeof (value as { pluginId?: unknown }).pluginId === "string";
+  if (value === null || typeof value !== "object") return false;
+  return "pluginId" in value && typeof value.pluginId === "string";
+}
+
+/**
+ * Wraps a plugin-authored component so it always receives a `client` bound
+ * to that plugin's own `plugin.<id>.*` RPC namespace. The plugin never
+ * constructs its own client or needs to know its own id — per the issue
+ * #174 spec, plugin-authored UI only uses an injected, typed client and
+ * never reaches Electron/IPC/global state directly.
+ */
+function bindPluginClient<TBaseProps extends object>(
+  pluginId: string,
+  Component: React.ComponentType<TBaseProps & { client: PluginRpcClient }>,
+): React.ComponentType<TBaseProps> {
+  const client = createPluginRpcClient(pluginId);
+  return function PluginClientBoundComponent(props: TBaseProps) {
+    return <Component {...props} client={client} />;
+  };
 }
 
 /**
@@ -64,7 +96,7 @@ export function applyPluginUiModules(
         pluginId,
         Component: settingsSection.kind === "schema"
           ? createPluginSchemaSettingsSection(pluginId)
-          : settingsSection.component,
+          : bindPluginClient(pluginId, settingsSection.component),
       });
     }
     if (navPage) {
@@ -74,7 +106,7 @@ export function applyPluginUiModules(
         label: navPage.label,
         icon: navPage.icon,
         pluginId,
-        Component: navPage.component,
+        Component: bindPluginClient(pluginId, navPage.component),
       });
     }
   }

@@ -21,15 +21,40 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _QQBOT_PLUGIN_DIR = _REPOSITORY_ROOT / "plugins" / "qqbot"
 _HELLO_FIXTURE_DIR = _REPOSITORY_ROOT / "tests" / "fixtures" / "plugins" / "hello"
 
+# Written on the fly into tmp_path rather than checked in under
+# tests/fixtures/plugins/: that directory is scanned wholesale by the
+# legacy agent.plugins.manager test suite too (test_manager.py), which
+# doesn't understand v2-only (api: 2, setup(ctx)) plugins and would start
+# failing its discover()/loaded_count bookkeeping if a v2-only fixture
+# showed up in that shared corpus. Building it inline (matching
+# test_kernel.py's own v2 RPC fixture) keeps it scoped to this test only.
+_RPC_DEMO_PLUGIN_PY = """
+async def _ping(payload):
+    return {"pong": payload.get("value")}
+
+
+async def setup(ctx):
+    ctx.rpc.register("ping", _ping)
+""".strip()
+
+_RPC_DEMO_MANIFEST = "api: 2\nid: rpc_demo\ncapabilities:\n  - rpc\n"
+
 
 def _config() -> str:
     return "[llm]\nregistrations = []\n\n[agent.maintenance]\nmemory_optimizer_enabled = false\n"
 
 
-def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _stage_plugin_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, with_rpc_demo: bool = False,
+) -> None:
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
     shutil.copytree(_HELLO_FIXTURE_DIR, root / "hello")
+    if with_rpc_demo:
+        rpc_demo_dir = root / "rpc_demo"
+        rpc_demo_dir.mkdir(parents=True)
+        (rpc_demo_dir / "plugin.py").write_text(_RPC_DEMO_PLUGIN_PY, encoding="utf-8")
+        (rpc_demo_dir / "manifest.yaml").write_text(_RPC_DEMO_MANIFEST, encoding="utf-8")
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 
 
@@ -112,6 +137,37 @@ async def test_set_enabled_false_disables_immediately_and_survives_a_restart(tmp
     finally:
         await restarted_service.aclose()
         await restarted_app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_disabling_a_plugin_makes_its_rpc_method_immediately_uncallable(tmp_path, monkeypatch):
+    """端到端证明验收标准 3：不是只看 plugins.list 的 state，而是真的调不通了。
+
+    此前只断言 ``plugins.list`` 里的 state 变成 DISABLED，注释里推断"RPC/工具
+    随之消失"，但没有任何测试真的经 ``plugins.setEnabled`` 走一遍完整的
+    停用流程后再调用该插件注册的 RPC 方法。这里用一个真正登记了
+    ``plugin.rpc_demo.ping`` 的 v2 夹具插件，证明停用前能调通、停用后经桥接
+    返回 unknown_method（而不是只在内核层面验证 unload，见
+    test_kernel.py::test_v2_plugin_rpc_method_callable_then_gone_after_unload）。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch, with_rpc_demo=True)
+    service, _, app = await _start_service(tmp_path)
+    try:
+        before = await _request(service, "plugin.rpc_demo.ping", {"value": 1})
+        assert before.error is None, before.error
+        assert before.payload == {"pong": 1}
+
+        disabled = await _request(service, "plugins.setEnabled", {
+            "plugin_id": "rpc_demo", "enabled": False, "operation_id": "op-disable-rpc",
+        })
+        assert disabled.error is None, disabled.error
+
+        after = await _request(service, "plugin.rpc_demo.ping", {"value": 1})
+        assert after.error is not None
+        assert after.error.code == "unknown_method"
+    finally:
+        await service.aclose()
+        await app.shutdown()
 
 
 @pytest.mark.asyncio

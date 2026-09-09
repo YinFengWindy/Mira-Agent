@@ -19,10 +19,15 @@ export function getSettingsSubsections(sectionId: SettingsSectionId): SettingsSu
   return pluginUiRegistry.getSettingsSection(sectionId)?.subsections ?? [];
 }
 
-/** Builds the initial active subsection for every currently registered section. */
+/**
+ * Builds the initial active subsection for every currently registered
+ * section. Keyed by plain `string` (not `SettingsSectionId`): this is a
+ * dynamic lookup map, not an exhaustively-cased record, and section ids
+ * include plugin ids only known at runtime.
+ */
 export function createInitialSettingsSubsectionState(
   sections: SettingsSectionEntry[] = listSettingsSections(),
-): Record<SettingsSectionId, string> {
+): Record<string, string> {
   return Object.fromEntries(
     sections.map((section) => [section.id, section.subsections[0]?.id ?? ""]),
   );
@@ -31,7 +36,7 @@ export function createInitialSettingsSubsectionState(
 /** Resolves an active subsection, falling back to the first available option. */
 export function resolveSettingsSubsectionId(
   sectionId: SettingsSectionId,
-  activeSubsections: Record<SettingsSectionId, string>,
+  activeSubsections: Record<string, string>,
 ): string | null {
   const subsections = getSettingsSubsections(sectionId);
   const activeId = activeSubsections[sectionId];

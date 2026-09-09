@@ -19,7 +19,7 @@ function PluginRow({
   return (
     <SettingsField label={plugin.name} hint={hint || undefined}>
       <div className="flex items-center justify-end gap-3">
-        <span className={cx("text-[11px]", plugin.error ? "text-danger-text" : "text-ink-faint")}>
+        <span className={cx("text-caption", plugin.error ? "text-danger-text" : "text-ink-faint")}>
           {plugin.error || plugin.state}
         </span>
         <SettingsToggleCard

@@ -50,7 +50,7 @@ function EditableSettingsPage({
   section,
   isSectionVisible = () => true,
 }: SettingsPageProps) {
-  const [activeSubsections, setActiveSubsections] = useState<Record<SettingsSectionId, string>>(
+  const [activeSubsections, setActiveSubsections] = useState<Record<string, string>>(
     createInitialSettingsSubsectionState,
   );
   const controller = useSettingsPageController({ bridgeReady });

@@ -60,6 +60,19 @@ export type NavPageEntry = {
 type Origin = "builtin" | "plugin";
 
 /**
+ * Whether one registry entry is visible right now: a built-in entry (no
+ * `pluginId`) always is; a plugin-owned entry only while that plugin is
+ * enabled. The single rule shared by nav rail, settings sidebar, the
+ * settings page and the active plugin-page view (see `usePluginUiVisibility`).
+ */
+export function isPluginContributionVisible(
+  pluginId: string | undefined,
+  isPluginEnabled: (pluginId: string) => boolean,
+): boolean {
+  return !pluginId || isPluginEnabled(pluginId);
+}
+
+/**
  * Aggregates settings.section and nav.page contributions from the core
  * (built-in entries) and from plugins (compiled in at build time via
  * `pluginUiModules.ts`). Built-in sections are registered through this same
@@ -126,7 +139,7 @@ class PluginUiRegistry {
     isPluginEnabled?: (pluginId: string) => boolean,
   ): T[] {
     const visible = [...source.values()].filter(({ entry }) => (
-      !entry.pluginId || !isPluginEnabled || isPluginEnabled(entry.pluginId)
+      !isPluginEnabled || isPluginContributionVisible(entry.pluginId, isPluginEnabled)
     ));
     const builtins = visible.filter((item) => item.origin === "builtin").map((item) => item.entry);
     const plugins = visible.filter((item) => item.origin === "plugin").map((item) => item.entry);
