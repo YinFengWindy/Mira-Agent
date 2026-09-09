@@ -15,6 +15,7 @@ from agent.plugin_host.runtime_context import (
     CapabilityNotGranted,
     PluginRuntimeContext,
 )
+from agent.plugin_host.tool_hooks import PluginToolHook
 
 __all__ = [
     "CapabilityNotGranted",
@@ -30,6 +31,7 @@ __all__ = [
     "PluginRecord",
     "PluginRuntimeContext",
     "PluginState",
+    "PluginToolHook",
     "ScopedEventBus",
     "load_manifest",
 ]

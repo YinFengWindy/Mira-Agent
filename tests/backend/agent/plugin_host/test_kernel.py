@@ -248,6 +248,48 @@ async def test_telegram_bot_commands_aggregated(tmp_path: Path):
     assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
 
 
+_V2_BOT_COMMANDS_PLUGIN = """
+async def setup(ctx):
+    ctx.bot_commands.add("chatid", "查看我的 chat_id")
+""".strip()
+
+_V2_BOT_COMMANDS_MANIFEST = (
+    "api: 2\nid: v2cmds\ncapabilities:\n  - bot_commands\n"
+)
+
+
+@pytest.mark.asyncio
+async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unload(
+    tmp_path: Path,
+):
+    """kernel.telegram_bot_commands 必须同时聚合 legacy 实例与 v2 贡献两条来源（#182）。"""
+    legacy_dir = tmp_path / "cmds"
+    legacy_dir.mkdir()
+    (legacy_dir / "plugin.py").write_text(
+        "from agent.plugins import Plugin\n"
+        "class Cmds(Plugin):\n"
+        "    name = 'cmds'\n"
+        "    def telegram_bot_commands(self):\n"
+        "        return [('undo', '撤销上一轮')]\n",
+        encoding="utf-8",
+    )
+    v2_dir = tmp_path / "v2cmds"
+    v2_dir.mkdir()
+    (v2_dir / "plugin.py").write_text(_V2_BOT_COMMANDS_PLUGIN, encoding="utf-8")
+    (v2_dir / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
+
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+
+    assert sorted(kernel.telegram_bot_commands) == sorted(
+        [("undo", "撤销上一轮"), ("chatid", "查看我的 chat_id")]
+    )
+
+    # 卸载 v2 插件后，其 bot 命令必须随 effect 一并摘除，legacy 一侧不受影响
+    _ = await kernel.unload("v2cmds")
+    assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
+
+
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
     shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")

@@ -29,8 +29,9 @@ def _load_citation_plugin_module() -> Any:
 
 _citation_module = _load_citation_plugin_module()
 CitationAfterReasoningModule = _citation_module.CitationAfterReasoningModule
-CitationPlugin = _citation_module.CitationPlugin
+CitationPromptModule = _citation_module.CitationPromptModule
 ProtocolTagCleanupModule = _citation_module.ProtocolTagCleanupModule
+citation_setup = _citation_module.setup
 extract_cited_ids = _citation_module.extract_cited_ids
 extract_cited_ids_from_tool_chain = _citation_module.extract_cited_ids_from_tool_chain
 strip_trailing_protocol_tags = _citation_module.strip_trailing_protocol_tags
@@ -171,9 +172,35 @@ def test_citation_tool_chain_fallback_uses_item_ids() -> None:
 
 
 @pytest.mark.asyncio
+async def test_citation_setup_contributes_expected_phase_modules() -> None:
+    """setup(ctx) 必须贡献与旧 CitationPlugin 完全一致的 phase 模块集合。"""
+
+    class _FakeLifecycle:
+        def __init__(self) -> None:
+            self.contributed: dict[str, list[object]] = {}
+
+        def contribute(self, slot: str, modules: list[object]) -> None:
+            self.contributed[slot] = modules
+
+    class _FakeCtx:
+        def __init__(self) -> None:
+            self.lifecycle = _FakeLifecycle()
+
+    ctx = _FakeCtx()
+    await citation_setup(ctx)
+
+    assert [type(m).__name__ for m in ctx.lifecycle.contributed["prompt_render"]] == [
+        "CitationPromptModule"
+    ]
+    assert [type(m).__name__ for m in ctx.lifecycle.contributed["after_reasoning"]] == [
+        "CitationAfterReasoningModule",
+        "ProtocolTagCleanupModule",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_citation_prompt_module_injects_prompt_section() -> None:
-    plugin = CitationPlugin()
-    module = plugin.prompt_render_modules()[0]
+    module = CitationPromptModule()
     ctx = PromptRenderCtx(
         session_key="telegram:1",
         channel="telegram",

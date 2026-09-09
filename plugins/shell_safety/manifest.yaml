@@ -1,0 +1,6 @@
+api: 2
+id: shell_safety
+version: '0.1.0'
+desc: 阻止 shell 工具执行容易卡住的交互式命令
+capabilities:
+  - tool_hooks

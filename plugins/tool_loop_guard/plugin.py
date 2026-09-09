@@ -2,15 +2,19 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from agent.lifecycle.types import PreToolCtx
-from agent.plugins import Plugin, on_tool_pre
+from agent.plugin_host.tool_hooks import PluginToolHook
 from agent.tool_hooks import HookOutcome
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _DEFAULT_REPEAT_LIMIT = 3
 _DENY_PREFIX = "tool_loop_guard:"
 _EXCLUDED_TOOLS = frozenset({"task_output", "task_stop"})
+_PLUGIN_NAME = "tool_loop_guard"
 
 
 @dataclass
@@ -19,29 +23,13 @@ class _LoopState:
     repeat_count: int = 0
 
 
-class ToolLoopGuard(Plugin):
-    name = "tool_loop_guard"
-    version = "0.1.0"
-    desc = "检测连续重复的工具调用并提前截断"
+class _ToolLoopGuard:
+    """检测连续重复的工具调用并提前截断；v2 插件不再继承旧 Plugin ABC。"""
 
-    def __init__(self) -> None:
+    def __init__(self, repeat_limit: int) -> None:
         self._states: dict[str, _LoopState] = {}
-        self._repeat_limit = _DEFAULT_REPEAT_LIMIT
+        self._repeat_limit = repeat_limit
 
-    async def initialize(self) -> None:
-        config = getattr(self, "context", None)
-        plugin_config = getattr(config, "config", None)
-        raw_limit = (
-            plugin_config.get("repeat_limit", _DEFAULT_REPEAT_LIMIT)
-            if plugin_config
-            else _DEFAULT_REPEAT_LIMIT
-        )
-        try:
-            self._repeat_limit = max(2, int(raw_limit))
-        except (TypeError, ValueError):
-            self._repeat_limit = _DEFAULT_REPEAT_LIMIT
-
-    @on_tool_pre()
     async def detect_repeated_tool_call(self, event: PreToolCtx) -> HookOutcome | None:
         signature, active_index = self._event_signature(event)
         if not signature or event.tool_batch_index != active_index:
@@ -93,3 +81,19 @@ class ToolLoopGuard(Plugin):
         if active_index < 0:
             return "", 0
         return "|".join(parts), active_index
+
+
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 tool_loop_guard：读取 repeat_limit 配置，注册 pre-tool hook。"""
+    raw_limit = ctx.config.get("repeat_limit", _DEFAULT_REPEAT_LIMIT)
+    try:
+        repeat_limit = max(2, int(raw_limit))
+    except (TypeError, ValueError):
+        repeat_limit = _DEFAULT_REPEAT_LIMIT
+    guard = _ToolLoopGuard(repeat_limit)
+    ctx.tool_hooks.add(
+        PluginToolHook(
+            name=f"plugin:{_PLUGIN_NAME}:detect_repeated_tool_call",
+            handler=guard.detect_repeated_tool_call,
+        )
+    )

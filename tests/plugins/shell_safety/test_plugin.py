@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from agent.plugins.manager import PluginManager
+from agent.plugin_host import HostServices, PluginKernel
 from agent.plugins.registry import plugin_registry
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
@@ -44,10 +44,10 @@ def _make_plugin_root(tmp_path: Path) -> Path:
 
 def _run_shell(root: Path, command: str) -> Any:
     bus = EventBus()
-    mgr = PluginManager(plugin_dirs=[root], event_bus=bus)
-    _run(mgr.load_all())
+    kernel = PluginKernel([root], services=HostServices(event_bus=bus))
+    _run(kernel.load_all())
     return _run(
-        ToolExecutor(mgr.tool_hooks).execute(
+        ToolExecutor(kernel.tool_hooks).execute(
             ToolExecutionRequest(
                 call_id="c1",
                 tool_name="shell",

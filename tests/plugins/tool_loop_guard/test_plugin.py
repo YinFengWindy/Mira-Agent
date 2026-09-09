@@ -9,7 +9,7 @@ import pytest
 
 from agent.looping.core import AgentLoop
 from agent.looping.ports import AgentLoopConfig, AgentLoopDeps, LLMConfig, MemoryServices
-from agent.plugins.manager import PluginManager
+from agent.plugin_host import HostServices, PluginKernel
 from agent.provider import LLMResponse, ToolCall
 from agent.subagent import SubAgent
 from agent.tool_hooks.base import ToolHook
@@ -166,9 +166,9 @@ def _tool_loop_guard_hooks() -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
         shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
-        mgr = PluginManager(plugin_dirs=[Path(tmp)], event_bus=EventBus())
-        asyncio.run(mgr.load_all())
-        return mgr.tool_hooks
+        kernel = PluginKernel([Path(tmp)], services=HostServices(event_bus=EventBus()))
+        asyncio.run(kernel.load_all())
+        return kernel.tool_hooks
 
 
 def _install_tool_loop_guard(subagent: SubAgent) -> SubAgent:

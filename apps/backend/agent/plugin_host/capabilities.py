@@ -36,6 +36,7 @@ class PluginContributions:
         self.proactive_gates: list[ProactiveGate] = []
         self.channels: list[Channel] = []
         self.tool_names: list[str] = []
+        self.bot_commands: list[tuple[str, str]] = []
 
 
 def contribute_to_list[T](
@@ -170,6 +171,26 @@ class ChannelsCapability:
             channel,
             effects=self._effects,
             label=f"channel:{getattr(channel, 'name', channel)}",
+        )
+
+
+class BotCommandsCapability:
+    """贡献 bot 命令（如 Telegram `/xxx`）；卸载时随 effect 从聚合列表摘除。
+
+    承接 kernel.telegram_bot_commands 的 v2 一侧来源，与 legacy 插件的
+    ``telegram_bot_commands()`` 方法两条路径并存，聚合逻辑见 kernel.py。
+    """
+
+    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+        self._contributions = contributions
+        self._effects = effects
+
+    def add(self, command: str, description: str) -> None:
+        contribute_to_list(
+            self._contributions.bot_commands,
+            (command, description),
+            effects=self._effects,
+            label=f"bot_command:{command}",
         )
 
 

@@ -24,10 +24,10 @@ from agent.plugin_host.capabilities import (
 )
 from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle
+from agent.plugin_host.tool_hooks import PluginToolHook
 from agent.plugins.manager import (
     _EVENT_TYPE_MAP,
     _PluginConfigError,
-    _PluginToolHook,
     _apply_manifest,
     _load_module_list,
     _load_plugin_config,
@@ -175,7 +175,7 @@ def _bind_tool_hooks(instance: Any, handle: PluginHandle, import_path: str) -> N
     for md in plugin_registry.get_handlers_by_module_path(import_path):
         if md.kind != MetadataKind.TOOL_HOOK:
             continue
-        hook = _PluginToolHook(
+        hook = PluginToolHook(
             name=f"plugin:{getattr(instance, 'name', import_path)}:{md.handler_name}",
             handler=functools.partial(md.handler, instance),
             tool_name_filter=md.hook_tool_name,

@@ -20,6 +20,7 @@ KNOWN_CAPABILITIES = frozenset(
         "kv",
         "config",
         "background",
+        "bot_commands",
     }
 )
 

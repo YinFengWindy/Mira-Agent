@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from agent.lifecycle.types import PromptRenderCtx
-from agent.plugins import Plugin
 from agent.prompting import PromptSectionRender
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _PROMPT_CTX_SLOT = "prompt:ctx"
 _REASONING_CTX_SLOT = "reasoning:ctx"
@@ -91,14 +93,13 @@ class ProtocolTagCleanupModule:
         return frame
 
 
-class CitationPlugin(Plugin):
-    name = "citation"
-
-    def prompt_render_modules(self) -> list[object]:
-        return [CitationPromptModule()]
-
-    def after_reasoning_modules(self) -> list[object]:
-        return [CitationAfterReasoningModule(), ProtocolTagCleanupModule()]
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 citation：贡献 prompt_render 与 after_reasoning 阶段的引用协议模块。"""
+    ctx.lifecycle.contribute("prompt_render", [CitationPromptModule()])
+    ctx.lifecycle.contribute(
+        "after_reasoning",
+        [CitationAfterReasoningModule(), ProtocolTagCleanupModule()],
+    )
 
 
 def extract_cited_ids(response: str) -> tuple[str, list[str]]:
