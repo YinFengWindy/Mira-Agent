@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -35,8 +35,9 @@ describe("LocalAssetRegistry", () => {
     assert.equal(reference.kind, "image");
     assert.match(reference.url, /^shiori-asset:\/\/local\/[0-9a-f-]+$/);
     assert.equal(registry.resolveUrl(reference.url.replace("shiori-asset:", "legacy-asset:")), null);
-    assert.equal(registry.resolveReference(reference.url)?.canonicalPath, grantedPath);
-    assert.equal(registry.resolveReference(grantedPath)?.canonicalPath, grantedPath);
+    const canonicalPath = await realpath(grantedPath);
+    assert.equal(registry.resolveReference(reference.url)?.canonicalPath, canonicalPath);
+    assert.equal(registry.resolveReference(grantedPath)?.canonicalPath, canonicalPath);
     assert.equal(registry.resolveReference(deniedPath), null);
     assert.equal(
       registry.resolveUrl(`shiori-asset://local?path=${encodeURIComponent(deniedPath)}`),

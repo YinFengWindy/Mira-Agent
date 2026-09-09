@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
@@ -32,7 +32,7 @@ describe("openGrantedLocalAsset", () => {
     });
 
     assert.deepEqual(result, { ok: true, error: null });
-    assert.deepEqual(opened, [documentPath]);
+    assert.deepEqual(opened, [await realpath(documentPath)]);
   });
 
   it("does not pass an unauthorized path to the operating system", async () => {
