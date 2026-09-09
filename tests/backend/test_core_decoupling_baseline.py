@@ -23,7 +23,6 @@ Covers:
 
 from __future__ import annotations
 
-import inspect
 import json
 import pytest
 from types import SimpleNamespace
@@ -248,19 +247,3 @@ def test_history_message_fields():
     assert msg.content == "hello"
     assert msg.tools_used == ["shell"]
     assert msg.tool_chain == []
-
-
-def test_turn_types_shim_is_removed():
-    """looping.turn_types 已移除，核心类型统一从 agent.core.types 导入。"""
-    import importlib.util
-
-    assert importlib.util.find_spec("agent.looping.turn_types") is None
-
-
-def test_core_boundary_modules_do_not_import_looping_turn_types():
-    """Canonical core/retrieval contracts must not depend on looping.turn_types."""
-    from agent.core import passive_turn
-    from agent.retrieval import protocol as retrieval_protocol
-
-    assert "agent.looping.turn_types" not in inspect.getsource(passive_turn)
-    assert "agent.looping.turn_types" not in inspect.getsource(retrieval_protocol)

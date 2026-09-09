@@ -7,7 +7,7 @@ import os
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -212,17 +212,24 @@ class McpClient:
         self._next_id += 1
         return i
 
+    def _require_process(self) -> asyncio.subprocess.Process:
+        """返回已连接的子进程；未连接时立即失败，而不是让调用方在下游拿到 None。"""
+        if self._process is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 未连接")
+        return self._process
+
     async def _send(self, payload: dict[str, Any]) -> None:
-        assert self._process and self._process.stdin
+        process = self._require_process()
+        # connect() 总是以 stdin=PIPE 创建子进程，因此进程存在时 stdin 必非空；
+        # 这里仅做静态类型收窄。
+        stdin = cast(asyncio.StreamWriter, process.stdin)
         logger.debug(
             "[mcp:%s] -> %s",
             self.name,
             json.dumps(payload, ensure_ascii=False)[:400],
         )
-        self._process.stdin.write(
-            (json.dumps(payload, ensure_ascii=False) + "\n").encode()
-        )
-        await self._process.stdin.drain()
+        stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode())
+        await stdin.drain()
 
     async def _recv(
         self,
@@ -230,13 +237,14 @@ class McpClient:
         stage: str = "recv",
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        assert self._process and self._process.stdout
+        process = self._require_process()
+        # connect() 总是以 stdout=PIPE 创建子进程，因此进程存在时 stdout 必非空；
+        # 这里仅做静态类型收窄。
+        stdout = cast(asyncio.StreamReader, process.stdout)
         recv_timeout = _RECV_TIMEOUT if timeout is None else timeout
         while True:
             try:
-                line = await asyncio.wait_for(
-                    self._process.stdout.readline(), timeout=recv_timeout
-                )
+                line = await asyncio.wait_for(stdout.readline(), timeout=recv_timeout)
             except asyncio.TimeoutError as e:
                 raise TimeoutError(
                     self._build_timeout_message(stage, expected_id, recv_timeout)
@@ -270,10 +278,13 @@ class McpClient:
 
     async def _drain_stderr(self) -> None:
         """后台读取 stderr，防止缓冲区阻塞。"""
-        assert self._process and self._process.stderr
+        process = self._require_process()
+        # connect() 总是以 stderr=PIPE 创建子进程，因此进程存在时 stderr 必非空；
+        # 这里仅做静态类型收窄。
+        stderr = cast(asyncio.StreamReader, process.stderr)
         try:
             while True:
-                line = await self._process.stderr.readline()
+                line = await stderr.readline()
                 if not line:
                     break
                 text = line.decode().rstrip()
