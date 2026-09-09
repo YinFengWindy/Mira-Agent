@@ -13,10 +13,16 @@ from core.common.cleanup import run_cleanup_steps
 from core.roles import RoleStore
 from core.common.runtime_scope import bind_runtime
 from core.common.task_collector import TaskCollector
-from desktop_bridge.method_policy import Handler, OwnerRouting, method_policy
+from desktop_bridge.method_policy import (
+    Handler,
+    MethodPolicy,
+    OwnerRouting,
+    resolve_plugin_method_policy,
+)
 from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
 from desktop_bridge.runtime.factory import build_desktop_service
+from desktop_bridge.runtime.plugin_config import RuntimePluginConfig
 from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 from desktop_bridge.service import DesktopBridgeService
 
@@ -39,6 +45,7 @@ class ReloadableDesktopService:
         self.roles = roles
         self.settings = RuntimeSettingsApplication(app, config_path, roles)
         self.role_tasks = RuntimeRoleTasks(app, roles)
+        self.plugin_config = RuntimePluginConfig(app, self.settings)
         lease = app.pin()
         self._current = _ServiceGeneration(build_desktop_service(lease.core, roles), lease)
         self._entries = [self._current]
@@ -92,7 +99,7 @@ class ReloadableDesktopService:
         if not isinstance(payload, dict):
             return BridgeResponse(request_id, "response", method,
                                   error=BridgeError("invalid_request", "payload 必须是对象"))
-        policy = method_policy(method)
+        policy = self.resolve_method_policy(method)
         if policy.handler is Handler.SETTINGS:
             try:
                 result = self.status() if method == "runtime.status" else await self.settings.apply(
@@ -101,6 +108,18 @@ class ReloadableDesktopService:
                 if method == "runtime.apply":
                     await self.publish_event({"id": request_id, "type": "event",
                                               "method": "runtime.applied", "payload": result})
+                return BridgeResponse(request_id, "response", method, result)
+            except RuntimeApplyError as exc:
+                return BridgeResponse(request_id, "response", method,
+                                      error=BridgeError(exc.code, str(exc), exc.details))
+        if policy.handler is Handler.PLUGIN_CONFIG:
+            try:
+                result = (
+                    self.plugin_config.get(payload) if method == "plugin.config.get"
+                    else await self.plugin_config.set(
+                        payload, prepare_service=self._prepare, publish_service=self._publish,
+                    )
+                )
                 return BridgeResponse(request_id, "response", method, result)
             except RuntimeApplyError as exc:
                 return BridgeResponse(request_id, "response", method,
@@ -148,6 +167,21 @@ class ReloadableDesktopService:
             if routing is OwnerRouting.BUSY_VOICE_SYNTHESIS and service.voice_handler.owns_synthesis(str(payload.get("voice_request_id") or "")):
                 return entry
         return self._current
+
+    def resolve_method_policy(self, method: str) -> MethodPolicy:
+        """Resolves dispatch policy, consulting the active generation's RPC registry."""
+        return resolve_plugin_method_policy(method, self._plugin_rpc_registry)
+
+    def _plugin_rpc_registry(self):
+        """Returns the active generation's plugin RPC registry, if any.
+
+        Only called for ``plugin.<id>.<method>`` requests (see
+        ``resolve_plugin_method_policy``); other methods never touch
+        ``self.app.core``.
+        """
+        core = self.app.core
+        kernel = core.plugin_manager if core is not None else None
+        return kernel.rpc if kernel is not None else None
 
     def _prepare(self, core):
         service = build_desktop_service(core, self.roles, activate_transport=False)

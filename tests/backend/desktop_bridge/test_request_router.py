@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from desktop_bridge.plugin_requests import DesktopPluginRequestHandler
 from desktop_bridge.request_router import DesktopBridgeRequestRouter
 
 
@@ -15,6 +16,7 @@ def _router(*, role_result=None, story_result=None):
         voice=SimpleNamespace(handle=AsyncMock(return_value=None)),
         stories=SimpleNamespace(handle=AsyncMock(return_value=story_result)),
         observation=None,
+        plugins=DesktopPluginRequestHandler(None),
     )
 
 

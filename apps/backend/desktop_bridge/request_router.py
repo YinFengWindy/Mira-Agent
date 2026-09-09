@@ -7,6 +7,7 @@ from agent.screen_observation.service import ScreenObservationService
 
 from .chat_requests import DesktopChatRequestHandler
 from .image_requests import DesktopImageRequestHandler
+from .plugin_requests import DesktopPluginRequestHandler
 from .role_requests import DesktopRoleRequestHandler
 from .session_task_requests import DesktopSessionTaskRequestHandler
 from .voice.voice_handler import DesktopVoiceHandler
@@ -28,6 +29,7 @@ class DesktopBridgeRequestRouter:
         voice: DesktopVoiceHandler,
         stories: StorySimulationHandler,
         observation: ScreenObservationService | None,
+        plugins: DesktopPluginRequestHandler,
     ) -> None:
         self._roles = roles
         self._sessions_and_tasks = sessions_and_tasks
@@ -36,6 +38,7 @@ class DesktopBridgeRequestRouter:
         self._voice = voice
         self._stories = stories
         self._observation = observation
+        self._plugins = plugins
 
     async def dispatch(
         self,
@@ -61,6 +64,9 @@ class DesktopBridgeRequestRouter:
             return story_result
         if method == "health":
             return {"ok": True}
+        plugin_result = await self._plugins.handle(method, payload)
+        if plugin_result is not None:
+            return plugin_result
         voice_result = await self._voice.handle(method, payload)
         if voice_result is not None:
             return voice_result

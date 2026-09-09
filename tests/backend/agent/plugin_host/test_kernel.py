@@ -248,6 +248,38 @@ async def test_telegram_bot_commands_aggregated(tmp_path: Path):
     assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
 
 
+_RPC_PLUGIN = """
+async def _ping(payload):
+    return {"pong": payload.get("value")}
+
+
+async def setup(ctx):
+    ctx.rpc.register("ping", _ping)
+""".strip()
+
+_RPC_MANIFEST = "api: 2\nid: rpcdemo\ncapabilities:\n  - rpc\n"
+
+
+@pytest.mark.asyncio
+async def test_v2_plugin_rpc_method_callable_then_gone_after_unload(tmp_path: Path):
+    plugin_dir = tmp_path / "rpcdemo"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.py").write_text(_RPC_PLUGIN, encoding="utf-8")
+    (plugin_dir / "manifest.yaml").write_text(_RPC_MANIFEST, encoding="utf-8")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+
+    resolved = kernel.rpc.resolve("plugin.rpcdemo.ping")
+    assert resolved is not None
+    _, handler = resolved
+    assert await handler({"value": 1}) == {"pong": 1}
+
+    _ = await kernel.unload("rpcdemo")
+
+    # 插件卸载后其 RPC 方法立即不可调用
+    assert kernel.rpc.resolve("plugin.rpcdemo.ping") is None
+
+
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
     shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")

@@ -27,6 +27,7 @@ def stub_core_runtime():
             screen_observation=None,
             role_runtime_registry=None,
             memory_runtime=SimpleNamespace(engine=None),
+            plugin_manager=None,
         )
         for name, value in overrides.items():
             setattr(runtime, name, value)

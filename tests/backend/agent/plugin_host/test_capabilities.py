@@ -13,11 +13,14 @@ from agent.plugin_host.capabilities import (
     PHASE_SLOTS,
     PluginContributions,
     ProactiveGatesCapability,
+    RpcCapability,
     ToolHooksCapability,
     ToolsCapability,
     contribute_to_list,
 )
 from agent.plugin_host.effects import EffectScope
+from agent.plugin_host.rpc import PluginRpcRegistry
+from desktop_bridge.method_policy import Concurrency, Handler
 
 
 class _FakeRegistry:
@@ -193,6 +196,56 @@ async def test_channels_capability_add_and_dispose():
 
     _ = await scope.dispose_all()
     assert contributions.channels == []
+
+
+# ── RpcCapability ─────────────────────────────────────────────────────────
+
+
+async def _ping(payload):
+    return {"pong": payload}
+
+
+@pytest.mark.asyncio
+async def test_rpc_capability_registers_under_plugin_namespace_and_disposes():
+    registry = PluginRpcRegistry()
+    scope = EffectScope("demo_plugin")
+    capability = RpcCapability(registry, scope, "demo_plugin")
+
+    capability.register("ping", _ping, concurrency=Concurrency.READ_ONLY, admission_exempt=True)
+
+    resolved = registry.resolve("plugin.demo_plugin.ping")
+    assert resolved == ("demo_plugin", _ping)
+    policy = registry.policy_for("plugin.demo_plugin.ping")
+    assert policy is not None
+    assert policy.concurrency is Concurrency.READ_ONLY
+    assert policy.admission_exempt is True
+    assert policy.handler is Handler.GENERATION
+    assert await _ping({"x": 1}) == {"pong": {"x": 1}}
+
+
+@pytest.mark.asyncio
+async def test_rpc_capability_dispose_unregisters_the_method():
+    registry = PluginRpcRegistry()
+    scope = EffectScope("demo_plugin")
+    capability = RpcCapability(registry, scope, "demo_plugin")
+    capability.register("ping", _ping)
+
+    _ = await scope.dispose_all()
+
+    # 卸载后其 RPC 方法立即不可调用
+    assert registry.resolve("plugin.demo_plugin.ping") is None
+
+
+def test_rpc_capability_defaults_to_conservative_mutation_policy():
+    registry = PluginRpcRegistry()
+    capability = RpcCapability(registry, EffectScope("demo_plugin"), "demo_plugin")
+
+    capability.register("write", _ping)
+
+    policy = registry.policy_for("plugin.demo_plugin.write")
+    assert policy is not None
+    assert policy.concurrency is Concurrency.MUTATION
+    assert policy.admission_exempt is False
 
 
 # ── BackgroundCapability ──────────────────────────────────────────────────
