@@ -33,7 +33,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("bridge", "desktop", "setup", "init"),
+        choices=("bridge", "desktop", "init"),
         help="运行命令；desktop 是 bridge 的兼容别名",
     )
     parser.add_argument("--config", default="config.toml", help="配置文件路径")
@@ -130,15 +130,6 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_argument_parser().parse_args(argv)
     config_path = str(args.config)
     workspace = args.workspace
-
-    if args.command == "setup":
-        from bootstrap.setup_wizard import run_setup_wizard
-
-        run_setup_wizard(
-            config_path=Path(config_path),
-            workspace=workspace or resolve_default_workspace(),
-        )
-        return 0
 
     if args.command == "init":
         summary = init_workspace(

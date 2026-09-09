@@ -1,6 +1,6 @@
 ---
 name: skill-creater
-description: 创建或改写 akashic-bot 技能（SKILL.md）。当用户要求新建技能、适配现有技能到当前格式、或修改技能内容时使用。
+description: 创建或改写 Shiori 技能（SKILL.md）。当用户要求新建技能、适配现有技能到当前格式、或修改技能内容时使用。
 ---
 
 # Skill 创建指南
@@ -25,7 +25,7 @@ $HOME/.shiori/workspace/skills/{skill-name}/   ← 用户自定义技能（优�
 ---
 name: skill-name
 description: 一句话说明技能功能 + 触发场景。触发词：词1, 词2, 词3
-metadata: {"akashic": {"always": false, "requires": {"bins": ["curl"], "env": ["API_KEY"]}}}
+metadata: {"shiori": {"always": false, "requires": {"bins": ["curl"], "env": ["API_KEY"]}}}
 ---
 
 # 技能标题

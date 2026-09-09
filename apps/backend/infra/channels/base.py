@@ -23,7 +23,7 @@ class AttachmentStore:
                 return self.root
         except Exception:
             pass
-        fallback = Path("/tmp/akashic_uploads")
+        fallback = Path("/tmp/shiori_uploads")
         fallback.mkdir(parents=True, exist_ok=True)
         if os.access(fallback, os.W_OK):
             return fallback
@@ -45,7 +45,7 @@ class AttachmentStore:
             path.write_bytes(data)
             return path
         except Exception:
-            fallback = Path("/tmp/akashic_uploads")
+            fallback = Path("/tmp/shiori_uploads")
             fallback.mkdir(parents=True, exist_ok=True)
             alt = fallback / f"{prefix}{uuid4().hex}{suffix}"
             alt.write_bytes(data)

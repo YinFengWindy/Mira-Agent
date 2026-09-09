@@ -1127,7 +1127,7 @@ async def test_qq_private_trace_sends_forward_then_final_and_clears_state(
     channel._workspace = tmp_path
     (tmp_path / "memory").mkdir(parents=True, exist_ok=True)
     (tmp_path / "memory" / "SELF.md").write_text(
-        "# Akashic 的自我认知\n- 我是 Steria，负责陪伴和协作。\n",
+        "# Steria 的自我认知\n- 我是 Steria，负责陪伴和协作。\n",
         encoding="utf-8",
     )
 

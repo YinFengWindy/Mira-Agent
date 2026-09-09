@@ -36,7 +36,7 @@ class McpAddTool(Tool):
                 "command": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "启动命令列表，如 ['python', '/home/user/.akashic/mcp/calendar-mcp/run_server.py']",
+                    "description": "启动命令列表，如 ['python', '/home/user/.shiori/mcp/calendar-mcp/run_server.py']",
                 },
                 "env": {
                     "type": "object",

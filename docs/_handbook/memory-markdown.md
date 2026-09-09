@@ -1,6 +1,6 @@
 # 记忆系统——Markdown 文件层
 
-akashic 的记忆分为两层：**Markdown 文件层**（人类可读，LLM 直接写入）和**向量数据库层**（`memory2.db`，语义检索）。本文档只讲 Markdown 层——哪几个文件、各自干什么、consolidation 怎么把对话变成记忆。
+Shiori 的记忆分为两层：**Markdown 文件层**（人类可读，LLM 直接写入）和**向量数据库层**（`memory2.db`，语义检索）。本文档只讲 Markdown 层——哪几个文件、各自干什么、consolidation 怎么把对话变成记忆。
 
 ---
 
@@ -11,7 +11,7 @@ akashic 的记忆分为两层：**Markdown 文件层**（人类可读，LLM 直�
 | 文件 | 写者 | 读方 | 用途 |
 |------|------|------|------|
 | **MEMORY.md** | Optimizer（主 agent 自动维护） | 被动/主动 agent 的 system prompt | 长期记忆——用户的稳定事实、偏好、身份 |
-| **SELF.md** | Optimizer（主 agent 自动维护） | 被动/主动 agent 的 system prompt | Akashic 的自我认知——形象、对用户的理解、关系定义 |
+| **SELF.md** | Optimizer（主 agent 自动维护） | 被动/主动 agent 的 system prompt | 角色的自我认知——形象、对用户的理解、关系定义 |
 | **HISTORY.md** | Consolidation worker 自动追加 | 被动 agent（检索时 grep）、consolidation 自身（取最近 3 条做上下文） | 按时间线的事件日志，只追加不修改 |
 | **RECENT_CONTEXT.md** | Consolidation worker 自动维护 | 被动/主动 agent 的 system prompt | 近期上下文摘要——最近在聊什么、关注什么 |
 | **PENDING.md** | Consolidation worker 追加 → Optimizer 消费后清空 | Optimizer | 缓冲队列——从对话中提取的待归档事实 |
@@ -151,7 +151,7 @@ Optimizer 在主 agent 启动时注册为后台任务（`memory_optimizer_enable
 
 | Priority | 块名 | 来源文件 | 注入形式 |
 |----------|------|---------|---------|
-| 30 | SelfModel | `SELF.md` | `## Akashic 自我认知\n\n{全文}` |
+| 30 | SelfModel | `SELF.md` | `## 角色自我认知\n\n{全文}` |
 | 35 | LongTermMemory | `MEMORY.md` | `## Long-term Memory\n\n{全文}` |
 | 45 | RecentContext | `RECENT_CONTEXT.md` | Compression + Ongoing Threads（不含 Recent Turns，那个有独立的滑动窗口） |
 | 55 | MemoryBlock | 向量检索结果 | `recall_memory` 的语义召回块（带 [id] 前缀和时间戳） |

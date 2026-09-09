@@ -6,7 +6,7 @@
 #
 #   python -m benchmarks.longmemeval.run \
 #     --config benchmarks/longmemeval/config.toml \
-#     --data benchmarks/longmemeval/data/longmemeval_akashic.json \
+#     --data benchmarks/longmemeval/data/longmemeval_oracle.json \
 #     --workspace /tmp/lme_bench \
 #     --limit 1
 #

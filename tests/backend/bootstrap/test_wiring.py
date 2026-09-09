@@ -302,7 +302,7 @@ def test_config_load_rejects_legacy_socket_configuration(tmp_path: Path):
                 },
             },
             "channels": {
-                "socket": "/tmp/dev-akashic.sock",
+                "socket": "/tmp/dev-shiori.sock",
             },
         },
     )
@@ -463,7 +463,7 @@ max_tokens = 256
 memory_window = 12
 
 [channels]
-socket = "/tmp/toml-akashic.sock"
+socket = "/tmp/toml-shiori.sock"
 
 [integrations.fitbit]
 enabled = true

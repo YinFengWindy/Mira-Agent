@@ -2,42 +2,30 @@
   <img src="./assets/shiori-app-icon.png" alt="Shiori icon" width="96" />
   <h1>Shiori</h1>
   <p><strong>让角色拥有自己的生活</strong></p>
-  <p>一个本地优先的 AI 角色生活空间。创建角色、延续记忆，<br />让 TA 在桌面和日常对话里继续陪伴你。</p>
+  <p>本地优先的 AI 角色扮演助手。角色有自己的人设和记忆，<br />在桌面、Telegram 和 QQ 上都是同一个人。</p>
   <p>
     <a href="https://github.com/YinFengWindy/Shiori-Agent/releases/latest"><strong>下载 Windows 版</strong></a>
     ·
-    <a href="https://github.com/YinFengWindy/Shiori-Agent/releases">查看全部版本</a>
+    <a href="https://github.com/YinFengWindy/Shiori-Agent/releases">历史版本</a>
     ·
     <a href="https://github.com/YinFengWindy/Shiori-Agent/issues">反馈问题</a>
     ·
-    <a href="https://github.com/YinFengWindy/Shiori-Agent">查看源码</a>
+    <a href="https://github.com/YinFengWindy/Shiori-Agent">源码</a>
   </p>
   <p>
     <img src="https://img.shields.io/badge/platform-Windows%20x64-2563eb?style=flat-square" alt="Windows x64" />
-    <img src="https://img.shields.io/badge/version-v0.1.0-7c3aed?style=flat-square" alt="v0.1.0" />
+    <img src="https://img.shields.io/badge/version-v0.2.0-7c3aed?style=flat-square" alt="v0.2.0" />
     <img src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square" alt="MIT license" />
   </p>
 </div>
 
-## 这不只是一次聊天
+## 关于 Shiori
 
-Shiori 不把角色锁在一段提示词里，而是给 TA 一套可以持续生活的空间：人设、记忆、会话、素材和关系彼此独立，并在桌面、渠道之间延续。
+角色不只是一段提示词。Shiori 把角色需要的东西分开存放：人设、记忆、会话、素材和关系各自独立，换一个会话、换一个聊天渠道，角色还是同一个角色。
 
-你可以创建多个角色，让每个角色拥有不同的性格、经历和相处方式。对话会留下记忆，角色可以在合适的时候主动联系你，你也可以给他们安排任务。
+你可以建任意多个角色，每个角色有自己的性格、经历和相处方式。聊过的内容会沉淀成记忆，角色会在合适的时候主动发消息，也可以接你派的任务，或者陪你走完一段故事模式的剧情。
 
-## 角色会记得，也会继续生活
-
-| 体验 | Shiori 如何实现 |
-| --- | --- |
-| **每个角色都有自己的身份** | 独立的人设、头像、立绘、素材、会话和记忆，不会因为切换角色而混淆经历。 |
-| **关系不会停在当前窗口** | 分开管理近期上下文与长期记忆，让角色在后续对话中重新取回共同经历。 |
-| **角色可以主动联系你** | 根据关系、场景和上次互动决定是否发起消息，而不是简单地按固定间隔提醒。 |
-| **桌面上也有 TA 的位置** | 透明桌宠窗口支持拖拽、位置记忆、动作播放和系统托盘常驻。 |
-| **对话可以变成画面** | 接入 NovelAI，让合适的对话回合自然产生CG。 |
-| **关系可以进入故事** | 将角色放进可暂停、可恢复、可分支的视觉小说式经历，保存剧情、场景和 CG。 |
-| **一个角色，多个入口** | 桌面端、Telegram 和 QQ 可以共享角色状态与会话记录。 |
-
-## 先看看 Shiori
+## 界面
 
 <table>
   <tr>
@@ -61,69 +49,58 @@ Shiori 不把角色锁在一段提示词里，而是给 TA 一套可以持续生
   </tr>
 </table>
 
+## 功能
 
+### 角色与对话
 
-## 产品能力
-
-### 桌面端
-
-- 创建、编辑、删除和切换角色
-- 多会话聊天、历史记录
-- 头像、立绘、聊天图片和本地素材管理
-- 图片生成、提示词标签和图片预览
-- 模型、记忆、渠道、主动能力、Drift 和 NovelAI 设置
-- 沉浸式视觉小说模式
-
-### Agent Runtime
-
-- 被动回复与流式输出
-- 近期上下文、长期记忆检索与记忆整理
-- Proactive 主动推送与同场景后续互动
-- Drift 空闲任务
-- 工具调用、插件扩展与生命周期拦截
-- 桌面端、Telegram 与 QQ 的统一会话同步
+- 创建、编辑、删除和切换角色；头像、立绘、聊天图片和本地素材都按角色分开管理
+- 每个角色可以开多个会话，历史记录完整保留，回复流式输出
+- 近期上下文和长期记忆分两层管理，需要时检索并定期整理
+- 角色会根据关系、场景和上次互动判断要不要主动开口，而不是按固定间隔提醒你
+- 空闲时可以跑 Drift 任务
+- 支持工具调用、插件扩展和生命周期拦截
 
 ### 故事模式
 
-- 创建独立的故事经历，使用角色快照、背景、剧情记录和场景状态
-- 支持剧情推进、自由对话、暂停、恢复、保存和分支
-- 重要剧情节点可以关联 CG、语音和其他演出资源
+- 每段故事是一次独立的经历，带角色快照、背景、剧情记录和场景状态
+- 剧情推进和自由对话可以随时切换，也能暂停、恢复、保存，或者从某个节点开一条分支
+- 重要节点可以挂上 CG、语音和其他演出资源
 
 ### 桌宠
 
-- 每个角色可以独立启用桌宠并绑定自己的素材包
-- 桌宠为codex桌宠格式，支持 ZIP 导入、安全校验、动作映射、原生拖拽和位置持久化
-- 桌宠可根据移动方向播放动作，停止后恢复 idle
-- 在明确授权后，观察伴侣可以把屏幕观察结果交给角色，并在桌宠附近展示回复气泡
+- 每个角色可以单独启用桌宠，绑定自己的素材包
+- 素材包用 `codex-sprite@1` 格式，支持 ZIP 导入、安全校验和动作映射
+- 透明窗口原生拖拽，记住上次的位置，托盘常驻；拖动时按方向播动作，停下来回到 idle
+- 授权之后可以开启屏幕观察，角色会读屏幕内容并在桌宠旁边弹气泡回你
 
-## 3 分钟开始
+### 图片生成
 
-### 直接体验
+- 接入 NovelAI 生成图片，可以用提示词标签控制，生成后直接预览
+- 合适的对话回合会自动出场景 CG
 
-1. 打开 [最新 Release](https://github.com/YinFengWindy/Shiori-Agent/releases/latest)。
-2. 下载 Windows x64 安装程序并完成安装。
-3. 首次启动后，在设置界面中注册API KEY，并创建自己的角色，为其绑定对应的LLM。
+### 多端接入
 
-### 可选连接
+- 桌面端、Telegram 和 QQ 共用同一份角色状态和会话记录
 
-| 服务 | 用途 | 是否必需 |
+## 开始使用
+
+1. 打开 [最新 Release](https://github.com/YinFengWindy/Shiori-Agent/releases/latest)，下载 Windows x64 安装程序装上。
+2. 第一次启动后，在设置里填上模型服务的 API Key。
+3. 创建一个角色，给它选好模型，就可以开始聊了。
+
+需要另外配置的服务：
+
+| 服务 | 用来做什么 | 必需 |
 | --- | --- | --- |
-| 模型服务 | 角色回复与 Agent 运行 | 必需 |
-| Embedding 服务 | 语义记忆检索 | 需要长期记忆时配置 |
-| Telegram / QQ | 从外部聊天渠道联系角色 | 可选 |
-| NovelAI | 图片生成与自动场景 CG | 可选 |
-| ASR / TTS 服务 | 桌宠语音交互 | 可选 |
+| 模型服务 | 角色回复和 Agent 运行 | 是 |
+| Embedding 服务 | 语义记忆检索 | 想用长期记忆时要配 |
+| Telegram / QQ | 从外部聊天软件找角色 | 否 |
+| NovelAI | 图片生成和自动场景 CG | 否 |
+| ASR / TTS 服务 | 桌宠语音交互 | 否 |
 
-## 开发者
+## 开发
 
-### 环境
-
-- Windows x64
-- Node.js 22+
-- pnpm 10.33.0
-- Python 3.12+
-
-### 本地运行
+环境要求：Windows x64、Node.js 22+、pnpm 10.33.0、Python 3.12+。
 
 ```powershell
 py -3.12 -m venv .venv
@@ -132,7 +109,7 @@ pnpm install
 pnpm dev
 ```
 
-开发环境中的 Python bridge 会使用项目 `.venv` 内的解释器。常用检查命令：
+开发模式下的 Python bridge 用的是项目 `.venv` 里的解释器，不走系统 PATH。常用检查：
 
 ```powershell
 pnpm test
@@ -142,7 +119,7 @@ pnpm build
 .venv\Scripts\pytest.exe -q tests\
 ```
 
-### 运行结构
+运行结构：
 
 ```text
 桌面端 / Telegram / QQ
@@ -159,12 +136,12 @@ pnpm build
        本地工作区
 ```
 
-## 本地数据与当前边界
+## 数据存在哪里
 
-- 角色、会话和记忆默认保存在本地工作区：`%USERPROFILE%\.shiori\workspace\`。
-- 模型请求会发送到你配置的模型服务；启用 NovelAI、Telegram、QQ 或语音服务后，相应内容也会发送到对应服务。
-- 外部渠道、NovelAI、语音和桌宠素材都需要单独配置；没有有效配置时，桌面端仍可只使用已启用的本地能力。
-- 修改或删除工作区内容前，请先退出 Shiori 并备份对应文件。
+- 角色、会话和记忆默认存在本地：`%USERPROFILE%\.shiori\workspace\`。
+- 模型请求会发给你自己配置的模型服务。开了 NovelAI、Telegram、QQ 或语音之后，相应的内容也会发到这些服务。
+- 外部渠道、NovelAI、语音和桌宠素材都要单独配置；不配也不影响桌面端本地功能的使用。
+- 要改或者删工作区里的文件，先退出 Shiori，动手之前先备份。
 
 ## License
 

@@ -1,8 +1,8 @@
 # LongMemEval Benchmark
 
-这个目录保留一版可提交的 LongMemEval 子集 benchmark。
+这个目录是 LongMemEval 的一个子集 benchmark。
 
-当前 benchmark 只测三类题：
+当前只测三类题：
 
 ```text
 ┌────────────────────────────┐
@@ -14,14 +14,21 @@
 └────────────────────────────┘
 ```
 
-对应数据文件：
+筛选是 runner 自己做的：`run.py` 载入数据后会无条件过滤到上面三类，其余题目直接丢弃，所以 `--data` 直接指向 LongMemEval 上游数据集即可，不需要预先裁一份子集出来。
 
-- `benchmarks/longmemeval/data/longmemeval_akashic.json`
+## 准备数据
+
+`data/` 在 `.gitignore` 里，数据集要自己从 [LongMemEval](https://github.com/xiaowu0162/LongMemEval) 下载后放进去：
+
+- `benchmarks/longmemeval/data/longmemeval_oracle.json` —— 推荐，500 题，过滤后剩 178 题（single-session-user 70 / single-session-preference 30 / knowledge-update 78）
+- `benchmarks/longmemeval/data/longmemeval_s_cleaned.json` —— 完整 haystack 版，约 265MB，跑起来慢很多
+
+下面的命令都以 oracle 版为例。
 
 ## 它在测什么
 
 这不是纯 retrieval benchmark。
-它测的是 `akashic-agent` 这套记忆系统在真实 AgentLoop 里的端到端效果：
+它测的是 `shiori-agent` 这套记忆系统在真实 AgentLoop 里的端到端效果：
 
 ```text
 ┌────────────────────┐
@@ -76,7 +83,7 @@
 ```bash
 python -m benchmarks.longmemeval.run \
   --config benchmarks/longmemeval/config.toml \
-  --data benchmarks/longmemeval/data/longmemeval_akashic.json \
+  --data benchmarks/longmemeval/data/longmemeval_oracle.json \
   --workspace /tmp/lme_bench \
   --workers 4 \
   --resume-auto
@@ -87,7 +94,7 @@ python -m benchmarks.longmemeval.run \
 ```bash
 python -m benchmarks.longmemeval.run \
   --config benchmarks/longmemeval/config.toml \
-  --data benchmarks/longmemeval/data/longmemeval_akashic.json \
+  --data benchmarks/longmemeval/data/longmemeval_oracle.json \
   --workspace /tmp/lme_bench_user \
   --type single-session-user \
   --workers 4 \
@@ -99,7 +106,7 @@ python -m benchmarks.longmemeval.run \
 ```bash
 python -m benchmarks.longmemeval.run \
   --config benchmarks/longmemeval/config.toml \
-  --data benchmarks/longmemeval/data/longmemeval_akashic.json \
+  --data benchmarks/longmemeval/data/longmemeval_oracle.json \
   --workspace /tmp/lme_bench_smoke \
   --limit 3 \
   --workers 1 \
@@ -111,7 +118,7 @@ python -m benchmarks.longmemeval.run \
 ```bash
 python -m benchmarks.longmemeval.run_one_qa \
   --config benchmarks/longmemeval/config.toml \
-  --data benchmarks/longmemeval/data/longmemeval_akashic.json \
+  --data benchmarks/longmemeval/data/longmemeval_oracle.json \
   --workspace /tmp/lme_one_case \
   --question-id 94f70d80
 ```

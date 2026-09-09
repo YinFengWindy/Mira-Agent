@@ -112,7 +112,7 @@ class McpClient:
                 "params": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "clientInfo": {"name": "akashic-agent", "version": "1.0"},
+                    "clientInfo": {"name": "shiori-agent", "version": "1.0"},
                 },
             }
         )
