@@ -75,7 +75,7 @@ def _resolve_manifest_config_model(record: PluginRecord) -> type[BaseModel]:
 def _resolve_legacy_config_model(record: PluginRecord) -> type[BaseModel] | None:
     from agent.plugins.registry import plugin_registry
 
-    cls = plugin_registry._classes.get(record.import_path)
+    cls = plugin_registry.get_class(record.import_path)
     model_cls = getattr(cls, "ConfigModel", None) if cls is not None else None
     if model_cls is None:
         return None
@@ -107,15 +107,22 @@ class PluginConfigSchemaRegistry:
         return model_cls.model_json_schema() if model_cls is not None else None
 
     def defaults_for(self, plugin_id: str) -> dict[str, Any] | None:
-        """Returns the model's default values, or None when the plugin has no model."""
+        """Returns default values for fields that declare one, or None with no model.
+
+        Reads defaults straight off ``model_fields`` instead of instantiating
+        the model: constructing an instance fails for the whole model as soon
+        as a single required field has no default, which would blank out
+        every other field's default along with it. A field without a default
+        (required) is simply absent from the result.
+        """
         model_cls = self._models.get(plugin_id)
         if model_cls is None:
             return None
-        try:
-            return model_cls().model_dump(mode="json")
-        except ValidationError:
-            # 模型存在无默认值的必填字段；调用方以空字典兜底而不是中断读取
-            return {}
+        return {
+            name: field_info.get_default(call_default_factory=True)
+            for name, field_info in model_cls.model_fields.items()
+            if not field_info.is_required()
+        }
 
     def validate(self, plugin_id: str, values: dict[str, Any]) -> dict[str, Any]:
         """Validates and normalizes values against the plugin's model.

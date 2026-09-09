@@ -168,6 +168,27 @@ async def test_set_validates_commits_and_survives_a_restart(tmp_path, monkeypatc
     assert restarted.plugins["qqbot"]["app_id"] == "app-123"
     assert restarted.plugins["qqbot"]["client_secret"] == "secret-xyz"
 
+    # 只证明磁盘文件正确还不够：验收标准要求"写入成功后事务化应用并在重启后
+    # 保持"，真正需要证明的是重启后的运行时能读回新值，而不只是磁盘字节正确。
+    # 用同一份配置文件重新构建一个全新的 AppRuntime + ReloadableDesktopService，
+    # 模拟进程重启后重新启动桥接。
+    restarted_app = AppRuntime(
+        restarted, tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await restarted_app.start()
+    restarted_service = ReloadableDesktopService(restarted_app, path, RoleStore(tmp_path))
+    try:
+        response_after_restart = await _request(
+            restarted_service, "plugin.config.get", {"plugin_id": "qqbot"},
+        )
+        assert response_after_restart.error is None, response_after_restart.error
+        assert response_after_restart.payload["values"]["app_id"] == "app-123"
+        assert response_after_restart.payload["values"]["client_secret"] == "secret-xyz"
+    finally:
+        await restarted_service.aclose()
+        await restarted_app.shutdown()
+
 
 @pytest.mark.asyncio
 async def test_set_refuses_a_value_toml_cannot_represent(tmp_path, monkeypatch):
@@ -189,6 +210,47 @@ async def test_set_refuses_a_value_toml_cannot_represent(tmp_path, monkeypatch):
 
         assert response.error is not None
         assert response.error.code == "plugin_config_unrepresentable"
+        assert path.read_text(encoding="utf-8") == before
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_set_rejects_a_merge_that_corrupts_an_unrelated_table(tmp_path, monkeypatch):
+    """整份文档回读守卫：目标表之外的任何键值变化都必须整体拒绝。
+
+    之前的守卫只重新校验目标插件自己的那张表，对合并逻辑意外改动了别的表
+    （例如行扫描定位表头出错）视而不见——目标表校验照常通过，写入照常提交，
+    用户配置被静默破坏。这里模拟一次"合并结果本身仍能通过目标表校验，但
+    顺带改动了无关表"的合并，断言它现在会被整体拒绝而不是被放行。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        before = path.read_text(encoding="utf-8")
+
+        import desktop_bridge.runtime.plugin_config as plugin_config_module
+        from desktop_bridge.plugin_config_text import merge_plugin_table as real_merge
+
+        def _merge_but_corrupt_an_unrelated_table(config_toml, plugin_id, values):
+            merged = real_merge(config_toml, plugin_id, values)
+            assert 'profile = "quiet"' in merged
+            return merged.replace('profile = "quiet"', 'profile = "loud"')
+
+        monkeypatch.setattr(
+            plugin_config_module, "merge_plugin_table", _merge_but_corrupt_an_unrelated_table,
+        )
+
+        response = await _request(service, "plugin.config.set", {
+            "plugin_id": "qqbot", "operation_id": "op-corrupt",
+            "values": {"app_id": "app-1", "client_secret": "secret-1"},
+        })
+
+        assert response.error is not None
+        assert response.error.code == "plugin_config_unrepresentable"
+        # 目标表校验本身会通过（app_id/client_secret 都合法），必须靠整份文档
+        # 对比才能发现 [proactive] 被意外改动，写入必须整体取消。
         assert path.read_text(encoding="utf-8") == before
     finally:
         await service.aclose()

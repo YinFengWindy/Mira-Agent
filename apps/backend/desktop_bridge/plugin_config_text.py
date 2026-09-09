@@ -1,12 +1,28 @@
 """Table-scoped TOML editing for ``[plugins.<id>]``.
 
 ``plugin.config.set`` must rewrite exactly one plugin's table while leaving
-the rest of the persisted config file byte-for-byte untouched (user comments,
-ordering, unrelated tables). A full ``toml.dumps`` round-trip of the whole
+the rest of the persisted config file untouched (ordering, unrelated tables,
+most surrounding comments). A full ``toml.dumps`` round-trip of the whole
 document would lose comments and reorder tables, so this module locates the
 existing ``[plugins.<id>]`` block (and any of its own sub-tables) by line
 scanning and replaces only that span; when the table does not exist yet, it
 appends a new one.
+
+The scan is statement-aware, not a naive per-line regex match: it tracks
+bracket depth and multi-line (triple-quoted) string state across lines so a
+multi-line array's own last element (e.g. a lone ``[3]`` line) or a header-
+shaped substring inside a multi-line string is never mistaken for a real
+table header. Header lines are also matched with any trailing ``# comment``
+stripped first, and header paths are parsed key-by-key (quoted segments
+included) so a quoted or dotted plugin id is matched correctly instead of by
+raw substring comparison.
+
+Known limitation: comment/blank lines sitting directly between the target
+table's last line and the next table's header are treated as part of the
+replaced span (there is no reliable way to tell whether they describe the
+plugin's own trailing state or the next table), so they are dropped rather
+than preserved byte-for-byte. Everything before the target table and
+everything from the next table's header onward is preserved exactly.
 """
 
 from __future__ import annotations
@@ -31,25 +47,41 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
     """
 
     lines = config_toml.splitlines(keepends=True)
-    prefix = f"plugins.{plugin_id}"
-    start, end = _locate_table(lines, prefix)
+    prefix_segments = ["plugins", plugin_id]
+    start, end = _locate_table(lines, prefix_segments)
     block = _render_table(plugin_id, values)
     if start is None:
         return _append_table(config_toml, block)
     return "".join(lines[:start] + [block] + lines[end:])
 
 
-def _locate_table(lines: list[str], prefix: str) -> tuple[int | None, int]:
-    """Returns the ``[start, end)`` line span owned by ``prefix``, if present."""
+def _locate_table(lines: list[str], prefix_segments: list[str]) -> tuple[int | None, int]:
+    """Returns the ``[start, end)`` line span owned by ``prefix_segments``, if present.
+
+    Only lines that begin a new top-level TOML statement (depth 0, not inside
+    a multi-line string) are considered as header candidates; continuation
+    lines of a multi-line array or string can never be one, no matter what
+    their stripped text looks like.
+    """
 
     start: int | None = None
     end = len(lines)
+    depth = 0
+    in_multiline_basic = False
+    in_multiline_literal = False
     for index, raw_line in enumerate(lines):
-        match = _HEADER_RE.match(raw_line.strip())
+        is_statement_start = depth == 0 and not in_multiline_basic and not in_multiline_literal
+        depth, in_multiline_basic, in_multiline_literal, comment_start = _scan_line(
+            raw_line, depth, in_multiline_basic, in_multiline_literal,
+        )
+        if not is_statement_start:
+            continue
+        text = raw_line if comment_start is None else raw_line[:comment_start]
+        match = _HEADER_RE.match(text.strip())
         if not match:
             continue
-        path = match.group(2)
-        owned = path == prefix or path.startswith(prefix + ".")
+        segments = _parse_key_path(match.group(2))
+        owned = segments[: len(prefix_segments)] == prefix_segments
         if start is None:
             if owned:
                 start = index
@@ -58,6 +90,119 @@ def _locate_table(lines: list[str], prefix: str) -> tuple[int | None, int]:
             end = index
             break
     return start, end
+
+
+def _scan_line(
+    line: str, depth: int, in_multiline_basic: bool, in_multiline_literal: bool,
+) -> tuple[int, bool, bool, int | None]:
+    """Advances TOML lexer state across one physical line.
+
+    Returns the updated bracket depth, multi-line string flags, and the
+    index of an unquoted ``#`` comment start on this line (``None`` when the
+    line has no such comment, e.g. because it is entirely inside a string).
+    """
+
+    index = 0
+    length = len(line)
+    comment_start: int | None = None
+    while index < length:
+        if in_multiline_literal:
+            if line.startswith("'''", index):
+                in_multiline_literal = False
+                index += 3
+            else:
+                index += 1
+            continue
+        if in_multiline_basic:
+            if line[index] == "\\" and index + 1 < length:
+                index += 2
+                continue
+            if line.startswith('"""', index):
+                in_multiline_basic = False
+                index += 3
+            else:
+                index += 1
+            continue
+        char = line[index]
+        if char == "#":
+            comment_start = index
+            break
+        if line.startswith('"""', index):
+            in_multiline_basic = True
+            index += 3
+            continue
+        if line.startswith("'''", index):
+            in_multiline_literal = True
+            index += 3
+            continue
+        if char == '"':
+            index += 1
+            while index < length:
+                if line[index] == "\\" and index + 1 < length:
+                    index += 2
+                    continue
+                if line[index] == '"':
+                    index += 1
+                    break
+                index += 1
+            continue
+        if char == "'":
+            index += 1
+            while index < length and line[index] != "'":
+                index += 1
+            index += 1
+            continue
+        if char == "[":
+            depth += 1
+            index += 1
+            continue
+        if char == "]":
+            depth = max(0, depth - 1)
+            index += 1
+            continue
+        index += 1
+    return depth, in_multiline_basic, in_multiline_literal, comment_start
+
+
+def _parse_key_path(path: str) -> list[str]:
+    """Splits a (possibly quoted) dotted TOML key path into its segments.
+
+    ``plugins."my.id"`` becomes ``["plugins", "my.id"]`` while the unquoted
+    ``plugins.my.id`` becomes three segments — matching TOML semantics,
+    where only the quoted form names a single key containing a dot.
+    """
+
+    segments: list[str] = []
+    index = 0
+    length = len(path)
+    while index < length:
+        while index < length and path[index] in " \t":
+            index += 1
+        if index >= length:
+            break
+        if path[index] in "\"'":
+            quote = path[index]
+            index += 1
+            buffer: list[str] = []
+            while index < length and path[index] != quote:
+                if quote == '"' and path[index] == "\\" and index + 1 < length:
+                    buffer.append(path[index + 1])
+                    index += 2
+                    continue
+                buffer.append(path[index])
+                index += 1
+            segments.append("".join(buffer))
+            index += 1
+        else:
+            start = index
+            while index < length and path[index] not in ". \t":
+                index += 1
+            segments.append(path[start:index])
+        while index < length and path[index] in " \t":
+            index += 1
+        if index < length and path[index] == ".":
+            index += 1
+    return segments
 
 
 def _append_table(config_toml: str, block: str) -> str:

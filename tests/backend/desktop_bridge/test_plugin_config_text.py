@@ -124,3 +124,103 @@ def test_a_plugin_id_that_is_a_prefix_of_another_does_not_collide():
     parsed = tomllib.loads(result)
     assert parsed["plugins"]["foo"] == {"value": 3}
     assert parsed["plugins"]["foobar"] == {"value": 2}
+
+
+def test_a_multi_line_arrays_lone_last_element_is_not_mistaken_for_a_header():
+    """回归：``[3]`` 独占一行时，旧的逐行正则会把它误判成表头。
+
+    这会让 ``end`` 提前锁定在这一行，导致目标表之后、真正下一个表之前的
+    全部内容（这里是 ``[other]``）被当作"已替换区间"的一部分丢弃。
+    """
+    text = (
+        "[plugins.demo]\n"
+        "a = 1\n"
+        "matrix = [\n"
+        "  [1, 2],\n"
+        "  [3]\n"
+        "]\n"
+        "\n"
+        "[other]\n"
+        "z = 9\n"
+    )
+    suffix = text[text.index("[other]") :]
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    assert result.endswith(suffix)
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["demo"] == {"a": 2}
+    assert parsed["other"] == {"z": 9}
+
+
+def test_a_header_shaped_line_inside_a_multiline_basic_string_is_not_a_header():
+    """回归：三引号字符串内部的 ``[a.b]`` 不能被当成表头解析。"""
+    text = (
+        "[plugins.demo]\n"
+        "a = 1\n"
+        'note = """\n'
+        "[a.b]\n"
+        "more text\n"
+        '"""\n'
+        "\n"
+        "[other]\n"
+        "z = 9\n"
+    )
+    suffix = text[text.index("[other]") :]
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    assert result.endswith(suffix)
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["demo"] == {"a": 2}
+    assert parsed["other"] == {"z": 9}
+
+
+def test_a_header_shaped_line_inside_a_multiline_literal_string_is_not_a_header():
+    """三引号字面量字符串（无转义）同样不能被误判成表头。"""
+    text = (
+        "[plugins.demo]\n"
+        "a = 1\n"
+        "note = '''\n"
+        "[a.b]\n"
+        "'''\n"
+        "\n"
+        "[other]\n"
+        "z = 9\n"
+    )
+    suffix = text[text.index("[other]") :]
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    assert result.endswith(suffix)
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["demo"] == {"a": 2}
+    assert parsed["other"] == {"z": 9}
+
+
+def test_a_header_line_with_a_trailing_comment_is_located_and_replaced():
+    """回归：行尾注释曾让表头正则的末尾锚点失配，导致误判为"不存在"，
+
+    从而走 append 分支，在文件末尾追加出一张重复的 ``[plugins.demo]``。
+    """
+    text = "[plugins.demo]  # 说明文字\na = 1\n\n[other]\nz = 9\n"
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    # 只应该有一张 [plugins.demo]，而不是替换失败后又追加了一张
+    assert result.count("[plugins.demo]") == 1
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["demo"] == {"a": 2}
+    assert parsed["other"] == {"z": 9}
+
+
+def test_a_quoted_key_header_is_located_by_its_unquoted_value():
+    """带引号的键（``plugin_id`` 本身含点）不能靠原始文本前缀匹配。"""
+    text = '[plugins."my.plugin"]\na = 1\n\n[other]\nz = 9\n'
+
+    result = merge_plugin_table(text, "my.plugin", {"a": 2})
+
+    assert result.count('"my.plugin"') == 1
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["my.plugin"] == {"a": 2}
+    assert parsed["other"] == {"z": 9}

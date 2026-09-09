@@ -494,7 +494,7 @@ def _load_plugin_config(
         try:
             return config_model.model_validate(raw_config or {})
         except ValidationError as e:
-            raise _PluginConfigError(_format_validation_error(e)) from e
+            raise _PluginConfigError(format_validation_error(e)) from e
     # 1. 读取 _conf_schema.json，提取每个字段的 default 值
     from agent.plugins.config import PluginConfig
     schema_path = plugin_dir / "_conf_schema.json"
@@ -534,11 +534,6 @@ def _load_plugin_config(
             else:
                 logger.warning("plugin_config.json 格式错误，期望 dict (%s)", plugin_dir)
     return PluginConfig(values)
-
-
-# 格式化逻辑归新插件系统所有；旧 manager 复用它，避免 #184 删除本模块时带走
-# 仍在被桥接使用的实现。
-_format_validation_error = format_validation_error
 
 
 def _load_module_list(instance: Any, method_name: str) -> list[object]:

@@ -39,7 +39,7 @@ from desktop_bridge.chat_requests import DesktopChatRequestHandler
 from desktop_bridge.chat_service import ChatTurnBusyError, DesktopChatService
 from desktop_bridge.image_requests import DesktopImageRequestHandler
 from desktop_bridge.image_service import DesktopImageService
-from desktop_bridge.method_policy import MethodPolicy, method_policy
+from desktop_bridge.method_policy import MethodPolicy, resolve_plugin_method_policy
 from desktop_bridge.models import BridgeError, BridgeEvent, BridgeResponse
 from desktop_bridge.plugin_requests import DesktopPluginRequestHandler
 from desktop_bridge.request_router import DesktopBridgeRequestRouter
@@ -340,22 +340,9 @@ class DesktopBridgeService:
         await self._broadcast_event(payload)
 
     def resolve_method_policy(self, method: str) -> MethodPolicy:
-        """Resolves dispatcher policy, querying the plugin RPC registry dynamically.
+        """Resolves dispatcher policy, querying the plugin RPC registry dynamically."""
 
-        ``plugin.<id>.<method>`` is not in the static table: its policy is
-        whatever the owning plugin declared via ``ctx.rpc.register``.
-        ``plugin.config.*`` is excluded because it is served by
-        ``ReloadableDesktopService`` (declared statically), never by this
-        single-generation service.
-        """
-
-        if method.startswith("plugin.") and not method.startswith("plugin.config."):
-            if self.plugin_rpc_registry is not None:
-                policy = self.plugin_rpc_registry.policy_for(method)
-                if policy is not None:
-                    return policy
-            return MethodPolicy()
-        return method_policy(method)
+        return resolve_plugin_method_policy(method, lambda: self.plugin_rpc_registry)
 
     async def aclose(self) -> None:
         """Releases bridge event subscriptions and desktop chat tasks."""
