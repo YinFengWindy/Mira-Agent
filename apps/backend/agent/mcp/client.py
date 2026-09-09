@@ -7,7 +7,7 @@ import os
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -218,11 +218,34 @@ class McpClient:
             raise RuntimeError(f"MCP 客户端 {self.name!r} 未连接")
         return self._process
 
+    def _require_stdin(self) -> asyncio.StreamWriter:
+        """返回已连接进程的 stdin。
+
+        connect() 总是以 stdin/stdout/stderr=PIPE 创建子进程，因此进程存在时
+        三个流理论上必非空；这里仍做真实的 None 检查并立即失败，而不是让
+        None 流入下游触发一个更晚、更隐晦的错误。
+        """
+        stdin = self._require_process().stdin
+        if stdin is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stdin 不可用")
+        return stdin
+
+    def _require_stdout(self) -> asyncio.StreamReader:
+        """返回已连接进程的 stdout；未连接或流不可用时立即失败。"""
+        stdout = self._require_process().stdout
+        if stdout is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stdout 不可用")
+        return stdout
+
+    def _require_stderr(self) -> asyncio.StreamReader:
+        """返回已连接进程的 stderr；未连接或流不可用时立即失败。"""
+        stderr = self._require_process().stderr
+        if stderr is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stderr 不可用")
+        return stderr
+
     async def _send(self, payload: dict[str, Any]) -> None:
-        process = self._require_process()
-        # connect() 总是以 stdin=PIPE 创建子进程，因此进程存在时 stdin 必非空；
-        # 这里仅做静态类型收窄。
-        stdin = cast(asyncio.StreamWriter, process.stdin)
+        stdin = self._require_stdin()
         logger.debug(
             "[mcp:%s] -> %s",
             self.name,
@@ -237,10 +260,7 @@ class McpClient:
         stage: str = "recv",
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        process = self._require_process()
-        # connect() 总是以 stdout=PIPE 创建子进程，因此进程存在时 stdout 必非空；
-        # 这里仅做静态类型收窄。
-        stdout = cast(asyncio.StreamReader, process.stdout)
+        stdout = self._require_stdout()
         recv_timeout = _RECV_TIMEOUT if timeout is None else timeout
         while True:
             try:
@@ -278,10 +298,7 @@ class McpClient:
 
     async def _drain_stderr(self) -> None:
         """后台读取 stderr，防止缓冲区阻塞。"""
-        process = self._require_process()
-        # connect() 总是以 stderr=PIPE 创建子进程，因此进程存在时 stderr 必非空；
-        # 这里仅做静态类型收窄。
-        stderr = cast(asyncio.StreamReader, process.stderr)
+        stderr = self._require_stderr()
         try:
             while True:
                 line = await stderr.readline()
