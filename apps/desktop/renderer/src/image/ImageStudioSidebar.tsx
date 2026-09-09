@@ -52,7 +52,7 @@ export function ImageStudioSidebar({
 }: ImageStudioSidebarProps) {
   const promptLibraryClass = cx(
     sidebarNavItemClass,
-    "mb-3 flex h-9 items-center gap-2 px-2 text-left text-sm text-[#6b7683]",
+    "mb-3 flex h-9 items-center gap-2 px-2 text-left text-sm text-ink-muted",
   );
 
   return (
