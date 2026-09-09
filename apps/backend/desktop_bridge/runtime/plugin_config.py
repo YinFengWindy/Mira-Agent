@@ -74,19 +74,25 @@ class RuntimePluginConfig:
                 errors=exc.errors(include_url=False, include_context=False),
             ) from exc
         # 复用设置事务：定位-替换式合并 TOML 文本后走既有事务化落盘 + 热更新路径，
-        # 不另起一套写盘逻辑（见 desktop_bridge/plugin_config_text.py）
-        original_text = self._settings.config_text
-        merged_text = merge_plugin_table(original_text, plugin_id, normalized)
-        self._assert_config_round_trip(kernel, plugin_id, original_text, merged_text, normalized)
-        apply_payload: dict[str, Any] = {
-            "config_toml": merged_text,
-            "operation_id": operation_id,
-        }
+        # 不另起一套写盘逻辑（见 desktop_bridge/plugin_config_text.py）。
+        # 合并与守卫都在事务锁内进行：本方法只改一张表、其余文本沿用"当前已提交
+        # 的配置"，若在锁外读取基准文本，并发的 runtime.apply 会被整份覆盖掉。
+        def _merge(current_text: str) -> str:
+            merged = merge_plugin_table(current_text, plugin_id, normalized)
+            self._assert_config_round_trip(
+                kernel, plugin_id, current_text, merged, normalized,
+            )
+            return merged
+
+        apply_payload: dict[str, Any] = {"operation_id": operation_id}
         expected_generation = payload.get("expected_generation")
         if expected_generation is not None:
             apply_payload["expected_generation"] = expected_generation
         result = await self._settings.apply(
-            apply_payload, prepare_service=prepare_service, publish_service=publish_service,
+            apply_payload,
+            prepare_service=prepare_service,
+            publish_service=publish_service,
+            build_config_toml=_merge,
         )
         return {"plugin_id": plugin_id, "values": normalized, **result}
 

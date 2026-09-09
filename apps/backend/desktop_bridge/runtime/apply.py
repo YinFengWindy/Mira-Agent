@@ -43,9 +43,20 @@ class RuntimeSettingsApplication:
     async def apply(
         self, payload: dict[str, Any], *, prepare_service: Callable,
         publish_service: Callable,
+        build_config_toml: Callable[[str], str] | None = None,
     ) -> dict[str, Any]:
-        """Applies a complete draft once; failures leave draft ownership with the UI."""
+        """Applies a complete draft once; failures leave draft ownership with the UI.
+
+        A caller that derives its new text from the *current* committed text
+        (rather than owning a full draft, as the settings UI does) passes
+        ``build_config_toml``: it runs inside this lock, so a concurrent apply
+        cannot slip a commit in between reading the current text and writing
+        the derived one. Deriving outside the lock would silently drop the
+        other writer's changes.
+        """
         async with self._lock:
+            if build_config_toml is not None:
+                payload = {**payload, "config_toml": build_config_toml(self.config_text)}
             return await self._apply(payload, prepare_service, publish_service)
 
     async def _apply(self, payload, prepare_service, publish_service):

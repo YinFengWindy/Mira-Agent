@@ -6,6 +6,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from bootstrap.app import AppRuntime
 from bootstrap.runtime.generations import RuntimeLease
@@ -25,6 +26,9 @@ from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.runtime.plugin_config import RuntimePluginConfig
 from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 from desktop_bridge.service import DesktopBridgeService
+
+if TYPE_CHECKING:
+    from agent.plugin_host.rpc import PluginRpcRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +176,7 @@ class ReloadableDesktopService:
         """Resolves dispatch policy, consulting the active generation's RPC registry."""
         return resolve_plugin_method_policy(method, self._plugin_rpc_registry)
 
-    def _plugin_rpc_registry(self):
+    def _plugin_rpc_registry(self) -> "PluginRpcRegistry | None":
         """Returns the active generation's plugin RPC registry, if any.
 
         Only called for ``plugin.<id>.<method>`` requests (see
