@@ -26,7 +26,7 @@
 所以**只要你是在用过的库上重建**，缓存就是热的，直接跑：
 
 ```bash
-python scripts/build_akasha_db.py \
+uv run python scripts/build_akasha_db.py \
   --config config.toml \
   --sessions-db ~/.shiori/workspace/sessions.db \
   --db-path    ~/.shiori/workspace/memory/akasha.db
@@ -99,7 +99,7 @@ store.close()
 `build_akasha_db.py` **不建** `fts_token_idf`（FTS 稀有词种子用的 IDF 表）。全新库或想刷新 IDF：
 
 ```bash
-python scripts/build_fts_idf.py
+uv run python scripts/build_fts_idf.py
 ```
 
 它扫 `sessions.db` 全部消息、jieba 切词算 IDF、写回 `akasha.db:fts_token_idf`。

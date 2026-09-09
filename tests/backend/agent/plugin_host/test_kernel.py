@@ -47,7 +47,7 @@ def test_discover_finds_all_top_level_plugins():
     names = {record.name for record in kernel.discover()}
 
     assert names == _EXPECTED_TOP_LEVEL_PLUGINS
-    assert len(names) == 17
+
 
 _V2_PLUGIN = """
 from agent.lifecycle.types import BeforeTurnCtx

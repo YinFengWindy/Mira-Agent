@@ -32,7 +32,7 @@ logger = logging.getLogger("observe.collector")
 
 # 仓库根：traceback 里"属于本项目"的帧以此为界，同时覆盖 apps/backend/** 与 plugins/**。
 # 插件迁到顶层 plugins/ 后，这个边界才把插件自身的帧也算作本项目代码。
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _FLUSH_INTERVAL = 10.0
 _MESSAGE_MAX = 500
 _TRACEBACK_MAX = 4000
@@ -327,7 +327,7 @@ def _top_app_frame(tb: types.TracebackType | None) -> str:
     chosen: traceback.FrameSummary = frames[-1]
     for frame in frames:
         try:
-            rel = Path(frame.filename).resolve().relative_to(_PROJECT_ROOT)
+            rel = Path(frame.filename).resolve().relative_to(_REPOSITORY_ROOT)
         except ValueError:
             continue
         return f"{rel}:{frame.lineno or 0}"

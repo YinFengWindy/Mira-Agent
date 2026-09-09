@@ -76,3 +76,41 @@ async def test_module_inspection_closes_http_when_construction_fails(monkeypatch
     with pytest.raises(ValueError, match="invalid wiring"):
         await app_main.inspect_modules(workspace=tmp_path)
     http.aclose.assert_awaited_once()
+
+
+def test_dev_launch_makes_top_level_plugins_importable(tmp_path: Path):
+    """开发态启动形态下，入口必须让 `plugins.<id>` 可导入。
+
+    桌面 dev 用 `python main.py` 以 apps/backend 为脚本目录启动后端，仓库根不在
+    sys.path 上；而插件包内部与 bootstrap 的默认记忆引擎都用 plugins.<id>.<module>
+    绝对导入。少了入口这一步，插件会在导入期全部失败并被内核静默跳过。
+
+    pytest 自身的 `pythonpath = . apps/backend` 恰好会掩盖这个缺口，所以这里用
+    子进程复刻真实的 sys.path 形态，而不是在当前进程里断言。
+    """
+    import subprocess
+    import sys
+
+    repository_root = Path(__file__).resolve().parents[2]
+    backend_root = repository_root / "apps" / "backend"
+    workspace = tmp_path / "workspace"
+    config_path = tmp_path / "config.toml"
+
+    probe = "\n".join([
+        "import sys",
+        f"sys.path[:] = [p for p in sys.path if p != {str(repository_root)!r}]",
+        "import main",
+        f"code = main.main(['init', '--workspace', {str(workspace)!r},"
+        f" '--config', {str(config_path)!r}])",
+        "import plugins.default_memory.config",
+        "print('PLUGINS_IMPORTABLE', code)",
+    ])
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=backend_root,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "PLUGINS_IMPORTABLE 0" in result.stdout
