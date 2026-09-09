@@ -281,7 +281,8 @@ void app.whenReady().then(() => {
   );
   registerLocalAssetProtocol(protocol, localAssets);
   void startBridge(bridge);
-  registerDesktopUpdates(app.isPackaged, app.getVersion(), (error) => {
+  const currentVersion = !app.isPackaged && process.env.SHIORI_DEV_VERSION || app.getVersion();
+  registerDesktopUpdates(app.isPackaged, currentVersion, (error) => {
     logDesktopDiagnostic({ scope: "main", event: "updater.check.failed", payload: { error } });
   });
   desktopPet = new DesktopPetController({
