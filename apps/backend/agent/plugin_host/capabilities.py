@@ -38,6 +38,27 @@ class PluginContributions:
         self.tool_names: list[str] = []
 
 
+def contribute_to_list[T](
+    target: list[T],
+    item: T,
+    *,
+    effects: EffectScope,
+    label: str,
+) -> None:
+    """把一项贡献登记进目标列表，并登记"从列表移除"的可回滚 effect。
+
+    三类列表型 capability（tool hook / proactive gate / channel）共用此实现，
+    保证登记与撤销形状一致；移除守卫使重复处置保持幂等。
+    """
+    target.append(item)
+
+    def discard() -> None:
+        if item in target:
+            target.remove(item)
+
+    effects.add(label, discard)
+
+
 class ToolsCapability:
     """注册插件工具到 ToolRegistry；卸载时通过 effect 反注册。"""
 
@@ -72,6 +93,7 @@ class ToolsCapability:
             source_type="plugin",
             source_name=self._plugin_id,
         )
+        # 工具除了从贡献清单移除，还要反注册出 ToolRegistry，故不复用列表 helper
         self._contributions.tool_names.append(name)
         self._effects.add(f"tool:{name}", lambda: self._unregister(name))
 
@@ -111,15 +133,12 @@ class ToolHooksCapability:
         self._effects = effects
 
     def add(self, hook: "ToolHook") -> None:
-        self._contributions.tool_hooks.append(hook)
-        self._effects.add(
-            f"tool_hook:{getattr(hook, 'name', hook)}",
-            lambda: self._discard(hook),
+        contribute_to_list(
+            self._contributions.tool_hooks,
+            hook,
+            effects=self._effects,
+            label=f"tool_hook:{getattr(hook, 'name', hook)}",
         )
-
-    def _discard(self, hook: "ToolHook") -> None:
-        if hook in self._contributions.tool_hooks:
-            self._contributions.tool_hooks.remove(hook)
 
 
 class ProactiveGatesCapability:
@@ -130,15 +149,12 @@ class ProactiveGatesCapability:
         self._effects = effects
 
     def add(self, gate: "ProactiveGate") -> None:
-        self._contributions.proactive_gates.append(gate)
-        self._effects.add(
-            f"proactive_gate:{getattr(gate, 'name', gate)}",
-            lambda: self._discard(gate),
+        contribute_to_list(
+            self._contributions.proactive_gates,
+            gate,
+            effects=self._effects,
+            label=f"proactive_gate:{getattr(gate, 'name', gate)}",
         )
-
-    def _discard(self, gate: "ProactiveGate") -> None:
-        if gate in self._contributions.proactive_gates:
-            self._contributions.proactive_gates.remove(gate)
 
 
 class ChannelsCapability:
@@ -149,15 +165,12 @@ class ChannelsCapability:
         self._effects = effects
 
     def add(self, channel: "Channel") -> None:
-        self._contributions.channels.append(channel)
-        self._effects.add(
-            f"channel:{getattr(channel, 'name', channel)}",
-            lambda: self._discard(channel),
+        contribute_to_list(
+            self._contributions.channels,
+            channel,
+            effects=self._effects,
+            label=f"channel:{getattr(channel, 'name', channel)}",
         )
-
-    def _discard(self, channel: "Channel") -> None:
-        if channel in self._contributions.channels:
-            self._contributions.channels.remove(channel)
 
 
 class BackgroundCapability:
