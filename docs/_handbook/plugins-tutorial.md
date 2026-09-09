@@ -4,11 +4,11 @@ agent 每次收到一条用户消息，经过 6 个生命周期阶段产出一�
 
 ## 先理解它怎么运转的
 
-插件放到 `apps/backend/plugins/` 目录下，启动时自动发现、加载、注册。过程：
+插件放到 `plugins/` 目录下，启动时自动发现、加载、注册。过程：
 
 ```
 PluginManager.discover()
-  → 扫描 apps/backend/plugins/ 下每个有 plugin.py 的子目录
+  → 扫描 plugins/ 下每个有 plugin.py 的子目录
   → 动态 import plugin.py，Plugin.__init_subclass__() 自动注册
   → 调用 initialize()，失败则回滚该插件的所有注册
 ```

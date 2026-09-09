@@ -38,7 +38,7 @@
 - 视图层中的派生计算（dirty 判断、header title、preview 数据、可见状态等）应优先抽到 selector / pure helper，避免散落在页面主体。
 - 每个测试文件只测试对应源文件的行为，对应关系必须一目了然：
   - TypeScript 单测与被测源文件**同目录并列**（`main.ts` / `main.test.ts`）；Electron、onboarding 这类 e2e 放 `apps/desktop/tests/`。
-  - Python 单测放 `tests/backend/`，目录结构镜像 `apps/backend/`。
+  - Python 单测放 `tests/backend/`，目录结构镜像 `apps/backend/`。例外：顶层 `plugins/<id>/` 插件包的单测放 `tests/plugins/<id>/`，镜像 `plugins/` 而非 `apps/backend/`；两棵测试树共享 `tests/conftest.py`。
 - 测试要能证明问题真实存在；不要只写“会通过但证明不了什么”的测试。
 
 ## React 与状态管理

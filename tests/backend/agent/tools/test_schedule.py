@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 from agent.scheduler import LatencyTracker, SchedulerService
 from agent.tools.schedule import CancelScheduleTool, ListSchedulesTool, ScheduleTool
-from tests.backend.conftest import make_job
+from tests.conftest import make_job
 
 _NOW = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 _NOW_FN = lambda: _NOW  # noqa: E731

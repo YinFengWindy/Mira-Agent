@@ -32,7 +32,6 @@ open_db = cast(Callable[[Path], sqlite3.Connection], getattr(_observe_db, "open_
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-BACKEND_ROOT = REPOSITORY_ROOT / "apps" / "backend"
 FIXTURES_DIR = REPOSITORY_ROOT / "tests" / "fixtures" / "plugins"
 
 
@@ -137,7 +136,7 @@ async def test_strict_candidate_rejects_plugin_initialization_failure(tmp_path):
 
 @pytest.mark.asyncio
 async def test_collects_and_clears_official_proactive_gates(tmp_path: Path):
-    source = BACKEND_ROOT / "plugins" / "relationship_proactive"
+    source = REPOSITORY_ROOT / "plugins" / "relationship_proactive"
     plugin_root = tmp_path / "plugins"
     shutil.copytree(source, plugin_root / "relationship_proactive")
     bus = EventBus()
@@ -160,7 +159,7 @@ async def test_collects_and_clears_official_proactive_gates(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_observe_plugin_writes_turn_trace(tmp_path: Path):
-    source = BACKEND_ROOT / "plugins" / "observe"
+    source = REPOSITORY_ROOT / "plugins" / "observe"
     plugin_root = tmp_path / "plugins"
     shutil.copytree(source, plugin_root / "observe")
     bus = EventBus()
@@ -206,7 +205,7 @@ async def test_observe_plugin_writes_turn_trace(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_observe_plugin_writes_memory_domain_events(tmp_path: Path):
-    source = BACKEND_ROOT / "plugins" / "observe"
+    source = REPOSITORY_ROOT / "plugins" / "observe"
     plugin_root = tmp_path / "plugins"
     shutil.copytree(source, plugin_root / "observe")
     bus = EventBus()

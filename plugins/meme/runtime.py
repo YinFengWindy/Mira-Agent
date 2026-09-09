@@ -12,7 +12,7 @@ from core.roles import RoleStore
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _COMMON_EMOJIS_PATH = Path("apps/desktop/renderer/src/chat/common_emojis.json")
 _PACKAGED_COMMON_EMOJIS_PATH = Path("common_emojis.json")
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _common_emojis_candidates(workspace: Path) -> list[Path]:

@@ -115,5 +115,5 @@ python scripts/build_fts_idf.py
 | 换了 embedding 模型 | 同"全新库"：必须重新预热（旧缓存全失配） |
 | 想确认图完整 | 看输出 `cache_misses` 是否为 0 |
 
-> 实现细节：快速重放后端在 `apps/backend/plugins/akasha/fast/`（内存 `MemoryStore` + graph_fast/fast_dense + `dump.dump_to_db`），
-> 对拍/确定性回归见 `tests/backend/test_fast_rebuild_parity.py`。
+> 实现细节：快速重放后端在 `plugins/akasha/fast/`（内存 `MemoryStore` + graph_fast/fast_dense + `dump.dump_to_db`），
+> 对拍/确定性回归见 `tests/plugins/akasha/test_fast_rebuild_parity.py`。

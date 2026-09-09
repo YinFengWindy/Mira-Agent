@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, cast
@@ -552,8 +553,18 @@ def build_core_runtime(
 
 
 def _resolve_plugin_dirs(workspace: Path) -> list[Path]:
-    project_root = Path(__file__).resolve().parent.parent
-    return [project_root / "plugins"]
+    """Resolves the top-level `plugins/` directory for dev and frozen runs.
+
+    In development the repo root is three parents above this file
+    (bootstrap -> backend -> apps -> repo root). When packaged with
+    PyInstaller, plugins are placed at the bundle root via `--add-data`, so
+    they must be resolved relative to `sys._MEIPASS` instead.
+    """
+    frozen_root = getattr(sys, "_MEIPASS", None)
+    if isinstance(frozen_root, str) and frozen_root:
+        return [Path(frozen_root) / "plugins"]
+    repo_root = Path(__file__).resolve().parents[3]
+    return [repo_root / "plugins"]
 
 
 def _role_owns_channel_target(

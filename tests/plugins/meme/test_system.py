@@ -8,11 +8,11 @@ from typing import Any
 
 import pytest
 
-BACKEND_ROOT = Path(__file__).resolve().parents[4] / "apps" / "backend"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_meme_runtime() -> Any:
-    path = BACKEND_ROOT / "plugins" / "meme" / "runtime.py"
+    path = REPO_ROOT / "plugins" / "meme" / "runtime.py"
     spec = importlib.util.spec_from_file_location("test_meme_runtime", path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))

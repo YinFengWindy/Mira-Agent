@@ -13,9 +13,41 @@ from bus.event_bus import EventBus
 
 from tests.backend.agent.plugin_host.conftest import (
     FIXTURES_DIR,
+    REPOSITORY_ROOT,
     before_turn_ctx,
     make_kernel,
 )
+
+_EXPECTED_TOP_LEVEL_PLUGINS = {
+    "akasha",
+    "citation",
+    "context_pressure",
+    "default_memory",
+    "desktop_pet",
+    "meme",
+    "novelai",
+    "observe",
+    "plugin_undo",
+    "qqbot",
+    "relationship_proactive",
+    "scene_awareness",
+    "setup_helper",
+    "shell_restore",
+    "shell_safety",
+    "status_commands",
+    "tool_loop_guard",
+}
+
+
+def test_discover_finds_all_top_level_plugins():
+    """插件目录迁至仓库顶层 `plugins/` 后，内核发现路径必须能找到全部 17 个插件（#178）。"""
+    plugins_dir = REPOSITORY_ROOT / "plugins"
+    kernel = make_kernel([plugins_dir], event_bus=EventBus())
+
+    names = {record.name for record in kernel.discover()}
+
+    assert names == _EXPECTED_TOP_LEVEL_PLUGINS
+    assert len(names) == 17
 
 _V2_PLUGIN = """
 from agent.lifecycle.types import BeforeTurnCtx

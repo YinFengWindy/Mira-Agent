@@ -86,7 +86,7 @@ def _load_script_config(
     *,
     db_path: str,
 ) -> AkashaConfig:
-    # 1. 插件配置仍从 apps/backend/plugins/akasha/config.local.toml 读取。
+    # 1. 插件配置仍从 plugins/akasha/config.local.toml 读取。
     config = load_akasha_config()
     if db_path.strip():
         return replace(config, db_path=db_path)

@@ -23,7 +23,7 @@ from core.net.http import (
 )
 from tests.backend.memory_fakes import FakeMemoryEngine
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[4] / "apps" / "backend"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 class _DummyTool(Tool):
@@ -165,7 +165,7 @@ def _make_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> Age
 def _tool_loop_guard_hooks() -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
-        shutil.copytree(_BACKEND_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
+        shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
         mgr = PluginManager(plugin_dirs=[Path(tmp)], event_bus=EventBus())
         asyncio.run(mgr.load_all())
         return mgr.tool_hooks

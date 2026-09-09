@@ -21,11 +21,11 @@ from bus.event_bus import EventBus
 from bus.events import InboundMessage
 from bus.events_lifecycle import TurnCommitted
 
-BACKEND_ROOT = Path(__file__).resolve().parents[4] / "apps" / "backend"
+REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _load_meme_plugin_class() -> Any:
-    path = BACKEND_ROOT / "plugins" / "meme" / "plugin.py"
+    path = REPO_ROOT / "plugins" / "meme" / "plugin.py"
     spec = importlib.util.spec_from_file_location(
         "test_p7_meme_plugin",
         path,

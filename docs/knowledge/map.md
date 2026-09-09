@@ -8,7 +8,7 @@ source_paths:
   - apps/backend/core/
   - apps/backend/agent/
   - apps/backend/proactive_v2/
-  - apps/backend/plugins/
+  - plugins/
   - apps/backend/desktop_bridge/
 related:
   - index.md
@@ -25,12 +25,12 @@ related:
 | 会话 | `apps/backend/session/` | Agent 回合、在线状态、消息历史、搜索 |
 | 对话持久化 | `apps/backend/conversation/` | 线程投影、旧数据迁移、跨入口消息连续性 |
 | 记忆契约 | `apps/backend/core/memory/` | Agent 检索与生命周期插件 |
-| 默认与增强记忆 | `apps/backend/plugins/default_memory/`、`apps/backend/memory2/` | 查询改写、召回、注入规划、响应后写入 |
+| 默认与增强记忆 | `plugins/default_memory/`、`apps/backend/memory2/` | 查询改写、召回、注入规划、响应后写入 |
 | 主动行为 | `apps/backend/proactive_v2/` | 传感、裁定、Agent tick、投递、状态持久化 |
 | Drift | `apps/backend/agent/core/drift_turn.py`、`apps/backend/proactive_v2/drift_state.py` | 特殊回合、工具、主动状态 |
 | NovelAI | `apps/backend/core/integrations/novelai/` | 手动图片生成、自动 CG、桌面图片面板 |
-| 自动 CG | `apps/backend/plugins/novelai/` | 场景判断、生成、消息推送、权威角色会话 |
-| 渠道 | `apps/backend/infra/channels/`、`apps/backend/core/channels/hub.py`、`apps/backend/plugins/qqbot/` | 消息总线、会话定位、媒体发送 |
+| 自动 CG | `plugins/novelai/` | 场景判断、生成、消息推送、权威角色会话 |
+| 渠道 | `apps/backend/infra/channels/`、`apps/backend/core/channels/hub.py`、`plugins/qqbot/` | 消息总线、会话定位、媒体发送 |
 | Agent 回合 | `apps/backend/agent/core/`、`apps/backend/agent/turns/`、`apps/backend/agent/lifecycle/` | 上下文、推理、工具、输出、生命周期事件 |
 | 工具、插件、MCP | `apps/backend/agent/tools/`、`apps/backend/agent/plugins/`、`apps/backend/agent/mcp/` | ToolRegistry、ToolExecutor、远端工具连接 |
 | 调度任务 | `apps/backend/agent/scheduler.py`、`apps/backend/agent/tools/schedule.py`、`apps/backend/desktop_bridge/schedule_role_task_service.py` | 主动触发、角色任务、桌面展示 |

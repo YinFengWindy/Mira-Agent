@@ -19,11 +19,11 @@ from agent.plugins.registry import plugin_registry
 from bus.event_bus import EventBus
 from core.roles import RoleStore
 
-BACKEND_ROOT = Path(__file__).resolve().parents[4] / "apps" / "backend"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_meme_plugin_module() -> Any:
-    path = BACKEND_ROOT / "plugins" / "meme" / "plugin.py"
+    path = REPO_ROOT / "plugins" / "meme" / "plugin.py"
     spec = importlib.util.spec_from_file_location(
         "test_meme_plugin",
         path,
@@ -123,7 +123,7 @@ async def test_meme_prompt_module_injects_bottom_section(tmp_path: Path) -> None
 async def test_plugin_manager_collects_meme_prompt_module_before_initialize(tmp_path: Path) -> None:
     _write_meme_workspace(tmp_path)
     plugin_dir = tmp_path / "plugin_src" / "meme"
-    shutil.copytree(BACKEND_ROOT / "plugins" / "meme", plugin_dir)
+    shutil.copytree(REPO_ROOT / "plugins" / "meme", plugin_dir)
     manager = PluginManager(
         [plugin_dir.parent],
         event_bus=EventBus(),
