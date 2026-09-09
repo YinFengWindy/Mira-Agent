@@ -159,7 +159,7 @@ export function ImageFormPanel({
           </svg>
         </button>
         {rolePanelOpen ? (
-          <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-md border border-line bg-white p-2">
+          <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 overflow-hidden rounded-md border border-line bg-white p-2">
             <div className="grid gap-1">
               {roleItems.map((item) => (
                 <button
