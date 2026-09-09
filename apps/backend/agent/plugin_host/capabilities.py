@@ -94,10 +94,13 @@ class LifecycleCapability:
             raise ValueError(f"未知 phase 槽位: {slot}")
         target = self._contributions.phase_modules[slot]
         target.extend(modules)
-        self._effects.add(
-            f"phase:{slot}:{len(modules)}",
-            lambda: [target.remove(m) for m in modules if m in target],
-        )
+
+        def remove_contributed() -> None:
+            for module in modules:
+                if module in target:
+                    target.remove(module)
+
+        self._effects.add(f"phase:{slot}:{len(modules)}", remove_contributed)
 
 
 class ToolHooksCapability:

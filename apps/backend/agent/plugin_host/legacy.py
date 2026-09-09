@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import functools
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from infra.channels.contract import Channel
 
 from agent.plugin_host.capabilities import (
     ChannelsCapability,
@@ -115,7 +118,7 @@ async def load_legacy_plugin(
     # 渠道在 initialize 成功后收集，保持旧语义
     channels_capability = ChannelsCapability(handle.contributions, handle.effects)
     for channel in _load_module_list(instance, "channels"):
-        channels_capability.add(channel)
+        channels_capability.add(cast("Channel", channel))
 
     handle.instance = instance
     return instance

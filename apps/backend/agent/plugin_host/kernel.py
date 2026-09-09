@@ -9,9 +9,10 @@ from __future__ import annotations
 import importlib.util
 import logging
 import sys
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from agent.plugin_host.capabilities import (
     BackgroundCapability,
@@ -193,6 +194,9 @@ class PluginKernel:
             raise ManifestError(
                 f"v2 插件 {handle.record.name} 的入口缺少 setup(ctx) 函数"
             )
+        setup_fn = cast(
+            "Callable[[PluginRuntimeContext], Awaitable[None]]", setup
+        )
         context = PluginRuntimeContext(
             plugin_id=handle.plugin_id,
             plugin_dir=handle.record.plugin_dir,
@@ -200,7 +204,7 @@ class PluginKernel:
             effects=handle.effects,
             capabilities=self._build_capabilities(handle),
         )
-        await setup(context)
+        await setup_fn(context)
 
     def _build_capabilities(self, handle: PluginHandle) -> dict[str, Any]:
         from agent.plugins.config import PluginConfig
