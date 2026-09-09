@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { useState } from "react";
 import { ArrowRight, User } from "@phosphor-icons/react";
 import type { RoleRecord } from "../shared/types";
@@ -21,10 +22,7 @@ export function OnboardingWorkspaceStep({ roles, entering, onEnter }: {
         <h2 className="break-words text-2xl font-medium text-ink">{role.name}</h2>
         {role.description ? <p className="mt-3 break-words text-sm leading-6 text-ink-muted">{role.description}</p> : null}
       </div>
-      {roles.length > 1 ? <select aria-label="选择角色" value={role.id} onChange={(event) => setSelectedId(event.target.value)} disabled={entering}
-        className="max-w-full rounded-md border border-line bg-surface p-2 text-sm">
-        {roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-      </select> : null}
+      {roles.length > 1 ? <Select aria-label="选择角色" value={role.id} onValueChange={(value) => setSelectedId(value)} disabled={entering} className="max-w-full rounded-md border border-line bg-surface p-2 text-sm" options={roles.map((item) => ({ value: item.id, label: item.name }))} /> : null}
       <button type="button" className={onboardingActionClass} disabled={entering} onClick={() => void onEnter(role)}>
         {entering ? "正在进入" : "进入工作区"}<ArrowRight size={18} />
       </button>

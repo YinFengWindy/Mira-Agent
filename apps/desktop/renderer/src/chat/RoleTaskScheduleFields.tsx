@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import type { Dispatch, SetStateAction } from "react";
 import type { ScheduleTaskTrigger } from "../shared/types";
 import {
@@ -52,21 +53,19 @@ export function RoleTaskScheduleFields({
     <div className="grid gap-3">
       <label className={roleTaskFieldLabelClass}>
         <span>循环周期</span>
-        <select
+        <Select
+          aria-label="循环周期"
           className={roleTaskFieldClass}
           value={recurringRule.preset}
           disabled={saving}
-          onChange={(event) => onRecurringRuleChange((current) => ({ ...current, preset: event.target.value as RecurringSchedulePreset }))}
-        >
-          {recurringScheduleOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
+          onValueChange={(value) => onRecurringRuleChange((current) => ({ ...current, preset: value as RecurringSchedulePreset }))}
+          options={recurringScheduleOptions}
+        />
       </label>
       {recurringRule.preset === "weekly" ? (
         <label className={roleTaskFieldLabelClass}>
           <span>星期</span>
-          <select className={roleTaskFieldClass} value={recurringRule.weekday} disabled={saving} onChange={(event) => onRecurringRuleChange((current) => ({ ...current, weekday: event.target.value }))}>
-            {weekdayOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          <Select aria-label="星期" className={roleTaskFieldClass} value={recurringRule.weekday} disabled={saving} onValueChange={(value) => onRecurringRuleChange((current) => ({ ...current, weekday: value }))} options={weekdayOptions} />
         </label>
       ) : null}
       {recurringRule.preset === "daily" || recurringRule.preset === "weekly" ? (

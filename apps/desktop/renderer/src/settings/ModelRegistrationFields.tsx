@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import type { ModelRegistrationFormData } from "../../../src/bridge/shared";
 import { SettingsField as Field } from "./SettingsField";
 import { SettingsSecretInput, settingsInputClass } from "./SettingsFieldPrimitives";
@@ -17,9 +18,7 @@ export function ModelRegistrationFields({ registration, onChange }: {
         <input aria-label="模型" className={inputClass} value={registration.model} onChange={(event) => onChange((current) => ({ ...current, model: event.target.value }))} />
       </Field>
       <Field label="Effort">
-        <select aria-label="Effort" className={inputClass} value={registration.effort} onChange={(event) => onChange((current) => ({ ...current, effort: event.target.value as ModelRegistrationFormData["effort"] }))}>
-          <option value="none">none</option><option value="low">low</option><option value="high">high</option><option value="max">max</option>
-        </select>
+        <Select aria-label="Effort" className={inputClass} value={registration.effort} onValueChange={(value) => onChange((current) => ({ ...current, effort: value as ModelRegistrationFormData["effort"] }))} options={[{ value: "none", label: "none" }, { value: "low", label: "low" }, { value: "high", label: "high" }, { value: "max", label: "max" }]} />
       </Field>
       <Field label="Base URL">
         <input aria-label="Base URL" className={inputClass} value={registration.baseUrl} onChange={(event) => onChange((current) => ({ ...current, baseUrl: event.target.value }))} />

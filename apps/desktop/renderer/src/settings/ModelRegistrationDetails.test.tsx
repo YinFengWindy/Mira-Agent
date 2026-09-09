@@ -30,6 +30,7 @@ describe("ModelRegistrationDetails", () => {
     assert.match(markup, /value="gpt-agent"/);
     assert.match(markup, /value="https:\/\/agent\.example"/);
     assert.match(markup, /value="secret"/);
-    assert.match(markup, /<select/);
+    assert.match(markup, /role="combobox"/);
+    assert.match(markup, />high<\/span>/);
   });
 });

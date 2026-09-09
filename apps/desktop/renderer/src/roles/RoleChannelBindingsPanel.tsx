@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { CaretDown, CaretUp, ChatCircleDots, Plus, Trash } from "@phosphor-icons/react";
 import type { RoleChannelBinding, RoleFormState } from "../shared/types";
 import { roleDeliveryFieldClass, roleDeliveryIconButtonClass } from "./roleDeliveryStyles";
@@ -34,7 +35,7 @@ function ChannelBindingRow({ activeRoleId, binding, index, bindingsCount, onUpda
       <span className="grid h-8 w-8 place-items-center rounded-lg bg-white/75 text-xs font-medium text-[#4B6B88]" aria-label={`投递顺序 ${index + 1}`}>{index + 1}</span>
       <div className="grid min-w-0 gap-3">
         <div className="grid gap-3 sm:grid-cols-[132px_minmax(0,1fr)]">
-          <label className="grid gap-1.5 text-xs text-ink-muted"><span>渠道</span><select className={roleDeliveryFieldClass} value={binding.channel} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? changeRoleBindingChannel(item, event.target.value, activeRoleId) : item))}><option value="telegram">Telegram</option><option value="qq">QQ</option><option value="qqbot">QQBot</option><option value="desktop">桌面端</option></select></label>
+          <label className="grid gap-1.5 text-xs text-ink-muted"><span>渠道</span><Select aria-label="渠道" className={roleDeliveryFieldClass} value={binding.channel} onValueChange={(value) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? changeRoleBindingChannel(item, value, activeRoleId) : item))} options={[{ value: "telegram", label: "Telegram" }, { value: "qq", label: "QQ" }, { value: "qqbot", label: "QQBot" }, { value: "desktop", label: "桌面端" }]} /></label>
           <label className="grid min-w-0 gap-1.5 text-xs text-ink-muted"><span>会话 / 群组 ID</span><input className={roleDeliveryFieldClass} value={binding.chat_id} placeholder="输入会话或群组 ID" readOnly={desktopBinding} onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, chat_id: event.target.value } : item))} /></label>
         </div>
         {!desktopBinding ? <label className="grid gap-1.5 text-xs text-ink-muted"><span>{roleBindingAllowFromLabel(binding.channel)}</span><input className={roleDeliveryFieldClass} value={binding.allow_from[0] ?? ""} placeholder="输入唯一联系人 ID" onChange={(event) => onUpdateBindings((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, allow_from: event.target.value.trim() ? [event.target.value.trim()] : [] } : item))} /></label> : <p className="text-xs text-ink-muted">{roleBindingChannelLabel(binding.channel)}使用当前角色的桌面对话。</p>}

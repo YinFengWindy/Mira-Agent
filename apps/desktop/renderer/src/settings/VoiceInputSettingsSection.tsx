@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { useEffect, useRef, useState } from "react";
 import { Microphone, Stop } from "@phosphor-icons/react";
 import type { VoiceInputDevice } from "../../../src/bridge/shared.js";
@@ -85,14 +86,13 @@ export function VoiceInputSettingsSection({ draft, updateDraft }: VoiceInputSett
       </Field>
       <Field label="麦克风设备">
         <div className="flex min-w-0 items-center gap-2">
-          <select
+          <Select
+            aria-label="麦克风设备"
             className={cx(settingsInputClass, "min-w-0 flex-1")}
             value={draft.voice.microphoneDeviceId}
-            onChange={(event) => updateDraft((current) => ({ ...current, voice: { ...current.voice, microphoneDeviceId: event.target.value } }))}
-          >
-            <option value="">系统默认设备</option>
-            {devices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label || device.deviceId}</option>)}
-          </select>
+            onValueChange={(value) => updateDraft((current) => ({ ...current, voice: { ...current.voice, microphoneDeviceId: value } }))}
+            options={[{ value: "", label: "系统默认设备" }, ...devices.map((device) => ({ value: device.deviceId, label: device.label || device.deviceId }))]}
+          />
           <button
             className={cx(settingsIconButtonClass, testing && "text-danger-text hover:bg-danger-soft hover:text-danger-text")}
             type="button"

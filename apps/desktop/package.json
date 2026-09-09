@@ -30,6 +30,7 @@
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
+    "@base-ui/react": "1.8.0",
     "@eslint/js": "^10.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@types/node": "^24.10.0",
