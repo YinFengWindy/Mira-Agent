@@ -36,6 +36,11 @@ def test_admission_exempt_generation_methods_are_read_only_or_cancellations():
 def test_dedicated_handlers_cover_exactly_the_settings_and_role_task_methods():
     settings = {name for name, policy in METHOD_POLICIES.items() if policy.handler is Handler.SETTINGS}
     role_tasks = {name for name, policy in METHOD_POLICIES.items() if policy.handler is Handler.ROLE_TASKS}
+    plugin_config = {
+        name for name, policy in METHOD_POLICIES.items() if policy.handler is Handler.PLUGIN_CONFIG
+    }
     assert settings == {"runtime.status", "runtime.apply"}
     assert role_tasks == {"roles.tasks.list", "roles.tasks.cancel"}
+    assert plugin_config == {"plugin.config.get", "plugin.config.set"}
     assert method_policy("runtime.apply").concurrency is Concurrency.SETTINGS_APPLY
+    assert method_policy("plugin.config.set").concurrency is Concurrency.SETTINGS_APPLY

@@ -31,6 +31,7 @@ class Handler(Enum):
     GENERATION = "generation"
     SETTINGS = "settings"
     ROLE_TASKS = "role_tasks"
+    PLUGIN_CONFIG = "plugin_config"
 
 
 class OwnerRouting(Enum):
@@ -59,6 +60,13 @@ METHOD_POLICIES: dict[str, MethodPolicy] = {
     ),
     "runtime.apply": MethodPolicy(
         concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.SETTINGS,
+    ),
+    "plugin.config.get": MethodPolicy(
+        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
+    ),
+    "plugin.config.set": MethodPolicy(
+        # 写入复用设置事务自己的串行锁，语义与 runtime.apply 一致
+        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
     ),
     "roles.tasks.list": MethodPolicy(
         concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.ROLE_TASKS,

@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
 from agent.looping.core import AgentLoop
+from agent.plugin_host.rpc import PluginRpcRegistry
 from agent.tools.message_push import MessagePushTool
 from bus.event_bus import EventBus
 from bus.events_lifecycle import (
@@ -38,7 +39,9 @@ from desktop_bridge.chat_requests import DesktopChatRequestHandler
 from desktop_bridge.chat_service import ChatTurnBusyError, DesktopChatService
 from desktop_bridge.image_requests import DesktopImageRequestHandler
 from desktop_bridge.image_service import DesktopImageService
+from desktop_bridge.method_policy import MethodPolicy, method_policy
 from desktop_bridge.models import BridgeError, BridgeEvent, BridgeResponse
+from desktop_bridge.plugin_requests import DesktopPluginRequestHandler
 from desktop_bridge.request_router import DesktopBridgeRequestRouter
 from desktop_bridge.role_requests import DesktopRoleRequestHandler
 from desktop_bridge.role_card_import_service import DesktopRoleCardImportService
@@ -107,6 +110,7 @@ class DesktopBridgeService:
         card_import_service: Any | None = None,
         activate_transport: bool = True,
         model_resolver: RoleModelRuntime | None = None,
+        plugin_rpc_registry: PluginRpcRegistry | None = None,
     ) -> None:
         self.workspace = workspace
         self.role_store = role_store
@@ -224,6 +228,7 @@ class DesktopBridgeService:
             image_tool=image_tool,
         )
         self.observation_service = observation_service
+        self.plugin_rpc_registry = plugin_rpc_registry
         self.request_router = DesktopBridgeRequestRouter(
             roles=DesktopRoleRequestHandler(
                 role_service=self.role_service,
@@ -260,6 +265,7 @@ class DesktopBridgeService:
             voice=self.voice_handler,
             stories=self.story_simulation,
             observation=observation_service,
+            plugins=DesktopPluginRequestHandler(plugin_rpc_registry),
         )
         if push_tool is not None and activate_transport:
             self.register_desktop_push_channel(push_tool)
@@ -332,6 +338,24 @@ class DesktopBridgeService:
         """Publishes one host event to every connected desktop client."""
 
         await self._broadcast_event(payload)
+
+    def resolve_method_policy(self, method: str) -> MethodPolicy:
+        """Resolves dispatcher policy, querying the plugin RPC registry dynamically.
+
+        ``plugin.<id>.<method>`` is not in the static table: its policy is
+        whatever the owning plugin declared via ``ctx.rpc.register``.
+        ``plugin.config.*`` is excluded because it is served by
+        ``ReloadableDesktopService`` (declared statically), never by this
+        single-generation service.
+        """
+
+        if method.startswith("plugin.") and not method.startswith("plugin.config."):
+            if self.plugin_rpc_registry is not None:
+                policy = self.plugin_rpc_registry.policy_for(method)
+                if policy is not None:
+                    return policy
+            return MethodPolicy()
+        return method_policy(method)
 
     async def aclose(self) -> None:
         """Releases bridge event subscriptions and desktop chat tasks."""

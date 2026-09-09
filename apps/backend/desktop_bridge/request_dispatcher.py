@@ -5,11 +5,12 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from desktop_bridge.method_policy import Concurrency, method_policy
+from desktop_bridge.method_policy import Concurrency, MethodPolicy, method_policy
 
 logger = logging.getLogger("desktop.bridge.dispatcher")
 
 RequestOperation = Callable[[], Awaitable[None]]
+PolicyResolver = Callable[[str], MethodPolicy]
 
 
 class BridgeRequestDispatcher:
@@ -20,6 +21,7 @@ class BridgeRequestDispatcher:
         *,
         max_concurrency: int = 8,
         integration_concurrency: int = 2,
+        policy_resolver: PolicyResolver = method_policy,
     ) -> None:
         if max_concurrency < 1:
             raise ValueError("max_concurrency 必须大于 0")
@@ -30,6 +32,8 @@ class BridgeRequestDispatcher:
         self._mutation_lock = asyncio.Lock()
         self._tasks: set[asyncio.Task[None]] = set()
         self._closed = False
+        # 注入而非进程级全局字典：generation 相关的 plugin.* 方法策略随服务实例变化
+        self._policy_resolver = policy_resolver
 
     def submit(self, request: dict[str, Any], operation: RequestOperation) -> None:
         """Schedules one request without blocking the stream reader."""
@@ -60,7 +64,7 @@ class BridgeRequestDispatcher:
         self._tasks.clear()
 
     async def _run(self, method: str, operation: RequestOperation) -> None:
-        lane = method_policy(method).concurrency
+        lane = self._policy_resolver(method).concurrency
         if lane is Concurrency.SETTINGS_APPLY:
             # The runtime transaction owns its serial lock. Waiting for old work
             # must leave transport capacity for health, cancellation and rejection.

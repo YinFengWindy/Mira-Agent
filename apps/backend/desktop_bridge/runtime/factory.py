@@ -12,6 +12,7 @@ def build_desktop_service(runtime: CoreRuntime, role_store: RoleStore, *,
     """Captures generation-owned dependencies without starting background work."""
     spawn = runtime.tools.get_tool("spawn")
     registry = runtime.role_runtime_registry
+    plugin_manager = getattr(runtime, "plugin_manager", None)
     return DesktopBridgeService(
         workspace=runtime.session_manager.workspace,
         role_store=role_store,
@@ -31,4 +32,5 @@ def build_desktop_service(runtime: CoreRuntime, role_store: RoleStore, *,
         role_runtime_registry=registry,
         image_tool=runtime.tools.get_tool("generate_image"),
         memory_engine=runtime.memory_runtime.engine,
+        plugin_rpc_registry=plugin_manager.rpc if plugin_manager is not None else None,
     )

@@ -57,7 +57,9 @@ class DesktopBridgeServer:
 
         self.service.start_background_tasks()
         writer = BridgeStreamWriter(write_payload)
-        dispatcher = BridgeRequestDispatcher()
+        dispatcher = BridgeRequestDispatcher(
+            policy_resolver=self.service.resolve_method_policy
+        )
 
         async def _emit_event(payload: dict[str, Any]) -> None:
             await writer.write(payload)

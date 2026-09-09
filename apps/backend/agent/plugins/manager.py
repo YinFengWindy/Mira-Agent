@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
+from agent.plugin_host.config_schema import format_validation_error
 from agent.lifecycle.types import (
     AfterReasoningCtx,
     AfterStepCtx,
@@ -535,12 +536,9 @@ def _load_plugin_config(
     return PluginConfig(values)
 
 
-def _format_validation_error(error: ValidationError) -> str:
-    parts: list[str] = []
-    for item in error.errors():
-        path = ".".join(str(part) for part in item.get("loc", ())) or "<root>"
-        parts.append(f"{path}: {item.get('msg', 'invalid')}")
-    return "; ".join(parts)
+# 格式化逻辑归新插件系统所有；旧 manager 复用它，避免 #184 删除本模块时带走
+# 仍在被桥接使用的实现。
+_format_validation_error = format_validation_error
 
 
 def _load_module_list(instance: Any, method_name: str) -> list[object]:
