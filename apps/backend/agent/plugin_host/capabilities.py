@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from agent.plugin_host.effects import EffectScope
+from agent.plugin_host.tool_hooks import PluginToolHook, build_hook_name
 
 if TYPE_CHECKING:
     from agent.core.proactive_turn.gates import ProactiveGate
@@ -48,8 +49,8 @@ def contribute_to_list[T](
 ) -> None:
     """把一项贡献登记进目标列表，并登记"从列表移除"的可回滚 effect。
 
-    三类列表型 capability（tool hook / proactive gate / channel）共用此实现，
-    保证登记与撤销形状一致；移除守卫使重复处置保持幂等。
+    四类列表型 capability（tool hook / proactive gate / channel / bot command）
+    共用此实现，保证登记与撤销形状一致；移除守卫使重复处置保持幂等。
     """
     target.append(item)
 
@@ -129,9 +130,15 @@ class LifecycleCapability:
 class ToolHooksCapability:
     """贡献工具执行前置 hook（ToolExecutor pre_hook 链）。"""
 
-    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+    def __init__(
+        self,
+        contributions: PluginContributions,
+        effects: EffectScope,
+        plugin_id: str,
+    ) -> None:
         self._contributions = contributions
         self._effects = effects
+        self._plugin_id = plugin_id
 
     def add(self, hook: "ToolHook") -> None:
         contribute_to_list(
@@ -140,6 +147,29 @@ class ToolHooksCapability:
             effects=self._effects,
             label=f"tool_hook:{getattr(hook, 'name', hook)}",
         )
+
+    def add_handler(
+        self,
+        handler: Any,
+        *,
+        tool_name_filter: str | None = None,
+        handler_name: str | None = None,
+    ) -> None:
+        """把函数式 pre-tool handler 包装为 PluginToolHook 并登记。
+
+        hook 名统一在这里生成（``build_hook_name``），插件不再需要各自导入宿主的
+        ``PluginToolHook``、手写 f-string 拼接或维护 ``_PLUGIN_NAME`` 常量（#182 评审）。
+        legacy 适配器把 handler 包成 ``functools.partial`` 后会丢失 ``__name__``，
+        因此保留 ``handler_name`` 覆盖参数，供其显式传入 metadata 里记录的原始 handler 名。
+        """
+        resolved_name = handler_name or getattr(handler, "__name__", repr(handler))
+        hook = PluginToolHook(
+            name=build_hook_name(self._plugin_id, resolved_name),
+            handler=handler,
+            tool_name_filter=tool_name_filter,
+        )
+        self.add(hook)
+        logger.info("插件 tool hook 已注册: %s", hook.name)
 
 
 class ProactiveGatesCapability:
@@ -179,6 +209,8 @@ class BotCommandsCapability:
 
     承接 kernel.telegram_bot_commands 的 v2 一侧来源，与 legacy 插件的
     ``telegram_bot_commands()`` 方法两条路径并存，聚合逻辑见 kernel.py。
+    迁移期两条来源之间不做去重（同一命令被两侧同时贡献会重复出现在聚合列表里）；
+    目前没有插件跨两条路径重复注册同一命令，暂不需要额外处理。
     """
 
     def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:

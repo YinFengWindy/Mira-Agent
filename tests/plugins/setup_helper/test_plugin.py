@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from plugins.setup_helper.plugin import ChatIdCommandModule, setup
+from agent.plugin_host import HostServices, PluginKernel
+from bus.event_bus import EventBus
+from plugins.setup_helper.plugin import ChatIdCommandModule
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _state(content: str, *, chat_id: str = "42", channel: str = "telegram") -> SimpleNamespace:
@@ -54,32 +60,28 @@ async def test_unrelated_command_is_ignored() -> None:
 
 
 @pytest.mark.asyncio
-async def test_setup_contributes_before_turn_module_and_bot_command() -> None:
-    """setup(ctx) 必须与旧 SetupHelper 的 before_turn_modules/telegram_bot_commands 等价。"""
+async def test_setup_contributes_before_turn_module_and_bot_command_via_kernel(
+    tmp_path: Path,
+) -> None:
+    """setup(ctx) 必须与旧 SetupHelper 的 before_turn_modules/telegram_bot_commands 等价。
 
-    class _FakeLifecycle:
-        def __init__(self) -> None:
-            self.contributed: dict[str, list[object]] = {}
+    用真实 PluginKernel 装配真实插件目录来验证，而不是自造 fake capability——
+    fake 与真实 capability 契约脱钩，capability 改坏也不会让测试变红（#182 评审）。
+    """
+    root = tmp_path / "plugins"
+    root.mkdir()
+    shutil.copytree(REPO_ROOT / "plugins" / "setup_helper", root / "setup_helper")
+    kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
+    await kernel.load_all()
 
-        def contribute(self, slot: str, modules: list[object]) -> None:
-            self.contributed[slot] = modules
-
-    class _FakeBotCommands:
-        def __init__(self) -> None:
-            self.added: list[tuple[str, str]] = []
-
-        def add(self, command: str, description: str) -> None:
-            self.added.append((command, description))
-
-    class _FakeCtx:
-        def __init__(self) -> None:
-            self.lifecycle = _FakeLifecycle()
-            self.bot_commands = _FakeBotCommands()
-
-    ctx = _FakeCtx()
-    await setup(ctx)
-
-    assert [type(m).__name__ for m in ctx.lifecycle.contributed["before_turn"]] == [
+    assert [type(m).__name__ for m in kernel.before_turn_modules] == [
         "ChatIdCommandModule"
     ]
-    assert ctx.bot_commands.added == [("chatid", "查看我的 chat_id（配置 proactive 用）")]
+    assert kernel.telegram_bot_commands == [
+        ("chatid", "查看我的 chat_id（配置 proactive 用）")
+    ]
+
+    # 卸载后贡献必须整体撤回，证明 phase 槽位与 bot 命令都真正挂在插件作用域上
+    _ = await kernel.unload("setup_helper")
+    assert kernel.before_turn_modules == []
+    assert kernel.telegram_bot_commands == []

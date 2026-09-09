@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from agent.lifecycle.types import PreToolCtx
-from agent.plugin_host.tool_hooks import PluginToolHook
 from agent.tool_hooks import HookOutcome
 
 if TYPE_CHECKING:
@@ -27,8 +26,6 @@ PACKAGE_WRITE_OPTIONS = {
     "--upgrade",
     "--sysupgrade",
 }
-
-_PLUGIN_NAME = "shell_safety"
 
 
 class _ShellSafetyGuard:
@@ -122,12 +119,10 @@ class _ShellSafetyGuard:
 
 
 async def setup(ctx: "PluginRuntimeContext") -> None:
-    """装配 shell_safety：注册 shell 工具的 pre-tool hook。"""
+    """装配 shell_safety：注册 shell 工具的 pre-tool hook。
+
+    hook 名由 ToolHooksCapability 统一生成（plugin:{plugin_id}:{handler.__name__}），
+    插件不再直接引用宿主的 PluginToolHook 或自行拼接 hook 名（#182 评审）。
+    """
     guard = _ShellSafetyGuard()
-    ctx.tool_hooks.add(
-        PluginToolHook(
-            name=f"plugin:{_PLUGIN_NAME}:block_interactive_shell",
-            handler=guard.block_interactive_shell,
-            tool_name_filter="shell",
-        )
-    )
+    ctx.tool_hooks.add_handler(guard.block_interactive_shell, tool_name_filter="shell")

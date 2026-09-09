@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from agent.lifecycle.types import PreToolCtx
-from agent.plugin_host.tool_hooks import PluginToolHook
 from agent.tool_hooks import HookOutcome
 
 if TYPE_CHECKING:
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
 _DEFAULT_REPEAT_LIMIT = 3
 _DENY_PREFIX = "tool_loop_guard:"
 _EXCLUDED_TOOLS = frozenset({"task_output", "task_stop"})
-_PLUGIN_NAME = "tool_loop_guard"
 
 
 @dataclass
@@ -84,16 +82,23 @@ class _ToolLoopGuard:
 
 
 async def setup(ctx: "PluginRuntimeContext") -> None:
-    """装配 tool_loop_guard：读取 repeat_limit 配置，注册 pre-tool hook。"""
+    """装配 tool_loop_guard：读取 repeat_limit 配置，注册 pre-tool hook。
+
+    hook 名由 ToolHooksCapability 统一生成（plugin:{plugin_id}:{handler.__name__}），
+    插件不再直接引用宿主的 PluginToolHook 或自行拼接 hook 名（#182 评审）。
+
+    行为变化说明：旧 Plugin ABC 版本没有 ConfigModel / _conf_schema.json，
+    因此旧 self.context.config 恒为 None，repeat_limit 实际上永远是这里的硬编码默认值 3，
+    用户在 [plugins.tool_loop_guard] 里配置的 repeat_limit 从未生效过。迁移到 v2 后
+    ctx.config 读的是 PluginConfig(services.plugin_configs[id])，配置现在真的会生效
+    （见 tests/plugins/tool_loop_guard/test_plugin.py 的
+    test_repeat_limit_config_actually_takes_effect_after_v2_migration）。
+    这是修正一个既有 bug，不是刻意的新行为，默认值仍是 3。
+    """
     raw_limit = ctx.config.get("repeat_limit", _DEFAULT_REPEAT_LIMIT)
     try:
         repeat_limit = max(2, int(raw_limit))
     except (TypeError, ValueError):
         repeat_limit = _DEFAULT_REPEAT_LIMIT
     guard = _ToolLoopGuard(repeat_limit)
-    ctx.tool_hooks.add(
-        PluginToolHook(
-            name=f"plugin:{_PLUGIN_NAME}:detect_repeated_tool_call",
-            handler=guard.detect_repeated_tool_call,
-        )
-    )
+    ctx.tool_hooks.add_handler(guard.detect_repeated_tool_call)

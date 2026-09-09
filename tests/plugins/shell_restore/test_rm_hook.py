@@ -46,6 +46,16 @@ def _run_shell(root: Path, command: str) -> Any:
     )
 
 
+def test_shell_restore_hook_name_matches_legacy_convention(tmp_path: Path) -> None:
+    """hook 名由 ToolHooksCapability 统一生成，须与旧系统
+    f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
+    bus = EventBus()
+    kernel = PluginKernel([_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus))
+    _run(kernel.load_all())
+
+    assert [h.name for h in kernel.tool_hooks] == ["plugin:shell_restore:rewrite_rm_to_mv"]
+
+
 def test_shell_rm_hook_rewrites_rm_and_creates_restore_dir(tmp_path: Path) -> None:
     restore_dir = tmp_path / "restore"
     os.environ["AKASIC_RESTORE_DIR"] = str(restore_dir)

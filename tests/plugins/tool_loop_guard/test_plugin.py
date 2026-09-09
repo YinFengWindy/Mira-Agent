@@ -162,11 +162,38 @@ def _make_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> Age
     return _make_agent_loop_with_tools(tmp_path, provider, [tool])
 
 
-def _tool_loop_guard_hooks() -> list[ToolHook]:
+def _make_bare_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> AgentLoop:
+    """构造不带默认 tool_loop_guard hook 的 AgentLoop，供测试自行装配指定配置的 hook。
+
+    ``_make_agent_loop``/``_make_agent_loop_with_tools`` 会用无配置（默认 repeat_limit=3）
+    的 hook 预先装好 loop，若测试还想验证自定义 repeat_limit，需要绕开这份默认装配，
+    否则两个 hook 会同时生效，配置更宽松的一份也会被更严格的默认值抢先拦截。
+    """
+    tools = ToolRegistry()
+    tools.register(tool)
+    return AgentLoop(
+        AgentLoopDeps(
+            bus=MagicMock(),
+            provider=cast(Any, provider),
+            tools=tools,
+            session_manager=MagicMock(),
+            workspace=tmp_path,
+            memory_services=MemoryServices(engine=FakeMemoryEngine(tmp_path)),
+        ),
+        AgentLoopConfig(llm=LLMConfig(max_iterations=10)),
+    )
+
+
+def _tool_loop_guard_hooks(*, plugin_configs: dict[str, dict[str, Any]] | None = None) -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
         shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
-        kernel = PluginKernel([Path(tmp)], services=HostServices(event_bus=EventBus()))
+        kernel = PluginKernel(
+            [Path(tmp)],
+            services=HostServices(
+                event_bus=EventBus(), plugin_configs=plugin_configs or {}
+            ),
+        )
         asyncio.run(kernel.load_all())
         return kernel.tool_hooks
 
@@ -174,6 +201,70 @@ def _tool_loop_guard_hooks() -> list[ToolHook]:
 def _install_tool_loop_guard(subagent: SubAgent) -> SubAgent:
     subagent.add_tool_hooks(_tool_loop_guard_hooks())
     return subagent
+
+
+def test_tool_loop_guard_hook_name_matches_legacy_convention():
+    """hook 名由 ToolHooksCapability 统一生成，须与旧系统
+    f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
+    hooks = _tool_loop_guard_hooks()
+
+    assert [h.name for h in hooks] == ["plugin:tool_loop_guard:detect_repeated_tool_call"]
+
+
+def test_repeat_limit_config_actually_takes_effect_after_v2_migration(tmp_path):
+    """[plugins.tool_loop_guard].repeat_limit 迁移前从未生效（#182 评审独立核实）：
+
+    旧 Plugin ABC 版本既无 ConfigModel 也无 _conf_schema.json，_load_plugin_config
+    因此恒返回 None，self.context.config 恒为 None，repeat_limit 硬编码为 3；
+    用户在 config.toml 里配置的值被静默吞掉。迁移到 v2 后 ctx.config 读取真实的
+    services.plugin_configs，配置现在真的生效——这是修了一个 bug，不是刻意变更，
+    这里用 repeat_limit=5 时连续 4 次相同调用都不应被拦截来证明。
+    """
+    tool = _DummyTool("dummy")
+    provider = _FakeProvider(
+        [
+            LLMResponse(content="", tool_calls=[ToolCall("c1", "dummy", {"x": 1})]),
+            LLMResponse(content="", tool_calls=[ToolCall("c2", "dummy", {"x": 1})]),
+            LLMResponse(content="", tool_calls=[ToolCall("c3", "dummy", {"x": 1})]),
+            LLMResponse(content="", tool_calls=[ToolCall("c4", "dummy", {"x": 1})]),
+            LLMResponse(content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]),
+        ]
+    )
+    loop = _make_bare_agent_loop(tmp_path, provider, tool)
+    loop.add_tool_hooks(
+        _tool_loop_guard_hooks(plugin_configs={"tool_loop_guard": {"repeat_limit": 5}})
+    )
+
+    final, tools_used, _, _vn, _ = asyncio.run(
+        loop._run_agent_loop([{"role": "user", "content": "test"}])
+    )
+
+    # repeat_limit=5 时，4 次相同签名调用都低于阈值，全部放行；
+    # 若配置像迁移前那样被吞掉（硬编码为 3），第 3 次就会被拦截，只会执行 2 次
+    assert len(tool.calls) == 4
+    assert tools_used == ["dummy", "dummy", "dummy", "dummy"]
+
+
+def test_repeat_limit_defaults_to_three_when_not_configured(tmp_path):
+    """未配置 [plugins.tool_loop_guard] 时，repeat_limit 缺省仍是硬编码的 3。"""
+    tool = _DummyTool("dummy")
+    provider = _FakeProvider(
+        [
+            LLMResponse(content="", tool_calls=[ToolCall("c1", "dummy", {"x": 1})]),
+            LLMResponse(content="", tool_calls=[ToolCall("c2", "dummy", {"x": 1})]),
+            LLMResponse(content="", tool_calls=[ToolCall("c3", "dummy", {"x": 1})]),
+            LLMResponse(content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]),
+        ]
+    )
+    loop = _make_bare_agent_loop(tmp_path, provider, tool)
+    loop.add_tool_hooks(_tool_loop_guard_hooks(plugin_configs={}))
+
+    final, tools_used, _, _vn, _ = asyncio.run(
+        loop._run_agent_loop([{"role": "user", "content": "test"}])
+    )
+
+    assert len(tool.calls) == 2
+    assert tools_used == ["dummy", "dummy"]
 
 
 def test_agent_loop_breaks_on_repeated_same_signature_and_returns_summary(tmp_path):

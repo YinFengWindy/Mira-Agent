@@ -159,12 +159,51 @@ async def test_tool_hooks_capability_add_and_dispose():
     scope = EffectScope("demo")
     hook = _Named("plugin:demo:guard")
 
-    ToolHooksCapability(contributions, scope).add(hook)  # type: ignore[arg-type]
+    ToolHooksCapability(contributions, scope, "demo").add(hook)  # type: ignore[arg-type]
     assert contributions.tool_hooks == [hook]
     assert scope.labels == ["tool_hook:plugin:demo:guard"]
 
     _ = await scope.dispose_all()
     assert contributions.tool_hooks == []
+
+
+@pytest.mark.asyncio
+async def test_tool_hooks_capability_add_handler_builds_name_from_function():
+    """add_handler 必须用 build_hook_name 统一拼 hook 名，不需要插件自己拼字符串。"""
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+
+    async def rewrite_rm_to_mv(event: object) -> None:
+        return None
+
+    ToolHooksCapability(contributions, scope, "shell_restore").add_handler(
+        rewrite_rm_to_mv, tool_name_filter="shell"
+    )
+
+    assert len(contributions.tool_hooks) == 1
+    hook = contributions.tool_hooks[0]
+    assert hook.name == "plugin:shell_restore:rewrite_rm_to_mv"
+
+
+@pytest.mark.asyncio
+async def test_tool_hooks_capability_add_handler_honors_explicit_handler_name():
+    """legacy 适配器把 handler 包成 functools.partial 后没有 __name__，
+    必须能显式传 handler_name 覆盖，而不是退化成 repr(partial(...))。"""
+    import functools
+
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+
+    async def guard(instance: object, event: object) -> None:
+        return None
+
+    bound = functools.partial(guard, object())
+
+    ToolHooksCapability(contributions, scope, "legacy_hook").add_handler(
+        bound, handler_name="guard"
+    )
+
+    assert contributions.tool_hooks[0].name == "plugin:legacy_hook:guard"
 
 
 @pytest.mark.asyncio

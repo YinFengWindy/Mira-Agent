@@ -34,6 +34,30 @@ async def test_legacy_decorator_handler_fires_and_unbinds_on_unload(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_legacy_tool_hook_name_matches_v2_convention(tmp_path: Path):
+    """legacy 适配器与 v2 ToolHooksCapability.add_handler 必须共用同一份命名逻辑
+    （build_hook_name，#182 评审）：两条路径都产出
+    f"plugin:{plugin_id}:{handler_name}"，与旧 PluginManager 逐字一致。"""
+    plugin_dir = tmp_path / "legacy_hook"
+    plugin_dir.mkdir()
+    (plugin_dir / "plugin.py").write_text(
+        "from agent.lifecycle.types import PreToolCtx\n"
+        "from agent.plugins import Plugin, on_tool_pre\n"
+        "class LegacyHook(Plugin):\n"
+        "    name = 'legacy_hook'\n"
+        "    @on_tool_pre(tool_name='shell')\n"
+        "    async def guard(self, event: PreToolCtx):\n"
+        "        return None\n",
+        encoding="utf-8",
+    )
+    bus = EventBus()
+    kernel = make_kernel([tmp_path], event_bus=bus)
+    await kernel.load_all()
+
+    assert [h.name for h in kernel.tool_hooks] == ["plugin:legacy_hook:guard"]
+
+
+@pytest.mark.asyncio
 async def test_direct_event_bus_subscription_unbound_on_unload(tmp_path: Path):
     """修复既有缺陷：插件在 initialize 里直接 event_bus.on 且不自行 off。"""
     plugin_dir = tmp_path / "direct_sub"

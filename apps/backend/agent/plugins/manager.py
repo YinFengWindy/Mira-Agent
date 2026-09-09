@@ -23,7 +23,7 @@ from agent.lifecycle.types import (
     BeforeTurnCtx,
     PromptRenderCtx,
 )
-from agent.plugin_host.tool_hooks import PluginToolHook as _PluginToolHook
+from agent.plugin_host.tool_hooks import PluginToolHook, build_hook_name
 from agent.plugins.registry import MetadataKind, PluginEventType, plugin_registry
 from agent.tool_hooks.base import ToolHook
 from agent.core.proactive_turn.gates import ProactiveGate
@@ -366,8 +366,10 @@ class PluginManager:
             if md.kind != MetadataKind.TOOL_HOOK:
                 continue
             bound = functools.partial(md.handler, instance)
-            hook = _PluginToolHook(
-                name=f"plugin:{getattr(instance, 'name', module_path)}:{md.handler_name}",
+            hook = PluginToolHook(
+                name=build_hook_name(
+                    str(getattr(instance, "name", module_path)), md.handler_name
+                ),
                 handler=bound,
                 tool_name_filter=md.hook_tool_name,
             )
@@ -601,10 +603,6 @@ def _make_execute(bound: Any) -> Any:
             result = await result
         return str(result)
     return execute
-
-
-# _PluginToolHook 已提升为共享实现，见 agent.plugin_host.tool_hooks.PluginToolHook；
-# 这里保留 _PluginToolHook 别名（见文件顶部 import）以免影响既有调用点。
 
 
 def _is_plugin_disabled(plugin_dir: Path) -> bool:

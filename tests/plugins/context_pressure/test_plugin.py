@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from agent.lifecycle.types import AfterStepCtx
+from agent.plugin_host import HostServices, PluginKernel
+from bus.event_bus import EventBus
 from plugins.context_pressure.plugin import (
     ContextPressureStopModule,
     _CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS,
-    setup,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _after_step_ctx(*, has_more: bool, tokens: int) -> AfterStepCtx:
@@ -70,23 +75,22 @@ async def test_no_early_stop_when_no_more_steps() -> None:
 
 
 @pytest.mark.asyncio
-async def test_setup_contributes_after_step_module() -> None:
-    """setup(ctx) 必须与旧 ContextPressurePlugin.after_step_modules() 等价。"""
+async def test_setup_contributes_after_step_module_via_kernel(tmp_path: Path) -> None:
+    """setup(ctx) 必须与旧 ContextPressurePlugin.after_step_modules() 等价。
 
-    class _FakeLifecycle:
-        def __init__(self) -> None:
-            self.contributed: dict[str, list[object]] = {}
+    用真实 PluginKernel 装配真实插件目录来验证，而不是自造 fake capability——
+    fake 与真实 capability 契约脱钩，capability 改坏也不会让测试变红（#182 评审）。
+    """
+    root = tmp_path / "plugins"
+    root.mkdir()
+    shutil.copytree(REPO_ROOT / "plugins" / "context_pressure", root / "context_pressure")
+    kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
+    await kernel.load_all()
 
-        def contribute(self, slot: str, modules: list[object]) -> None:
-            self.contributed[slot] = modules
-
-    class _FakeCtx:
-        def __init__(self) -> None:
-            self.lifecycle = _FakeLifecycle()
-
-    ctx = _FakeCtx()
-    await setup(ctx)
-
-    assert [type(m).__name__ for m in ctx.lifecycle.contributed["after_step"]] == [
+    assert [type(m).__name__ for m in kernel.after_step_modules] == [
         "ContextPressureStopModule"
     ]
+
+    # 卸载后贡献必须整体撤回，证明 phase 槽位真正挂在插件作用域上
+    _ = await kernel.unload("context_pressure")
+    assert kernel.after_step_modules == []

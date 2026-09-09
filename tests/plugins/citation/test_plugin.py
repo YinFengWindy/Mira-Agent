@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,8 @@ import pytest
 
 from agent.core.response_parser import ResponseMetadata
 from agent.lifecycle.types import AfterReasoningCtx, PromptRenderCtx
+from agent.plugin_host import HostServices, PluginKernel
+from bus.event_bus import EventBus
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -31,7 +34,6 @@ _citation_module = _load_citation_plugin_module()
 CitationAfterReasoningModule = _citation_module.CitationAfterReasoningModule
 CitationPromptModule = _citation_module.CitationPromptModule
 ProtocolTagCleanupModule = _citation_module.ProtocolTagCleanupModule
-citation_setup = _citation_module.setup
 extract_cited_ids = _citation_module.extract_cited_ids
 extract_cited_ids_from_tool_chain = _citation_module.extract_cited_ids_from_tool_chain
 strip_trailing_protocol_tags = _citation_module.strip_trailing_protocol_tags
@@ -172,30 +174,32 @@ def test_citation_tool_chain_fallback_uses_item_ids() -> None:
 
 
 @pytest.mark.asyncio
-async def test_citation_setup_contributes_expected_phase_modules() -> None:
-    """setup(ctx) 必须贡献与旧 CitationPlugin 完全一致的 phase 模块集合。"""
+async def test_citation_setup_contributes_expected_phase_modules_via_kernel(
+    tmp_path: Path,
+) -> None:
+    """setup(ctx) 必须贡献与旧 CitationPlugin 完全一致的 phase 模块集合。
 
-    class _FakeLifecycle:
-        def __init__(self) -> None:
-            self.contributed: dict[str, list[object]] = {}
+    用真实 PluginKernel 装配真实插件目录来验证，而不是自造 fake capability——
+    fake 与真实 capability 契约脱钩，capability 改坏也不会让测试变红（#182 评审）。
+    """
+    root = tmp_path / "plugins"
+    root.mkdir()
+    shutil.copytree(REPO_ROOT / "plugins" / "citation", root / "citation")
+    kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
+    await kernel.load_all()
 
-        def contribute(self, slot: str, modules: list[object]) -> None:
-            self.contributed[slot] = modules
-
-    class _FakeCtx:
-        def __init__(self) -> None:
-            self.lifecycle = _FakeLifecycle()
-
-    ctx = _FakeCtx()
-    await citation_setup(ctx)
-
-    assert [type(m).__name__ for m in ctx.lifecycle.contributed["prompt_render"]] == [
+    assert [type(m).__name__ for m in kernel.prompt_render_modules] == [
         "CitationPromptModule"
     ]
-    assert [type(m).__name__ for m in ctx.lifecycle.contributed["after_reasoning"]] == [
+    assert [type(m).__name__ for m in kernel.after_reasoning_modules] == [
         "CitationAfterReasoningModule",
         "ProtocolTagCleanupModule",
     ]
+
+    # 卸载后贡献必须整体撤回，证明生命周期与 phase 槽位真正挂在插件作用域上
+    _ = await kernel.unload("citation")
+    assert kernel.prompt_render_modules == []
+    assert kernel.after_reasoning_modules == []
 
 
 @pytest.mark.asyncio

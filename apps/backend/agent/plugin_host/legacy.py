@@ -24,7 +24,6 @@ from agent.plugin_host.capabilities import (
 )
 from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle
-from agent.plugin_host.tool_hooks import PluginToolHook
 from agent.plugins.manager import (
     _EVENT_TYPE_MAP,
     _PluginConfigError,
@@ -171,17 +170,20 @@ def _register_tools(instance: Any, handle: PluginHandle, deps: Any) -> None:
 
 
 def _bind_tool_hooks(instance: Any, handle: PluginHandle, import_path: str) -> None:
-    hooks_capability = ToolHooksCapability(handle.contributions, handle.effects)
+    # 命名与登记逻辑收敛进 ToolHooksCapability.add_handler；handler 经 functools.partial
+    # 包裹后丢失 __name__，显式传 handler_name 复用 metadata 记录的原始名字，
+    # 保证 hook 名与旧系统 f"plugin:{instance.name}:{md.handler_name}" 逐字一致。
+    hooks_capability = ToolHooksCapability(
+        handle.contributions, handle.effects, handle.plugin_id
+    )
     for md in plugin_registry.get_handlers_by_module_path(import_path):
         if md.kind != MetadataKind.TOOL_HOOK:
             continue
-        hook = PluginToolHook(
-            name=f"plugin:{getattr(instance, 'name', import_path)}:{md.handler_name}",
-            handler=functools.partial(md.handler, instance),
+        hooks_capability.add_handler(
+            functools.partial(md.handler, instance),
             tool_name_filter=md.hook_tool_name,
+            handler_name=md.handler_name,
         )
-        hooks_capability.add(hook)
-        logger.info("插件 tool hook 已注册: %s", hook.name)
 
 
 def _collect_phase_modules(instance: Any, handle: PluginHandle) -> None:

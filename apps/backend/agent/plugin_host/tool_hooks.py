@@ -14,6 +14,16 @@ from agent.tool_hooks.base import ToolHook
 from agent.tool_hooks.types import HookContext, HookOutcome
 
 
+def build_hook_name(plugin_id: str, handler_name: str) -> str:
+    """生成插件 tool hook 的注册名：``plugin:{plugin_id}:{handler_name}``。
+
+    与旧系统 ``f"plugin:{instance.name}:{md.handler_name}"`` 逐字一致；
+    v2 插件经 ``ToolHooksCapability.add_handler``、legacy 适配器都复用这一份，
+    避免各处各拼一份同形式的字符串（#182 评审）。
+    """
+    return f"plugin:{plugin_id}:{handler_name}"
+
+
 class PluginToolHook(ToolHook):
     """将插件的 pre-tool handler 适配为 ToolExecutor 的 ToolHook 接口。"""
 

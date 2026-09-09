@@ -1,4 +1,6 @@
 api: 2
 id: citation
+version: '0.1.0'
+desc: 记忆引用追踪协议，注入引用规范、提取 cited 记忆 ID 并清理协议标签
 capabilities:
   - lifecycle
