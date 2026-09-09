@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from agent.plugins.manager import PluginManager
+    from agent.plugin_host import PluginKernel
 
 from agent.config_models import Config, WiringConfig
 from agent.context import ContextBuilder
@@ -94,7 +94,7 @@ class CoreRuntime:
     role_runtime_registry: RoleRuntimeRegistry
     image_sync_service: ExternalImageSyncService | None = None
     agent_provider: LLMProvider | None = None
-    plugin_manager: "PluginManager | None" = None
+    plugin_manager: "PluginKernel | None" = None
     memory_optimizer: Any | None = None
     screen_observation: ScreenObservationService | None = None
     additional_providers: list[LLMProvider] = field(default_factory=list)
@@ -503,24 +503,26 @@ def build_core_runtime(
         active_turn_states=loop.active_turn_states,
     )
 
-    from agent.plugins.manager import PluginManager as _PluginManager
+    from agent.plugin_host import HostServices, PluginKernel
     plugin_light_provider, plugin_light_model = _resolve_plugin_llm_dependencies(
         config,
         provider,
         light_provider,
     )
-    plugin_manager = _PluginManager(
+    plugin_manager = PluginKernel(
         plugin_dirs=_resolve_plugin_dirs(workspace),
-        event_bus=event_bus,
-        tool_registry=tools,
-        workspace=workspace,
-        session_manager=session_manager,
-        memory_engine=memory_runtime.engine,
-        app_config=config,
-        light_provider=plugin_light_provider,
-        light_model=plugin_light_model,
-        plugin_configs=config.plugins,
-        relationship_runtime=relationship_runtime,
+        services=HostServices(
+            event_bus=event_bus,
+            tool_registry=tools,
+            workspace=workspace,
+            session_manager=session_manager,
+            memory_engine=memory_runtime.engine,
+            app_config=config,
+            light_provider=plugin_light_provider,
+            light_model=plugin_light_model,
+            plugin_configs=config.plugins,
+            relationship_runtime=relationship_runtime,
+        ),
         namespace=uuid4().hex,
         strict=shared is not None,
     )

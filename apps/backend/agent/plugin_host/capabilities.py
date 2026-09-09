@@ -1,0 +1,198 @@
+"""按产品扩展点划分的 capability 实现：插件只拿到 manifest 声明的窄接口。"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import TYPE_CHECKING, Any
+
+from agent.plugin_host.effects import EffectScope
+
+if TYPE_CHECKING:
+    from agent.core.proactive_turn.gates import ProactiveGate
+    from agent.tool_hooks.base import ToolHook
+    from infra.channels.contract import Channel
+
+logger = logging.getLogger(__name__)
+
+# Shiori 定义的 7 个 phase 槽位；顺序与 AgentLoop 接线一致
+PHASE_SLOTS = (
+    "before_turn",
+    "before_reasoning",
+    "prompt_render",
+    "before_step",
+    "after_step",
+    "after_reasoning",
+    "after_turn",
+)
+
+
+class PluginContributions:
+    """单个插件贡献的运行时对象集合；随插件卸载整体废弃。"""
+
+    def __init__(self) -> None:
+        self.phase_modules: dict[str, list[object]] = {slot: [] for slot in PHASE_SLOTS}
+        self.tool_hooks: list[ToolHook] = []
+        self.proactive_gates: list[ProactiveGate] = []
+        self.channels: list[Channel] = []
+        self.tool_names: list[str] = []
+
+
+def contribute_to_list[T](
+    target: list[T],
+    item: T,
+    *,
+    effects: EffectScope,
+    label: str,
+) -> None:
+    """把一项贡献登记进目标列表，并登记"从列表移除"的可回滚 effect。
+
+    三类列表型 capability（tool hook / proactive gate / channel）共用此实现，
+    保证登记与撤销形状一致；移除守卫使重复处置保持幂等。
+    """
+    target.append(item)
+
+    def discard() -> None:
+        if item in target:
+            target.remove(item)
+
+    effects.add(label, discard)
+
+
+class ToolsCapability:
+    """注册插件工具到 ToolRegistry；卸载时通过 effect 反注册。"""
+
+    def __init__(
+        self,
+        registry: Any,
+        effects: EffectScope,
+        contributions: PluginContributions,
+        plugin_id: str,
+    ) -> None:
+        self._registry = registry
+        self._effects = effects
+        self._contributions = contributions
+        self._plugin_id = plugin_id
+
+    def register(
+        self,
+        tool: Any,
+        *,
+        risk: str = "read-write",
+        always_on: bool = False,
+        search_hint: str | None = None,
+    ) -> None:
+        if self._registry is None:
+            raise RuntimeError(f"插件 {self._plugin_id} 请求 tools 能力，但宿主未提供 ToolRegistry")
+        name = str(tool.name)
+        self._registry.register(
+            tool,
+            risk=risk,
+            always_on=always_on,
+            search_hint=search_hint,
+            source_type="plugin",
+            source_name=self._plugin_id,
+        )
+        # 工具除了从贡献清单移除，还要反注册出 ToolRegistry，故不复用列表 helper
+        self._contributions.tool_names.append(name)
+        self._effects.add(f"tool:{name}", lambda: self._unregister(name))
+
+    def _unregister(self, name: str) -> None:
+        if self._registry is not None:
+            self._registry.unregister(name)
+        if name in self._contributions.tool_names:
+            self._contributions.tool_names.remove(name)
+
+
+class LifecycleCapability:
+    """向 Shiori 定义的 phase 槽位贡献模块；槽位顺序语义仍由核心拥有。"""
+
+    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+        self._contributions = contributions
+        self._effects = effects
+
+    def contribute(self, slot: str, modules: list[object]) -> None:
+        if slot not in PHASE_SLOTS:
+            raise ValueError(f"未知 phase 槽位: {slot}")
+        target = self._contributions.phase_modules[slot]
+        target.extend(modules)
+
+        def remove_contributed() -> None:
+            for module in modules:
+                if module in target:
+                    target.remove(module)
+
+        self._effects.add(f"phase:{slot}:{len(modules)}", remove_contributed)
+
+
+class ToolHooksCapability:
+    """贡献工具执行前置 hook（ToolExecutor pre_hook 链）。"""
+
+    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+        self._contributions = contributions
+        self._effects = effects
+
+    def add(self, hook: "ToolHook") -> None:
+        contribute_to_list(
+            self._contributions.tool_hooks,
+            hook,
+            effects=self._effects,
+            label=f"tool_hook:{getattr(hook, 'name', hook)}",
+        )
+
+
+class ProactiveGatesCapability:
+    """贡献参与主动 tick 准入的 gate；不允许直接投递消息。"""
+
+    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+        self._contributions = contributions
+        self._effects = effects
+
+    def add(self, gate: "ProactiveGate") -> None:
+        contribute_to_list(
+            self._contributions.proactive_gates,
+            gate,
+            effects=self._effects,
+            label=f"proactive_gate:{getattr(gate, 'name', gate)}",
+        )
+
+
+class ChannelsCapability:
+    """贡献渠道 adapter；渠道宿主接管其生命周期。"""
+
+    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+        self._contributions = contributions
+        self._effects = effects
+
+    def add(self, channel: "Channel") -> None:
+        contribute_to_list(
+            self._contributions.channels,
+            channel,
+            effects=self._effects,
+            label=f"channel:{getattr(channel, 'name', channel)}",
+        )
+
+
+class BackgroundCapability:
+    """启动可取消后台任务；插件卸载时任务被取消并等待退出。"""
+
+    def __init__(self, effects: EffectScope, plugin_id: str) -> None:
+        self._effects = effects
+        self._plugin_id = plugin_id
+
+    def spawn(self, coro: Any, *, name: str) -> asyncio.Task[Any]:
+        task: asyncio.Task[Any] = asyncio.create_task(
+            coro, name=f"plugin:{self._plugin_id}:{name}"
+        )
+        self._effects.add(f"background:{name}", lambda: self._cancel(task))
+        return task
+
+    @staticmethod
+    async def _cancel(task: asyncio.Task[Any]) -> None:
+        if task.done():
+            return
+        _ = task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 - 卸载路径只收敛不传播
+            pass

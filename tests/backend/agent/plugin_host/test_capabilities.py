@@ -1,0 +1,254 @@
+"""capabilities.py 行为：贡献登记、卸载移除、后台任务取消与槽位校验。"""
+
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from agent.plugin_host.capabilities import (
+    BackgroundCapability,
+    ChannelsCapability,
+    LifecycleCapability,
+    PHASE_SLOTS,
+    PluginContributions,
+    ProactiveGatesCapability,
+    ToolHooksCapability,
+    ToolsCapability,
+    contribute_to_list,
+)
+from agent.plugin_host.effects import EffectScope
+
+
+class _FakeRegistry:
+    """记录 register/unregister 调用的最小 ToolRegistry 替身。"""
+
+    def __init__(self) -> None:
+        self.registered: list[str] = []
+        self.register_kwargs: dict[str, object] = {}
+
+    def register(self, tool: object, **kwargs: object) -> None:
+        self.registered.append(str(getattr(tool, "name")))
+        self.register_kwargs = kwargs
+
+    def unregister(self, name: str) -> None:
+        if name in self.registered:
+            self.registered.remove(name)
+
+
+class _FakeTool:
+    name = "demo_tool"
+
+
+class _Named:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+# ── 共享 helper ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_contribute_to_list_adds_then_removes_on_dispose():
+    scope = EffectScope("demo")
+    target: list[str] = ["pre-existing"]
+    contribute_to_list(target, "added", effects=scope, label="x:added")
+
+    assert target == ["pre-existing", "added"]
+    _ = await scope.dispose_all()
+    # 只移除自己贡献的项，既有内容保留
+    assert target == ["pre-existing"]
+
+
+@pytest.mark.asyncio
+async def test_contribute_to_list_discard_is_idempotent():
+    scope = EffectScope("demo")
+    target: list[str] = []
+    contribute_to_list(target, "once", effects=scope, label="x:once")
+    target.remove("once")  # 外部已移除
+
+    # 守卫使处置不抛 ValueError
+    assert await scope.dispose_all() == []
+
+
+# ── ToolsCapability ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_tools_capability_registers_with_plugin_source_and_unregisters():
+    registry = _FakeRegistry()
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+    capability = ToolsCapability(registry, scope, contributions, "demo_plugin")
+
+    capability.register(_FakeTool(), risk="destructive", always_on=True)
+
+    assert registry.registered == ["demo_tool"]
+    assert contributions.tool_names == ["demo_tool"]
+    # 工具来源必须标为插件，否则 ToolRegistry 无法归因
+    assert registry.register_kwargs["source_type"] == "plugin"
+    assert registry.register_kwargs["source_name"] == "demo_plugin"
+    assert registry.register_kwargs["risk"] == "destructive"
+    assert registry.register_kwargs["always_on"] is True
+
+    _ = await scope.dispose_all()
+    assert registry.registered == []
+    assert contributions.tool_names == []
+
+
+def test_tools_capability_without_registry_raises():
+    capability = ToolsCapability(
+        None, EffectScope("demo"), PluginContributions(), "demo_plugin"
+    )
+    with pytest.raises(RuntimeError, match="未提供 ToolRegistry"):
+        capability.register(_FakeTool())
+
+
+# ── LifecycleCapability ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_contribution_removed_on_dispose():
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+    capability = LifecycleCapability(contributions, scope)
+    first, second = object(), object()
+
+    capability.contribute("before_turn", [first, second])
+    assert contributions.phase_modules["before_turn"] == [first, second]
+
+    _ = await scope.dispose_all()
+    assert contributions.phase_modules["before_turn"] == []
+
+
+def test_lifecycle_unknown_slot_raises():
+    capability = LifecycleCapability(PluginContributions(), EffectScope("demo"))
+    with pytest.raises(ValueError, match="未知 phase 槽位"):
+        capability.contribute("after_everything", [object()])
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_dispose_only_removes_own_modules():
+    contributions = PluginContributions()
+    foreign = object()
+    contributions.phase_modules["after_turn"].append(foreign)
+    scope = EffectScope("demo")
+    mine = object()
+
+    LifecycleCapability(contributions, scope).contribute("after_turn", [mine])
+    _ = await scope.dispose_all()
+
+    # 其他插件贡献的模块不能被本插件卸载带走
+    assert contributions.phase_modules["after_turn"] == [foreign]
+
+
+def test_all_phase_slots_are_contributable():
+    contributions = PluginContributions()
+    capability = LifecycleCapability(contributions, EffectScope("demo"))
+    for slot in PHASE_SLOTS:
+        capability.contribute(slot, [object()])
+    assert all(len(contributions.phase_modules[slot]) == 1 for slot in PHASE_SLOTS)
+
+
+# ── 列表型 capability ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_tool_hooks_capability_add_and_dispose():
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+    hook = _Named("plugin:demo:guard")
+
+    ToolHooksCapability(contributions, scope).add(hook)  # type: ignore[arg-type]
+    assert contributions.tool_hooks == [hook]
+    assert scope.labels == ["tool_hook:plugin:demo:guard"]
+
+    _ = await scope.dispose_all()
+    assert contributions.tool_hooks == []
+
+
+@pytest.mark.asyncio
+async def test_proactive_gates_capability_add_and_dispose():
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+    gate = _Named("relationship.loneliness")
+
+    ProactiveGatesCapability(contributions, scope).add(gate)  # type: ignore[arg-type]
+    assert contributions.proactive_gates == [gate]
+    assert scope.labels == ["proactive_gate:relationship.loneliness"]
+
+    _ = await scope.dispose_all()
+    assert contributions.proactive_gates == []
+
+
+@pytest.mark.asyncio
+async def test_channels_capability_add_and_dispose():
+    contributions = PluginContributions()
+    scope = EffectScope("demo")
+    channel = _Named("qq")
+
+    ChannelsCapability(contributions, scope).add(channel)  # type: ignore[arg-type]
+    assert contributions.channels == [channel]
+    assert scope.labels == ["channel:qq"]
+
+    _ = await scope.dispose_all()
+    assert contributions.channels == []
+
+
+# ── BackgroundCapability ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_background_task_cancelled_and_awaited_on_dispose():
+    scope = EffectScope("demo")
+    started = asyncio.Event()
+    cleaned: list[str] = []
+
+    async def worker() -> None:
+        started.set()
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            cleaned.append("cancelled")
+            raise
+
+    task = BackgroundCapability(scope, "demo_plugin").spawn(worker(), name="worker")
+    await started.wait()
+    assert not task.done()
+    assert task.get_name() == "plugin:demo_plugin:worker"
+
+    _ = await scope.dispose_all()
+    # dispose 必须等到任务真正退出，而不是只发出取消
+    assert task.done()
+    assert cleaned == ["cancelled"]
+
+
+@pytest.mark.asyncio
+async def test_background_dispose_of_finished_task_is_noop():
+    scope = EffectScope("demo")
+
+    async def quick() -> None:
+        return None
+
+    task = BackgroundCapability(scope, "demo_plugin").spawn(quick(), name="quick")
+    await task
+
+    assert await scope.dispose_all() == []
+    assert not task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_background_task_failure_does_not_break_dispose():
+    scope = EffectScope("demo")
+    failed = asyncio.Event()
+
+    async def boom() -> None:
+        failed.set()
+        raise RuntimeError("worker exploded")
+
+    _ = BackgroundCapability(scope, "demo_plugin").spawn(boom(), name="boom")
+    await failed.wait()
+    await asyncio.sleep(0)
+
+    # 后台任务自身异常不得让插件卸载失败
+    assert await scope.dispose_all() == []
