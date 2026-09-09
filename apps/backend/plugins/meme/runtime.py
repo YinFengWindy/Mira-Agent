@@ -159,7 +159,7 @@ class MemeCatalog:
             "<example>",
             "对方说：最喜欢你了 → 回复结尾加 <meme:shy>",
             "对方说：我好喜欢你 → 回复结尾加 <meme:shy>",
-            "对方说：akashic你真好 → 回复结尾加 <meme:shy>",
+            "对方说：shiori你真好 → 回复结尾加 <meme:shy>",
             "对方说：你真好 → 回复结尾加 <meme:shy>",
             "对方说：你今天好棒 → 回复结尾加 <meme:shy>",
             "对方说：谢谢你今天帮了我好多 → 回复结尾加 <meme:shy> 或 <meme:happy>",

@@ -6,5 +6,5 @@ from contextvars import ContextVar
 # observe 的全局错误采集器在 logging 钩子里读取它，给错误打上 session 归属。
 # 放在 core 层是为了让主循环与 observe 插件共享同一个 ContextVar 对象。
 current_session_key: ContextVar[str | None] = ContextVar(
-    "akashic_current_session_key", default=None
+    "shiori_current_session_key", default=None
 )

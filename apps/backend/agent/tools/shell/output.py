@@ -44,7 +44,7 @@ def _truncate(content: str) -> dict[str, Any]:
 
 
 def _write_full_output(content: str) -> str:
-    fd, path = tempfile.mkstemp(prefix="akashic-shell-", suffix=".log")
+    fd, path = tempfile.mkstemp(prefix="shiori-shell-", suffix=".log")
     os.close(fd)
     Path(path).write_text(content, encoding="utf-8")
     return path

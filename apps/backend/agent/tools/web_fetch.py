@@ -21,7 +21,7 @@ from core.net.http import (
 _MAX_BYTES = 5 * 1024 * 1024  # 5MB，与 OpenCode 一致
 _DEFAULT_TIMEOUT = 30  # 秒
 _MAX_TIMEOUT = 120  # 秒，与 OpenCode 一致
-_USER_AGENT = "akashic/1.0"
+_USER_AGENT = "shiori/1.0"
 _MAX_TEXT_CHARS = 50_000  # 返回给 LLM 的文本字符上限（约 ~12K tokens）
 
 # 根据 format 设置 Accept header，引导服务端返回更合适的格式

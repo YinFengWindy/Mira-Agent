@@ -31,7 +31,7 @@ logger = logging.getLogger("benchmarks.personamem")
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run PersonaMem benchmark against the akashic agent runtime."
+        description="Run PersonaMem benchmark against the Shiori agent runtime."
     )
     parser.add_argument("--config", required=True, type=Path, help="Path to config.toml")
     parser.add_argument("--questions", required=True, type=Path, help="Path to questions_*.csv")

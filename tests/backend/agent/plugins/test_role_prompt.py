@@ -36,7 +36,6 @@ def test_role_system_section_contains_only_role_prompt_and_mood_contract(
 
     assert section is not None
     assert "你是 Mira。" in section.content
-    assert "Akashic" not in section.content
     assert "用户创建的角色" not in section.content
 
 

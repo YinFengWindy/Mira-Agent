@@ -5,7 +5,7 @@
 ## 目录与格式
 
 - 每个技能目录必须包含 `SKILL.md`。
-- `SKILL.md` 建议包含 frontmatter：`name`、`description`、`metadata.akashic`。
+- `SKILL.md` 建议包含 frontmatter：`name`、`description`、`metadata.shiori`。
 - 主循环可按需读取具体技能文件；本索引只做发现与导航，不承载执行细节。
 
 ## 当前内置技能

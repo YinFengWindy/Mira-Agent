@@ -171,9 +171,9 @@ class SkillsLoader:
         """解析 frontmatter 中 metadata 字段的 JSON 配置。
 
         配置结构示例：
-            {"akashic": {"always": true, "requires": {"bins": ["curl"]}}}
+            {"shiori": {"always": true, "requires": {"bins": ["curl"]}}}
 
-        为兼容其他格式，同时识别 "akashic" 和 "skill" 顶层键。
+        为兼容其他格式，同时识别 "shiori" 和 "skill" 顶层键。
 
         Args:
             raw: frontmatter 中 metadata 字段的原始字符串。
@@ -186,7 +186,7 @@ class SkillsLoader:
             if not isinstance(data, dict):
                 return {}
             # 依次尝试已知的顶层键
-            for key in ("akashic", "skill"):
+            for key in ("shiori", "skill"):
                 if key in data:
                     return data[key]
             # 兼容：直接返回整个对象（旧格式）

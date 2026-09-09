@@ -22,22 +22,22 @@ def patch_ncatbot_ws_open_timeout(timeout_seconds: float) -> None:
     try:
         adapter_mod = importlib.import_module("ncatbot.core.adapter.adapter")
         original_connect = getattr(
-            adapter_mod, "_akashic_original_websockets_connect", None
+            adapter_mod, "_shiori_original_websockets_connect", None
         )
         if original_connect is None:
             original_connect = adapter_mod.websockets.connect
-            adapter_mod._akashic_original_websockets_connect = original_connect
+            adapter_mod._shiori_original_websockets_connect = original_connect
 
             def _patched_connect(*args, **kwargs):
                 configured_timeout = getattr(
-                    adapter_mod, "_akashic_websocket_open_timeout_seconds", None
+                    adapter_mod, "_shiori_websocket_open_timeout_seconds", None
                 )
                 if configured_timeout is not None:
                     kwargs["open_timeout"] = configured_timeout
-                return adapter_mod._akashic_original_websockets_connect(*args, **kwargs)
+                return adapter_mod._shiori_original_websockets_connect(*args, **kwargs)
 
             adapter_mod.websockets.connect = _patched_connect
-        adapter_mod._akashic_websocket_open_timeout_seconds = timeout_seconds
+        adapter_mod._shiori_websocket_open_timeout_seconds = timeout_seconds
     except Exception as exc:
         logger.warning(
             "[qq] patch ncatbot WebSocket open_timeout 失败，沿用 SDK 默认值: %s",
@@ -82,7 +82,7 @@ async def download_to_temp(
             extension = ext_map.get(content_type.split(";")[0].strip(), ".jpg")
             path = attachment_store.write_bytes(
                 response.content,
-                prefix="akashic_qq_",
+                prefix="shiori_qq_",
                 suffix=extension,
             )
             paths.append(str(path))

@@ -206,7 +206,7 @@ class ShellTool(Tool):
     ) -> str:
         task_id = f"shell_{uuid4().hex[:12]}"
         log_fd, log_path = tempfile.mkstemp(
-            prefix=f"akashic-bg-{task_id}-", suffix=".log"
+            prefix=f"shiori-bg-{task_id}-", suffix=".log"
         )
         os.close(log_fd)
 
@@ -261,7 +261,7 @@ class ShellTool(Tool):
         """前台执行；允许按需关闭自动转后台，直接等待完整结果。"""
         task_id = f"shell_{uuid4().hex[:12]}"
         log_fd, log_path = tempfile.mkstemp(
-            prefix=f"akashic-fg-{task_id}-", suffix=".log"
+            prefix=f"shiori-fg-{task_id}-", suffix=".log"
         )
         os.close(log_fd)
 

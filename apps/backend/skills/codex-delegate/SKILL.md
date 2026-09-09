@@ -1,7 +1,7 @@
 ---
 name: codex-delegate
 description: 把长代码库任务委托给本机 Codex CLI 后台执行。当用户说用 codex skill、codexskill、codex delegate、委托 codex、后台 codex、阻塞 codex exec、subagent 跑 codex 时使用。
-metadata: {"akashic": {"always": false, "requires": {"bins": ["codex"]}}}
+metadata: {"shiori": {"always": false, "requires": {"bins": ["codex"]}}}
 ---
 
 # Codex Delegate
@@ -39,10 +39,10 @@ metadata: {"akashic": {"always": false, "requires": {"bins": ["codex"]}}}
 9. `auto_promote=false` 且不传 `timeout` 时，shell 会默认同步等待 21600 秒；只有需要更短硬截止时才显式传 `timeout`。
 10. `codex exec` 要用 `--cd <repo>` 指定工作目录，避免依赖 shell 的 `cd` 状态。
 11. 默认把任务说明写入 prompt 文件，再用 `codex exec --cd <repo> - < prompt.txt` 读取，避免 shell 引号、换行和特殊字符破坏 prompt。
-12. 必须给 `codex exec` 加 `--output-last-message <task_dir>/codex-result.md`，完成后读这个文件作为主要结果；不要从 `/tmp/akashic-shell-*.log` 里 grep 或 tail 输出。
+12. 必须给 `codex exec` 加 `--output-last-message <task_dir>/codex-result.md`，完成后读这个文件作为主要结果；不要从 `/tmp/shiori-shell-*.log` 里 grep 或 tail 输出。
 13. 同时把 stdout+stderr 保存到 `<task_dir>/codex-run.log`，因为 `session id: ...` 在 stderr 里。
 14. 如果需要后续复用同一个 Codex 会话，必须从 `codex-run.log` 提取 session id，写入 `<task_dir>/codex-session.txt`，并在回复里告诉主会话这个 session id。
-15. prompt、result、run log、session id 都必须放在 subagent 任务目录 `<task_dir>`；不要写 `/tmp`，也不要依赖 `/tmp/akashic-shell-*.log`。
+15. prompt、result、run log、session id 都必须放在 subagent 任务目录 `<task_dir>`；不要写 `/tmp`，也不要依赖 `/tmp/shiori-shell-*.log`。
 
 ## 推荐调用形态
 
@@ -56,7 +56,7 @@ shell(
 )
 
 spawn(
-  task="用户给出的 repo 路径是 /path/to/repo；用户目标是：<原样概括用户目标>。不要让主 agent 先探索这个仓库，不要使用主 agent 预选的文件列表；Codex CLI 必须把 /path/to/repo 当作完整代码库，自行发现入口、目录和相关文件。在当前 subagent 任务目录写入 prompt.txt，然后用 shell 阻塞执行 codex exec --cd /path/to/repo --output-last-message <当前任务目录>/codex-result.md - < <当前任务目录>/prompt.txt，并用 2>&1 | tee <当前任务目录>/codex-run.log 保存完整日志。shell 必须设置 auto_promote=false，不要 run_in_background，不要写 /tmp，不要读取 /tmp/akashic-shell 日志。完成后读取 codex-result.md，总结结果；从 codex-run.log 提取 session id 写入 codex-session.txt 并带回。",
+  task="用户给出的 repo 路径是 /path/to/repo；用户目标是：<原样概括用户目标>。不要让主 agent 先探索这个仓库，不要使用主 agent 预选的文件列表；Codex CLI 必须把 /path/to/repo 当作完整代码库，自行发现入口、目录和相关文件。在当前 subagent 任务目录写入 prompt.txt，然后用 shell 阻塞执行 codex exec --cd /path/to/repo --output-last-message <当前任务目录>/codex-result.md - < <当前任务目录>/prompt.txt，并用 2>&1 | tee <当前任务目录>/codex-run.log 保存完整日志。shell 必须设置 auto_promote=false，不要 run_in_background，不要写 /tmp，不要读取 /tmp/shiori-shell 日志。完成后读取 codex-result.md，总结结果；从 codex-run.log 提取 session id 写入 codex-session.txt 并带回。",
   label="codex delegate",
   profile="scripting",
   run_in_background=true
