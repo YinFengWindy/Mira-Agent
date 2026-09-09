@@ -39,7 +39,7 @@ const args = [
   "--add-data",
   `${join(backendRoot, "skills")}${dataSeparator}skills`,
   "--add-data",
-  `${join(repositoryRoot, "apps", "desktop", "renderer", "src", "chat", "common_emojis.json")}${dataSeparator}common_emojis.json`,
+  `${join(repositoryRoot, "apps", "desktop", "renderer", "src", "chat", "common_emojis.json")}${dataSeparator}.`,
   "--collect-submodules",
   "plugins",
   "--collect-submodules",
