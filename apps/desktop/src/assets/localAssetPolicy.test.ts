@@ -1,7 +1,40 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { collectTrustedLocalAssetPaths } from "./localAssetPolicy.js";
+import {
+  collectTrustedLocalAssetPaths,
+  isLocalAssetInsideRoot,
+  resolveLocalAssetCandidate,
+} from "./localAssetPolicy.js";
+
+test("Windows short paths share native asset identity and root containment", {
+  skip: process.platform !== "win32",
+}, async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "shiori-asset-short-path-"));
+  try {
+    const imagePath = join(directory, "avatar.png");
+    await writeFile(imagePath, "image", "utf-8");
+    const shortPathResult = spawnSync("cmd.exe", [
+      "/d", "/c", `for %I in ("${imagePath}") do @echo %~sI`,
+    ], { encoding: "utf-8", windowsVerbatimArguments: true });
+    assert.equal(shortPathResult.status, 0, shortPathResult.stderr);
+    const shortPath = shortPathResult.stdout.trim();
+    const canonicalPath = await realpath(imagePath);
+    if (shortPath.toLowerCase() === canonicalPath.toLowerCase()) {
+      context.skip("Windows short file names are unavailable on this volume");
+      return;
+    }
+
+    assert.equal(resolveLocalAssetCandidate(shortPath)?.canonicalPath, canonicalPath);
+    assert.equal(isLocalAssetInsideRoot(canonicalPath, join(shortPath, "..")), true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("pet package renderer assets are collected from trusted bridge payloads", () => {
   const previewPath = "C:\\workspace\\roles\\assets\\role-1\\pets\\pet-1\\preview.png";

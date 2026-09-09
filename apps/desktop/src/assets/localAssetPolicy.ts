@@ -54,7 +54,8 @@ export function resolveLocalAssetCandidate(path: string): LocalAssetCandidate | 
     return null;
   }
   try {
-    const canonicalPath = realpathSync(requestedPath);
+    // Match fs/promises.realpath when Windows inputs contain short path aliases.
+    const canonicalPath = realpathSync.native(requestedPath);
     if (!statSync(canonicalPath).isFile()) {
       return null;
     }
@@ -67,7 +68,7 @@ export function resolveLocalAssetCandidate(path: string): LocalAssetCandidate | 
 /** Checks canonical containment without accepting sibling-prefix or cross-drive paths. */
 export function isLocalAssetInsideRoot(canonicalPath: string, root: string): boolean {
   try {
-    const canonicalRoot = realpathSync(root);
+    const canonicalRoot = realpathSync.native(root);
     const relativePath = relative(canonicalRoot, canonicalPath);
     const parentPrefix = `..${process.platform === "win32" ? "\\" : "/"}`;
     return relativePath !== ""

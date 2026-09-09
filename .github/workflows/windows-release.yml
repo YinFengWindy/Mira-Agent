@@ -56,12 +56,17 @@ jobs:
       - name: Install desktop dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run focused release checks
-        run: |
-          .venv\Scripts\pytest.exe -q tests/backend/test_main.py
-          pnpm --filter shiori-desktop run typecheck
-          pnpm test
-          pnpm --filter shiori-desktop run test:package
+      - name: Run backend release checks
+        run: .venv\Scripts\pytest.exe -q tests/backend/test_main.py
+
+      - name: Run desktop typecheck
+        run: pnpm --filter shiori-desktop run typecheck
+
+      - name: Run desktop unit tests
+        run: pnpm test
+
+      - name: Run packaging tests
+        run: pnpm --filter shiori-desktop run test:package
 
       - name: Build Windows installer and unpacked artifact
         run: pnpm --filter shiori-desktop run package:win
