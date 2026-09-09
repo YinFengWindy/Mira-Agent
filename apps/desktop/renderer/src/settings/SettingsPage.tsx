@@ -9,6 +9,7 @@ import {
 } from "./settingsSectionMetadata";
 import { useSettingsPageController } from "./useSettingsPageController";
 import { cardClass, cx } from "../shared/styles";
+import { AboutSettingsPage } from "./AboutSettingsPage";
 
 type SettingsPageProps = {
   bridgeReady: boolean;
@@ -23,6 +24,13 @@ export const settingsContentClass = "relative scrollbar-soft overflow-y-auto px-
 
 /** Renders the active settings domain and delegates persistence to its controller. */
 export function SettingsPage({
+  bridgeReady,
+  section,
+}: SettingsPageProps) {
+  return section === "about" ? <AboutSettingsPage /> : <EditableSettingsPage bridgeReady={bridgeReady} section={section} />;
+}
+
+function EditableSettingsPage({
   bridgeReady,
   section,
 }: SettingsPageProps) {
@@ -106,7 +114,7 @@ export function SettingsPage({
               ) : null}
             </header>
           )}
-          {currentId && currentSubsectionId ? (
+          {currentId && currentId !== "about" && currentSubsectionId ? (
             <SettingsSectionContent
               sectionId={currentId}
               subsectionId={currentSubsectionId}

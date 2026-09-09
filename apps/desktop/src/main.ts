@@ -9,7 +9,7 @@ import { registerDesktopIpc } from "./bridge/ipc.js";
 import { openGrantedLocalAsset } from "./assets/localAssetOpen.js";
 import { LocalAssetRegistry, localAssetScheme } from "./assets/localAssetRegistry.js";
 import { ensureDesktopRuntimeConfig, resolveDesktopRuntimePaths } from "./runtimePaths.js";
-import { checkForDesktopUpdates } from "./updater.js";
+import { registerDesktopUpdates } from "./updater.js";
 import { createDesktopTray } from "./tray.js";
 import { createDesktopWindow, showDesktopWindow } from "./window.js";
 import {
@@ -281,7 +281,8 @@ void app.whenReady().then(() => {
   );
   registerLocalAssetProtocol(protocol, localAssets);
   void startBridge(bridge);
-  checkForDesktopUpdates(app.isPackaged, (error) => {
+  const currentVersion = !app.isPackaged && process.env.SHIORI_DEV_VERSION || app.getVersion();
+  registerDesktopUpdates(app.isPackaged, currentVersion, (error) => {
     logDesktopDiagnostic({ scope: "main", event: "updater.check.failed", payload: { error } });
   });
   desktopPet = new DesktopPetController({

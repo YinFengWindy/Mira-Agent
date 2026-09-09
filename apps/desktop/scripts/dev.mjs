@@ -4,11 +4,13 @@ import { createServer as createNetServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { resolveDevVersion } from "./dev-version.mjs";
 
 const require = createRequire(import.meta.url);
 const electronExe = require("electron");
 const here = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(here, "..");
+const devVersion = resolveDevVersion(desktopRoot);
 const rendererConfig = resolve(desktopRoot, "renderer", "vite.config.ts");
 const userDataDir = resolve(desktopRoot, ".dev-user-data");
 const preferredPort = Number(process.env.SHIORI_RENDERER_DEV_SERVER_PORT || "5173");
@@ -78,6 +80,7 @@ electronProc = spawn(electronExe, ["."], {
   stdio: "inherit",
   env: {
     ...process.env,
+    SHIORI_DEV_VERSION: devVersion ?? "",
     SHIORI_RENDERER_DEV_SERVER_URL: devServerUrl,
     SHIORI_DESKTOP_USER_DATA_DIR: userDataDir,
   },

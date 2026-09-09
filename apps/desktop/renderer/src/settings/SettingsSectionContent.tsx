@@ -8,7 +8,7 @@ import type { SettingsSectionId } from "./SettingsSidebar";
 import type { SettingsSectionEditorProps } from "./settingsPageTypes";
 
 type SettingsSectionContentProps = SettingsSectionEditorProps & {
-  sectionId: SettingsSectionId;
+  sectionId: Exclude<SettingsSectionId, "about">;
 };
 
 /** Routes the active settings domain to its focused editor component. */

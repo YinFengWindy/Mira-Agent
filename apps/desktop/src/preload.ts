@@ -29,6 +29,16 @@ window.addEventListener("click", (event) => {
 });
 
 const api: DesktopApi = {
+  updates: {
+    getState: () => ipcRenderer.invoke("desktop:update-state"),
+    check: () => ipcRenderer.invoke("desktop:update-check"),
+    install: () => ipcRenderer.invoke("desktop:update-install"),
+    onState(listener) {
+      const wrapped = (_event: unknown, state: import("./updateContract.js").DesktopUpdateState) => listener(state);
+      ipcRenderer.on("desktop:update-state", wrapped);
+      return () => ipcRenderer.off("desktop:update-state", wrapped);
+    },
+  },
   applicationSessionId() {
     return ipcRenderer.invoke("desktop:application-session-id") as Promise<string>;
   },
