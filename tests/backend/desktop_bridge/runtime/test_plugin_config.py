@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -274,6 +275,31 @@ async def test_set_requires_plugin_id_and_operation_id(tmp_path, monkeypatch):
         assert missing_plugin_id.error.code == "runtime_invalid_request"
         assert missing_operation_id.error.code == "runtime_invalid_request"
         assert path.read_text(encoding="utf-8") == before
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_get_returns_json_safe_defaults(tmp_path, monkeypatch):
+    """默认值必须以 JSON 形态返回，否则 plugin.config.get 会在传输层炸掉。
+
+    ``defaults_for`` 直接从 ``model_fields`` 取默认值，拿到的是原始 Python 对象；
+    而这个结果会与已存值合并后经桥接序列化回 renderer。模型里一旦有 Enum /
+    datetime / Path / 嵌套模型这类默认值，原样送上传输层就会失败。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, _, app = await _start_service(tmp_path)
+    try:
+        response = await _request(
+            service, "plugin.config.get", {"plugin_id": "nullable_config"},
+        )
+
+        assert response.error is None, response.error
+        # Enum 默认值必须已经是它的 JSON 值，而不是 Enum 实例
+        assert response.payload["values"]["mode"] == "quiet"
+        # 最直接的证据：整个响应能被 JSON 序列化
+        _ = json.dumps(response.payload)
     finally:
         await service.aclose()
         await app.shutdown()

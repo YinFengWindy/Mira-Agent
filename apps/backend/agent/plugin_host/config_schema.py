@@ -20,6 +20,7 @@ import sys
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
+from pydantic_core import to_jsonable_python
 
 from agent.plugin_host.handle import PluginRecord
 
@@ -114,12 +115,17 @@ class PluginConfigSchemaRegistry:
         as a single required field has no default, which would blank out
         every other field's default along with it. A field without a default
         (required) is simply absent from the result.
+
+        The values are converted to their JSON form, matching ``validate``:
+        this result is merged with stored values and serialised straight onto
+        the bridge, so a default that is an ``Enum`` / ``datetime`` / ``Path``
+        / nested model must not reach the transport as a raw Python object.
         """
         model_cls = self._models.get(plugin_id)
         if model_cls is None:
             return None
         return {
-            name: field_info.get_default(call_default_factory=True)
+            name: to_jsonable_python(field_info.get_default(call_default_factory=True))
             for name, field_info in model_cls.model_fields.items()
             if not field_info.is_required()
         }

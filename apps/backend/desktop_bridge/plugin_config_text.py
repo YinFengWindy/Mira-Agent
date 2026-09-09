@@ -213,7 +213,15 @@ def _append_table(config_toml: str, block: str) -> str:
 
 
 def _render_table(plugin_id: str, values: dict[str, Any]) -> str:
-    """Dumps ``values`` as ``[plugins.<plugin_id>...]`` header(s) plus fields."""
+    """Dumps ``values`` as ``[plugins.<plugin_id>...]`` header(s) plus fields.
+
+    The per-line header rewrite below is safe only because ``toml.dumps``
+    never emits a multi-line value: strings are written with their newlines
+    escaped, so no value line can be mistaken for a table header. ``values``
+    is always a validated ``model_dump(mode="json")`` result, which is why the
+    naive line scan is sufficient here but not in ``_locate_table``, where the
+    input is a user-authored document.
+    """
 
     rendered = toml.dumps({plugin_id: values})
     out_lines: list[str] = []
