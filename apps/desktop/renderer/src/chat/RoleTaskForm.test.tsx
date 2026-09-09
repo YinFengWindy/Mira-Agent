@@ -54,7 +54,7 @@ describe("RoleTaskForm", () => {
       content: "喝水",
     });
 
-    assert.match(markup, /<select/);
+    assert.match(markup, /role="combobox"/);
     assert.match(markup, /每小时/);
     assert.doesNotMatch(markup, /placeholder="例如 1h 或 0 9 \* \* \*"/);
   });
@@ -68,7 +68,7 @@ describe("RoleTaskForm", () => {
       content: "喝水",
     });
 
-    assert.match(markup, /<option value="daily" selected="">每天<\/option>/);
+    assert.match(markup, />每天<\/span>/);
     assert.match(markup, />执行时间</);
     assert.match(markup, /type="time" value="14:30"/);
   });
@@ -82,8 +82,8 @@ describe("RoleTaskForm", () => {
       content: "喝水",
     });
 
-    assert.match(markup, /<option value="weekly" selected="">每周<\/option>/);
-    assert.match(markup, /<option value="5" selected="">周五<\/option>/);
+    assert.match(markup, />每周<\/span>/);
+    assert.match(markup, />周五<\/span>/);
     assert.match(markup, /type="time" value="08:15"/);
   });
 
@@ -96,7 +96,7 @@ describe("RoleTaskForm", () => {
       content: "喝水",
     }, true, "保存失败");
 
-    assert.match(markup, /<option value="custom" selected="">自定义<\/option>/);
+    assert.match(markup, />自定义<\/span>/);
     assert.match(markup, /type="text"/);
     assert.match(markup, /value="\*\/5 \* \* \* \*"/);
     assert.match(markup, />保存中…</);

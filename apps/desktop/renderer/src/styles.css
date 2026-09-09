@@ -349,7 +349,8 @@
    the global outline would double up on top of it. */
 input:focus-visible,
 textarea:focus-visible,
-select:focus-visible {
+select:focus-visible,
+button[role="combobox"]:focus-visible {
   outline: none;
 }
 

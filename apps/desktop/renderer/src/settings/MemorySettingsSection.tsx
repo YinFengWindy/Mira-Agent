@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { SettingsField as Field } from "./SettingsField";
 import {
   SettingsSecretInput,
@@ -20,11 +21,7 @@ export function MemorySettingsSection({
         <SettingsSectionCard>
           <SettingsToggleField label="启用记忆" checked={draft.memory.enabled} onChange={(checked) => updateDraft((current) => ({ ...current, memory: { ...current.memory, enabled: checked } }))} />
           <Field label="记忆引擎" hint="default 对应 default_memory 插件。">
-            <select className={settingsInputClass} value={draft.memory.engine} onChange={(event) => updateDraft((current) => ({ ...current, memory: { ...current.memory, engine: event.target.value } }))}>
-              {getMemoryEngineOptions(draft.memory.engine).map((option) => (
-                <option key={option.value || "default"} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <Select aria-label="记忆引擎" className={settingsInputClass} value={draft.memory.engine} onValueChange={(value) => updateDraft((current) => ({ ...current, memory: { ...current.memory, engine: value } }))} options={getMemoryEngineOptions(draft.memory.engine)} />
           </Field>
         </SettingsSectionCard>
       );

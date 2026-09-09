@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "../styles.css";
 import * as Icons from "../shared/ui/icons";
+import { SelectExamples } from "./SelectExamples";
 import {
   badgeClass,
   cardClass,
@@ -65,6 +66,7 @@ function App() {
           </p>
         </header>
 
+        <SelectExamples />
         <Section title="色阶原语">
           {Object.entries(RAMPS).map(([ramp, steps]) => (
             <div key={ramp} className="mb-3 flex items-end gap-2">

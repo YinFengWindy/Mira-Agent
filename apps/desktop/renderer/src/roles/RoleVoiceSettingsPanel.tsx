@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { PencilSimple, Waveform } from "@phosphor-icons/react";
 import type React from "react";
 import { useState } from "react";
@@ -59,15 +60,12 @@ export function RoleVoiceSettingsPanel({ roleForm, onUpdate }: RoleVoiceSettings
             {moods.map((mood) => (
               <label className="grid grid-cols-[minmax(0,1fr)_132px] items-center gap-3 border-b border-[#E2EEE7] py-2.5 text-sm last:border-b-0" key={mood}>
                 <span className="truncate text-ink-secondary">{mood}</span>
-                <select className="rounded-lg border border-transparent bg-white/75 px-2.5 py-2 text-xs text-ink-secondary transition focus:bg-white focus:outline-none" value={roleForm.voiceMoodEmotions[mood] ?? ""} onChange={(event) => onUpdate((current) => {
+                <Select aria-label={mood} className="rounded-md border border-transparent bg-white/75 px-2.5 py-2 text-xs text-ink-secondary transition focus:bg-white focus:outline-none" value={roleForm.voiceMoodEmotions[mood] ?? ""} onValueChange={(value) => onUpdate((current) => {
                   const next = { ...current.voiceMoodEmotions };
-                  if (event.target.value) next[mood] = event.target.value;
+                  if (value) next[mood] = value;
                   else delete next[mood];
                   return { ...current, voiceMoodEmotions: next };
-                })}>
-                  <option value="">自动判断</option>
-                  {minimaxVoiceEmotionOptions.map((emotion) => <option key={emotion} value={emotion}>{emotion}</option>)}
-                </select>
+                })} options={[{ value: "", label: "自动判断" }, ...minimaxVoiceEmotionOptions.map((emotion) => ({ value: emotion, label: emotion }))]} />
               </label>
             ))}
           </div>

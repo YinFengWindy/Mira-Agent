@@ -1,3 +1,4 @@
+import { Select, type SelectOption } from "../shared/ui/Select";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toFileUrl } from "../shared/format";
 import { DeleteIcon, ResetIcon, UploadIcon } from "../shared/icons";
@@ -27,17 +28,12 @@ type ImageFormPanelProps = {
   onChangeUndesiredContentPreset: (value: number) => void;
 };
 
-type ImageSelectOption<T extends string> = {
-  id: T;
-  label: string;
-};
-
-const sizeOptions: Array<ImageSelectOption<ImageSizePreset>> = [
-  { id: "square", label: "1024 × 1024" },
-  { id: "landscape", label: "1216 × 832" },
-  { id: "portrait", label: "832 × 1216" },
-  { id: "custom", label: "自定义" },
-];
+const sizeOptions = [
+  { value: "square", label: "1024 × 1024" },
+  { value: "landscape", label: "1216 × 832" },
+  { value: "portrait", label: "832 × 1216" },
+  { value: "custom", label: "自定义" },
+] satisfies SelectOption[];
 
 function clampCustomDimensionInput(value: string): string {
   const trimmed = value.trim();
@@ -55,6 +51,7 @@ function hasPositiveIntegerText(value: string): boolean {
   return /^\d+$/.test(trimmed) && Number(trimmed) > 0;
 }
 
+/** Renders image generation inputs and prompt-specific settings. */
 export function ImageFormPanel({
   bridgeReady,
   form,
@@ -79,11 +76,11 @@ export function ImageFormPanel({
   const promptTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectClass = cx(
     inputClass,
-    "h-10 appearance-none py-0 pr-8 text-xs leading-4",
+    "h-10 py-0 text-xs leading-4",
   );
   const settingsSelectClass = cx(
     inputClass,
-    "h-9 appearance-none py-0 pr-8 text-xs leading-4",
+    "h-9 py-0 text-xs leading-4",
   );
   const promptTextareaClass = cx(
     inputClass,
@@ -279,20 +276,13 @@ export function ImageFormPanel({
                   <div className="mt-3 grid gap-1.5">
                     <div className="text-xs font-semibold text-ink">Undesired Content Preset</div>
                     <div className="relative">
-                      <select
+                      <Select
+                        aria-label="Undesired Content Preset"
                         className={settingsSelectClass}
                         value={String(undesiredContentPreset)}
-                        onChange={(event) => onChangeUndesiredContentPreset(Number(event.target.value) || 0)}
-                      >
-                        <option value="0">None</option>
-                        <option value="1">Light</option>
-                        <option value="2">Heavy</option>
-                      </select>
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-ink-muted" aria-hidden="true">
-                        <svg viewBox="0 0 12 12" className="h-3.5 w-3.5 fill-current">
-                          <path d="M2.2 4.2 6 8l3.8-3.8.8.8L6 9.8 1.4 5z" />
-                        </svg>
-                      </span>
+                        onValueChange={(value) => onChangeUndesiredContentPreset(Number(value) || 0)}
+                        options={[{ value: "0", label: "None" }, { value: "1", label: "Light" }, { value: "2", label: "Heavy" }]}
+                      />
                     </div>
                   </div>
                 </div>
@@ -400,20 +390,13 @@ export function ImageFormPanel({
       <div className="grid min-w-0 gap-1.5">
         <div className="text-xs font-medium text-ink-secondary">尺寸</div>
         <div className="relative min-w-0">
-          <select
+          <Select
+            aria-label="尺寸"
             className={selectClass}
             value={form.sizePreset}
-            onChange={(event) => onChange({ sizePreset: event.target.value as ImageSizePreset })}
-          >
-            {sizeOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
-          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-ink-muted" aria-hidden="true">
-            <svg viewBox="0 0 12 12" className="h-3.5 w-3.5 fill-current">
-              <path d="M2.2 4.2 6 8l3.8-3.8.8.8L6 9.8 1.4 5z" />
-            </svg>
-          </span>
+            onValueChange={(value) => onChange({ sizePreset: value as ImageSizePreset })}
+            options={sizeOptions}
+          />
         </div>
         {form.sizePreset === "custom" ? (
           <div className="grid min-w-0 gap-2 md:grid-cols-2">

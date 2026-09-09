@@ -1,3 +1,4 @@
+import { Select } from "../shared/ui/Select";
 import { SettingsField as Field } from "./SettingsField";
 import {
   SettingsSecretInput,
@@ -15,9 +16,7 @@ export function VoiceSettingsSection({ draft, subsectionId, updateDraft }: Setti
   return (
     <SettingsSectionCard>
       <Field label="ASR Provider">
-        <select className={settingsInputClass} value={draft.voice.asrProvider} onChange={(event) => updateDraft((current) => ({ ...current, voice: { ...current.voice, asrProvider: event.target.value } }))}>
-          <option value="tencent">tencent</option>
-        </select>
+        <Select aria-label="ASR Provider" className={settingsInputClass} value={draft.voice.asrProvider} onValueChange={(value) => updateDraft((current) => ({ ...current, voice: { ...current.voice, asrProvider: value } }))} options={[{ value: "tencent", label: "tencent" }]} />
       </Field>
       <Field label="腾讯云 ASR 地址">
         <input className={settingsInputClass} value={draft.voice.asrBaseUrl} onChange={(event) => updateDraft((current) => ({ ...current, voice: { ...current.voice, asrBaseUrl: event.target.value } }))} />
@@ -29,9 +28,7 @@ export function VoiceSettingsSection({ draft, subsectionId, updateDraft }: Setti
         <SettingsSecretInput value={draft.voice.asrSecretKey} onChange={(value) => updateDraft((current) => ({ ...current, voice: { ...current.voice, asrSecretKey: value } }))} />
       </Field>
       <Field label="TTS Provider">
-        <select className={settingsInputClass} value={draft.voice.ttsProvider} onChange={(event) => updateDraft((current) => ({ ...current, voice: { ...current.voice, ttsProvider: event.target.value } }))}>
-          <option value="minimax">minimax</option>
-        </select>
+        <Select aria-label="TTS Provider" className={settingsInputClass} value={draft.voice.ttsProvider} onValueChange={(value) => updateDraft((current) => ({ ...current, voice: { ...current.voice, ttsProvider: value } }))} options={[{ value: "minimax", label: "minimax" }]} />
       </Field>
       <Field label="MiniMax TTS 地址">
         <input className={settingsInputClass} value={draft.voice.ttsBaseUrl} onChange={(event) => updateDraft((current) => ({ ...current, voice: { ...current.voice, ttsBaseUrl: event.target.value } }))} />
