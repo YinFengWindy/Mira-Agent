@@ -27,6 +27,11 @@ export default defineConfig({
       input: {
         main: resolvePath(here, "index.html"),
         pet: resolvePath(here, "pet.html"),
+        // One host-owned entry for every plugin-owned desktop window. Adding a
+        // per-plugin entry here is exactly the build-time coupling #181
+        // removes — `pet.html` above is the last one, and goes away when the
+        // pet moves onto this capability.
+        surface: resolvePath(here, "surface.html"),
         voice: resolvePath(here, "voice.html"),
       },
       output: {

@@ -1,0 +1,318 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import type { SurfaceBounds, SurfaceSpec } from "./contract.js";
+import {
+  DesktopSurfaceError,
+  DesktopSurfaceHost,
+  surfaceMessageChannel,
+  surfacePositionChannel,
+  type SurfaceKey,
+  type SurfaceWindowHandle,
+} from "./host.js";
+
+const body = { width: 192, height: 208 };
+const spec: SurfaceSpec = { body };
+const key: SurfaceKey = { pluginId: "demo", surfaceId: "main" };
+const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
+
+class FakeWindow implements SurfaceWindowHandle {
+  static nextId = 1;
+  readonly id = FakeWindow.nextId++;
+  bounds: SurfaceBounds = { x: 0, y: 0, width: body.width, height: body.height };
+  destroyed = false;
+  hidden = false;
+  shown = 0;
+  ignoreMouse: { ignore: boolean; forward?: boolean } | null = null;
+  readonly sent: { channel: string; payload: unknown }[] = [];
+  private closedListeners: (() => void)[] = [];
+
+  setBounds(bounds: SurfaceBounds) { this.bounds = bounds; }
+  getBounds() { return this.bounds; }
+  isDestroyed() { return this.destroyed; }
+  destroy() { this.destroyed = true; }
+  showInactive() { this.shown += 1; this.hidden = false; }
+  hide() { this.hidden = true; }
+  setIgnoreMouseEvents(ignore: boolean, options?: { forward?: boolean }) {
+    this.ignoreMouse = { ignore, forward: options?.forward };
+  }
+  send(channel: string, payload: unknown) { this.sent.push({ channel, payload }); }
+  onClosed(listener: () => void) { this.closedListeners.push(listener); }
+  /** Simulates the OS closing the window out from under the host. */
+  emitClosed() { this.destroyed = true; for (const listener of this.closedListeners) listener(); }
+  positionMessages() { return this.sent.filter((item) => item.channel === surfacePositionChannel); }
+}
+
+type Scheduled = { id: number; dueAtMs: number; callback: () => void };
+
+/** A deterministic clock plus timer queue, so glide and tween frames are exact. */
+class FakeClock {
+  nowMs = 1_000;
+  private nextId = 1;
+  private queue: Scheduled[] = [];
+
+  setTimer = (callback: () => void, delayMs: number) => {
+    const entry = { id: this.nextId++, dueAtMs: this.nowMs + delayMs, callback };
+    this.queue.push(entry);
+    return entry.id as unknown as ReturnType<typeof setTimeout>;
+  };
+
+  clearTimer = (handle: unknown) => {
+    this.queue = this.queue.filter((entry) => entry.id !== (handle as number));
+  };
+
+  get pending() { return this.queue.length; }
+
+  /** Runs every timer that comes due within `byMs`, in due order. */
+  advance(byMs: number) {
+    const deadline = this.nowMs + byMs;
+    for (;;) {
+      const next = this.queue.slice().sort((a, b) => a.dueAtMs - b.dueAtMs)[0];
+      if (!next || next.dueAtMs > deadline) break;
+      this.queue = this.queue.filter((entry) => entry !== next);
+      this.nowMs = next.dueAtMs;
+      next.callback();
+    }
+    this.nowMs = deadline;
+  }
+}
+
+function setup(options: { cursor?: () => { x: number; y: number } } = {}) {
+  const clock = new FakeClock();
+  const windows: FakeWindow[] = [];
+  let cursor = { x: 0, y: 0 };
+  const host = new DesktopSurfaceHost({
+    createWindow: () => { const window = new FakeWindow(); windows.push(window); return window; },
+    workAreaFor: () => workArea,
+    cursorScreenPoint: options.cursor ?? (() => cursor),
+    now: () => clock.nowMs,
+    setTimer: clock.setTimer,
+    clearTimer: clock.clearTimer,
+  });
+  return { host, clock, windows, moveCursor: (next: { x: number; y: number }) => { cursor = next; } };
+}
+
+test("creating a surface places its body and reports the clamped anchor once", () => {
+  const { host, windows } = setup();
+  const applied = host.create(key, spec, { x: -100, y: 500 });
+  assert.deepEqual(applied, { x: 0, y: 500 });
+  assert.deepEqual(windows[0].bounds, { x: 0, y: 500, width: 192, height: 208 });
+  assert.deepEqual(windows[0].positionMessages().length, 1);
+  assert.deepEqual(windows[0].positionMessages()[0].payload, {
+    anchor: { x: 0, y: 500 },
+    bodyOffset: { x: 0, y: 0 },
+    workArea,
+  });
+});
+
+test("creating the same surface twice is refused rather than leaking the first window", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  assert.throws(() => host.create(key, spec, { x: 0, y: 0 }), DesktopSurfaceError);
+  assert.equal(windows.length, 1, "the refused call must not have created a second window");
+  assert.equal(windows[0].destroyed, false);
+});
+
+test("an extension grows the window without moving the body", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 300, y: 400 });
+  host.setExtension(key, { side: "above", size: 60 });
+  assert.deepEqual(windows[0].bounds, { x: 300, y: 340, width: 192, height: 268 });
+  const latest = windows[0].positionMessages().at(-1)?.payload as { anchor: unknown; bodyOffset: unknown };
+  assert.deepEqual(latest.anchor, { x: 300, y: 400 }, "the body anchor is unchanged");
+  assert.deepEqual(latest.bodyOffset, { x: 0, y: 60 });
+});
+
+test("a drag follows the native cursor without an IPC message per frame", () => {
+  const { host, windows, clock, moveCursor } = setup();
+  host.create(key, spec, { x: 300, y: 400 });
+  const messagesAfterCreate = windows[0].positionMessages().length;
+
+  moveCursor({ x: 800, y: 700 });
+  host.beginDrag(key, { x: 96, y: 104 });
+  clock.advance(100);
+  assert.deepEqual(windows[0].bounds.x, 800 - 96);
+  assert.deepEqual(windows[0].bounds.y, 700 - 104);
+
+  moveCursor({ x: 900, y: 750 });
+  clock.advance(100);
+  assert.deepEqual(windows[0].bounds.x, 900 - 96);
+
+  assert.equal(
+    windows[0].positionMessages().length,
+    messagesAfterCreate,
+    "drag frames must not push a message per frame — that is the round-trip these primitives exist to avoid",
+  );
+
+  host.endDrag(key);
+  assert.equal(windows[0].positionMessages().length, messagesAfterCreate + 1, "settling reports once");
+  assert.deepEqual(windows[0].positionMessages().at(-1)?.payload, {
+    anchor: { x: 804, y: 646 },
+    bodyOffset: { x: 0, y: 0 },
+    workArea,
+  });
+});
+
+test("ending a drag stops the cursor follower", () => {
+  const { host, windows, clock, moveCursor } = setup();
+  host.create(key, spec, { x: 300, y: 400 });
+  moveCursor({ x: 800, y: 700 });
+  host.beginDrag(key, { x: 0, y: 0 });
+  clock.advance(50);
+  host.endDrag(key);
+  const settled = { ...windows[0].bounds };
+
+  moveCursor({ x: 1200, y: 900 });
+  clock.advance(500);
+  assert.deepEqual(windows[0].bounds, settled, "the surface must not keep chasing the cursor after release");
+  assert.equal(clock.pending, 0, "no follower timer may survive the release");
+});
+
+test("a release velocity glides the surface and settles it exactly once", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 300, y: 400 });
+  const before = windows[0].positionMessages().length;
+  host.endDrag(key, { x: 900, y: 0 });
+  clock.advance(2_000);
+  assert.ok(windows[0].bounds.x > 300, "the glide must have carried the surface forward");
+  assert.equal(clock.pending, 0, "the glide must not leave a timer behind");
+  assert.equal(windows[0].positionMessages().length, before + 1);
+});
+
+test("a glide into an edge slides along it instead of stopping dead", () => {
+  const { host, windows, clock } = setup();
+  // Flick hard into the right edge with a live downward component: the x axis
+  // clamps immediately, the y axis must keep travelling.
+  host.create(key, spec, { x: 1920 - body.width, y: 100 });
+  host.endDrag(key, { x: 5_000, y: 900 });
+  clock.advance(2_000);
+  assert.equal(windows[0].bounds.x, 1920 - body.width);
+  assert.ok(windows[0].bounds.y > 100, "the unclamped axis must have kept gliding");
+});
+
+test("a glide into a corner settles immediately instead of burning the full duration", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 1920 - body.width, y: 1040 - body.height });
+  host.endDrag(key, { x: 5_000, y: 5_000 });
+  // Both axes clamp on the very first frame, so both velocities are spent and
+  // the glide has nowhere left to go. Without per-axis zeroing it would keep
+  // integrating an undiminished velocity against a pinned position until the
+  // 900ms ceiling — still on screen, but holding a timer for no reason.
+  clock.advance(50);
+  assert.equal(clock.pending, 0, "a glide with nowhere to go must settle on the first frame");
+  assert.equal(windows[0].positionMessages().length, 2, "create reports once, the settle reports once");
+  assert.deepEqual(windows[0].bounds, {
+    x: 1920 - body.width,
+    y: 1040 - body.height,
+    width: body.width,
+    height: body.height,
+  });
+});
+
+test("an eased move interpolates and lands exactly on the target", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  host.moveTo(key, { x: 700, y: 100 }, 900);
+  clock.advance(450);
+  const midway = windows[0].bounds.x;
+  assert.ok(midway > 100 && midway < 700, `expected an intermediate frame, got ${midway}`);
+  clock.advance(900);
+  assert.equal(windows[0].bounds.x, 700);
+  assert.equal(clock.pending, 0);
+});
+
+test("a new interaction cancels the one in flight", () => {
+  const { host, windows, clock, moveCursor } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  host.moveTo(key, { x: 900, y: 100 }, 900);
+  clock.advance(100);
+
+  moveCursor({ x: 400, y: 400 });
+  host.beginDrag(key, { x: 0, y: 0 });
+  clock.advance(2_000);
+  assert.deepEqual(windows[0].bounds.x, 400, "the drag, not the abandoned tween, owns the position");
+
+  host.endDrag(key);
+  assert.equal(clock.pending, 0);
+});
+
+test("destroying a surface stops its timers and closes its window", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  host.endDrag(key, { x: 900, y: 900 });
+  assert.ok(clock.pending > 0);
+  host.destroy(key);
+  assert.equal(clock.pending, 0);
+  assert.equal(windows[0].destroyed, true);
+  assert.equal(host.has(key), false);
+});
+
+test("disabling a plugin reclaims every surface it owns, and only those", () => {
+  const { host, windows } = setup();
+  host.create({ pluginId: "demo", surfaceId: "a" }, spec, { x: 0, y: 0 });
+  host.create({ pluginId: "demo", surfaceId: "b" }, spec, { x: 0, y: 0 });
+  host.create({ pluginId: "other", surfaceId: "a" }, spec, { x: 0, y: 0 });
+
+  host.destroyAllForPlugin("demo");
+
+  assert.equal(host.has({ pluginId: "demo", surfaceId: "a" }), false);
+  assert.equal(host.has({ pluginId: "demo", surfaceId: "b" }), false);
+  assert.equal(host.has({ pluginId: "other", surfaceId: "a" }), true);
+  assert.deepEqual(windows.map((item) => item.destroyed), [true, true, false]);
+});
+
+test("a window closed by the OS is forgotten and its timers dropped", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  host.endDrag(key, { x: 900, y: 900 });
+  assert.ok(clock.pending > 0);
+
+  windows[0].emitClosed();
+
+  assert.equal(host.has(key), false);
+  assert.equal(clock.pending, 0, "a glide must not keep ticking against a window the OS already closed");
+  assert.throws(() => host.setPosition(key, { x: 0, y: 0 }), DesktopSurfaceError);
+});
+
+test("an IPC sender is attributed only to the live surface that owns its window", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  assert.deepEqual(host.keyForWindowId(windows[0].id), key);
+  assert.equal(host.keyForWindowId(windows[0].id + 999), null);
+  assert.equal(host.keyForWindowId(null), null);
+  host.destroy(key);
+  assert.equal(host.keyForWindowId(windows[0].id), null, "a destroyed surface must not claim its old window id");
+});
+
+test("click-through is applied at creation and toggled afterwards", () => {
+  const { host, windows } = setup();
+  host.create(key, { body, clickThrough: true }, { x: 0, y: 0 });
+  assert.deepEqual(windows[0].ignoreMouse, { ignore: true, forward: true });
+  host.setClickThrough(key, false);
+  assert.deepEqual(windows[0].ignoreMouse, { ignore: false, forward: true });
+});
+
+test("hiding a surface stops interactions rather than leaving them running offscreen", () => {
+  const { host, windows, clock } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  host.endDrag(key, { x: 900, y: 900 });
+  host.hide(key);
+  assert.equal(windows[0].hidden, true);
+  assert.equal(clock.pending, 0);
+});
+
+test("messages are relayed only to the plugin's own surface", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  host.create({ pluginId: "other", surfaceId: "main" }, spec, { x: 0, y: 0 });
+  host.postMessage(key, { hello: "world" });
+  assert.deepEqual(
+    windows[0].sent.filter((item) => item.channel === surfaceMessageChannel).map((item) => item.payload),
+    [{ hello: "world" }],
+  );
+  assert.equal(windows[1].sent.some((item) => item.channel === surfaceMessageChannel), false);
+});
+
+test("posting to a surface that is already gone is a no-op, not a throw", () => {
+  const { host } = setup();
+  host.postMessage(key, { hello: "world" });
+});

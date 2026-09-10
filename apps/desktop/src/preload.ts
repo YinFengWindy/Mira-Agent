@@ -1,17 +1,46 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { PreloadLocalAssetCache } from "./assets/preloadLocalAssetCache.js";
 import { localAssetScheme } from "./assets/localAssetContract.js";
+import { surfaceMessageChannel, surfacePositionChannel } from "./surface/host.js";
+import { surfaceChannels } from "./surface/ipc.js";
 import type {
   BridgeEvent,
   BridgeResponse,
   DesktopApi,
   LocalAssetTransport,
   RendererDiagnosticPayload,
+  SurfacePlacementPayload,
   WindowControlAction,
   WindowState,
   VoiceInputDevice,
   VoicePlaybackCommand,
 } from "./bridge/shared.js";
+
+/**
+ * Guards a placement push before it reaches plugin code.
+ *
+ * The preload is the last place that can reject a malformed main-process
+ * payload with the renderer's own types still intact, and a surface renderer
+ * lays itself out from these numbers — a NaN reaching it produces an
+ * invisible, unclickable window rather than a visible error.
+ */
+function isSurfacePlacement(value: unknown): value is SurfacePlacementPayload {
+  if (value === null || typeof value !== "object") return false;
+  const { anchor, bodyOffset, workArea } = value as Record<string, unknown>;
+  return isFinitePoint(anchor) && isFinitePoint(bodyOffset) && isFiniteRect(workArea);
+}
+
+function isFinitePoint(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const { x, y } = value as Record<string, unknown>;
+  return Number.isFinite(x) && Number.isFinite(y);
+}
+
+function isFiniteRect(value: unknown): boolean {
+  if (!isFinitePoint(value)) return false;
+  const { width, height } = value as Record<string, unknown>;
+  return Number.isFinite(width) && Number.isFinite(height);
+}
 
 const localAssets = new PreloadLocalAssetCache();
 
@@ -161,6 +190,66 @@ const api: DesktopApi = {
   },
   offPetBubbleLayout(listener) {
     ipcRenderer.off("desktop:pet-bubble-layout", listener);
+  },
+  surfaces: {
+    create(pluginId, surfaceId, spec, anchor) {
+      return ipcRenderer.invoke(surfaceChannels.create, {
+        pluginId, surfaceId, spec, x: anchor.x, y: anchor.y,
+      }) as Promise<{ x: number; y: number }>;
+    },
+    destroy(pluginId, surfaceId) {
+      return ipcRenderer.invoke(surfaceChannels.destroy, { pluginId, surfaceId }) as Promise<void>;
+    },
+    show(pluginId, surfaceId) {
+      ipcRenderer.send(surfaceChannels.show, { pluginId, surfaceId });
+    },
+    hide(pluginId, surfaceId) {
+      ipcRenderer.send(surfaceChannels.hide, { pluginId, surfaceId });
+    },
+    workArea(pluginId, surfaceId) {
+      return ipcRenderer.invoke(surfaceChannels.workArea, { pluginId, surfaceId }) as Promise<
+        SurfacePlacementPayload["workArea"]
+      >;
+    },
+    setPosition(pluginId, surfaceId, position) {
+      ipcRenderer.send(surfaceChannels.setPosition, { pluginId, surfaceId, x: position.x, y: position.y });
+    },
+    moveTo(pluginId, surfaceId, position, durationMs) {
+      ipcRenderer.send(surfaceChannels.moveTo, {
+        pluginId, surfaceId, x: position.x, y: position.y, durationMs,
+      });
+    },
+    post(pluginId, surfaceId, message) {
+      ipcRenderer.send(surfaceChannels.post, { pluginId, surfaceId, message });
+    },
+  },
+  surface: {
+    beginDrag(offset) {
+      ipcRenderer.send(surfaceChannels.beginDrag, { offsetX: offset.x, offsetY: offset.y });
+    },
+    endDrag(velocity) {
+      ipcRenderer.send(surfaceChannels.endDrag, velocity
+        ? { velocityX: velocity.x, velocityY: velocity.y }
+        : {});
+    },
+    setExtension(extension) {
+      ipcRenderer.send(surfaceChannels.setExtension, extension);
+    },
+    setClickThrough(clickThrough) {
+      ipcRenderer.send(surfaceChannels.setClickThrough, { clickThrough });
+    },
+    onPlacement(listener) {
+      const wrapped = (_event: unknown, payload: unknown) => {
+        if (isSurfacePlacement(payload)) listener(payload);
+      };
+      ipcRenderer.on(surfacePositionChannel, wrapped);
+      return () => ipcRenderer.off(surfacePositionChannel, wrapped);
+    },
+    onMessage(listener) {
+      const wrapped = (_event: unknown, payload: unknown) => listener(payload);
+      ipcRenderer.on(surfaceMessageChannel, wrapped);
+      return () => ipcRenderer.off(surfaceMessageChannel, wrapped);
+    },
   },
   onVoiceCaptureCommand(listener) {
     const wrapped = (_event: unknown, value: unknown) => {

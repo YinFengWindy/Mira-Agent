@@ -4,6 +4,61 @@ export type BridgeRequest = {
   payload: Record<string, unknown>;
 };
 
+/** Where a surface's body ended up after the host clamped and settled it. */
+export type SurfacePlacementPayload = {
+  anchor: { x: number; y: number };
+  bodyOffset: { x: number; y: number };
+  workArea: { x: number; y: number; width: number; height: number };
+};
+
+/** What a plugin declares when asking the host to create one of its windows. */
+export type SurfaceSpecPayload = {
+  body: { width: number; height: number };
+  transparent?: boolean;
+  alwaysOnTop?: boolean;
+  skipTaskbar?: boolean;
+  clickThrough?: boolean;
+};
+
+/**
+ * Creates and addresses plugin-owned desktop windows by name.
+ *
+ * A surface renderer cannot create its own window, so creation comes from
+ * code already running in the main window — a plugin's `nav.page` or
+ * `settings.section` from #179.
+ */
+export type DesktopSurfacesApi = {
+  create(
+    pluginId: string,
+    surfaceId: string,
+    spec: SurfaceSpecPayload,
+    anchor: { x: number; y: number },
+  ): Promise<{ x: number; y: number }>;
+  destroy(pluginId: string, surfaceId: string): Promise<void>;
+  show(pluginId: string, surfaceId: string): void;
+  hide(pluginId: string, surfaceId: string): void;
+  workArea(pluginId: string, surfaceId: string): Promise<SurfacePlacementPayload["workArea"]>;
+  setPosition(pluginId: string, surfaceId: string, position: { x: number; y: number }): void;
+  moveTo(pluginId: string, surfaceId: string, position: { x: number; y: number }, durationMs: number): void;
+  /** Relays a payload to the surface renderer, delivered on `onMessage`. */
+  post(pluginId: string, surfaceId: string, message: unknown): void;
+};
+
+/**
+ * Drives the surface window the caller is already inside.
+ *
+ * No surface is named: the host attributes each request to whichever surface
+ * owns the sending window, so this half cannot address anything else.
+ */
+export type DesktopSurfaceSelfApi = {
+  beginDrag(offset: { x: number; y: number }): void;
+  endDrag(velocity?: { x: number; y: number }): void;
+  setExtension(extension: { side: "above" | "below"; size: number }): void;
+  setClickThrough(clickThrough: boolean): void;
+  onPlacement(listener: (placement: SurfacePlacementPayload) => void): () => void;
+  onMessage(listener: (payload: unknown) => void): () => void;
+};
+
 export type BridgeResponse = {
   id: string;
   type: "response";
@@ -288,6 +343,17 @@ export type DesktopApi = {
   /** Subscribes to main-process placement updates for the current full-reply bubble. */
   onPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
   offPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
+  /**
+   * The DesktopSurface capability (#181): plugin-owned desktop windows.
+   *
+   * Split in two because the two halves have different trust properties.
+   * `surfaces` names the surface it acts on and is reachable from any
+   * main-window code; `surface` acts on the window the caller is already
+   * inside, which the host resolves from the sender rather than the payload.
+   * See `src/surface/ipc.ts`.
+   */
+  surfaces: DesktopSurfacesApi;
+  surface: DesktopSurfaceSelfApi;
   /** Subscribes to microphone commands issued by the main-process recorder. */
   onVoiceCaptureCommand(listener: (command: VoiceCaptureCommand) => void): () => void;
   /** Reports captured 16-bit PCM samples to the owning main-process recorder. */
