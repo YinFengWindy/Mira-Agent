@@ -165,3 +165,37 @@ streaming_enabled = true
     loaded = config.load_config(config_path)
 
     assert loaded.desktop_streaming_enabled is True
+
+
+def _write_minimal_config(tmp_path: Path) -> Path:
+    """写一份只含必填项的 config，用于断言各项默认值。"""
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+[[llm.registrations]]
+id = "00000000-0000-4000-a000-000000000001"
+provider = "openai"
+model = "test-model"
+api_key = "test-key"
+effort = "none"
+
+[agent]
+system_prompt = "test"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def test_load_config_keeps_internal_max_iterations_default(tmp_path: Path):
+    cfg = config.load_config(_write_minimal_config(tmp_path))
+
+    assert cfg.max_iterations == 10
+
+
+def test_load_config_defaults_memory_window_and_optimizer_interval(tmp_path: Path):
+    cfg = config.load_config(_write_minimal_config(tmp_path))
+
+    assert cfg.memory_window == 40
+    assert cfg.memory_optimizer_interval_seconds == 64800

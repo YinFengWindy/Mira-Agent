@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from bus.events import OutboundMessage, SpawnCompletionItem
+from bus.events import InboundMessage, OutboundMessage, SpawnCompletionItem
 from bus.queue import MessageBus
 from bootstrap.runtime.generations import RuntimeCandidate
 
@@ -69,3 +69,35 @@ async def test_late_completion_after_intake_closes_releases_its_generation():
     await bus.publish_inbound(SpawnCompletionItem("desktop", "one", object(), runtime_lease=retained))
     assert generation.drained.is_set()
     assert bus.inbound_size == 0
+
+
+@pytest.mark.asyncio
+async def test_message_bus_retries_failed_outbound_dispatch():
+    bus = MessageBus()
+    await bus.publish_inbound(InboundMessage("telegram", "u", "1", "hello"))
+    inbound = await bus.consume_inbound()
+    assert inbound.session_key == "telegram:1"
+
+    sent: list[str] = []
+    attempts = {"count": 0}
+
+    async def callback(msg: OutboundMessage) -> None:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("first")
+        sent.append(msg.content)
+
+    bus.subscribe_outbound("telegram", callback)
+    task = asyncio.create_task(bus.dispatch_outbound())
+    await bus.publish_outbound(OutboundMessage("telegram", "1", "payload"))
+    for _ in range(300):
+        if sent:
+            break
+        await asyncio.sleep(0.01)
+    bus.stop()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert sent == ["payload"]
+    assert bus.inbound_size == 0
+    assert bus.outbound_size == 0
