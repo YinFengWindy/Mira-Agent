@@ -19,7 +19,7 @@ from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-_QQBOT_PLUGIN_DIR = _REPOSITORY_ROOT / "apps" / "backend" / "plugins" / "qqbot"
+_QQBOT_PLUGIN_DIR = _REPOSITORY_ROOT / "plugins" / "qqbot"
 _HELLO_FIXTURE_DIR = _REPOSITORY_ROOT / "tests" / "fixtures" / "plugins" / "hello"
 _NULLABLE_FIXTURE_DIR = (
     _REPOSITORY_ROOT / "tests" / "fixtures" / "plugins" / "nullable_config"
