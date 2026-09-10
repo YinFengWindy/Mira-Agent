@@ -143,7 +143,6 @@ def _router(*, registry: PluginRpcRegistry | None) -> DesktopBridgeRequestRouter
         roles=SimpleNamespace(handle=AsyncMock(return_value=None)),
         sessions_and_tasks=SimpleNamespace(handle=AsyncMock(return_value=None)),
         chat=SimpleNamespace(handle=AsyncMock(return_value=None)),
-        images=SimpleNamespace(handle=AsyncMock(return_value=None)),
         voice=SimpleNamespace(handle=AsyncMock(return_value=None)),
         stories=SimpleNamespace(handle=AsyncMock(return_value=None)),
         observation=None,

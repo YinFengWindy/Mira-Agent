@@ -18,7 +18,6 @@ from core.roles import RoleRepository, RoleStore
 from agent.screen_observation.service import ScreenObservationService
 from desktop_bridge.models import BridgeResponse
 from desktop_bridge.server import DesktopBridgeServer
-from desktop_bridge.service import DesktopBridgeService
 from session.manager import SessionManager
 
 
@@ -123,13 +122,8 @@ def test_server_forwards_the_role_runtime_registry_to_story(
 
 
 def test_desktop_server_reuses_core_screen_observation_service(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_core_runtime
+    tmp_path: Path, stub_core_runtime
 ) -> None:
-    monkeypatch.setattr(
-        DesktopBridgeService,
-        "_build_novelai_service",
-        lambda self: None,
-    )
     observation = SimpleNamespace()
     runtime = stub_core_runtime(
         session_manager=SimpleNamespace(workspace=tmp_path),

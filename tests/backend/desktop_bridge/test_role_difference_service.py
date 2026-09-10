@@ -1,5 +1,5 @@
+import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -20,19 +20,21 @@ def _write_generated_image(path: Path) -> None:
     image.save(path)
 
 
-class FakeNovelAI:
+class FakeImageTool:
+    """Fakes the shared ``generate_image`` tool's JSON-string contract."""
+
     def __init__(self, output_dir: Path, *, fail_at: int | None = None) -> None:
         self.output_dir = output_dir
         self.fail_at = fail_at
-        self.requests = []
+        self.calls: list[dict] = []
 
-    async def generate(self, request):
-        self.requests.append(request)
-        if self.fail_at == len(self.requests):
+    async def execute(self, **kwargs) -> str:
+        self.calls.append(kwargs)
+        if self.fail_at == len(self.calls):
             raise ValueError("upstream generation failed")
-        output = self.output_dir / f"generated-{len(self.requests)}.png"
+        output = self.output_dir / f"generated-{len(self.calls)}.png"
         _write_generated_image(output)
-        return SimpleNamespace(output_paths=[str(output)])
+        return json.dumps({"output_paths": [str(output)]})
 
 
 def _create_role(tmp_path: Path) -> tuple[RoleStore, str, Path]:
@@ -54,10 +56,10 @@ async def test_generates_all_differences_from_one_base_and_persists_one_category
 ) -> None:
     store, role_id, output_dir = _create_role(tmp_path)
     output_dir.mkdir()
-    novelai = FakeNovelAI(output_dir)
+    image_tool = FakeImageTool(output_dir)
     service = RoleDifferenceGenerationService(
         role_store=store,
-        novelai_service=novelai,
+        image_tool=image_tool,
         workspace=tmp_path,
     )
     events = []
@@ -77,18 +79,18 @@ async def test_generates_all_differences_from_one_base_and_persists_one_category
         role.asset_category_bindings[path] == generated_category.id
         for path in role.illustrations[-5:]
     )
-    assert [request.mode for request in novelai.requests] == ["img2img"] * 5
+    assert [call["mode"] for call in image_tool.calls] == ["img2img"] * 5
     assert all(
-        "solid pure white background (#FFFFFF)" in request.prompt
-        for request in novelai.requests
+        "solid pure white background (#FFFFFF)" in call["prompt"]
+        for call in image_tool.calls
     )
     assert all(
-        "colored background" in request.negative_prompt for request in novelai.requests
+        "colored background" in call["negative_prompt"] for call in image_tool.calls
     )
-    assert {request.base_image_path for request in novelai.requests} == {
+    assert {call["base_image_path"] for call in image_tool.calls} == {
         str(store.resolve_role_asset_path(role_id, base_asset))
     }
-    assert [request.seed for request in novelai.requests] == [
+    assert [call["seed"] for call in image_tool.calls] == [
         _stable_seed(
             _file_hash(store.resolve_role_asset_path(role_id, base_asset)),
             difference_id,
@@ -133,7 +135,7 @@ async def test_generated_differences_bind_standard_moods_and_preserve_custom_moo
     output_dir.mkdir()
     service = RoleDifferenceGenerationService(
         role_store=store,
-        novelai_service=FakeNovelAI(output_dir),
+        image_tool=FakeImageTool(output_dir),
         workspace=tmp_path,
     )
 
@@ -166,10 +168,10 @@ async def test_generation_failure_does_not_persist_partial_category(
 ) -> None:
     store, role_id, output_dir = _create_role(tmp_path)
     output_dir.mkdir()
-    novelai = FakeNovelAI(output_dir, fail_at=3)
+    image_tool = FakeImageTool(output_dir, fail_at=3)
     service = RoleDifferenceGenerationService(
         role_store=store,
-        novelai_service=novelai,
+        image_tool=image_tool,
         workspace=tmp_path,
     )
     events = []

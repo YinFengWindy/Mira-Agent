@@ -23,14 +23,6 @@ function createSettingsFormData(): SettingsFormData {
       embeddingBaseUrl: "https://embed.example",
       outputDimensionality: "1536",
     },
-    integrations: {
-      novelaiEnabled: true,
-      novelaiToken: "novel-token",
-      novelaiNsfwEnabled: false,
-      novelaiAddQualityTags: true,
-      novelaiUndesiredContentPreset: 1,
-      novelaiAutoWritebackRoleAssets: true,
-    },
     voice: {
       enabled: true,
       hotkey: "Ctrl+Space",
@@ -69,7 +61,6 @@ describe("SettingsSectionContent", () => {
       { sectionId: "models", subsectionId: "catalog", expected: "gpt-agent" },
       { sectionId: "channels", subsectionId: "qq", expected: "10001" },
       { sectionId: "memory", subsectionId: "embedding", expected: "embed-model" },
-      { sectionId: "integrations", subsectionId: "novelai", expected: "novel-token" },
       { sectionId: "voice", subsectionId: "provider", expected: "secret-id" },
       { sectionId: "advanced", subsectionId: "general", expected: "max_tokens" },
     ] as const;

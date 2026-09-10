@@ -1,4 +1,4 @@
-import { toFileUrl } from "../shared/format";
+import { toFileUrl } from "../../../apps/desktop/renderer/src/shared/format";
 import type { ImageGenerateResult, ImageHistoryRecord } from "./types";
 
 type ImagePreviewPanelProps = {

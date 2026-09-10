@@ -19,14 +19,11 @@ type UseNavigationHistoryArgs = {
   activeRoleIdRef: React.MutableRefObject<string>;
   lastNonSettingsViewRef: React.MutableRefObject<AppMainView>;
   roles: RoleRecord[];
-  setError: React.Dispatch<React.SetStateAction<string>>;
-  setNotice: React.Dispatch<React.SetStateAction<string>>;
   setSettingsSection: React.Dispatch<React.SetStateAction<SettingsSectionId>>;
   setSidebarAnimating: React.Dispatch<React.SetStateAction<boolean>>;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   setSidebarWidth: React.Dispatch<React.SetStateAction<number>>;
   setMainView: React.Dispatch<React.SetStateAction<AppMainView>>;
-  imageHistorySidebarOpen: () => void;
   applyRoleSnapshot: (role: RoleRecord, sessionOverride?: SessionPayload | null) => void;
 };
 
@@ -37,14 +34,11 @@ export function useNavigationHistory({
   activeRoleIdRef,
   lastNonSettingsViewRef,
   roles,
-  setError,
-  setNotice,
   setSettingsSection,
   setSidebarAnimating,
   setSidebarCollapsed,
   setSidebarWidth,
   setMainView,
-  imageHistorySidebarOpen,
   applyRoleSnapshot,
 }: UseNavigationHistoryArgs) {
   const navigationHistoryRef = useRef<NavigationEntry[]>([]);
@@ -135,37 +129,11 @@ export function useNavigationHistory({
     }
   }
 
-  function openImageStudio(options?: { recordHistory?: boolean }): void {
-    if (!roles.length) {
-      setError("请先创建至少一个角色，再进入生图。");
-      setNotice("");
-      return;
-    }
-    const nextView: AppMainView = { kind: "image-studio" };
-    setSidebarAnimating(true);
-    setSidebarCollapsed(false);
-    imageHistorySidebarOpen();
-    setMainView(nextView);
-    if (options?.recordHistory !== false) {
-      pushNavigationEntry(buildNavigationEntry(nextView));
-    }
-  }
-
   /** Opens a plugin-contributed nav.page full-page surface by its registry id. */
   function openPluginPage(pageId: string, options?: { recordHistory?: boolean }): void {
     const nextView: AppMainView = { kind: "plugin-page", pageId };
     setSidebarAnimating(true);
     setSidebarCollapsed(false);
-    setMainView(nextView);
-    if (options?.recordHistory !== false) {
-      pushNavigationEntry(buildNavigationEntry(nextView));
-    }
-  }
-
-  function openPromptTagLibrary(options?: { recordHistory?: boolean }): void {
-    const nextView: AppMainView = { kind: "image-prompt-tags" };
-    setSidebarCollapsed(false);
-    setSidebarWidth((current) => Math.min(sidebarMaxWidth, Math.max(sidebarMinWidth, current)));
     setMainView(nextView);
     if (options?.recordHistory !== false) {
       pushNavigationEntry(buildNavigationEntry(nextView));
@@ -206,14 +174,6 @@ export function useNavigationHistory({
     setSettingsSection(nextEntry.settingsSection);
     if (nextEntry.view.kind === "settings") {
       openSettingsView(nextEntry.settingsSection);
-      return;
-    }
-    if (nextEntry.view.kind === "image-studio") {
-      openImageStudio({ recordHistory: false });
-      return;
-    }
-    if (nextEntry.view.kind === "image-prompt-tags") {
-      openPromptTagLibrary({ recordHistory: false });
       return;
     }
     if (nextEntry.view.kind === "story") {
@@ -268,8 +228,6 @@ export function useNavigationHistory({
     replaceNavigationEntry,
     openChatView,
     openStoryWorkspace,
-    openImageStudio,
-    openPromptTagLibrary,
     openSettingsWorkspace,
     openRoleWorkspace,
     openPluginPage,

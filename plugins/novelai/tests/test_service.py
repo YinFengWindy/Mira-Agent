@@ -8,16 +8,16 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 
-from core.integrations.novelai.client import NovelAIClient
-from core.integrations.novelai.models import (
+from plugins.novelai.backend.client import NovelAIClient
+from plugins.novelai.backend.models import (
     GenerateImageRequest,
     GeneratedImageRecord,
     NovelAIGenerationSource,
     NovelAISettings,
 )
-from core.integrations.novelai.prompt_tags import PromptTagStore
-from core.integrations.novelai.service import NovelAIService
-from core.integrations.novelai.store import NovelAIStore
+from plugins.novelai.backend.prompt_tags import PromptTagStore
+from plugins.novelai.backend.service import NovelAIService
+from plugins.novelai.backend.store import NovelAIStore
 from core.roles.store import RoleStore
 
 _TINY_PNG = base64.b64decode(
@@ -77,7 +77,7 @@ async def test_regenerate_reuses_exact_request_parameters_with_fresh_seed(
         },
     )
 
-    with patch("core.integrations.novelai.service.secrets.randbelow", return_value=100):
+    with patch("plugins.novelai.backend.service.secrets.randbelow", return_value=100):
         result = await service.regenerate(source, session_key="role:mira")
 
     assert result.seed == 100

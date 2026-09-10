@@ -14,8 +14,9 @@ import httpx
 
 from agent.tools.filesystem import _resolve_path
 from core.common.media import detect_image_mime_from_header
-from core.integrations.novelai.client import NovelAIClient
-from core.integrations.novelai.models import (
+from core.roles.store import RoleStore
+from plugins.novelai.backend.client import NovelAIClient
+from plugins.novelai.backend.models import (
     GenerateImageRequest,
     GenerateImageResult,
     GeneratedImageRecord,
@@ -23,10 +24,9 @@ from core.integrations.novelai.models import (
     NovelAIMode,
     NovelAISettings,
 )
-from core.integrations.novelai.prompt_tags import PromptTagStore
-from core.integrations.novelai.prompt_validation import validate_novelai_prompt
-from core.integrations.novelai.store import NovelAIStore
-from core.roles.store import RoleStore
+from plugins.novelai.backend.prompt_tags import PromptTagStore
+from plugins.novelai.backend.prompt_validation import validate_novelai_prompt
+from plugins.novelai.backend.store import NovelAIStore
 
 _SIZE_PRESETS: dict[str, tuple[int, int]] = {
     "square": (1024, 1024),

@@ -1,8 +1,8 @@
-import { Select } from "../shared/ui/Select";
-import { SettingsToggleCard } from "../settings/SettingsToggleCard";
-import { toFileUrl } from "../shared/format";
-import { BackIcon, ResetIcon, SaveIcon, UploadIcon } from "../shared/icons";
-import { cx, inputClass } from "../shared/styles";
+import { Select } from "../../../apps/desktop/renderer/src/shared/ui/Select";
+import { SettingsToggleCard } from "../../../apps/desktop/renderer/src/settings/SettingsToggleCard";
+import { toFileUrl } from "../../../apps/desktop/renderer/src/shared/format";
+import { BackIcon, ResetIcon, SaveIcon, UploadIcon } from "../../../apps/desktop/renderer/src/shared/icons";
+import { cx, inputClass } from "../../../apps/desktop/renderer/src/shared/styles";
 import type { PromptTagEntry } from "./types";
 
 export type PromptTagDraft = PromptTagEntry;

@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from bus.events_lifecycle import SceneTransition
-from core.integrations.novelai.models import NovelAISizePreset
-from core.integrations.novelai.prompt_validation import validate_novelai_prompt
+from plugins.novelai.backend.models import NovelAISizePreset
+from plugins.novelai.backend.prompt_validation import validate_novelai_prompt
 
 if TYPE_CHECKING:
     from agent.provider import ToolCall

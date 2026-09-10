@@ -1,6 +1,6 @@
 import pytest
 
-from core.integrations.novelai.prompt_validation import validate_novelai_prompt
+from plugins.novelai.backend.prompt_validation import validate_novelai_prompt
 
 
 @pytest.mark.parametrize(

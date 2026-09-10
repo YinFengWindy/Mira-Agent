@@ -7,9 +7,6 @@ import {
   chatLatestImageSidebarMaxWidth,
   chatLatestImageSidebarMinWidth,
   createEmptyRoleForm,
-  historySidebarDefaultWidth,
-  historySidebarMaxWidth,
-  historySidebarMinWidth,
   sidebarAnimationDurationMs,
   sidebarAutoCollapseWindowWidth,
   sidebarCollapseThreshold,
@@ -40,8 +37,6 @@ import { registerRendererGlobalDiagnostics } from "./diagnostics/rendererGlobalD
 // Registers every plugin's compiled-in settings.section/nav.page contributions
 // into pluginUiRegistry before any component (nav rail, settings sidebar) reads it.
 import "./plugins/pluginUiModules";
-import { useImageStudioState } from "./image/useImageStudioState";
-import { type PromptTagWorkspaceSectionId } from "./image/PromptTagWorkspaceSidebar";
 import { createRoleFormFromRole, syncRoleFormMoodConfig } from "./roles/roleFormState";
 import { useRoleDifferenceGeneration } from "./roles/useRoleDifferenceGeneration";
 import { type RoleWorkspaceSectionId } from "./roles/RoleWorkspaceSidebar";
@@ -85,7 +80,6 @@ function StoryRoute({ roles, onExit }: StoryRouteProps): React.ReactElement {
 
 function App(): React.ReactElement {
   const [health, setHealth] = useState("connecting");
-  const [promptTagWorkspaceSection, setPromptTagWorkspaceSection] = useState<PromptTagWorkspaceSectionId>("list");
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [activeRoleId, setActiveRoleId] = useState("");
   const [activeSession, setActiveSession] = useState<SessionPayload | null>(null);
@@ -117,12 +111,6 @@ function App(): React.ReactElement {
   const [roleForm, setRoleForm] = useState(createEmptyRoleForm);
   const [settingsSection, setSettingsSection] = useState<SettingsSectionId>("models");
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const imageHistorySidebar = useRightSidebarState({
-    minWidth: historySidebarMinWidth,
-    maxWidth: historySidebarMaxWidth,
-    defaultWidth: historySidebarDefaultWidth,
-    animationDurationMs: sidebarAnimationDurationMs,
-  });
   const chatLatestImageSidebar = useRightSidebarState({
     minWidth: chatLatestImageSidebarMinWidth,
     maxWidth: chatLatestImageSidebarMaxWidth,
@@ -163,7 +151,6 @@ function App(): React.ReactElement {
     || mainView.kind === "role-create"
     || mainView.kind === "role-detail"
     || mainView.kind === "role-assets";
-  const imageStudioViewActive = mainView.kind === "image-studio";
   const roleWorkspaceSection: RoleWorkspaceSectionId =
     mainView.kind === "role-create"
       ? "role-create"
@@ -172,11 +159,6 @@ function App(): React.ReactElement {
         : mainView.kind === "role-detail"
         ? "role-detail"
         : "roles-list";
-  const imageStudioState = useImageStudioState({
-    active: imageStudioViewActive,
-    activeRole: roles.find((role) => role.id === activeRoleId) ?? null,
-    roles,
-  });
   const { updateRoleForm } = useRoleFormAdapters({
     roleFormRef,
     setRoleForm,
@@ -248,8 +230,6 @@ function App(): React.ReactElement {
     replaceNavigationEntry,
     openChatView,
     openStoryWorkspace,
-    openImageStudio,
-    openPromptTagLibrary,
     openSettingsWorkspace,
     openRoleWorkspace,
     openPluginPage,
@@ -261,14 +241,11 @@ function App(): React.ReactElement {
     activeRoleIdRef,
     lastNonSettingsViewRef,
     roles,
-    setError,
-    setNotice,
     setSettingsSection,
     setSidebarAnimating: leftSidebar.setAnimating,
     setSidebarCollapsed: leftSidebar.setCollapsed,
     setSidebarWidth: leftSidebar.setWidth,
     setMainView,
-    imageHistorySidebarOpen: imageHistorySidebar.open,
     applyRoleSnapshot,
   });
 
@@ -600,7 +577,7 @@ function App(): React.ReactElement {
       onGoForward={() => void navigateHistory("forward", openRole)}
       onRefreshSession={() => void refreshSession()}
       onOpenSettings={() => openSettingsWorkspace()}
-      shellResizing={leftSidebar.resizing || imageHistorySidebar.resizing || chatLatestImageSidebar.resizing}
+      shellResizing={leftSidebar.resizing || chatLatestImageSidebar.resizing}
       sidebarState={{
         collapsed: leftSidebar.collapsed,
         width: leftSidebar.width,
@@ -612,10 +589,6 @@ function App(): React.ReactElement {
       settingsSection={settingsSection}
       onBackToChat={() => openChatView()}
       onOpenSettingsSection={(section) => openSettingsWorkspace(section)}
-      imageStudioViewActive={imageStudioViewActive}
-      imagePromptTagsViewActive={mainView.kind === "image-prompt-tags"}
-      promptTagWorkspaceSection={promptTagWorkspaceSection}
-      onOpenPromptTagWorkspaceSection={setPromptTagWorkspaceSection}
       roleWorkspaceViewActive={roleWorkspaceViewActive}
       roleWorkspaceSection={roleWorkspaceSection}
       onOpenRoleWorkspaceSection={(section) => {
@@ -634,9 +607,6 @@ function App(): React.ReactElement {
       onOpenStory={() => openStoryWorkspace()}
       onOpenPluginPage={(pageId) => openPluginPage(pageId)}
       onOpenRole={(roleId) => void openRole(roleId, null, { recordHistory: true })}
-      onOpenImageStudio={() => openImageStudio()}
-      onOpenPromptTagLibrary={() => { setPromptTagWorkspaceSection("list"); openPromptTagLibrary(); }}
-      imageStudioState={imageStudioState}
       workspaceFeedback={workspaceFeedback}
       activeRole={activeRole}
       activeSession={activeSession}
@@ -669,7 +639,6 @@ function App(): React.ReactElement {
       onSendMessage={sendMessage}
       onCancelChat={() => void cancelChatTurn(activeSessionKey, activeRoleId)}
       onLoadOlderMessages={loadOlderMessages}
-      imageHistorySidebar={imageHistorySidebar}
       detailRole={detailRole}
       pendingRoleCardAction={pendingRoleCardAction}
       onOpenRoleManagementDetail={(roleId) => void openRoleDetail(roleId)}

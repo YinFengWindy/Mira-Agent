@@ -3,7 +3,6 @@ import { PluginManagementSection } from "../plugins/PluginManagementSection";
 import { AboutSettingsPage } from "./AboutSettingsPage";
 import { AdvancedSettingsSection } from "./AdvancedSettingsSection";
 import { ChannelsSettingsSection } from "./ChannelsSettingsSection";
-import { IntegrationsSettingsSection } from "./IntegrationsSettingsSection";
 import { MemorySettingsSection } from "./MemorySettingsSection";
 import { ModelsSettingsSection } from "./ModelsSettingsSection";
 import { VoiceSettingsSection } from "./VoiceSettingsSection";
@@ -48,12 +47,6 @@ export function registerBuiltinSettingsSections(): void {
       { id: "embedding", label: "Embedding" },
     ],
     Component: MemorySettingsSection,
-  }, "builtin");
-
-  pluginUiRegistry.registerSettingsSection({
-    kind: "editor", slot: "settings.section", id: "integrations", label: "集成",
-    subsections: [{ id: "novelai", label: "NovelAI" }],
-    Component: IntegrationsSettingsSection,
   }, "builtin");
 
   pluginUiRegistry.registerSettingsSection({

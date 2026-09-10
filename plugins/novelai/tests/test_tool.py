@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agent.tools.image_generate import GenerateImageTool
-from core.integrations.novelai.models import GenerateImageResult
+from plugins.novelai.backend.tool import GenerateImageTool
+from plugins.novelai.backend.models import GenerateImageResult
 
 
 def test_generate_image_tool_requires_english_novelai_tags() -> None:

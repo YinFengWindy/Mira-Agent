@@ -159,8 +159,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const qq = asRecord(channels.qq);
   const memory = asRecord(parsed.memory);
   const embedding = asRecord(memory.embedding);
-  const integrations = asRecord(parsed.integrations);
-  const novelai = asRecord(integrations.novelai);
   const agent = asRecord(parsed.agent);
   const agentContext = asRecord(agent.context);
   const agentTools = asRecord(agent.tools);
@@ -189,18 +187,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
           embedding.output_dimensionality == null
             ? ""
             : String(embedding.output_dimensionality),
-      },
-      integrations: {
-        novelaiEnabled: Boolean(novelai.enabled),
-        novelaiToken: String(novelai.token ?? ""),
-        novelaiNsfwEnabled: Boolean(novelai.nsfw_enabled),
-        novelaiAddQualityTags: Boolean(novelai.add_quality_tags),
-        novelaiUndesiredContentPreset: Number(
-          novelai.undesired_content_preset ?? 0,
-        ),
-        novelaiAutoWritebackRoleAssets: Boolean(
-          novelai.auto_writeback_role_assets,
-        ),
       },
       voice: {
         enabled: Boolean(voice.enabled),
@@ -315,28 +301,6 @@ function renderSettingsToml(formData: SettingsFormData): string {
       ? `output_dimensionality = ${Number(outputDimensionality)}`
       : "",
     "",
-    "[integrations.novelai]",
-    `enabled = ${formData.integrations.novelaiEnabled ? "true" : "false"}`,
-    `token = ${quote(formData.integrations.novelaiToken)}`,
-    `base_url = ${quote(desktopSettingsDefaults.novelaiBaseUrl)}`,
-    `default_model = ${quote(desktopSettingsDefaults.novelaiDefaultModel)}`,
-    `nsfw_model = ${quote(desktopSettingsDefaults.novelaiNsfwModel)}`,
-    `nsfw_enabled = ${
-      formData.integrations.novelaiNsfwEnabled ? "true" : "false"
-    }`,
-    `add_quality_tags = ${
-      formData.integrations.novelaiAddQualityTags ? "true" : "false"
-    }`,
-    `undesired_content_preset = ${formData.integrations.novelaiUndesiredContentPreset}`,
-    "allow_txt2img = true",
-    "allow_img2img = true",
-    `auto_writeback_role_assets = ${
-      formData.integrations.novelaiAutoWritebackRoleAssets ? "true" : "false"
-    }`,
-    "max_pixels = 1048576",
-    "max_steps = 28",
-    "default_samples = 1",
-    "",
     "[voice]",
     `enabled = ${formData.voice.enabled ? "true" : "false"}`,
     `hotkey = ${quote(formData.voice.hotkey.trim())}`,
@@ -388,12 +352,6 @@ function validateSettings(formData: SettingsFormData): void {
   }
   if (formData.advanced.maxIterations < 0) {
     throw new Error("max_iterations 不能小于 0");
-  }
-  if (
-    !Number.isInteger(formData.integrations.novelaiUndesiredContentPreset) ||
-    formData.integrations.novelaiUndesiredContentPreset < 0
-  ) {
-    throw new Error("NovelAI undesired content preset 必须是非负整数");
   }
   if (formData.memory.outputDimensionality.trim()) {
     const value = Number(formData.memory.outputDimensionality);

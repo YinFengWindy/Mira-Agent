@@ -9,9 +9,6 @@ describe("ImageStudioSidebar", () => {
     const markup = renderToStaticMarkup(
       <ImageStudioSidebar
         bridgeReady
-        collapsed={false}
-        animating={false}
-        width={280}
         form={{
           roleId: "",
           prompt: "",
@@ -32,7 +29,6 @@ describe("ImageStudioSidebar", () => {
         submitting={false}
         validationError=""
         onOpenPromptTagLibrary={() => undefined}
-        onBeginResize={() => undefined}
         onChange={() => undefined}
         onPickBaseImage={() => undefined}
         onSubmit={() => undefined}

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { act } from "react";
-import { mountTestComponent } from "../shared/testing/domTestHarness";
-import { chooseSelectOption } from "../shared/testing/selectTestActions";
+import { mountTestComponent } from "../../../apps/desktop/renderer/src/shared/testing/domTestHarness";
+import { chooseSelectOption } from "../../../apps/desktop/renderer/src/shared/testing/selectTestActions";
 import type { ImageStudioFormState } from "./types";
 
 it("ImageFormPanel commits a portalled preset without dismissing its parent and keeps size values intact", async () => {

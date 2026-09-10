@@ -94,6 +94,29 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
     return "".join(out)
 
 
+def remove_table(config_toml: str, path_segments: list[str]) -> str:
+    """Removes every span owned by ``path_segments`` (its table and sub-tables).
+
+    Same span-collection logic as ``merge_plugin_table``, minus inserting a
+    replacement block — used by the one-time ``[integrations.novelai]`` ->
+    ``[plugins.novelai]`` config migration (issue #180) to drop the legacy
+    table once its values have been copied into the plugin's own table. A
+    no-op (returns the text unchanged) when the path has no owned span.
+    """
+
+    lines = config_toml.splitlines(keepends=True)
+    spans = _locate_owned_spans(lines, path_segments)
+    if not spans:
+        return config_toml
+    out: list[str] = list(lines[: spans[0][0]])
+    previous_end = spans[0][1]
+    for start, end in spans[1:]:
+        out.extend(lines[previous_end:start])
+        previous_end = end
+    out.extend(lines[previous_end:])
+    return "".join(out)
+
+
 def _reject_if_owned_by_an_unlocatable_form(config_toml: str, plugin_id: str) -> None:
     """Raises ``PluginTableConflict`` if ``plugin_id`` already has values elsewhere.
 

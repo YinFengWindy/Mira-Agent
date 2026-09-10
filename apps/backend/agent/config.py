@@ -20,7 +20,6 @@ from agent.config_models import (
     MemoryConfig,
     MemoryEmbeddingConfig,
     ModelRegistration,
-    NovelAISettings,
     QQChannelConfig,
     TelegramChannelConfig,
     WiringConfig,
@@ -47,8 +46,18 @@ def _validated_timezone(tz_name: str, *, enabled: bool) -> str:
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
-    """Loads and validates the persisted TOML configuration."""
-    return load_config_data(_load_config_data(path))
+    """Loads and validates the persisted TOML configuration.
+
+    Runs the one-time ``[integrations.novelai]`` -> ``[plugins.novelai]``
+    migration (issue #180) against the real file before parsing, so an
+    upgrading user's existing token/settings show up under the plugin's own
+    config channel with no action required. ``load_config_text`` deliberately
+    does not run this: it promises never to touch the persisted file.
+    """
+    resolved_path = Path(path)
+    data = _load_config_data(resolved_path)
+    data = _migrate_legacy_novelai_config(resolved_path, data)
+    return load_config_data(data)
 
 
 def load_config_data(data: dict[str, Any]) -> Config:
@@ -68,7 +77,6 @@ def load_config_data(data: dict[str, Any]) -> Config:
     channels = _load_channels_config(data)
     proactive = _load_proactive_config(data)
     memory = _load_memory_config(data)
-    novelai = _load_novelai_config(data)
     voice = _load_voice_config(data)
     wiring = _load_wiring_config(data)
     plugins = _load_plugins_config(data)
@@ -136,7 +144,6 @@ def load_config_data(data: dict[str, Any]) -> Config:
             desktop_chat_cfg.get("streaming_enabled", False)
         ),
         multimodal=bool(llm_main.get("multimodal", True)),
-        novelai=novelai,
         voice=voice,
         wiring=wiring,
         plugins=plugins,
@@ -265,31 +272,42 @@ def _load_memory_config(data: dict) -> MemoryConfig:
     )
 
 
-def _load_novelai_config(data: dict) -> NovelAISettings:
+def _migrate_legacy_novelai_config(path: Path, data: dict[str, Any]) -> dict[str, Any]:
+    """One-time, idempotent move of ``[integrations.novelai]`` into ``[plugins.novelai]``.
+
+    Issue #180: novelai's settings moved from the removed ``Config.novelai``
+    field to the generic plugin config channel. Older config files still have
+    the values under ``[integrations.novelai]``; this rewrites the file once
+    so an upgrading user keeps their token/settings with no action required.
+
+    Idempotent by construction, not by a marker: once migrated,
+    ``[integrations.novelai]`` is gone from the file, so the guard below finds
+    nothing to do on every subsequent load (including a second call in the
+    same process). Never overwrites an existing ``[plugins.novelai]`` table
+    entry-by-entry — before this ticket the only field that table could ever
+    hold is the host-owned ``enabled`` flag (set by the plugin management
+    toggle), which is preserved as-is; every other field is not something a
+    pre-#180 build could have written there.
+    """
     integrations = _as_dict(data.get("integrations"))
-    raw = _as_dict(integrations.get("novelai"))
-    defaults = NovelAISettings()
-    return NovelAISettings(
-        enabled=bool(raw.get("enabled", defaults.enabled)),
-        token=_resolve(str(raw.get("token", defaults.token))),
-        base_url=str(raw.get("base_url") or defaults.base_url),
-        default_model=str(raw.get("default_model") or defaults.default_model),
-        nsfw_model=str(raw.get("nsfw_model") or defaults.nsfw_model),
-        nsfw_enabled=bool(raw.get("nsfw_enabled", defaults.nsfw_enabled)),
-        allow_txt2img=bool(raw.get("allow_txt2img", defaults.allow_txt2img)),
-        allow_img2img=bool(raw.get("allow_img2img", defaults.allow_img2img)),
-        auto_writeback_role_assets=bool(
-            raw.get(
-                "auto_writeback_role_assets",
-                defaults.auto_writeback_role_assets,
-            )
-        ),
-        max_pixels=int(raw.get("max_pixels", defaults.max_pixels)),
-        max_steps=int(raw.get("max_steps", defaults.max_steps)),
-        default_samples=int(raw.get("default_samples", defaults.default_samples)),
-        add_quality_tags=bool(raw.get("add_quality_tags", defaults.add_quality_tags)),
-        undesired_content_preset=int(raw.get("undesired_content_preset", defaults.undesired_content_preset)),
-    )
+    legacy_values = integrations.get("novelai")
+    if not isinstance(legacy_values, dict) or not legacy_values:
+        return data
+    # Local import: keeps this rarely-hit migration path from pulling the
+    # desktop bridge's TOML text-splicing module into every config load.
+    from desktop_bridge.plugin_config_text import merge_plugin_table, remove_table
+
+    plugins = _as_dict(data.get("plugins"))
+    existing = _as_dict(plugins.get("novelai"))
+    merged_values: dict[str, Any] = dict(legacy_values)
+    if "enabled" in existing:
+        merged_values["enabled"] = existing["enabled"]
+    text = path.read_text(encoding="utf-8")
+    migrated_text = merge_plugin_table(text, "novelai", merged_values)
+    migrated_text = remove_table(migrated_text, ["integrations", "novelai"])
+    path.write_text(migrated_text, encoding="utf-8")
+    logger.info("已将 [integrations.novelai] 一次性迁移至 [plugins.novelai]")
+    return tomllib.loads(migrated_text)
 
 
 def _load_voice_config(data: dict) -> VoiceConfig:

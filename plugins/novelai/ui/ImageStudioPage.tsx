@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
-import { cx } from "../shared/styles";
+import { useState } from "react";
+import { cx } from "../../../apps/desktop/renderer/src/shared/styles";
 import { ImageHistoryPanel } from "./ImageHistoryPanel";
 import { ImagePreviewPanel } from "./ImagePreviewPanel";
 import type {
   ImageGenerateResult,
   ImageHistoryRecord,
 } from "./types";
+
+const HISTORY_SIDEBAR_WIDTH = 260;
 
 type ImageStudioPageProps = {
   activeRecord: ImageHistoryRecord | null;
@@ -14,16 +16,16 @@ type ImageStudioPageProps = {
   history: ImageHistoryRecord[];
   latestResult: ImageGenerateResult | null;
   selectedRecordId: string;
-  historySidebarCollapsed: boolean;
-  historySidebarWidth: number;
-  historySidebarAnimating: boolean;
-  historySidebarResizing: boolean;
   onSelectRecord: (record: ImageHistoryRecord) => void;
-  onToggleHistorySidebar: () => void;
-  onBeginHistorySidebarResize: (event: React.PointerEvent<HTMLDivElement>) => void;
 };
 
-/** Renders the image studio preview workspace and the collapsible history drawer. */
+/**
+ * Renders the image studio preview workspace and the collapsible history
+ * drawer. The drawer is fixed-width (no drag-resize) — this plugin page owns
+ * its own layout instead of the app shell's shared, resizable sidebar track,
+ * so the resize-drag affordance from before the migration to nav.page is not
+ * reproduced; the collapse toggle is kept since it affects layout, not chrome.
+ */
 export function ImageStudioPage({
   activeRecord,
   error,
@@ -31,26 +33,11 @@ export function ImageStudioPage({
   history,
   latestResult,
   selectedRecordId,
-  historySidebarCollapsed,
-  historySidebarWidth,
-  historySidebarAnimating,
-  historySidebarResizing,
   onSelectRecord,
-  onToggleHistorySidebar,
-  onBeginHistorySidebarResize,
 }: ImageStudioPageProps) {
-  const [historySidebarMounted, setHistorySidebarMounted] = useState(!historySidebarCollapsed);
+  const [historySidebarCollapsed, setHistorySidebarCollapsed] = useState(false);
   const historyToggleGlyphClass =
     "relative h-[11px] w-3 rounded-[4px] border-[1.2px] border-current before:absolute before:w-px before:rounded-full before:bg-current before:content-['']";
-
-  useEffect(() => {
-    if (!historySidebarCollapsed) {
-      setHistorySidebarMounted(true);
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setHistorySidebarMounted(false), 240);
-    return () => window.clearTimeout(timer);
-  }, [historySidebarCollapsed]);
 
   return (
     <section className="image-studio-page relative h-full overflow-hidden bg-gradient-app bg-fixed">
@@ -59,7 +46,7 @@ export function ImageStudioPage({
         type="button"
         aria-label={historySidebarCollapsed ? "展开历史侧栏" : "收起历史侧栏"}
         aria-expanded={!historySidebarCollapsed}
-        onClick={onToggleHistorySidebar}
+        onClick={() => setHistorySidebarCollapsed((current) => !current)}
       >
         <span
           className={cx(
@@ -82,26 +69,11 @@ export function ImageStudioPage({
           </div>
         </div>
         <div
-          className={cx(
-            "relative h-full overflow-hidden border-l border-line-soft bg-gradient-app bg-fixed",
-            historySidebarAnimating && "transition-[width] duration-[480ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-            historySidebarResizing && !historySidebarAnimating && "transition-[width] duration-100 ease-out",
-          )}
-          style={{ width: historySidebarCollapsed ? 0 : historySidebarWidth }}
+          className="relative h-full overflow-hidden border-l border-line-soft bg-gradient-app bg-fixed transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{ width: historySidebarCollapsed ? 0 : HISTORY_SIDEBAR_WIDTH }}
         >
           {!historySidebarCollapsed ? (
-            <div
-              className="absolute inset-y-0 left-0 z-[3] w-3 -translate-x-1/2 cursor-col-resize before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-line-soft before:content-['']"
-              onPointerDown={onBeginHistorySidebarResize}
-            />
-          ) : null}
-          {historySidebarMounted ? (
-            <div
-              className={cx(
-                "h-full min-h-0 pb-3 pt-3 transition-[opacity,transform] duration-200",
-                historySidebarCollapsed ? "pointer-events-none translate-x-8 pl-0 pr-0 opacity-0" : "translate-x-0 pl-2 pr-2 opacity-100",
-              )}
-            >
+            <div className="h-full min-h-0 pb-3 pl-2 pr-2 pt-3">
               <ImageHistoryPanel
                 items={history}
                 selectedRecordId={selectedRecordId}

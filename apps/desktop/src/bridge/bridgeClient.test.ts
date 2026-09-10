@@ -129,9 +129,9 @@ describe("DesktopBridgeClient", () => {
     assert.equal(client.invokeTimeoutMs("roles.list"), 30_000);
     assert.equal(client.invokeTimeoutMs("voice.transcribe"), 30_000);
     assert.equal(client.invokeTimeoutMs("voice.synthesize"), 30_000);
-    assert.equal(client.invokeTimeoutMs("novelai.generate"), 5 * 60_000);
+    assert.equal(client.invokeTimeoutMs("plugin.novelai.generate"), 5 * 60_000);
     assert.equal(
-      client.invokeTimeoutMs("novelai.regenerateMessageMedia"),
+      client.invokeTimeoutMs("plugin.novelai.regenerateMessageMedia"),
       5 * 60_000,
     );
     assert.equal(client.invokeTimeoutMs("roles.differences.generate"), 5 * 60_000);

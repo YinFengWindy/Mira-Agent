@@ -4,8 +4,8 @@ from typing import Any
 
 import httpx
 
-from core.integrations.novelai.models import NovelAISettings
 from core.net.http import HttpRequester
+from plugins.novelai.backend.models import NovelAISettings
 
 
 class NovelAIClient:

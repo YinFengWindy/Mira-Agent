@@ -6,7 +6,6 @@ from typing import Any
 from agent.screen_observation.service import ScreenObservationService
 
 from .chat_requests import DesktopChatRequestHandler
-from .image_requests import DesktopImageRequestHandler
 from .plugin_requests import DesktopPluginRequestHandler
 from .role_requests import DesktopRoleRequestHandler
 from .session_task_requests import DesktopSessionTaskRequestHandler
@@ -25,7 +24,6 @@ class DesktopBridgeRequestRouter:
         roles: DesktopRoleRequestHandler,
         sessions_and_tasks: DesktopSessionTaskRequestHandler,
         chat: DesktopChatRequestHandler,
-        images: DesktopImageRequestHandler,
         voice: DesktopVoiceHandler,
         stories: StorySimulationHandler,
         observation: ScreenObservationService | None,
@@ -34,7 +32,6 @@ class DesktopBridgeRequestRouter:
         self._roles = roles
         self._sessions_and_tasks = sessions_and_tasks
         self._chat = chat
-        self._images = images
         self._voice = voice
         self._stories = stories
         self._observation = observation
@@ -73,7 +70,7 @@ class DesktopBridgeRequestRouter:
         result = await self._roles.handle(method, payload)
         if result is not None:
             return result
-        for handler in (self._sessions_and_tasks, self._chat, self._images):
+        for handler in (self._sessions_and_tasks, self._chat):
             result = await handler.handle(
                 method,
                 payload,

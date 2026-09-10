@@ -5,12 +5,11 @@ import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSectio
 
 registerBuiltinSettingsSections();
 
-/** The eight settings.section ids registered by `registerBuiltinSettingsSections`. */
+/** The seven settings.section ids registered by `registerBuiltinSettingsSections`. */
 export type BuiltinSettingsSectionId =
   | "models"
   | "channels"
   | "memory"
-  | "integrations"
   | "voice"
   | "advanced"
   | "plugins"

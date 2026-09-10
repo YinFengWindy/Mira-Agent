@@ -12,7 +12,6 @@ def _router(*, role_result=None, story_result=None):
         roles=SimpleNamespace(handle=AsyncMock(return_value=role_result)),
         sessions_and_tasks=SimpleNamespace(handle=AsyncMock(return_value=None)),
         chat=SimpleNamespace(handle=AsyncMock(return_value=None)),
-        images=SimpleNamespace(handle=AsyncMock(return_value=None)),
         voice=SimpleNamespace(handle=AsyncMock(return_value=None)),
         stories=SimpleNamespace(handle=AsyncMock(return_value=story_result)),
         observation=None,
@@ -51,7 +50,6 @@ async def test_request_router_stops_after_the_owning_handler_matches() -> None:
     router._roles.handle.assert_awaited_once_with("roles.list", {})
     router._sessions_and_tasks.handle.assert_not_awaited()
     router._chat.handle.assert_not_awaited()
-    router._images.handle.assert_not_awaited()
 
 
 @pytest.mark.asyncio

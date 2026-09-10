@@ -28,14 +28,6 @@ function createSettingsFormData(
       embeddingBaseUrl: "",
       outputDimensionality: "",
     },
-    integrations: {
-      novelaiEnabled: false,
-      novelaiToken: "",
-      novelaiNsfwEnabled: false,
-      novelaiAddQualityTags: false,
-      novelaiUndesiredContentPreset: 0,
-      novelaiAutoWritebackRoleAssets: false,
-    },
     voice: {
       enabled: false,
       hotkey: "Ctrl+Space",
