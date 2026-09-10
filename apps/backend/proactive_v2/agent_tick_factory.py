@@ -69,14 +69,17 @@ class AgentTickFactory:
     def build(self) -> ProactiveTurnPipeline:
         if self._deps.pool is None:
             raise RuntimeError("proactive_v2 依赖 MCP 连接池，pool 不能为空")
+        # 上面的 raise 已经保证 pool 非空；此处收窄一次类型，
+        # 后续构建方法直接接收非空 pool，不必再逐处断言。
+        pool = self._deps.pool
 
         # 1. 先确定本轮 proactive 要服务哪个 session。
         session_key = self._get_session_key()
         # 2. 再把 tick 运行期依赖逐项组装好：
         #    最近用户时间 / 工具依赖 / gateway 数据依赖 / 近期主动消息读取函数。
         last_user_at_fn = self._build_last_user_at_fn(session_key)
-        tool_deps = self._build_tool_deps()
-        gateway_deps = self._build_gateway_deps(tool_deps)
+        tool_deps = self._build_tool_deps(pool)
+        gateway_deps = self._build_gateway_deps(tool_deps, pool)
         recent_proactive_fn = self._build_recent_proactive_fn()
         drift_pipeline = self._build_drift_pipeline(tool_deps)
         target_transports_fn = getattr(self._deps.sense, "target_transports", None)
@@ -156,29 +159,20 @@ class AgentTickFactory:
 
         return llm_fn
 
-    def _build_alert_fn(self) -> AlertFn:
-        pool = self._deps.pool
-        assert pool is not None
-
+    def _build_alert_fn(self, pool: McpClientPool) -> AlertFn:
         async def alert_fn() -> list[dict]:
             return await mcp_sources.fetch_alert_events_async(pool)
 
         return alert_fn
 
-    def _build_feed_fn(self) -> FeedFn:
-        pool = self._deps.pool
-        assert pool is not None
-
+    def _build_feed_fn(self, pool: McpClientPool) -> FeedFn:
         async def feed_fn(limit: int = 5) -> list[dict]:
             events = await mcp_sources.fetch_content_events_async(pool)
             return events[:limit]
 
         return feed_fn
 
-    def _build_context_fn(self) -> ContextFn:
-        pool = self._deps.pool
-        assert pool is not None
-
+    def _build_context_fn(self, pool: McpClientPool) -> ContextFn:
         async def context_fn() -> list[dict]:
             rows = await mcp_sources.fetch_context_data_async(pool)
             if not isinstance(rows, list):
@@ -198,10 +192,7 @@ class AgentTickFactory:
 
         return recent_chat_fn
 
-    def _build_ack_fn(self) -> AckFn:
-        pool = self._deps.pool
-        assert pool is not None
-
+    def _build_ack_fn(self, pool: McpClientPool) -> AckFn:
         async def ack_fn(compound_key: str, ttl_hours: int) -> None:
             """compound_key 格式："{ack_server}:{id}"，如 "feed-mcp:c1"."""
             parts = compound_key.split(":", 1)
@@ -215,10 +206,7 @@ class AgentTickFactory:
 
         return ack_fn
 
-    def _build_alert_ack_fn(self) -> AlertAckFn:
-        pool = self._deps.pool
-        assert pool is not None
-
+    def _build_alert_ack_fn(self, pool: McpClientPool) -> AlertAckFn:
         async def alert_ack_fn(compound_key: str) -> None:
             """Alert 专用通道，走 acknowledge_events（非 content entries）。"""
             import types as _types
@@ -231,7 +219,7 @@ class AgentTickFactory:
 
         return alert_ack_fn
 
-    def _build_tool_deps(self) -> ToolDeps:
+    def _build_tool_deps(self, pool: McpClientPool) -> ToolDeps:
         web_fetch_tool = None
         try:
             web_fetch_tool = WebFetchTool()
@@ -241,16 +229,18 @@ class AgentTickFactory:
             web_fetch_tool=web_fetch_tool,
             memory=self._deps.memory,
             recent_chat_fn=self._build_recent_chat_fn(),
-            ack_fn=self._build_ack_fn(),
-            alert_ack_fn=self._build_alert_ack_fn(),
+            ack_fn=self._build_ack_fn(pool),
+            alert_ack_fn=self._build_alert_ack_fn(pool),
             max_chars=self._deps.cfg.agent_tick_web_fetch_max_chars,
         )
 
-    def _build_gateway_deps(self, tool_deps: ToolDeps) -> GatewayDeps:
+    def _build_gateway_deps(
+        self, tool_deps: ToolDeps, pool: McpClientPool
+    ) -> GatewayDeps:
         return GatewayDeps(
-            alert_fn=self._build_alert_fn(),
-            feed_fn=self._build_feed_fn(),
-            context_fn=self._build_context_fn(),
+            alert_fn=self._build_alert_fn(pool),
+            feed_fn=self._build_feed_fn(pool),
+            context_fn=self._build_context_fn(pool),
             web_fetch_tool=tool_deps.web_fetch_tool,
             max_chars=tool_deps.max_chars,
             content_limit=getattr(self._deps.cfg, "agent_tick_content_limit", 5),

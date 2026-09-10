@@ -114,3 +114,38 @@ def test_dev_launch_makes_top_level_plugins_importable(tmp_path: Path):
 
     assert result.returncode == 0, result.stderr
     assert "PLUGINS_IMPORTABLE 0" in result.stdout
+@pytest.mark.asyncio
+async def test_module_entrypoint_exit_codes(monkeypatch: pytest.MonkeyPatch):
+    """以 `python -m main` 方式运行时的三条退出路径。"""
+    import runpy
+    import sys
+
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
+    monkeypatch.setattr(sys, "argv", ["main.py", "--config", "missing.json"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("main", run_name="__main__")
+    assert exc.value.code == 1
+
+    def _fake_asyncio_run(coro):
+        coro.close()
+        return None
+
+    monkeypatch.setattr("pathlib.Path.exists", lambda self: True)
+    monkeypatch.setattr("asyncio.run", _fake_asyncio_run)
+    monkeypatch.setattr(
+        "agent.config.Config.load",
+        classmethod(lambda cls, path="config.toml": SimpleNamespace()),
+    )
+    monkeypatch.setattr(
+        "bootstrap.app.build_app_runtime",
+        lambda *args, **kwargs: SimpleNamespace(run=AsyncMock()),
+    )
+    monkeypatch.setattr(sys, "argv", ["main.py", "cli"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("main", run_name="__main__")
+    assert exc.value.code == 2
+
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("main", run_name="__main__")
+    assert exc.value.code == 0
