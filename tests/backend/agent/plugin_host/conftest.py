@@ -18,6 +18,8 @@ from bus.event_bus import EventBus
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES_DIR = REPOSITORY_ROOT / "tests" / "fixtures" / "plugins"
 
+# 夹具布局适配归仓库根 conftest 所有，两棵测试树共用同一份实现
+from conftest import stage_plugin_fixture as stage_plugin_fixture  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _clean_registry():
@@ -45,10 +47,18 @@ def make_kernel(
     tools: ToolRegistry | None = None,
     namespace: str = "",
     strict: bool = False,
+    workspace: Path | None = None,
 ) -> PluginKernel:
+    # 插件数据落在 workspace 而非插件目录（issue #209），而 legacy 适配器会为每个
+    # 插件装配 kv，因此夹具默认提供一个可写 workspace；测试传进来的插件目录本身
+    # 就是 tmp 目录，直接复用它即可。
     return PluginKernel(
         plugin_dirs,
-        services=HostServices(event_bus=event_bus, tool_registry=tools),
+        services=HostServices(
+            event_bus=event_bus,
+            tool_registry=tools,
+            workspace=workspace or plugin_dirs[0],
+        ),
         namespace=namespace,
         strict=strict,
     )

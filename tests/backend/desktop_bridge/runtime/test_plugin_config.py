@@ -15,6 +15,7 @@ import pytest
 
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
+from conftest import stage_plugin_fixture
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -38,8 +39,10 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Stages qqbot (has ConfigModel), hello (has none) and a nullable-default model."""
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    shutil.copytree(_HELLO_FIXTURE_DIR, root / "hello")
-    shutil.copytree(_NULLABLE_FIXTURE_DIR, root / "nullable_config")
+    # 夹具是旧扁平布局，内核要求 backend/；不重整的话这些插件根本不会被加载，
+    # 而「无配置模型返回 schema=None」这类断言在插件缺席时也成立，测试会假绿。
+    _ = stage_plugin_fixture("hello", root)
+    _ = stage_plugin_fixture("nullable_config", root)
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 
 
@@ -91,6 +94,10 @@ async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(tmp_p
         assert response.error is None, response.error
         assert response.payload["schema"] is None
         assert response.payload["values"] == {}
+        # 插件缺席时上面两条也成立，必须确认它真的被加载了，否则是假绿
+        kernel = app.core.plugin_manager
+        assert kernel is not None
+        assert any(item["id"] == "hello" for item in kernel.states())
     finally:
         await service.aclose()
         await app.shutdown()

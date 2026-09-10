@@ -13,7 +13,7 @@ from bus.events_lifecycle import TurnCommitted
 from agent.config_models import Config, MemoryConfig
 from agent.tools.registry import ToolRegistry
 from bootstrap.memory import build_memory_runtime
-from plugins.default_memory.engine import DefaultMemoryEngine
+from plugins.default_memory.backend.engine import DefaultMemoryEngine
 from core.memory.engine import (
     EngineProfile,
     MemoryCapability,

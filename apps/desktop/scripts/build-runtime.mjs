@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
-import { delimiter, join, resolve } from "node:path";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { basename, delimiter, join, resolve } from "node:path";
 import { resolveReleaseManifest } from "./release-manifest.mjs";
 
 const releaseManifest = resolveReleaseManifest();
@@ -16,6 +16,23 @@ if (!existsSync(python)) {
 await rm(runtimeRoot, { recursive: true, force: true });
 await rm(workRoot, { recursive: true, force: true });
 await mkdir(runtimeRoot, { recursive: true });
+
+// Plugin packages keep their own `tests/` alongside their source (see
+// plugins/<id>/tests/), so a plain directory copy would ship pytest-only
+// modules (~925K) to end users and make PyInstaller's submodule collector
+// try to import them. Stage a filtered copy of `plugins/` that drops each
+// plugin's `tests/` directory and `__pycache__`, then point PyInstaller at
+// the staging copy instead of the real source tree.
+const stagingRoot = resolve(workRoot, "plugins-staging");
+await mkdir(stagingRoot, { recursive: true });
+const stagedPluginsDir = join(stagingRoot, "plugins");
+await cp(join(repositoryRoot, "plugins"), stagedPluginsDir, {
+  recursive: true,
+  filter: (source) => {
+    const name = basename(source);
+    return name !== "tests" && name !== "__pycache__";
+  },
+});
 
 const dataSeparator = delimiter;
 const args = [
@@ -35,9 +52,9 @@ const args = [
   "--paths",
   backendRoot,
   "--paths",
-  repositoryRoot,
+  stagingRoot,
   "--add-data",
-  `${join(repositoryRoot, "plugins")}${dataSeparator}plugins`,
+  `${stagedPluginsDir}${dataSeparator}plugins`,
   "--add-data",
   `${join(backendRoot, "skills")}${dataSeparator}skills`,
   "--add-data",

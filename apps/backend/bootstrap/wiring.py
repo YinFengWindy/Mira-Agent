@@ -30,7 +30,7 @@ _MEMORY_WIRING: dict[str, ToolsetProviderFactory] = {
 
 
 def _build_default_memory_plugin() -> MemoryPlugin:
-    from plugins.default_memory.memory_plugin import MemoryPlugin as DefaultMemoryPlugin
+    from plugins.default_memory.backend.memory_plugin import MemoryPlugin as DefaultMemoryPlugin
 
     return DefaultMemoryPlugin()
 

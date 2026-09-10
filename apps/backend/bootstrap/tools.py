@@ -33,7 +33,7 @@ from agent.tools.message_push import MessagePushTool
 from agent.tools.observe_screen import ObserveScreenTool
 from agent.tools.registry import ToolRegistry
 from core.common.cleanup import run_cleanup_steps
-from bootstrap.paths import resource_root
+from bootstrap.paths import REPOSITORY_ROOT, resource_root
 from bootstrap.runtime.construction import track_build_resource
 from bootstrap.toolsets.meta import (
     build_readonly_tools,
@@ -523,6 +523,7 @@ def build_core_runtime(
             light_model=plugin_light_model,
             plugin_configs=config.plugins,
             relationship_runtime=relationship_runtime,
+            legacy_plugin_root=_legacy_plugin_root(),
         ),
         namespace=uuid4().hex,
         strict=shared is not None,
@@ -555,6 +556,17 @@ def build_core_runtime(
 def _resolve_plugin_dirs(workspace: Path) -> list[Path]:
     """Resolves the top-level `plugins/` directory for dev and frozen runs."""
     return [resource_root() / "plugins"]
+
+
+def _legacy_plugin_root() -> Path | None:
+    """插件包上移到仓库顶层之前的位置，用于一次性迁移遗留的本地状态。
+
+    `.kv.json` 与 `plugin.disabled` 都被 gitignore 覆盖，目录重命名经 git
+    落到本地时不会跟着搬，会静默留在旧路径（见 #178 / #209）。打包形态下
+    这个目录不存在，返回 None。
+    """
+    legacy = REPOSITORY_ROOT / "apps" / "backend" / "plugins"
+    return legacy if legacy.is_dir() else None
 
 
 def _role_owns_channel_target(
