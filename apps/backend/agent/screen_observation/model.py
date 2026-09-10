@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from agent.llm_json import load_json_object_loose
 from agent.provider import LLMProvider
@@ -64,9 +64,11 @@ class ObservationModelAdapter:
                     previous_context=previous_context,
                     recent_bubbles=recent_bubbles,
                 )
-        assert self._provider is not None
+        # 走到这里说明 role_runtime_registry 分支未提前 return；
+        # 方法开头的 raise 已保证此时 provider/model 非空，这里仅做静态类型收窄。
+        provider = cast(LLMProvider, self._provider)
         return await self._analyze_with_provider(
-            provider=self._provider,
+            provider=provider,
             model=self._model,
             frame=frame,
             previous_context=previous_context,

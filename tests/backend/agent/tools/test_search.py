@@ -698,6 +698,21 @@ class TestToolSearchTool:
         assert all(r["name"] != "schedule" for r in results_a)
         assert any(r["name"] == "schedule" for r in results_b)
 
+    def test_set_excluded_names_reaches_keyword_search(self):
+        """set_excluded_names 设置的名单必须真的传到 registry.search 的 keyword 路径。"""
+        reg = _make_registry()
+        tool = ToolSearchTool(reg)
+
+        before = json.loads(asyncio.run(tool.execute(query="定时任务", top_k=5)))
+        assert any(m["name"] == "schedule" for m in before["matched"])
+
+        async def _run_excluded():
+            tool.set_excluded_names({"schedule"})
+            return await tool.execute(query="定时任务", top_k=5)
+
+        after = json.loads(asyncio.run(_run_excluded()))
+        assert all(m["name"] != "schedule" for m in after["matched"])
+
     def test_get_deferred_names_excludes_visible(self):
         """get_deferred_names(visible=...) 不包含已可见（preloaded）工具。"""
         reg = _make_registry()

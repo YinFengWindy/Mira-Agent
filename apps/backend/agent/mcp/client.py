@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,7 @@ class McpClient:
         # cwd 未指定时从 command 中推断，避免子进程继承 agent 工作目录
         self.cwd = cwd or _infer_cwd(command)
         self._process: asyncio.subprocess.Process | None = None
+        self._stderr_task: asyncio.Task[None] | None = None
         self._next_id = 1
         self._tool_infos: list[McpToolInfo] = []
         self._recent_stdout: deque[str] = deque(maxlen=8)
@@ -100,7 +102,11 @@ class McpClient:
             cwd=self.cwd,
             limit=_STREAM_LIMIT,
         )
-        _ = asyncio.create_task(self._drain_stderr())
+        # 在连接路径上取流：流不可用时 RuntimeError 由 connect() 冒泡，
+        # 而不是丢进一个无人接管的后台任务里。
+        self._stderr_task = asyncio.create_task(
+            self._drain_stderr(self._require_stderr())
+        )
 
         # initialize 握手
         init_id = self._new_id()
@@ -193,36 +199,78 @@ class McpClient:
         return str(resp.get("result", ""))
 
     async def disconnect(self) -> None:
-        """终止子进程。"""
-        if self._process is None:
+        """终止子进程，并回收 stderr 排空任务。"""
+        if self._process is not None:
+            try:
+                self._process.terminate()
+                _ = await asyncio.wait_for(self._process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                self._process.kill()
+                _ = await self._process.wait()
+            except Exception as e:
+                logger.warning("[mcp] 断开 %r 时出错: %s", self.name, e)
+            finally:
+                self._process = None
+        # 先结束子进程再收任务：子进程还活着时停止排空 stderr，可能让它写满
+        # 管道缓冲区而卡在退出路径上。
+        await self._close_stderr_task()
+
+    async def _close_stderr_task(self) -> None:
+        """取消并等待 stderr 排空任务，确保 disconnect() 后不残留悬挂 task。"""
+        task = self._stderr_task
+        if task is None:
             return
-        try:
-            self._process.terminate()
-            _ = await asyncio.wait_for(self._process.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            self._process.kill()
-            _ = await self._process.wait()
-        except Exception as e:
-            logger.warning("[mcp] 断开 %r 时出错: %s", self.name, e)
-        finally:
-            self._process = None
+        self._stderr_task = None
+        _ = task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
     def _new_id(self) -> int:
         i = self._next_id
         self._next_id += 1
         return i
 
+    def _require_process(self) -> asyncio.subprocess.Process:
+        """返回已连接的子进程；未连接时立即失败，而不是让调用方在下游拿到 None。"""
+        if self._process is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 未连接")
+        return self._process
+
+    def _require_stdin(self) -> asyncio.StreamWriter:
+        """返回已连接进程的 stdin。
+
+        connect() 总是以 stdin/stdout/stderr=PIPE 创建子进程，因此进程存在时
+        三个流理论上必非空；这里仍做真实的 None 检查并立即失败，而不是让
+        None 流入下游触发一个更晚、更隐晦的错误。
+        """
+        stdin = self._require_process().stdin
+        if stdin is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stdin 不可用")
+        return stdin
+
+    def _require_stdout(self) -> asyncio.StreamReader:
+        """返回已连接进程的 stdout；未连接或流不可用时立即失败。"""
+        stdout = self._require_process().stdout
+        if stdout is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stdout 不可用")
+        return stdout
+
+    def _require_stderr(self) -> asyncio.StreamReader:
+        """返回已连接进程的 stderr；未连接或流不可用时立即失败。"""
+        stderr = self._require_process().stderr
+        if stderr is None:
+            raise RuntimeError(f"MCP 客户端 {self.name!r} 的 stderr 不可用")
+        return stderr
+
     async def _send(self, payload: dict[str, Any]) -> None:
-        assert self._process and self._process.stdin
+        stdin = self._require_stdin()
         logger.debug(
             "[mcp:%s] -> %s",
             self.name,
             json.dumps(payload, ensure_ascii=False)[:400],
         )
-        self._process.stdin.write(
-            (json.dumps(payload, ensure_ascii=False) + "\n").encode()
-        )
-        await self._process.stdin.drain()
+        stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode())
+        await stdin.drain()
 
     async def _recv(
         self,
@@ -230,13 +278,11 @@ class McpClient:
         stage: str = "recv",
         timeout: float | None = None,
     ) -> dict[str, Any]:
-        assert self._process and self._process.stdout
+        stdout = self._require_stdout()
         recv_timeout = _RECV_TIMEOUT if timeout is None else timeout
         while True:
             try:
-                line = await asyncio.wait_for(
-                    self._process.stdout.readline(), timeout=recv_timeout
-                )
+                line = await asyncio.wait_for(stdout.readline(), timeout=recv_timeout)
             except asyncio.TimeoutError as e:
                 raise TimeoutError(
                     self._build_timeout_message(stage, expected_id, recv_timeout)
@@ -268,19 +314,25 @@ class McpClient:
             logger.debug("[mcp:%s] <- %s", self.name, text[:400])
             return msg
 
-    async def _drain_stderr(self) -> None:
-        """后台读取 stderr，防止缓冲区阻塞。"""
-        assert self._process and self._process.stderr
+    async def _drain_stderr(self, stderr: asyncio.StreamReader) -> None:
+        """后台读取 stderr，防止缓冲区阻塞。
+
+        流由 `_connect_impl` 取好后传入，因此"流不可用"在连接时就已失败。
+        子进程的 stderr 未必是合法 UTF-8，解码用 replace 兜底：这个协程的
+        全部职责就是持续排空，不能因为一个坏字节停下来让管道写满。
+        """
         try:
             while True:
-                line = await self._process.stderr.readline()
+                line = await stderr.readline()
                 if not line:
                     break
-                text = line.decode().rstrip()
+                text = line.decode(errors="replace").rstrip()
                 self._recent_stderr.append(text[:500])
                 logger.debug("[mcp:%s] stderr: %s", self.name, text)
-        except Exception:
-            pass
+        except Exception as e:
+            # 排空失败不影响 stdio 主协议通道，因此在这里就地记录并结束，
+            # 而不是把异常留给一个无人 await 的 task 在 GC 时才暴露。
+            logger.warning("[mcp:%s] stderr 排空中止: %s", self.name, e)
 
     def _build_timeout_message(
         self,

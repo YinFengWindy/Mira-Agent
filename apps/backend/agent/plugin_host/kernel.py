@@ -18,7 +18,6 @@ from agent.plugin_host.capabilities import (
     BackgroundCapability,
     ChannelsCapability,
     LifecycleCapability,
-    PHASE_SLOTS,
     ProactiveGatesCapability,
     ToolHooksCapability,
     ToolsCapability,
@@ -350,18 +349,6 @@ class PluginKernel:
             for command, description in getter():
                 commands.append((str(command), str(description)))
         return commands
-
-
-# 断言 v2/legacy 使用同一批槽位名，防止两处清单漂移
-assert set(PHASE_SLOTS) == {
-    "before_turn",
-    "before_reasoning",
-    "prompt_render",
-    "before_step",
-    "after_step",
-    "after_reasoning",
-    "after_turn",
-}
 
 
 def _import_module(module_name: str, path: Path) -> None:

@@ -1,29 +1,13 @@
 import { BrowserWindow, screen } from "electron";
 import { rendererDevServerUrl, rendererPetDist, preloadScript } from "../paths.js";
 import { attachDesktopWindowSecurity, resolveRendererEntryUrl, validateRendererDevServerUrl } from "../windowSecurity.js";
-import { desktopPetViewport } from "./geometry.js";
+import { desktopPetWindowOptions } from "./windowContract.js";
 
 export { clampDesktopPetPosition, desktopPetViewport } from "./geometry.js";
 
 /** Creates the fixed transparent desktop-pet surface without loading the full application renderer. */
 export function createDesktopPetWindow(options: { openLocalAttachment: (url: string) => Promise<unknown> | unknown }): BrowserWindow {
-  const window = new BrowserWindow({
-    width: desktopPetViewport.width,
-    height: desktopPetViewport.height,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    hasShadow: false,
-    webPreferences: {
-      preload: preloadScript,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      spellcheck: false,
-    },
-  });
+  const window = new BrowserWindow(desktopPetWindowOptions(preloadScript));
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   attachDesktopWindowSecurity(window.webContents, {
     rendererEntryUrl: resolveRendererEntryUrl(rendererPetDist, rendererDevServerUrl),
