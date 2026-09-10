@@ -1,16 +1,14 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
-
-from agent.plugins import Plugin
 
 from .channel import QQBotChannel
 
 if TYPE_CHECKING:
-    from infra.channels.contract import Channel
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _UNRESOLVED_ENV_RE = re.compile(r"^\$\{\w+\}$")
 
@@ -57,22 +55,21 @@ class QQBotConfigModel(BaseModel):
         return "" if _UNRESOLVED_ENV_RE.fullmatch(text) else text
 
 
-class QQBotPlugin(Plugin):
-    """Exposes the official QQBot channel through the plugin runtime."""
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 qqbot：校验插件配置，凭据齐备时贡献官方 QQBot 渠道。
 
-    name = "qqbot"
-    desc = "官方 QQBot 渠道"
-    ConfigModel = QQBotConfigModel
-
-    def channels(self) -> list["Channel"]:
-        config = cast(QQBotConfigModel | None, self.context.config)
-        if config is None or not config.app_id or not config.client_secret:
-            return []
-        return [
-            QQBotChannel(
-                app_id=config.app_id,
-                client_secret=config.client_secret,
-                allow_from=config.allow_from,
-                groups=config.groups,
-            )
-        ]
+    行为对齐 legacy：QQBotConfigModel 校验失败时 setup() 直接抛出，交由内核的
+    通用失败回滚处理，与旧 ``_load_plugin_config`` 在校验失败时跳过插件加载
+    的语义一致；凭据缺失（非校验失败）则不贡献渠道，同样与旧 channels() 一致。
+    """
+    config = QQBotConfigModel.model_validate(ctx.config.as_dict())
+    if not config.app_id or not config.client_secret:
+        return
+    ctx.channels.add(
+        QQBotChannel(
+            app_id=config.app_id,
+            client_secret=config.client_secret,
+            allow_from=config.allow_from,
+            groups=config.groups,
+        )
+    )

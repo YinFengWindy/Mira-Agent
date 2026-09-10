@@ -364,6 +364,105 @@ async def test_v2_plugin_rpc_method_callable_then_gone_after_unload(tmp_path: Pa
     assert kernel.rpc.resolve("plugin.rpcdemo.ping") is None
 
 
+_HOST_SERVICES_PLUGIN = """
+captured: dict = {}
+
+
+async def setup(ctx):
+    captured["workspace"] = ctx.workspace
+    captured["memory_engine"] = ctx.memory_engine
+    captured["session_manager"] = ctx.session_manager
+    captured["light_provider"] = ctx.light_provider
+    captured["light_model"] = ctx.light_model
+    captured["relationship_runtime"] = ctx.relationship_runtime
+""".strip()
+
+_HOST_SERVICES_MANIFEST = (
+    "api: 2\nid: hostrefs\ncapabilities:\n"
+    "  - workspace\n  - memory_engine\n  - session_manager\n"
+    "  - light_provider\n  - light_model\n  - relationship_runtime\n"
+)
+
+
+@pytest.mark.asyncio
+async def test_v2_plugin_reads_host_service_references(tmp_path: Path):
+    """新增 6 个直传型 capability（#183）必须原样透出 HostServices 的同名字段。"""
+    plugin_dir = tmp_path / "hostrefs"
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
+        _HOST_SERVICES_PLUGIN, encoding="utf-8"
+    )
+    (plugin_dir / "manifest.yaml").write_text(
+        _HOST_SERVICES_MANIFEST, encoding="utf-8"
+    )
+    workspace = tmp_path / "workspace-for-hostrefs"
+    workspace.mkdir()
+    memory_engine = object()
+    session_manager = object()
+    light_provider = object()
+    relationship_runtime = object()
+    kernel = make_kernel(
+        [tmp_path],
+        event_bus=EventBus(),
+        workspace=workspace,
+        memory_engine=memory_engine,
+        session_manager=session_manager,
+        light_provider=light_provider,
+        light_model="light-model-x",
+        relationship_runtime=relationship_runtime,
+    )
+    await kernel.load_all()
+
+    import sys
+
+    module = next(
+        m for k, m in sys.modules.items()
+        if k.startswith("akasic_plugin_") and k.endswith("_hostrefs")
+    )
+    assert module.captured == {
+        "workspace": workspace,
+        "memory_engine": memory_engine,
+        "session_manager": session_manager,
+        "light_provider": light_provider,
+        "light_model": "light-model-x",
+        "relationship_runtime": relationship_runtime,
+    }
+
+
+@pytest.mark.asyncio
+async def test_v2_plugin_host_service_capabilities_are_gated(tmp_path: Path):
+    """未在 manifest 声明的直传型 capability 访问时必须抛 CapabilityNotGranted。"""
+    plugin_dir = tmp_path / "hostrefs_gated"
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
+        """
+captured: dict = {}
+
+
+async def setup(ctx):
+    try:
+        _ = ctx.memory_engine
+    except AttributeError as e:
+        captured["denied"] = str(e)
+""".strip(),
+        encoding="utf-8",
+    )
+    (plugin_dir / "manifest.yaml").write_text(
+        "api: 2\nid: hostrefs_gated\ncapabilities:\n  - workspace\n",
+        encoding="utf-8",
+    )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+
+    import sys
+
+    module = next(
+        m for k, m in sys.modules.items()
+        if k.startswith("akasic_plugin_") and k.endswith("_hostrefs_gated")
+    )
+    assert "未声明 capability" in module.captured["denied"]
+
+
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
     stage_plugin_fixture("weather", tmp_path)

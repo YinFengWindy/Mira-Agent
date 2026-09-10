@@ -22,6 +22,16 @@ KNOWN_CAPABILITIES = frozenset(
         "background",
         "bot_commands",
         "rpc",
+        # 批 B（#183）新增：直传宿主服务引用，供渠道/事件/记忆壳插件读取。这些
+        # 字段本身没有装配/回滚语义（不像 tools/kv 等需要 effect 包装），
+        # 因此不各建一个 Capability 类，直接在 kernel._build_capabilities 里
+        # 透传 HostServices 的同名字段。
+        "workspace",
+        "memory_engine",
+        "session_manager",
+        "light_provider",
+        "light_model",
+        "relationship_runtime",
     }
 )
 

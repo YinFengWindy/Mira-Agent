@@ -1,0 +1,8 @@
+api: 2
+id: default_memory
+desc: default 记忆引擎的插件壳（检索/召回轨迹记录）；引擎本体由 core.memory.plugin 独立接线
+capabilities:
+  - memory_engine
+  - workspace
+  - lifecycle
+  - events

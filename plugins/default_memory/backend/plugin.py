@@ -6,10 +6,12 @@ import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from agent.lifecycle.types import AfterToolResultCtx, BeforeTurnCtx
-from agent.plugins import Plugin, on_tool_result
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _CTX_SLOT = "session:ctx"
 _ITEM_LINE_RE = re.compile(r"^-\s+\[([^\]]+)\]\s*(.*)$")
@@ -20,34 +22,33 @@ class ContextPrepareRecordModule:
     slot = "default_memory.inspector"
     requires = ("before_turn.emit", _CTX_SLOT)
 
-    def __init__(self, plugin: "DefaultMemoryInspector") -> None:
-        self._plugin = plugin
+    def __init__(self, recorder: "_DefaultMemoryRecorder") -> None:
+        self._recorder = recorder
 
     async def run(self, frame: Any) -> Any:
         ctx = frame.slots.get(_CTX_SLOT)
         if isinstance(ctx, BeforeTurnCtx):
-            self._plugin.record_context_prepare(ctx)
+            self._recorder.record_context_prepare(ctx)
         return frame
 
 
-class DefaultMemoryInspector(Plugin):
-    name = "default_memory"
+class _DefaultMemoryRecorder:
+    """记录 default 记忆引擎的检索/召回轨迹到 workspace 下的 jsonl 文件。
 
-    async def initialize(self) -> None:
-        self._active = _is_memory_engine(self.context.memory_engine, "default")
+    是否激活只在装配时判定一次（与旧 initialize() 里的一次性判定等价，见
+    setup() 文档）；两个记录入口（before_turn 模块、AFTER_TOOL_RESULT 事件）
+    共享同一份状态，因此收进一个小类而不是两处散落的闭包。
+    """
+
+    def __init__(self, *, active: bool, data_path: Path) -> None:
+        self._active = active
         self._lock = threading.RLock()
         self._active_turns: dict[str, str] = {}
-        self._data_path = _data_path(
-            plugin_dir=self.context.plugin_dir,
-            workspace=self.context.workspace,
-        )
+        self._data_path = data_path
         self._data_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def before_turn_modules(self) -> list[object]:
-        return [ContextPrepareRecordModule(self)]
-
     def record_context_prepare(self, event: BeforeTurnCtx) -> None:
-        if not getattr(self, "_active", False):
+        if not self._active:
             return
         turn_id = _turn_id(event.session_key, event.timestamp.isoformat(), event.content)
         self._active_turns[event.session_key] = turn_id
@@ -75,9 +76,8 @@ class DefaultMemoryInspector(Plugin):
             }
         )
 
-    @on_tool_result()
     async def record_recall_memory(self, event: AfterToolResultCtx) -> None:
-        if not getattr(self, "_active", False) or event.tool_name != "recall_memory":
+        if not self._active or event.tool_name != "recall_memory":
             return
         turn_id = self._active_turns.get(event.session_key)
         if not turn_id:
@@ -116,6 +116,24 @@ class DefaultMemoryInspector(Plugin):
         with self._lock:
             with self._data_path.open("a", encoding="utf-8") as fh:
                 _ = fh.write(line + "\n")
+
+
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 default_memory 插件壳：贡献 before_turn 检索记录模块与 recall_memory 工具结果记录。
+
+    记忆引擎本体（``DefaultMemoryEngine`` / ``MemoryPlugin``）不在此文件，由
+    ``core.memory.plugin`` 的独立契约装配（见同目录 ``memory_plugin.py``），
+    不受本次插件系统迁移影响；这里只是给它接一个 v2 生命周期壳。
+
+    是否激活只在装配时判定一次：``ctx.memory_engine`` 在同一次 kernel
+    generation 内固定不变，与旧 ``initialize()`` 里的一次性判定效果等价。
+    """
+    recorder = _DefaultMemoryRecorder(
+        active=_is_memory_engine(ctx.memory_engine, "default"),
+        data_path=_data_path(plugin_dir=ctx.plugin_dir, workspace=ctx.workspace),
+    )
+    ctx.lifecycle.contribute("before_turn", [ContextPrepareRecordModule(recorder)])
+    ctx.events.on(AfterToolResultCtx, recorder.record_recall_memory)
 
 
 def _turn_id(session_key: str, timestamp: str, content: str) -> str:

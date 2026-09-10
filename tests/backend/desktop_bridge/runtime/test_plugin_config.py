@@ -1,8 +1,9 @@
 """plugin.config.get/set：schema 通道读写，覆盖验收标准 3 与 4。
 
-用真实的 legacy 插件（仓库自带的 qqbot，经 ``Plugin.ConfigModel`` 声明配置
-模型）和一个完全没有配置模型的旧插件（hello 夹具）做被测对象，而不是只能
-造假插件；证明 ``plugin.config`` 通道对存量插件立刻可用。
+用真实插件（仓库自带的 qqbot，经 v2 manifest 的 ``config_model`` 声明配置
+模型——#183 之前经 legacy ``Plugin.ConfigModel`` 声明，迁移后 schema 解析路径
+换了但通道行为不变）和一个完全没有配置模型的旧插件（hello 夹具）做被测对象，
+而不是只能造假插件；证明 ``plugin.config`` 通道对存量插件立刻可用。
 """
 
 from __future__ import annotations

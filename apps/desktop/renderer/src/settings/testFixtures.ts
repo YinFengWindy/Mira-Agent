@@ -4,7 +4,7 @@ import type { SettingsFormData } from "../../../src/bridge/shared.js";
 export function createSettingsDraft(): SettingsFormData {
   return {
     models: { registrations: [] },
-    channels: { telegramToken: "", qqBotUin: "", qqBotAppId: "", qqBotClientSecret: "" },
+    channels: { telegramToken: "", qqBotUin: "" },
     memory: { enabled: false, engine: "default", embeddingModel: "", embeddingApiKey: "", embeddingBaseUrl: "", outputDimensionality: "" },
     integrations: { novelaiEnabled: false, novelaiToken: "", novelaiNsfwEnabled: false, novelaiAddQualityTags: false, novelaiUndesiredContentPreset: 0, novelaiAutoWritebackRoleAssets: false },
     voice: { enabled: false, hotkey: "Ctrl+Space", microphoneDeviceId: "", asrProvider: "tencent", asrBaseUrl: "", asrSecretId: "", asrSecretKey: "", ttsProvider: "minimax", ttsBaseUrl: "", ttsModel: "", ttsApiKey: "", ttsVolume: 2 },

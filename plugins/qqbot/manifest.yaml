@@ -1,3 +1,8 @@
-name: qqbot
-version: 0.1.0
+api: 2
+id: qqbot
+version: '0.1.0'
 desc: 官方 QQBot 渠道
+capabilities:
+  - config
+  - channels
+config_model: QQBotConfigModel
