@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from time import perf_counter
-from typing import Literal, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Literal, Mapping, Protocol, Sequence, cast, runtime_checkable
 
 
 class ProactiveMode(StrEnum):
@@ -192,13 +192,15 @@ class ProactiveGateChain:
                     blocked_gate_name=gate.name,
                 )
             if decision.kind == "activate":
-                assert decision.mode is not None
+                # _validate_decision 已保证 activate 分支下 mode 不为空；
+                # 这里仅做静态类型收窄，不再重复运行期校验。
+                mode = cast(ProactiveMode, decision.mode)
                 return ProactiveGateResult(
                     blocked=False,
                     reason=decision.reason or gate.name,
                     activation=ProactiveGateActivation(
                         gate_name=gate.name,
-                        mode=decision.mode,
+                        mode=mode,
                         reason=decision.reason,
                         metadata=dict(decision.metadata),
                     ),
