@@ -110,3 +110,63 @@ async def test_metadata_sender_uses_push_identity_not_shared_turn_identity():
     sender.assert_awaited_once_with("one", "second", {
         "delivery_key": "occurrence", "already_persisted": True,
     })
+
+
+@pytest.mark.asyncio
+async def test_message_push_tool_covers_success_failure_and_fallbacks():
+    tool = MessagePushTool()
+    sent = {"text": [], "stream_text": [], "file": [], "image": []}
+
+    async def text(chat_id: str, message: str) -> None:
+        sent["text"].append((chat_id, message))
+
+    async def stream_text(chat_id: str, message: str) -> None:
+        sent["stream_text"].append((chat_id, message))
+
+    async def file(chat_id: str, path: str, name: str | None) -> None:
+        sent["file"].append((chat_id, path, name))
+
+    async def image(chat_id: str, path: str) -> None:
+        sent["image"].append((chat_id, path))
+
+    tool.register_channel(
+        "telegram",
+        text=text,
+        stream_text=stream_text,
+        file=file,
+        image=image,
+    )
+    result = await tool.execute(
+        channel="telegram",
+        chat_id=123,
+        message="hello",
+        file="/tmp/demo.txt",
+        image="https://img",
+    )
+
+    assert "文本已发送" in result
+    assert "文件 'demo.txt' 已发送" in result
+    assert "图片已发送" in result
+    assert sent["text"] == []
+    assert sent["stream_text"] == [("123", "hello")]
+    assert sent["file"] == [("123", "/tmp/demo.txt", "demo.txt")]
+    assert sent["image"] == [("123", "https://img")]
+
+    assert await tool.execute(channel="telegram", chat_id=1) == (
+        "错误：message、file、image 至少提供一个"
+    )
+    assert "未注册" in await tool.execute(channel="qq", chat_id=1, message="x")
+
+    tool.register_channel("limited", text=text)
+    limited = await tool.execute(
+        channel="limited", chat_id=1, file="/tmp/a.txt", image="/tmp/a.png"
+    )
+    assert "不支持发送文件" in limited
+    assert "不支持发送图片" in limited
+
+    async def broken(chat_id: str, message: str) -> None:
+        raise RuntimeError("send failed")
+
+    tool.register_channel("broken", text=broken)
+    assert "发送失败" in await tool.execute(channel="broken", chat_id=1, message="x")
+
