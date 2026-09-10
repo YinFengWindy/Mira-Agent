@@ -86,6 +86,10 @@ class PluginRegistry:
     def register_class(self, cls: type) -> None:
         self._classes[cls.__module__] = cls
 
+    def get_class(self, import_path: str) -> type | None:
+        """Returns the legacy ``Plugin`` subclass registered for ``import_path``, if any."""
+        return self._classes.get(import_path)
+
     def register_instance(self, mp: str, inst: object) -> None:
         self._instances[mp] = inst
 

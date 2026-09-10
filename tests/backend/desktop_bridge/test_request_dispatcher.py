@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 
+from desktop_bridge.method_policy import Concurrency, MethodPolicy
 from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
 
 
@@ -144,6 +145,38 @@ async def test_mutation_requests_run_one_at_a_time() -> None:
     await dispatcher.aclose()
 
     assert peak == 1
+
+
+@pytest.mark.asyncio
+async def test_injected_policy_resolver_overrides_the_static_table() -> None:
+    # generation/bridge 服务按 DI 而非全局字典把 plugin.* 方法策略动态注入分发器
+    calls: list[str] = []
+
+    def resolver(method: str) -> MethodPolicy:
+        calls.append(method)
+        return MethodPolicy(concurrency=Concurrency.READ_ONLY)
+
+    dispatcher = BridgeRequestDispatcher(policy_resolver=resolver)
+    active = 0
+    peak = 0
+    release = asyncio.Event()
+
+    async def _read() -> None:
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await release.wait()
+        active -= 1
+
+    for _ in range(4):
+        dispatcher.submit({"method": "plugin.demo.write"}, _read)
+    await asyncio.sleep(0)
+
+    # 静态表会把 plugin.demo.write 当作串行 mutation；注入的 resolver 证明它确实生效
+    assert peak == 4
+    assert calls.count("plugin.demo.write") == 4
+    release.set()
+    await dispatcher.aclose()
 
 
 @pytest.mark.asyncio

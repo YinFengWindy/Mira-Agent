@@ -310,6 +310,36 @@ async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unlo
     # 卸载 v2 插件后，其 bot 命令必须随 effect 一并摘除，legacy 一侧不受影响
     _ = await kernel.unload("v2cmds")
     assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
+_RPC_PLUGIN = """
+async def _ping(payload):
+    return {"pong": payload.get("value")}
+
+
+async def setup(ctx):
+    ctx.rpc.register("ping", _ping)
+""".strip()
+
+_RPC_MANIFEST = "api: 2\nid: rpcdemo\ncapabilities:\n  - rpc\n"
+
+
+@pytest.mark.asyncio
+async def test_v2_plugin_rpc_method_callable_then_gone_after_unload(tmp_path: Path):
+    plugin_dir = tmp_path / "rpcdemo"
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(_RPC_PLUGIN, encoding="utf-8")
+    (plugin_dir / "manifest.yaml").write_text(_RPC_MANIFEST, encoding="utf-8")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+
+    resolved = kernel.rpc.resolve("plugin.rpcdemo.ping")
+    assert resolved is not None
+    _, handler = resolved
+    assert await handler({"value": 1}) == {"pong": 1}
+
+    _ = await kernel.unload("rpcdemo")
+
+    # 插件卸载后其 RPC 方法立即不可调用
+    assert kernel.rpc.resolve("plugin.rpcdemo.ping") is None
 
 
 @pytest.mark.asyncio

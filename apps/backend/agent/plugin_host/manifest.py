@@ -21,6 +21,7 @@ KNOWN_CAPABILITIES = frozenset(
         "config",
         "background",
         "bot_commands",
+        "rpc",
     }
 )
 

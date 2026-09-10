@@ -11,7 +11,9 @@ from agent.plugin_host.tool_hooks import PluginToolHook, build_hook_name
 
 if TYPE_CHECKING:
     from agent.core.proactive_turn.gates import ProactiveGate
+    from agent.plugin_host.rpc import PluginRpcRegistry, RpcHandler
     from agent.tool_hooks.base import ToolHook
+    from desktop_bridge.method_policy import Concurrency
     from infra.channels.contract import Channel
 
 logger = logging.getLogger(__name__)
@@ -223,6 +225,48 @@ class BotCommandsCapability:
             (command, description),
             effects=self._effects,
             label=f"bot_command:{command}",
+        )
+
+
+class RpcCapability:
+    """ctx.rpc：向 ``plugin.<id>.<method>`` 命名空间登记桥接可调用方法。
+
+    并发/准入语义复用桌面桥接的 ``MethodPolicy``；未声明时回落到保守默认
+    （非只读并发、非豁免准入），由插件按需通过参数放宽。卸载/回滚时经
+    EffectScope 反注册，使方法可调用性与插件在架状态严格同步。
+    """
+
+    def __init__(
+        self,
+        registry: "PluginRpcRegistry",
+        effects: EffectScope,
+        plugin_id: str,
+    ) -> None:
+        self._registry = registry
+        self._effects = effects
+        self._plugin_id = plugin_id
+
+    def register(
+        self,
+        name: str,
+        handler: "RpcHandler",
+        *,
+        concurrency: "Concurrency | None" = None,
+        admission_exempt: bool = False,
+    ) -> None:
+        # 局部导入：核心插件运行时不在模块加载期就拉入桌面桥接的完整依赖链，
+        # 只在插件真正调用 ctx.rpc.register 时（应用已启动）才需要这些类型。
+        from desktop_bridge.method_policy import Concurrency, Handler, MethodPolicy
+
+        full_name = f"plugin.{self._plugin_id}.{name}"
+        policy = MethodPolicy(
+            concurrency=concurrency or Concurrency.MUTATION,
+            admission_exempt=admission_exempt,
+            handler=Handler.GENERATION,
+        )
+        self._registry.register(full_name, self._plugin_id, handler, policy)
+        self._effects.add(
+            f"rpc:{full_name}", lambda: self._registry.unregister(full_name)
         )
 
 

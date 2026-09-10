@@ -10,8 +10,16 @@ served by the current generation.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Only for type annotations: avoids pulling desktop_bridge's dependency
+    # chain into the core plugin runtime at import time (mirrors the same
+    # discipline agent.plugin_host.rpc already applies in the other direction).
+    from agent.plugin_host.rpc import PluginRpcRegistry
 
 
 class Concurrency(Enum):
@@ -31,6 +39,7 @@ class Handler(Enum):
     GENERATION = "generation"
     SETTINGS = "settings"
     ROLE_TASKS = "role_tasks"
+    PLUGIN_CONFIG = "plugin_config"
 
 
 class OwnerRouting(Enum):
@@ -59,6 +68,13 @@ METHOD_POLICIES: dict[str, MethodPolicy] = {
     ),
     "runtime.apply": MethodPolicy(
         concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.SETTINGS,
+    ),
+    "plugin.config.get": MethodPolicy(
+        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
+    ),
+    "plugin.config.set": MethodPolicy(
+        # 写入复用设置事务自己的串行锁，语义与 runtime.apply 一致
+        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
     ),
     "roles.tasks.list": MethodPolicy(
         concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.ROLE_TASKS,
@@ -100,3 +116,38 @@ METHOD_POLICIES: dict[str, MethodPolicy] = {
 def method_policy(method: str) -> MethodPolicy:
     """Returns the declared policy, or the conservative default for new methods."""
     return METHOD_POLICIES.get(method, _DEFAULT_POLICY)
+
+
+# ``plugin.<id>.<method>`` methods are not in the static table above: their
+# policy is whatever the owning plugin declared via ``ctx.rpc.register``.
+# ``plugin.config.*`` is excluded from that because it is served directly by
+# ``ReloadableDesktopService`` (declared statically above), never through a
+# plugin-declared RPC registration.
+_PLUGIN_METHOD_PREFIX = "plugin."
+_PLUGIN_CONFIG_METHOD_PREFIX = "plugin.config."
+
+
+def resolve_plugin_method_policy(
+    method: str, registry_provider: "Callable[[], PluginRpcRegistry | None]",
+) -> MethodPolicy:
+    """Resolves dispatcher policy for one request, consulting a plugin RPC registry.
+
+    Shared by ``DesktopBridgeService`` (single generation) and
+    ``ReloadableDesktopService`` (leases the active generation's registry)
+    so the ``plugin.`` prefix rule is declared in exactly one place.
+
+    ``registry_provider`` is only called for ``plugin.<id>.<method>``: most
+    requests never touch a plugin registry at all, and ``ReloadableDesktopService``
+    only has one to offer once it has resolved the active generation's kernel,
+    which callers should not have to do for every request regardless of method.
+    """
+    if method.startswith(_PLUGIN_METHOD_PREFIX) and not method.startswith(
+        _PLUGIN_CONFIG_METHOD_PREFIX,
+    ):
+        registry = registry_provider()
+        if registry is not None:
+            policy = registry.policy_for(method)
+            if policy is not None:
+                return policy
+        return MethodPolicy()
+    return method_policy(method)
