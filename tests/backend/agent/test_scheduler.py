@@ -20,7 +20,7 @@ from core.roles import RoleRepository, RoleRuntimeRegistry, RoleStore
 from core.roles.model_runtime import RoleModelRuntime, RoleModelSnapshot
 from desktop_bridge import DesktopBridgeService
 from session.manager import SessionManager
-from tests.backend.conftest import make_job
+from conftest import make_job
 
 
 def test_job_store_raises_for_invalid_json(tmp_path: Path):

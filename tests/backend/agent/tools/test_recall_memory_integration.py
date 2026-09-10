@@ -20,7 +20,7 @@ from core.memory.engine import (
     MemoryRecord,
     MemoryToolSpec,
 )
-from plugins.default_memory.engine import DefaultMemoryEngine
+from plugins.default_memory.backend.engine import DefaultMemoryEngine
 from memory2.embedder import Embedder
 from memory2.retriever import Retriever
 from memory2.store import MemoryStore2

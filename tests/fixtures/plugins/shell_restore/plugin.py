@@ -1,6 +1,6 @@
 from agent.lifecycle.types import PreToolCtx
 from agent.plugins import on_tool_pre
-from plugins.shell_restore.plugin import ShellRestore as _ShellRestore
+from plugins.shell_restore.backend.plugin import ShellRestore as _ShellRestore
 
 
 class ShellRestore(_ShellRestore):

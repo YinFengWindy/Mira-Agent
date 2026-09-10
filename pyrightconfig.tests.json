@@ -7,7 +7,8 @@
     "apps/backend"
   ],
   "include": [
-    "tests/backend"
+    "tests/backend",
+    "plugins"
   ],
   "exclude": [
     ".venv",

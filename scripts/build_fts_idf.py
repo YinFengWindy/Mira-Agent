@@ -13,13 +13,13 @@ from pathlib import Path
 import jieba
 
 if __package__:
-    from scripts.project_paths import add_backend_to_sys_path
+    from scripts.project_paths import add_project_roots_to_sys_path
 else:
     # When this file is executed directly, Python puts only ``scripts/`` on
     # sys.path, so the package-qualified import is not available yet.
-    from project_paths import add_backend_to_sys_path
+    from project_paths import add_project_roots_to_sys_path
 
-add_backend_to_sys_path()
+add_project_roots_to_sys_path()
 
 from core.common.workspace import resolve_default_workspace
 

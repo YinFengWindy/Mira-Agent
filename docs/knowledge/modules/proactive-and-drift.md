@@ -10,7 +10,7 @@ source_paths:
   - apps/backend/agent/core/proactive_turn/gates.py
   - apps/backend/agent/core/proactive_turn/phases.py
   - apps/backend/agent/core/proactive_turn/tick_logging.py
-  - apps/backend/plugins/relationship_proactive/plugin.py
+  - plugins/relationship_proactive/plugin.py
   - apps/backend/proactive_v2/drift_state.py
   - apps/backend/agent/core/drift_turn.py
 related:

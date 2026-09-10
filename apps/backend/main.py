@@ -21,6 +21,7 @@ from bootstrap.app import (
     configure_logging_stream,
 )
 from bootstrap.init_workspace import InitSummary, init_workspace
+from bootstrap.paths import ensure_repository_root_importable
 from core.common.workspace import resolve_default_workspace
 from core.net.http import SharedHttpResources
 from desktop_bridge import DesktopBridgeServer
@@ -126,6 +127,10 @@ async def serve_bridge(
 
 def main(argv: list[str] | None = None) -> int:
     """解析命令行参数并执行对应的 runtime 入口。"""
+    # 插件包在仓库顶层 plugins/，而本进程的 sys.path[0] 只是脚本目录
+    # apps/backend；插件与默认记忆引擎都用 plugins.<id>.<module> 绝对导入，
+    # 因此入口必须先把仓库根挂上，否则开发态下插件会在导入期全部失败。
+    ensure_repository_root_importable()
     configure_logging_stream(sys.stderr)
     args = _build_argument_parser().parse_args(argv)
     config_path = str(args.config)

@@ -16,7 +16,7 @@
     "apps/backend/desktop_bridge",
     "apps/backend/infra",
     "apps/backend/memory2",
-    "apps/backend/plugins",
+    "plugins",
     "apps/backend/proactive_v2",
     "apps/backend/prompts",
     "apps/backend/session",
@@ -27,6 +27,7 @@
     ".venv",
     ".venv-test",
     "tests",
+    "plugins/*/tests",
     "private_tests",
     "benchmarks"
   ],

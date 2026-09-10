@@ -232,7 +232,7 @@ Optimizer 定时任务
 
 ### 调用点汇总
 
-所有不在 `apps/backend/plugins/default_memory/` 下的真实调用点：
+所有不在 `plugins/default_memory/` 下的真实调用点：
 
 | 位置 | 行 | 方法 | 说明 |
 |------|-----|------|------|

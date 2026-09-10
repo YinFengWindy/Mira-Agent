@@ -84,7 +84,7 @@ flowchart TD
 ## 工具、Memory 与插件
 
 - `ToolRegistry` 保存工具、schema、风险、always-on、搜索索引和 source metadata；MCP 工具也同步到该 registry。
-- `apps/backend/core/memory/` 定义 MemoryEngine、MemoryQuery、MemoryResult、MemoryMutation 和 runtime protocol；具体策略位于 `apps/backend/plugins/default_memory/`、Akasha 和 `apps/backend/memory2/`。
+- `apps/backend/core/memory/` 定义 MemoryEngine、MemoryQuery、MemoryResult、MemoryMutation 和 runtime protocol；具体策略位于 `plugins/default_memory/`、Akasha 和 `apps/backend/memory2/`。
 - `PluginManager` 同时负责 discover/import/config/context 注入、EventBus handler、tool、tool hook、phase module、proactive gate、channel、initialize rollback 和 terminate。
 - 当前 PluginManager 的 EventBus handler 卸载不完整，目标迁移必须把每个订阅变成可销毁资源。
 
