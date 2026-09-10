@@ -1,7 +1,10 @@
 from typing import Any, cast
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from core.memory.markdown import (
     _MarkdownConsolidationWorker as ConsolidationWorker,
@@ -13,6 +16,54 @@ from core.memory.markdown import (
 class _Resp:
     def __init__(self, content: str) -> None:
         self.content = content
+
+
+class _FixedPayloadHarness:
+    """provider 恒定返回同一份 payload 的 worker，便于断言 draft 的产出。"""
+
+    def __init__(self, payload: str) -> None:
+        self._memory_port = SimpleNamespace(
+            read_long_term=MagicMock(return_value="MEM"),
+            read_history=MagicMock(return_value=""),
+            read_recent_context=MagicMock(return_value=""),
+            append_history_once=MagicMock(return_value=True),
+            append_pending_once=MagicMock(return_value=True),
+            save_from_consolidation=AsyncMock(),
+        )
+        self.last_draft = None
+        self.provider = SimpleNamespace(chat=AsyncMock(return_value=_Resp(payload)))
+        self._consolidation = ConsolidationWorker(
+            profile_maint=cast(Any, self._memory_port),
+            provider=cast(Any, self.provider),
+            model="lm",
+            keep_count=2,
+        )
+
+    async def consolidate(self, session, archive_all: bool = False) -> None:
+        self.last_draft = await self._consolidation.prepare_consolidation(
+            session,
+            archive_all=archive_all,
+        )
+
+
+def _short_window_session(key: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        key=key,
+        last_consolidated=0,
+        messages=[
+            {"role": "user", "content": "u1", "timestamp": "2025-01-01T10:00:00"},
+            {"role": "assistant", "content": "a1", "timestamp": "2025-01-01T10:01:00"},
+            {"role": "tool", "content": "skip", "timestamp": "2025-01-01T10:02:00"},
+            {
+                "role": "assistant",
+                "content": "skip proactive",
+                "timestamp": "2025-01-01T10:03:00",
+                "proactive": True,
+            },
+        ],
+        _channel="telegram",
+        _chat_id=key.split(":", 1)[1],
+    )
 
 
 def _message_text(kwargs) -> str:
@@ -809,6 +860,127 @@ def test_consolidation_recent_context_exception_fails_consolidation():
     assert draft is not None
     assert draft.step == "recent_context"
     assert "TimeoutError" in draft.error
+
+
+@pytest.mark.asyncio
+async def test_prepare_consolidation_collects_history_entries_and_pending_items():
+    harness = _FixedPayloadHarness(
+        json.dumps(
+            {
+                "history_entries": [
+                    "[2025-01-01 10:00] 主题A",
+                    "[2025-01-01 10:02] 主题B",
+                ],
+                "pending_items": [{"tag": "preference", "content": "喜欢 A"}],
+            }
+        )
+    )
+    session = _short_window_session("telegram:1")
+
+    await harness.consolidate(session, archive_all=True)
+
+    assert harness.last_draft is not None
+    assert harness.last_draft.history_entry_payloads == [
+        ("[2025-01-01 10:00] 主题A", 0),
+        ("[2025-01-01 10:02] 主题B", 0),
+    ]
+    assert harness.last_draft.pending_items == "- [preference] 喜欢 A"
+    # draft 只是产出，推进 last_consolidated 是提交阶段的事
+    assert session.last_consolidated == 0
+
+
+@pytest.mark.asyncio
+async def test_prepare_consolidation_schedules_no_background_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """prepare_consolidation 必须全程 await 完，不留后台任务。"""
+    scheduled = []
+    real_create_task = asyncio.create_task
+
+    def _capture_task(coro):
+        task = real_create_task(coro)
+        scheduled.append(task)
+        return task
+
+    monkeypatch.setattr(asyncio, "create_task", _capture_task)
+    harness = _FixedPayloadHarness(
+        json.dumps({"history_entries": ["[2025-01-01 10:00] 主题A"]})
+    )
+
+    await harness.consolidate(_short_window_session("telegram:2"), archive_all=True)
+
+    assert harness.last_draft is not None
+    assert harness.last_draft.history_entry_payloads == [
+        ("[2025-01-01 10:00] 主题A", 0)
+    ]
+    assert scheduled == []
+
+
+@pytest.mark.asyncio
+async def test_prepare_consolidation_returns_none_for_empty_payload():
+    harness = _FixedPayloadHarness("")
+    session = SimpleNamespace(
+        key="s",
+        messages=[{"role": "user", "content": "u"}],
+        last_consolidated=0,
+    )
+
+    await harness.consolidate(session)
+
+    assert harness.last_draft is None
+
+
+@pytest.mark.asyncio
+async def test_long_term_prompt_contains_window_conversation():
+    """合并长期记忆提取调用（第二次 LLM 调用）应包含窗口对话内容。"""
+    captured_prompts: list[str] = []
+    event_payload = json.dumps(
+        {
+            "history_entries": [
+                "[2026-03-17 15:07] 用户询问助手是否记得其开始佩戴 Fitbit 手环的具体时间。"
+            ],
+            "pending_items": [],
+        }
+    )
+
+    async def _capture_chat(*, messages, **kwargs):
+        captured_prompts.append(str(messages[-1]["content"]))
+        return _Resp(event_payload)
+
+    harness = _FixedPayloadHarness(event_payload)
+    harness.provider.chat = _capture_chat
+    harness._memory_port.save_item = AsyncMock(return_value="new:profile-1")
+    session = SimpleNamespace(
+        key="telegram:fitbit",
+        last_consolidated=0,
+        messages=[
+            {
+                "role": "assistant",
+                "content": "嗯，刚看到个挺有意思的消息。",
+                "timestamp": "2026-03-17T15:05:00",
+                "proactive": True,
+            },
+            {
+                "role": "assistant",
+                "content": "嗯，刚看到个挺硬核的更新。",
+                "timestamp": "2026-03-17T15:06:00",
+                "proactive": True,
+            },
+            {
+                "role": "user",
+                "content": "你还记得我什么时候开始戴fitbit手环的吗",
+                "timestamp": "2026-03-17T15:07:00",
+            },
+        ],
+        _channel="telegram",
+        _chat_id="fitbit",
+    )
+
+    await harness.consolidate(session, archive_all=True)
+
+    assert len(captured_prompts) == 1
+    assert "fitbit" in captured_prompts[0].lower()
+    harness._memory_port.save_item.assert_not_awaited()
 
 
 def test_select_recent_history_entries_returns_last_three_chunks():
