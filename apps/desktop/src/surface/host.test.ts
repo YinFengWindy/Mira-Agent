@@ -7,7 +7,9 @@ import {
   surfaceMessageChannel,
   surfacePositionChannel,
   surfaceStateChannel,
+  type DesktopSurfaceHostOptions,
   type SurfaceKey,
+  type SurfaceSettleReason,
   type SurfaceWindowHandle,
 } from "./host.js";
 
@@ -77,19 +79,34 @@ class FakeClock {
   }
 }
 
-function setup(options: { cursor?: () => { x: number; y: number } } = {}) {
+function setup(options: {
+  cursor?: () => { x: number; y: number };
+  displayId?: () => string;
+  onSettled?: DesktopSurfaceHostOptions["onSettled"];
+} = {}) {
   const clock = new FakeClock();
   const windows: FakeWindow[] = [];
   let cursor = { x: 0, y: 0 };
   const host = new DesktopSurfaceHost({
     createWindow: () => { const window = new FakeWindow(); windows.push(window); return window; },
     workAreaFor: () => workArea,
+    displayIdFor: options.displayId,
     cursorScreenPoint: options.cursor ?? (() => cursor),
+    onSettled: options.onSettled,
     now: () => clock.nowMs,
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
   });
   return { host, clock, windows, moveCursor: (next: { x: number; y: number }) => { cursor = next; } };
+}
+
+/** Collects settle notifications, which is how main-process owners track a surface. */
+function settleRecorder() {
+  const settles: { key: SurfaceKey; anchor: { x: number; y: number }; reason: SurfaceSettleReason }[] = [];
+  const onSettled: DesktopSurfaceHostOptions["onSettled"] = (settledKey, placement, reason) => {
+    settles.push({ key: settledKey, anchor: placement.anchor, reason });
+  };
+  return { settles, onSettled, reasons: () => settles.map((settle) => settle.reason) };
 }
 
 test("creating a surface places its body and reports the clamped anchor once", () => {
@@ -364,6 +381,124 @@ test("only the latest retained state is replayed, and transient messages never a
 test("ready on a surface that is already gone is refused rather than crashed on", () => {
   const { host } = setup();
   assert.throws(() => host.markReady(key), DesktopSurfaceError);
+});
+
+test("a surface is revealed only once its renderer reports ready", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  // Showing at create would put an empty transparent always-on-top rectangle
+  // over the desktop until the renderer painted.
+  assert.equal(windows[0].shown, 0);
+
+  host.markReady(key);
+
+  assert.equal(windows[0].shown, 1);
+});
+
+test("a renderer reload does not resurrect a surface the plugin hid", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  host.markReady(key);
+  host.hide(key);
+  assert.equal(windows[0].hidden, true);
+
+  // A reloaded renderer announces itself again; the surface must stay hidden.
+  host.markReady(key);
+
+  assert.equal(windows[0].hidden, true);
+  assert.equal(windows[0].shown, 1);
+
+  host.show(key);
+  host.markReady(key);
+  assert.equal(windows[0].shown, 3);
+});
+
+test("the settle observer is told where a surface came to rest, and why", () => {
+  const recorder = settleRecorder();
+  const { host } = setup({ onSettled: recorder.onSettled });
+
+  host.create(key, spec, { x: 300, y: 400 });
+  host.setPosition(key, { x: 500, y: 600 });
+  host.setExtension(key, { side: "above", size: 60 });
+  host.markReady(key);
+
+  assert.deepEqual(recorder.reasons(), ["create", "position", "extension", "ready"]);
+  assert.deepEqual(recorder.settles.at(-1)?.key, key);
+  assert.deepEqual(recorder.settles.at(-1)?.anchor, { x: 500, y: 600 });
+});
+
+test("the settle observer is not called per drag, glide or tween frame", () => {
+  const recorder = settleRecorder();
+  const { host, clock, windows, moveCursor } = setup({ onSettled: recorder.onSettled });
+  host.create(key, spec, { x: 300, y: 400 });
+
+  moveCursor({ x: 800, y: 700 });
+  host.beginDrag(key, { x: 96, y: 104 });
+  clock.advance(200);
+  assert.deepEqual(recorder.reasons(), ["create"], "cursor following must not notify per frame");
+  assert.ok(windows[0].bounds.x > 300, "the drag should genuinely have moved the window");
+
+  host.endDrag(key, { x: -900, y: 0 });
+  assert.deepEqual(recorder.reasons(), ["create"], "handing over a velocity is not settling");
+  clock.advance(40);
+  assert.deepEqual(recorder.reasons(), ["create"], "glide frames must not notify per frame");
+
+  clock.advance(2_000);
+  assert.deepEqual(recorder.reasons(), ["create", "momentum"], "the glide settles exactly once");
+
+  host.moveTo(key, { x: 100, y: 100 }, 200);
+  clock.advance(100);
+  assert.deepEqual(recorder.reasons(), ["create", "momentum"], "tween frames must not notify per frame");
+  clock.advance(400);
+  assert.deepEqual(recorder.reasons(), ["create", "momentum", "move"]);
+  assert.deepEqual(recorder.settles.at(-1)?.anchor, { x: 100, y: 100 });
+});
+
+test("a drag released without a velocity settles immediately", () => {
+  const recorder = settleRecorder();
+  const { host, clock, moveCursor } = setup({ onSettled: recorder.onSettled });
+  host.create(key, spec, { x: 300, y: 400 });
+
+  moveCursor({ x: 500, y: 500 });
+  host.beginDrag(key, { x: 0, y: 0 });
+  clock.advance(50);
+  host.endDrag(key);
+
+  assert.deepEqual(recorder.reasons(), ["create", "drag"]);
+  assert.deepEqual(recorder.settles.at(-1)?.anchor, { x: 500, y: 500 });
+});
+
+test("a settle observer that throws does not break the surface it observes", () => {
+  let calls = 0;
+  const { host, clock, windows } = setup({
+    onSettled: () => { calls += 1; throw new Error("observer exploded"); },
+  });
+
+  host.create(key, spec, { x: 300, y: 400 });
+  // A throwing observer is called from glide and tween timers; letting it
+  // escape would strand the surface mid-motion with a dead timer.
+  host.endDrag(key, { x: -900, y: 0 });
+  clock.advance(2_000);
+  host.setPosition(key, { x: 10, y: 20 });
+
+  assert.ok(calls >= 3);
+  assert.deepEqual(windows[0].bounds, { x: 10, y: 20, width: 192, height: 208 });
+  assert.equal(host.has(key), true);
+});
+
+test("display identity is separate from the work-area rectangle", () => {
+  const { host } = setup({ displayId: () => "display-7" });
+  host.create(key, spec, { x: 0, y: 0 });
+
+  assert.equal(host.displayId(key), "display-7");
+  assert.deepEqual(host.workArea(key), workArea);
+});
+
+test("display identity falls back to empty rather than throwing when the host cannot report it", () => {
+  const { host } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+
+  assert.equal(host.displayId(key), "");
 });
 
 test("a context menu resolves the chosen id and targets the surface's own window", async () => {

@@ -337,34 +337,14 @@ export type DesktopApi = {
   windowState(): Promise<WindowState>;
   /** Synchronizes the desktop-pet window with the role saved by the detail form. */
   syncPet(forceVisible?: boolean): Promise<void>;
-  /** Dismisses the active safe observation bubble. */
+  /**
+   * Dismisses the active safe observation bubble.
+   *
+   * Still a pet-shaped host call: the pet's surface uses it directly until
+   * observation itself becomes a plugin (#220) and reaches the pet over
+   * plugin-to-plugin messaging (#218).
+   */
   dismissPetObservationBubble(): Promise<void>;
-  /** Starts following the system cursor from the given local pet offset and screen sample. */
-  beginPetDrag(offsetX: number, offsetY: number, screenX?: number, screenY?: number): void;
-  /** Applies an immediate renderer cursor sample during a pet drag. */
-  movePet(screenX: number, screenY: number): void;
-  /** Stops the current pet drag and optionally starts a Codex-style release glide. */
-  endPetDrag(screenX?: number, screenY?: number, velocityX?: number, velocityY?: number): void;
-  /** Restores the main Shiori window from a pet double click. */
-  openPetRole(): void;
-  /** Opens the native context menu for the desktop-pet window. */
-  openPetMenu(): void;
-  /** Announces that the pet renderer has installed its initial-state listeners. */
-  petRendererReady(): void;
-  /** Reports the rendered full-reply bubble height so the main process can resize the transparent pet window. */
-  setPetBubbleHeight(height: number): void;
-  /** Subscribes to package loads from the dedicated desktop-pet window. */
-  onPetLoad(listener: (event: unknown, payload: unknown) => void): void;
-  offPetLoad(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to sprite state transitions from the desktop-pet controller. */
-  onPetPlay(listener: (event: unknown, payload: unknown) => void): void;
-  offPetPlay(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to safe observation status and speech-bubble updates. */
-  onPetObservation(listener: (event: unknown, payload: unknown) => void): void;
-  offPetObservation(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to main-process placement updates for the current full-reply bubble. */
-  onPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
-  offPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
   /**
    * The DesktopSurface capability (#181): plugin-owned desktop windows.
    *

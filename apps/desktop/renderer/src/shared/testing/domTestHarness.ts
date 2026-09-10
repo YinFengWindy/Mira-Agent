@@ -1,9 +1,27 @@
 import { Window } from "happy-dom";
 import { act, type ReactNode } from "react";
 
+export type MountTestComponentOptions = {
+  /**
+   * Extra properties installed on the test window before the component mounts.
+   *
+   * Needed because this harness replaces `globalThis.window` with a fresh
+   * happy-dom window that has no preload bridge on it. Anything reading
+   * `window.miraDesktop` from an effect — which every plugin surface does, for
+   * the host features that are not part of the surface contract — would
+   * otherwise throw on mount, and there is no point after `mountTestComponent`
+   * returns at which a test could still install it, because React has already
+   * flushed its effects.
+   */
+  windowGlobals?: Record<string, unknown>;
+};
+
 /** Mounts a React component with DOM events and restores browser globals after cleanup. */
-export async function mountTestComponent(component: ReactNode) {
+export async function mountTestComponent(component: ReactNode, options: MountTestComponentOptions = {}) {
   const browserWindow = new Window();
+  for (const [name, value] of Object.entries(options.windowGlobals ?? {})) {
+    Object.defineProperty(browserWindow, name, { configurable: true, writable: true, value });
+  }
   const globals = {
     window: browserWindow,
     document: browserWindow.document,
@@ -38,6 +56,8 @@ export async function mountTestComponent(component: ReactNode) {
 
   return {
     container,
+    /** The happy-dom window, for tests that must patch layout the DOM does not implement. */
+    window: browserWindow,
     async render(next: ReactNode) {
       await act(async () => root.render(next));
     },

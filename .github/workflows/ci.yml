@@ -74,3 +74,12 @@ jobs:
 
       - name: Run production build
         run: pnpm run build
+
+      # The only check that proves the two `import.meta.glob` patterns for
+      # colocated plugin UI (`plugins/<id>/ui/` and `plugins/<id>/surface/`)
+      # actually resolve. `pnpm run build` above cannot: a glob matching
+      # nothing builds perfectly. Load-bearing since #181-B, where the desktop
+      # pet's renderer became the first real `surface/` match — a broken glob
+      # would ship a host with no pet in it and every other gate still green.
+      - name: Run plugin UI build smoke check
+        run: pnpm run desktop:test:plugin-ui

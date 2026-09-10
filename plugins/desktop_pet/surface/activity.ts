@@ -1,4 +1,4 @@
-import type { BridgeEvent } from "../../../src/bridge/shared";
+import type { BridgeEvent } from "../../../apps/desktop/src/bridge/shared";
 import type { SpriteState } from "./spriteContract";
 
 type PetActivityState = Extract<SpriteState, "failed" | "waiting" | "running" | "review">;

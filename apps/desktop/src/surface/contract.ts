@@ -65,6 +65,10 @@ export type SurfaceSpec = {
  *
  * Kept here rather than in `window.ts` so the "transparent, frameless, always
  * on top, never node-integrated" contract is assertable without Electron.
+ *
+ * Note the absence of `show: false`: Electron therefore puts a surface on
+ * screen as soon as it is constructed, before its renderer has painted. See
+ * #222 — fixing it needs a real Electron run, not a unit test.
  */
 export function desktopSurfaceWindowOptions(spec: SurfaceSpec, preload: string) {
   return {

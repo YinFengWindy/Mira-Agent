@@ -69,11 +69,25 @@ export function adaptSurfaceWindow(window: BrowserWindow): SurfaceWindowHandle {
 
 /** Resolves the work area of the display a surface currently sits on. */
 export function workAreaForSurface(handle: SurfaceWindowHandle): SurfaceWorkArea {
+  return displayForSurface(handle).workArea;
+}
+
+/**
+ * Stable identity of the display a surface currently sits on.
+ *
+ * Callers remembering a per-display position need identity rather than the
+ * work-area rectangle, which changes when a taskbar moves and can be identical
+ * across two displays.
+ */
+export function displayIdForSurface(handle: SurfaceWindowHandle): string {
+  return String(displayForSurface(handle).id);
+}
+
+function displayForSurface(handle: SurfaceWindowHandle) {
   const window = BrowserWindow.fromId(handle.id);
-  const display = window && !window.isDestroyed()
+  return window && !window.isDestroyed()
     ? screen.getDisplayMatching(window.getBounds())
     : screen.getPrimaryDisplay();
-  return display.workArea;
 }
 
 /** The native cursor location, which only the main process can read. */

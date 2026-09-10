@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { app, BrowserWindow, Menu, powerMonitor, protocol, screen, session, shell } from "electron";
+import { app, BrowserWindow, powerMonitor, protocol, session, shell } from "electron";
 import { localAssetSchemePrivileges, registerLocalAssetProtocol } from "./assets/assetProtocol.js";
 import { DesktopBridgeClient } from "./bridge/bridgeClient.js";
 import { startBridge, wireBridgeEvents } from "./bridge/bridgeLifecycle.js";
@@ -10,6 +10,7 @@ import { DesktopSurfaceHost } from "./surface/host.js";
 import {
   createDesktopSurfaceWindow,
   cursorScreenPoint,
+  displayIdForSurface,
   showSurfaceContextMenu,
   workAreaForSurface,
 } from "./surface/window.js";
@@ -24,10 +25,9 @@ import {
   shouldHideDesktopWindowOnClose as shouldHideDesktopWindowOnClosePolicy,
 } from "./windowLifecycle.js";
 import { registerDesktopContentSecurityPolicy } from "./windowSecurity.js";
-import { DesktopPetController } from "./pet/controller.js";
+import { DesktopPetController, desktopPetSurfaceKey } from "./pet/controller.js";
 import { loadDesktopPetSettings, saveDesktopPetSettings } from "./pet/settings.js";
 import type { DesktopPetActionState, DesktopPetBinding, DesktopPetSettings } from "./pet/types.js";
-import { createDesktopPetWindow, displayForDesktopPet } from "./pet/window.js";
 import { DesktopObservationController } from "./observation/controller.js";
 import { wireRoleReplyBubbles } from "./observation/roleBubble.js";
 import { createVoiceCaptureWindow } from "./voice/window.js";
@@ -56,7 +56,6 @@ let desktopWindow: BrowserWindow | null = null;
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let desktopPetSettings: DesktopPetSettings;
 let desktopPet: DesktopPetController | null = null;
-let desktopSurfaces: DesktopSurfaceHost | null = null;
 let desktopObservation: DesktopObservationController | null = null;
 let voiceRecorder: BrowserVoiceRecorder | null = null;
 let voiceController: DesktopVoiceController | null = null;
@@ -295,14 +294,28 @@ void app.whenReady().then(() => {
   registerDesktopUpdates(app.isPackaged, currentVersion, (error) => {
     logDesktopDiagnostic({ scope: "main", event: "updater.check.failed", payload: { error } });
   });
+  // DesktopSurface (#181). Constructed before the pet controller because the
+  // pet is now one of its clients: since #181-B the pet owns no window code of
+  // its own, it drives a surface. `DesktopPetController` keeps only the pet's
+  // domain state until 181-C/D move that into the plugin too.
+  const desktopSurfaces = new DesktopSurfaceHost({
+    createWindow: (key, spec) => createDesktopSurfaceWindow(key, spec, { openLocalAttachment }),
+    workAreaFor: workAreaForSurface,
+    displayIdFor: displayIdForSurface,
+    cursorScreenPoint,
+    showContextMenu: showSurfaceContextMenu,
+    activateMainWindow: showOrCreateDesktopWindow,
+    onSettled: (key, placement, reason) => {
+      if (key.pluginId !== desktopPetSurfaceKey.pluginId) return;
+      desktopPet?.handleSettled(reason, placement.anchor);
+    },
+  });
+  registerDesktopSurfaceIpc(desktopSurfaces);
   desktopPet = new DesktopPetController({
     getSettings: () => desktopPetSettings,
     saveSettings: persistDesktopPetSettings,
     resolveBinding: resolveDesktopPetBinding,
-    createWindow: createDesktopPetWindow,
-    displayForWindow: displayForDesktopPet,
-    cursorScreenPoint: () => screen.getCursorScreenPoint(),
-    openLocalAttachment,
+    surfaces: desktopSurfaces,
   });
   desktopObservation = new DesktopObservationController({
     pet: desktopPet,
@@ -379,30 +392,12 @@ void app.whenReady().then(() => {
     openLocalAttachment,
     desktopPet,
     desktopObservation,
-    onOpenPetRole: showOrCreateDesktopWindow,
-    onShowPetContextMenu: (petWindow) => {
-      Menu.buildFromTemplate([
-        { label: "显示主窗口", click: showOrCreateDesktopWindow },
-        { label: "隐藏桌宠", click: () => void hideDesktopPet() },
-      ]).popup({ window: petWindow });
-    },
     voiceRecorder: activeVoiceRecorder,
     voiceController: activeVoiceController,
     voicePlayback: activeVoicePlayback,
     onVoiceSettingsChanged: reloadVoiceSettings,
     onPetVisibilityChanged: syncDesktopPetRuntimeState,
   });
-  // DesktopSurface (#181). The desktop pet still runs on its own bespoke
-  // window path above; it moves onto this capability in the follow-up tickets,
-  // at which point `DesktopPetController` and `pet.html` go away.
-  desktopSurfaces = new DesktopSurfaceHost({
-    createWindow: (key, spec) => createDesktopSurfaceWindow(key, spec, { openLocalAttachment }),
-    workAreaFor: workAreaForSurface,
-    cursorScreenPoint,
-    showContextMenu: showSurfaceContextMenu,
-    activateMainWindow: showOrCreateDesktopWindow,
-  });
-  registerDesktopSurfaceIpc(desktopSurfaces);
   getOrCreateDesktopWindow();
   if (trayLifecycleEnabled) {
     desktopTray = createDesktopTray({

@@ -49,10 +49,53 @@ export type SurfaceWindowHandle = {
 
 type TimerHandle = { readonly __surfaceTimer?: never } | ReturnType<typeof setTimeout>;
 
+/**
+ * Why a surface came to rest, for the in-process settle observer.
+ *
+ * A plugin's host-side code often wants to remember where its surface ended
+ * up, but only some of these reasons represent the user moving it: growing a
+ * panel or replaying state on reload lands the surface at the position it
+ * already had, and treating those as a move means rewriting persisted state
+ * every time a bubble appears.
+ */
+export type SurfaceSettleReason =
+  | "create"
+  | "position"
+  | "extension"
+  | "drag"
+  | "momentum"
+  | "move"
+  | "ready";
+
+/** Where a surface settled, as reported to both the renderer and the settle observer. */
+export type SurfacePlacementInfo = {
+  anchor: SurfacePoint;
+  bodyOffset: SurfacePoint;
+  workArea: SurfaceWorkArea;
+};
+
 export type DesktopSurfaceHostOptions = {
   createWindow(key: SurfaceKey, spec: SurfaceSpec): SurfaceWindowHandle;
   workAreaFor(window: SurfaceWindowHandle): SurfaceWorkArea;
+  /**
+   * Stable identity of the display a surface sits on.
+   *
+   * Separate from `workAreaFor` because a work area is a rectangle: two
+   * displays can present the same one, and a single display's changes when a
+   * taskbar moves. Callers that remember a per-display position need identity,
+   * not geometry.
+   */
+  displayIdFor?(window: SurfaceWindowHandle): string;
   cursorScreenPoint(): SurfacePoint;
+  /**
+   * Notified in-process whenever a surface comes to rest.
+   *
+   * Deliberately not an IPC message: this is how main-process code that owns a
+   * surface (today the pet controller, until 181-C/D move it into the plugin)
+   * learns a drag or glide finished, without the renderer having to report a
+   * position it was never told. Never called from a drag, glide or tween frame.
+   */
+  onSettled?(key: SurfaceKey, placement: SurfacePlacementInfo, reason: SurfaceSettleReason): void;
   /** Opens a native context menu over a surface; resolves the chosen id, or null. */
   showContextMenu?(
     window: SurfaceWindowHandle,
@@ -98,6 +141,15 @@ type SurfaceRecord = {
   moveTimer: TimerHandle | null;
   /** Last value passed to `setState`, replayed on `markReady`. See `setState`. */
   retained: { payload: unknown } | null;
+  /**
+   * Whether the plugin wants this surface on screen.
+   *
+   * Tracked so a renderer reload cannot un-hide a surface: the reloaded
+   * renderer calls `ready()` again, and `markReady` shows the window so a
+   * surface never sits there blank. Without this flag that would resurrect a
+   * surface the plugin had explicitly hidden.
+   */
+  visible: boolean;
 };
 
 /**
@@ -151,6 +203,7 @@ export class DesktopSurfaceHost {
       move: null,
       moveTimer: null,
       retained: null,
+      visible: true,
     };
     this.surfaces.set(id, record);
     // A window closed by the OS (or by Electron shutting down) must not leave
@@ -160,7 +213,7 @@ export class DesktopSurfaceHost {
     });
     if (spec.clickThrough) window.setIgnoreMouseEvents(true, { forward: true });
     const applied = this.applyAnchor(record, anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "create");
     return applied;
   }
 
@@ -200,11 +253,14 @@ export class DesktopSurfaceHost {
   }
 
   show(key: SurfaceKey): void {
-    this.require(key).window.showInactive();
+    const record = this.require(key);
+    record.visible = true;
+    record.window.showInactive();
   }
 
   hide(key: SurfaceKey): void {
     const record = this.require(key);
+    record.visible = false;
     this.stopInteractions(record);
     record.window.hide();
   }
@@ -214,7 +270,7 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     this.stopInteractions(record);
     const applied = this.applyAnchor(record, anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "position");
     return applied;
   }
 
@@ -223,13 +279,19 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     record.extension = extension;
     this.applyAnchor(record, record.anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "extension");
   }
 
   /** The work area of the display the surface currently sits on. */
   workArea(key: SurfaceKey): SurfaceWorkArea {
     const record = this.require(key);
     return this.options.workAreaFor(record.window);
+  }
+
+  /** Stable identity of the display the surface currently sits on. */
+  displayId(key: SurfaceKey): string {
+    const record = this.require(key);
+    return this.options.displayIdFor?.(record.window) ?? "";
   }
 
   setClickThrough(key: SurfaceKey, clickThrough: boolean): void {
@@ -269,12 +331,24 @@ export class DesktopSurfaceHost {
    * Handles a surface renderer announcing it has installed its listeners.
    *
    * Replays the retained state and the current placement, so the renderer
-   * never has to ask for either.
+   * never has to ask for either, then re-asserts visibility — with
+   * `showInactive`, so a surface never steals focus.
+   *
+   * The show matters for *reloads*, not for the first paint: a renderer that
+   * reloads calls `ready()` again, and a surface the plugin had hidden must
+   * not come back with it, which is what `visible` guards. It does not
+   * suppress the empty transparent rectangle between `create` and the first
+   * paint — `desktopSurfaceWindowOptions` does not pass `show: false`, so
+   * Electron shows the window as soon as it is constructed. That predates
+   * this capability (the pet's own window behaved the same) and closing it
+   * needs an end-to-end Electron check this repo cannot run in unit tests.
+   * Tracked in #222.
    */
   markReady(key: SurfaceKey): void {
     const record = this.require(key);
     if (record.retained) record.window.send(surfaceStateChannel, record.retained.payload);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "ready");
+    if (record.visible) record.window.showInactive();
   }
 
   /**
@@ -317,7 +391,7 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     this.stopDrag(record);
     if (!velocity || (velocity.x === 0 && velocity.y === 0)) {
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "drag");
       return;
     }
     record.momentum = { position: record.anchor, velocity };
@@ -333,7 +407,7 @@ export class DesktopSurfaceHost {
     this.stopInteractions(record);
     if (durationMs <= 0) {
       this.applyAnchor(record, target);
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "move");
       return;
     }
     const workArea = this.options.workAreaFor(record.window);
@@ -373,7 +447,7 @@ export class DesktopSurfaceHost {
     record.momentum = { position: applied, velocity };
     if (shouldStopSurfaceMomentum(record.momentum, now - record.momentumStartedAtMs, record.momentumConfig)) {
       this.stopMomentum(record);
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "momentum");
       return;
     }
     record.momentumTimer = this.setTimer(() => this.advanceMomentum(record), surfaceMomentumIntervalMs);
@@ -394,7 +468,7 @@ export class DesktopSurfaceHost {
     });
     if (progress >= 1) {
       record.move = null;
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "move");
       return;
     }
     record.moveTimer = this.setTimer(() => this.advanceMove(record), surfaceMoveFrameMs);
@@ -422,14 +496,22 @@ export class DesktopSurfaceHost {
    * primitives exist to avoid. A renderer does not need screen coordinates
    * while the host is moving its window; it needs them once the motion stops.
    */
-  private notifyPlacement(record: SurfaceRecord): void {
+  private notifyPlacement(record: SurfaceRecord, reason: SurfaceSettleReason): void {
     const window = record.window;
     if (window.isDestroyed()) return;
-    window.send(surfacePositionChannel, {
+    const placement: SurfacePlacementInfo = {
       anchor: record.anchor,
       bodyOffset: surfaceBodyOffset(record.extension),
       workArea: this.options.workAreaFor(window),
-    });
+    };
+    window.send(surfacePositionChannel, placement);
+    try {
+      this.options.onSettled?.(record.key, placement, reason);
+    } catch {
+      // An observer that throws must not take down the glide or tween timer
+      // this can be called from, nor leave a surface mid-motion. Whoever
+      // installs the observer owns reporting its own failures.
+    }
   }
 
   /** Re-reads the anchor from the OS, for callers that suspect the window moved behind us. */

@@ -5,7 +5,14 @@ import type { SpriteState } from "./spriteContract";
 /** Lets a proactive message complete its Codex waving acknowledgement before waiting. */
 export const petNotificationAnimationMs = 720;
 
-/** Subscribes to bridge activity while keeping brief notification animation above task status. */
+/**
+ * Subscribes to bridge activity while keeping brief notification animation above task status.
+ *
+ * TEMPORARY COUPLING: reads the host's backend event stream directly through
+ * `window.miraDesktop.onEvent` rather than through this plugin's own RPC
+ * channel. Left as-is deliberately — #181 moves the pet's *window* onto the
+ * DesktopSurface capability and nothing else.
+ */
 export function usePetActivityState(initialState: SpriteState): SpriteState {
   const [state, setState] = useState<SpriteState>(initialState);
   const activitiesRef = useRef<PetActivityTransition["activities"]>({});

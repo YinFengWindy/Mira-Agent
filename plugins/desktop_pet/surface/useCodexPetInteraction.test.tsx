@@ -1,33 +1,43 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { act } from "react";
-import { mountTestComponent } from "../shared/testing/domTestHarness";
+import { mountTestComponent } from "../../../apps/desktop/renderer/src/shared/testing/domTestHarness";
 import { useCodexPetInteraction } from "./useCodexPetInteraction";
+import type { SurfaceHandle } from "../../../apps/desktop/renderer/src/surface/pluginSurfaceRegistry";
 
 type BridgeCall = { name: string; args: unknown[] };
 
-/** Records every bridge call so tests can assert on the exact main-process commands. */
-function fakeBridge(calls: BridgeCall[]) {
+/** Records every surface and voice call so tests assert on the exact commands. */
+function fakeBridges(calls: BridgeCall[]) {
   const record = (name: string) => (...args: unknown[]) => { calls.push({ name, args }); };
-  return {
-    beginPetDrag: record("beginPetDrag"),
-    movePet: record("movePet"),
-    endPetDrag: record("endPetDrag"),
-    openPetRole: record("openPetRole"),
+  const surface = {
+    beginDrag: record("beginDrag"),
+    endDrag: record("endDrag"),
+    setExtension: record("setExtension"),
+    setClickThrough: record("setClickThrough"),
+    onPlacement: () => () => {},
+    onMessage: () => () => {},
+    onState: () => () => {},
+    ready: record("ready"),
+    showContextMenu: async () => null,
+    activateMainWindow: record("activateMainWindow"),
+  } as unknown as SurfaceHandle;
+  const voice = {
     startVoicePress: record("startVoicePress"),
     voicePointerMoved: record("voicePointerMoved"),
     voiceRelease: record("voiceRelease"),
     voiceCancel: record("voiceCancel"),
-  } as unknown as Parameters<typeof useCodexPetInteraction>[0];
+  } as unknown as Parameters<typeof useCodexPetInteraction>[1];
+  return { surface, voice };
 }
 
 async function mountPet() {
   const calls: BridgeCall[] = [];
-  const bridge = fakeBridge(calls);
+  const { surface, voice } = fakeBridges(calls);
   let hook!: ReturnType<typeof useCodexPetInteraction>;
 
   function Harness() {
-    hook = useCodexPetInteraction(bridge);
+    hook = useCodexPetInteraction(surface, voice);
     return <div data-pet="true" {...hook.pointerHandlers} />;
   }
 
@@ -73,14 +83,29 @@ async function mountPet() {
 }
 
 describe("codex pet interaction", () => {
-  it("captures the pointer and starts a drag on primary press", async () => {
+  it("captures the pointer and starts a surface drag on primary press", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
 
       assert.equal(pet.isDragging, true);
-      assert.deepEqual(pet.callNames(), ["startVoicePress", "beginPetDrag"]);
+      assert.deepEqual(pet.callNames(), ["startVoicePress", "beginDrag"]);
       assert.equal(pet.capturedPointers.has(1), true);
+    } finally {
+      await pet.cleanup();
+    }
+  });
+
+  it("hands the host a grab offset rather than a screen position", async () => {
+    const pet = await mountPet();
+    try {
+      await pet.pointer("pointerdown", { screenX: 900, screenY: 700, clientX: 17, clientY: 23 });
+
+      const beginDrag = pet.calls.find((call) => call.name === "beginDrag");
+      // happy-dom reports a zero-origin bounding rect, so the offset equals the
+      // client point. The point of the assertion is the shape: an offset inside
+      // the body, never the screen coordinate the old bridge also passed.
+      assert.deepEqual(beginDrag?.args, [{ x: 17, y: 23 }]);
     } finally {
       await pet.cleanup();
     }
@@ -98,29 +123,30 @@ describe("codex pet interaction", () => {
     }
   });
 
-  it("moves the pet and faces the drag direction once past the slop threshold", async () => {
+  it("faces the drag direction without reporting a position per pointer move", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
       await pet.pointer("pointermove", { screenX: 101, screenY: 200 });
 
-      assert.equal(pet.state, null, "a sub-threshold move must not move the pet");
-      assert.deepEqual(pet.callNames(), ["startVoicePress", "beginPetDrag"]);
+      assert.equal(pet.state, null, "a sub-threshold move must not change the sprite");
+      assert.deepEqual(pet.callNames(), ["startVoicePress", "beginDrag"]);
 
       await pet.pointer("pointermove", { screenX: 140, screenY: 200 });
       assert.equal(pet.state, "running-right");
 
       await pet.pointer("pointermove", { screenX: 60, screenY: 200 });
       assert.equal(pet.state, "running-left");
-      assert.deepEqual(pet.callNames().slice(2), [
-        "voicePointerMoved", "movePet", "voicePointerMoved", "movePet",
-      ]);
+      // The host follows the native cursor itself. A per-move position call
+      // from here is precisely what the DesktopSurface primitives replaced, so
+      // the only calls left are the voice-gesture cancels.
+      assert.deepEqual(pet.callNames().slice(2), ["voicePointerMoved", "voicePointerMoved"]);
     } finally {
       await pet.cleanup();
     }
   });
 
-  it("releases the drag and the pointer capture on pointer up", async () => {
+  it("releases the drag with a throw velocity and drops the pointer capture", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
@@ -129,14 +155,14 @@ describe("codex pet interaction", () => {
 
       assert.equal(pet.isDragging, false);
       assert.equal(pet.state, "jumping");
-      assert.deepEqual(pet.callNames().slice(-2), ["endPetDrag", "voiceRelease"]);
+      assert.deepEqual(pet.callNames().slice(-2), ["endDrag", "voiceRelease"]);
       assert.equal(pet.capturedPointers.has(1), false);
     } finally {
       await pet.cleanup();
     }
   });
 
-  it("cancels the voice press without an end position when the pointer is cancelled", async () => {
+  it("ends the drag without a velocity when the pointer is cancelled", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
@@ -144,7 +170,7 @@ describe("codex pet interaction", () => {
 
       assert.equal(pet.isDragging, false);
       assert.equal(pet.state, null);
-      const endDrag = pet.calls.find((call) => call.name === "endPetDrag");
+      const endDrag = pet.calls.find((call) => call.name === "endDrag");
       assert.deepEqual(endDrag?.args, []);
       assert.deepEqual(pet.callNames().slice(-1), ["voiceCancel"]);
     } finally {
@@ -152,20 +178,20 @@ describe("codex pet interaction", () => {
     }
   });
 
-  it("opens the main window when a double click follows a click that never moved", async () => {
+  it("activates the main window when a double click follows a click that never moved", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
       await pet.pointer("pointerup", { screenX: 100, screenY: 200 });
       await pet.doubleClick();
 
-      assert.equal(pet.callNames().includes("openPetRole"), true);
+      assert.equal(pet.callNames().includes("activateMainWindow"), true);
     } finally {
       await pet.cleanup();
     }
   });
 
-  it("does not open the main window when the gesture before the double click was a drag", async () => {
+  it("does not activate the main window when the gesture before the double click was a drag", async () => {
     const pet = await mountPet();
     try {
       await pet.pointer("pointerdown", { screenX: 100, screenY: 200 });
@@ -173,7 +199,7 @@ describe("codex pet interaction", () => {
       await pet.pointer("pointerup", { screenX: 400, screenY: 200 });
       await pet.doubleClick();
 
-      assert.equal(pet.callNames().includes("openPetRole"), false);
+      assert.equal(pet.callNames().includes("activateMainWindow"), false);
     } finally {
       await pet.cleanup();
     }

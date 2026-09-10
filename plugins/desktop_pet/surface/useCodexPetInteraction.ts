@@ -9,8 +9,20 @@ import {
   type PetPointerSample,
 } from "./interactionContract";
 import type { SpriteState } from "./spriteContract";
+import type { SurfaceHandle } from "../../../apps/desktop/renderer/src/surface/pluginSurfaceRegistry";
 
-type PetDragBridge = Pick<Window["miraDesktop"], "beginPetDrag" | "movePet" | "endPetDrag" | "openPetRole" | "startVoicePress" | "voicePointerMoved" | "voiceRelease" | "voiceCancel">;
+/**
+ * The host voice gesture a pet press doubles as.
+ *
+ * TEMPORARY COUPLING: voice (ASR/TTS) stays in the host by decision — it is
+ * not becoming a plugin — so these calls go straight to `window.miraDesktop`
+ * instead of through the surface. The intended end state is voice offered as a
+ * host capability injected into a surface; tracked in #221.
+ */
+export type PetVoiceBridge = Pick<
+  Window["miraDesktop"],
+  "startVoicePress" | "voicePointerMoved" | "voiceRelease" | "voiceCancel"
+>;
 
 type DragState = {
   pointerId: number;
@@ -20,8 +32,21 @@ type DragState = {
   samples: PetPointerSample[];
 };
 
-/** Maps renderer pointer gestures to Codex pet animation rows and main-process drag commands. */
-export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
+/**
+ * Maps renderer pointer gestures to Codex pet animation rows and DesktopSurface commands.
+ *
+ * Note what is *absent* compared with the pre-#181 version: there is no
+ * per-move "the pointer is now here" call. The host follows the native cursor
+ * itself once `beginDrag` hands it the grab offset, because only the main
+ * process can read a cursor that has left the window — and a renderer
+ * reporting coordinates every frame is exactly the IPC round-trip the surface
+ * primitives exist to avoid. Pointer moves here now only drive the sprite's
+ * facing direction, the throw-velocity samples, and the voice-gesture cancel.
+ */
+export function useCodexPetInteraction(
+  surface: SurfaceHandle | null,
+  voice: PetVoiceBridge | null,
+) {
   const [interactionState, setInteractionState] = useState<SpriteState | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<DragState | null>(null);
@@ -32,9 +57,9 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (event.button !== 0 || !dragBridge) return;
+    if (event.button !== 0 || !surface) return;
     event.preventDefault();
-    dragBridge.startVoicePress();
+    voice?.startVoicePress();
     setNextInteractionState(null);
     lastGestureWasDragRef.current = true;
     dragRef.current = {
@@ -47,12 +72,7 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
     setIsDragging(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     const bounds = event.currentTarget.getBoundingClientRect();
-    dragBridge.beginPetDrag(
-      event.clientX - bounds.left,
-      event.clientY - bounds.top,
-      event.screenX,
-      event.screenY,
-    );
+    surface.beginDrag({ x: event.clientX - bounds.left, y: event.clientY - bounds.top });
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -62,12 +82,11 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
     drag.samples = petDragSamplesWith(drag.samples, sample);
     if (!hasPetDragMoved(drag.previousScreenX, drag.previousScreenY, event.screenX, event.screenY)) return;
     drag.hasMoved = true;
-    dragBridge?.voicePointerMoved();
+    voice?.voicePointerMoved();
     const nextState = petDragState(drag.previousScreenX, event.screenX);
     drag.previousScreenX = event.screenX;
     drag.previousScreenY = event.screenY;
     if (nextState) setNextInteractionState(nextState);
-    dragBridge?.movePet(event.screenX, event.screenY);
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -77,13 +96,10 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
     dragRef.current = null;
     setIsDragging(false);
     lastGestureWasDragRef.current = release.hasMoved;
-    dragBridge?.endPetDrag(
-      release.sample.screenX,
-      release.sample.screenY,
-      release.velocity?.x,
-      release.velocity?.y,
-    );
-    dragBridge?.voiceRelease();
+    // The host already knows where the surface is; only the throw velocity is
+    // news, and only when the release was fast enough to be worth a glide.
+    surface?.endDrag(release.velocity ?? undefined);
+    voice?.voiceRelease();
     setNextInteractionState(petHoverState);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   }
@@ -94,8 +110,8 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
     dragRef.current = null;
     setIsDragging(false);
     lastGestureWasDragRef.current = true;
-    dragBridge?.endPetDrag();
-    dragBridge?.voiceCancel();
+    surface?.endDrag();
+    voice?.voiceCancel();
     setNextInteractionState(null);
   }
 
@@ -108,7 +124,7 @@ export function useCodexPetInteraction(dragBridge: PetDragBridge | null) {
   }
 
   function onDoubleClick(): void {
-    if (petDoubleClickSelectsMainWindow(lastGestureWasDragRef.current)) dragBridge?.openPetRole();
+    if (petDoubleClickSelectsMainWindow(lastGestureWasDragRef.current)) surface?.activateMainWindow();
   }
 
   return {
