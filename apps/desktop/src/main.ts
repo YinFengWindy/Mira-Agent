@@ -29,6 +29,7 @@ import { DesktopVoiceController } from "./voice/controller.js";
 import { VoiceHotkeyController } from "./voice/hotkey.js";
 import { BrowserVoicePlayback } from "./voice/playback.js";
 import { cancelVoiceTurn, createVoicePlaybackCallbacks, handleVoiceBridgeEvent, selectVoiceTurn } from "./voice/bridgeEvents.js";
+import { applyVoiceAvailability, isVoiceHotkeyAvailable } from "./voice/availability.js";
 import { configureSettingsConfigPath, loadSettingsData } from "./settings.js";
 import type { SettingsFormData, VoiceStatePayload } from "./bridge/shared.js";
 
@@ -190,18 +191,19 @@ function publishVoiceState(payload: VoiceStatePayload): void {
 }
 
 function syncVoiceAvailability(cancelCurrentTurn = true): void {
-  if (!voiceHotkey) return;
-  const enabled = Boolean(voiceSettings?.enabled && desktopPet?.isRunning && desktopPetSettings.visible);
-  if (enabled) {
-    voiceHotkey.start();
-    return;
-  }
-  if (cancelCurrentTurn) {
-    voiceHotkey.stop();
-    voiceController?.cancel();
-  } else {
-    voiceHotkey.stopAfterCurrentPress();
-  }
+  const hotkey = voiceHotkey;
+  if (!hotkey) return;
+  const available = isVoiceHotkeyAvailable({
+    voiceEnabled: Boolean(voiceSettings?.enabled),
+    petRunning: Boolean(desktopPet?.isRunning),
+    petVisible: desktopPetSettings.visible,
+  });
+  applyVoiceAvailability(available, cancelCurrentTurn, {
+    start: () => hotkey.start(),
+    stop: () => hotkey.stop(),
+    stopAfterCurrentPress: () => hotkey.stopAfterCurrentPress(),
+    cancelCurrentTurn: () => voiceController?.cancel(),
+  });
 }
 
 function syncDesktopPetRuntimeState(): void {
