@@ -24,6 +24,7 @@ from agent.plugin_host.capabilities import (
 )
 from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle
+from agent.plugin_host.plugin_data import open_plugin_kv
 from agent.plugins.manager import (
     _EVENT_TYPE_MAP,
     _PluginConfigError,
@@ -70,14 +71,19 @@ async def load_legacy_plugin(
         raise LegacyPluginError(f"插件 {record.name} 配置无效: {e}") from e
 
     # 旧 PluginContext 保持原字段，但 event_bus 换成作用域代理修复卸载不解绑缺陷
-    from agent.plugins.context import PluginContext, PluginKVStore
+    from agent.plugins.context import PluginContext
 
     instance.context = PluginContext(
         event_bus=scoped_bus,
         tool_registry=deps.tool_registry,
         plugin_id=plugin_id,
         plugin_dir=record.plugin_dir,
-        kv_store=PluginKVStore(record.plugin_dir / ".kv.json"),
+        # kv 落在 workspace，不再写进插件目录（issue #209）
+        kv_store=open_plugin_kv(
+            workspace=deps.workspace,
+            plugin_id=plugin_id,
+            plugin_dir=record.plugin_dir,
+        ),
         config=plugin_config,
         app_config=deps.app_config,
         light_provider=deps.light_provider,

@@ -32,6 +32,7 @@ from agent.plugin_host.manifest import (
     load_manifest,
     synthesize_legacy_manifest,
 )
+from agent.plugin_host.plugin_data import open_plugin_kv
 from agent.plugin_host.runtime_context import PluginRuntimeContext
 from bus.event_bus import EventBus
 
@@ -208,12 +209,15 @@ class PluginKernel:
 
     def _build_capabilities(self, handle: PluginHandle) -> dict[str, Any]:
         from agent.plugins.config import PluginConfig
-        from agent.plugins.context import PluginKVStore
 
         services = self._services
         builders: dict[str, Any] = {
             "events": lambda: ScopedEventBus(services.event_bus, handle.effects),
-            "kv": lambda: PluginKVStore(handle.record.plugin_dir / ".kv.json"),
+            "kv": lambda: open_plugin_kv(
+                workspace=services.workspace,
+                plugin_id=handle.plugin_id,
+                plugin_dir=handle.record.plugin_dir,
+            ),
             "config": lambda: PluginConfig(
                 services.plugin_configs.get(handle.plugin_id, {})
             ),

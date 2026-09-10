@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from agent.plugin_host import PluginState
+from agent.plugin_host.plugin_data import plugin_data_dir
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 
@@ -94,7 +95,10 @@ async def test_v2_plugin_setup_and_unload(tmp_path: Path):
 
     assert kernel.loaded_count == 1
     assert [m.__class__.__name__ for m in kernel.before_turn_modules] == ["StampModule"]
-    assert (plugin_dir / ".kv.json").exists()
+    # kv 落在 workspace 而不是插件目录（issue #209）；夹具把插件目录的父目录当
+    # workspace，所以这里是 tmp_path/plugins/v2demo/kv.json
+    assert (plugin_data_dir(tmp_path, "v2demo") / "kv.json").exists()
+    assert not (plugin_dir / ".kv.json").exists()
 
     import sys
 

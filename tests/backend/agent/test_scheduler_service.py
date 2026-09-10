@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from agent.scheduler import JobStore, LatencyTracker, SchedulerService
-from tests.conftest import drain_tasks, make_job
+from conftest import drain_tasks, make_job
 
 # ── Helpers ──────────────────────────────────────────────────────
 
