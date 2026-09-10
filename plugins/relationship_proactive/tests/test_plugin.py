@@ -147,6 +147,25 @@ async def test_plugin_applies_shared_scene_observation(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_collects_and_clears_official_proactive_gates(tmp_path: Path):
+    """setup() 必须与旧 proactive_gates() 等价：两个 gate 按声明顺序聚合进
+    kernel.proactive_gates，卸载后整体清空——不只是"能驱动 gate 链"，而是
+    "聚合面本身真的收纳了这两个 gate 且卸载会清掉"。"""
+    runtime = MagicMock()
+    kernel, _bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=runtime)
+
+    await kernel.load_all()
+
+    assert [gate.name for gate in kernel.proactive_gates] == [
+        "relationship.scene_followup",
+        "relationship.loneliness",
+    ]
+
+    _ = await kernel.unload("relationship_proactive")
+    assert kernel.proactive_gates == []
+
+
+@pytest.mark.asyncio
 async def test_setup_contributes_nothing_when_relationship_runtime_absent(tmp_path: Path):
     """relationship_runtime 未接线时插件仍加载成功但不贡献任何 gate/订阅。"""
     kernel, _bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=None)
