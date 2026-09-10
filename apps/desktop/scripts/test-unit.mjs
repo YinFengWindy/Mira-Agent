@@ -9,6 +9,8 @@ const repoRoot = resolve(desktopRoot, "..", "..");
 const testRoots = [
   resolve(desktopRoot, "src"),
   resolve(desktopRoot, "renderer", "src"),
+  // 跨模块集成回归；e2e 脚本用 *.e2e.ts 命名，不会被这里收集
+  resolve(desktopRoot, "tests", "integration"),
 ];
 
 async function findTestFiles(directory) {

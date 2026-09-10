@@ -1,11 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import type { SessionMessage, SessionPayload } from "../shared/types";
-import { buildOptimisticUserChatMessage } from "../chat/chatComposerState";
-import { ensureChatMessageRenderId, reconcileSessionMessageRenderIds } from "../chat/chatMessageIdentity";
-import { mergeIncomingSessionDuringSend, shouldClearPendingUserMessage } from "../chat/chatSessionMerge";
-import { applyChatStreamDelta, finalizeChatCancellation, finishChatStream } from "../chat/chatStreamingState";
-import { mergeOpenedSessionSnapshot, mergeSessionSummaryAndMessage } from "./sessionMessagePagination";
+import type { SessionMessage, SessionPayload } from "../../renderer/src/shared/types";
+import { buildOptimisticUserChatMessage } from "../../renderer/src/chat/chatComposerState";
+import { ensureChatMessageRenderId, reconcileSessionMessageRenderIds } from "../../renderer/src/chat/chatMessageIdentity";
+import { mergeIncomingSessionDuringSend, shouldClearPendingUserMessage } from "../../renderer/src/chat/chatSessionMerge";
+import { applyChatStreamDelta, finalizeChatCancellation, finishChatStream } from "../../renderer/src/chat/chatStreamingState";
+import { mergeOpenedSessionSnapshot, mergeSessionSummaryAndMessage } from "../../renderer/src/app/sessionMessagePagination";
 
 const KEY = "role:mira";
 
