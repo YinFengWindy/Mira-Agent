@@ -106,6 +106,31 @@ describe("SettingsSectionContent", () => {
     assert.doesNotMatch(markup, /agent-key/);
   });
 
+  it("throws instead of silently rendering nothing for an unregistered section id", () => {
+    assert.throws(() => renderToStaticMarkup(
+      <SettingsSectionContent
+        sectionId="does-not-exist"
+        subsectionId="whatever"
+        draft={draft}
+        updateDraft={updateDraft}
+      />,
+    ), /does-not-exist/);
+  });
+
+  it("throws instead of silently rendering nothing for a standalone (non-editor) section id", () => {
+    // "about" and "plugins" are registered as "standalone" — SettingsPage
+    // routes those away before ever reaching SettingsSectionContent, so
+    // reaching here with one is itself the invariant violation being tested.
+    assert.throws(() => renderToStaticMarkup(
+      <SettingsSectionContent
+        sectionId="about"
+        subsectionId="updates"
+        draft={draft}
+        updateDraft={updateDraft}
+      />,
+    ), /about/);
+  });
+
   it("renders the global TTS volume control", () => {
     const markup = renderToStaticMarkup(
       <SettingsSectionContent

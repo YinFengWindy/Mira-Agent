@@ -7,7 +7,6 @@ validation, TOML merging and the round-trip guard itself.
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Callable
 from typing import Any
 
@@ -17,13 +16,15 @@ from agent.plugin_host.config_schema import (
     format_validation_error,
     validate_against,
 )
-from agent.plugin_host.kernel import PluginKernel
+from agent.plugin_host.kernel import PLUGIN_ENABLED_CONFIG_KEY, PluginKernel
 from bootstrap.app import AppRuntime
 from desktop_bridge.plugin_config_text import PluginTableConflict, merge_plugin_table
 from desktop_bridge.runtime.apply import (
     DerivedWrite,
     RuntimeApplyError,
     RuntimeSettingsApplication,
+    assert_plugin_table_isolated,
+    read_plugin_table,
 )
 
 
@@ -42,6 +43,9 @@ class RuntimePluginConfig:
         kernel = self._plugin_kernel()
         schema = kernel.config_schemas.schema_for(plugin_id) if kernel is not None else None
         stored = dict(self._app.config.plugins.get(plugin_id, {}))
+        # 启停状态归宿主所有，由 plugins.list / plugins.setEnabled 管理；
+        # 不要混进配置表单的值里被 renderer 原样回传。
+        _ = stored.pop(PLUGIN_ENABLED_CONFIG_KEY, None)
         if schema is None:
             values = stored
         else:
@@ -102,8 +106,17 @@ class RuntimePluginConfig:
         # 但当幂等 memo 命中时，apply() 根本不会调用这个回调——见
         # RuntimeSettingsApplication.apply 的文档。
         def _merge(current_text: str) -> str:
+            # 启停状态与插件配置同住一张表，但它归宿主所有、不是配置模型的字段，
+            # 校验时会被 pydantic 丢弃。整表替换必须把它显式带回来，否则用户改一次
+            # 插件配置就会把停用的插件重新启用。
+            values_to_write = dict(normalized)
+            current = read_plugin_table(current_text, plugin_id)
+            if PLUGIN_ENABLED_CONFIG_KEY in current:
+                values_to_write[PLUGIN_ENABLED_CONFIG_KEY] = current[
+                    PLUGIN_ENABLED_CONFIG_KEY
+                ]
             try:
-                merged = merge_plugin_table(current_text, plugin_id, normalized)
+                merged = merge_plugin_table(current_text, plugin_id, values_to_write)
             except PluginTableConflict as exc:
                 # 目标插件已经以本模块定位不到的形式存在于文档中（[plugins] 下的
                 # 点分键，或内联表）：照常追加会生成重复的 [plugins.<id>] 声明，
@@ -113,8 +126,7 @@ class RuntimePluginConfig:
                     "plugin_config_unrepresentable",
                     f"插件 {plugin_id} 的配置已经以点分键或内联表的形式写在 "
                     "[plugins] 表下，无法通过设置页定位替换；请先在配置文件中把它"
-                    "整理成独立的 [plugins."
-                    f"{plugin_id}] 表，再通过设置页保存",
+                    f"整理成独立的 [plugins.{plugin_id}] 表，再通过设置页保存",
                 ) from exc
             self._assert_config_round_trip(
                 model_cls, plugin_id, current_text, merged, normalized,
@@ -164,36 +176,13 @@ class RuntimePluginConfig:
            value) and rewrites or drops content that belongs to a *different*
            table entirely.
 
-        The previous guard only re-validated the target plugin's own table,
-        which is blind to (2): a merge that silently mangled an unrelated
-        table would sail through as long as the target table still parsed.
-        So this parses the whole document before and after the merge and
-        requires every key outside ``plugins.<plugin_id>`` to compare equal;
-        any difference anywhere rejects the entire write.
+        (2) is checked by the shared ``assert_plugin_table_isolated`` guard
+        (also used by the plugin enable/disable toggle); (1) is specific to
+        this schema-validated write, so it stays here as an extra check on
+        top of that shared one.
         """
 
-        try:
-            before = tomllib.loads(original_text)
-        except tomllib.TOMLDecodeError as exc:
-            # The pre-merge text is the config the runtime is already running
-            # with, so a decode failure here indicates a bug upstream of this
-            # module rather than a user mistake — but never assume anything
-            # about it and refuse the write regardless.
-            raise RuntimeApplyError(
-                "plugin_config_unrepresentable", f"当前配置无法解析: {exc}",
-            ) from exc
-        try:
-            after = tomllib.loads(merged_text)
-        except tomllib.TOMLDecodeError as exc:
-            raise RuntimeApplyError(
-                "plugin_config_unrepresentable", f"合并后的配置无法解析: {exc}",
-            ) from exc
-        if _without_plugin_table(before, plugin_id) != _without_plugin_table(after, plugin_id):
-            raise RuntimeApplyError(
-                "plugin_config_unrepresentable",
-                "合并后配置中出现了与目标插件无关的改动，写入已取消",
-            )
-        stored = after.get("plugins", {}).get(plugin_id, {})
+        stored = assert_plugin_table_isolated(plugin_id, original_text, merged_text)
         try:
             reread = validate_against(model_cls, stored)
         except ValidationError as exc:
@@ -206,12 +195,3 @@ class RuntimePluginConfig:
                 "plugin_config_unrepresentable",
                 "配置中存在无法用 TOML 表达的值，写入已取消",
             )
-
-
-def _without_plugin_table(document: dict[str, Any], plugin_id: str) -> dict[str, Any]:
-    """Returns a shallow copy of ``document`` with ``plugins.<plugin_id>`` removed."""
-    rest = dict(document)
-    plugins = dict(rest.get("plugins", {}))
-    plugins.pop(plugin_id, None)
-    rest["plugins"] = plugins
-    return rest

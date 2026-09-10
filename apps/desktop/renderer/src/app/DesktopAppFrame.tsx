@@ -15,10 +15,11 @@ import { RoleManagementPage } from "../roles/RoleManagementPage";
 import { RoleSearchDialog } from "../roles/RoleSearchDialog";
 import { RoleSidebar } from "../roles/RoleSidebar";
 import { RoleWorkspaceSidebar, type RoleWorkspaceSectionId } from "../roles/RoleWorkspaceSidebar";
+import { usePluginUiVisibility } from "./usePluginUiVisibility";
 import { SettingsPage } from "../settings/SettingsPage";
 import { SettingsSidebar, type SettingsSectionId } from "../settings/SettingsSidebar";
 import { cx } from "../shared/styles";
-import { NavRail, type NavRailViewId } from "../shell/NavRail";
+import { NavRail, pluginNavRailViewId, type NavRailViewId } from "../shell/NavRail";
 import type {
   AppMainView,
   ChatSendRequest,
@@ -83,6 +84,7 @@ type DesktopAppFrameProps = {
   onOpenSearch: () => void;
   onOpenRolesWorkspace: () => void;
   onOpenStory: () => void;
+  onOpenPluginPage: (pageId: string) => void;
   onOpenRole: (roleId: string) => void;
   onOpenImageStudio: () => void;
   onOpenPromptTagLibrary: () => void;
@@ -220,6 +222,7 @@ export function DesktopAppFrame({
   onOpenSearch,
   onOpenRolesWorkspace,
   onOpenStory,
+  onOpenPluginPage,
   onOpenRole,
   onOpenImageStudio,
   onOpenPromptTagLibrary,
@@ -330,8 +333,19 @@ export function DesktopAppFrame({
           ? "story"
           : mainView.kind === "settings"
             ? "settings"
-            : null;
+            : mainView.kind === "plugin-page"
+              ? pluginNavRailViewId(mainView.pageId)
+              : null;
   const navRailUnreadTotal = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
+  // nav.page entries are compiled in statically (see pluginUiModules.ts); listed here
+  // rather than threaded through props, matching how this frame already owns view
+  // dispatch and keeps the (already very large) prop surface from growing further.
+  // Visibility (hiding a disabled plugin's entries immediately, issue #174 AC 3)
+  // is centralized in usePluginUiVisibility so it isn't recomputed per call site.
+  const { pluginNavPages, settingsSidebarSections, isSectionVisible, resolveVisibleNavPage } = usePluginUiVisibility();
+  const activePluginNavPage = mainView.kind === "plugin-page"
+    ? resolveVisibleNavPage(mainView.pageId)
+    : undefined;
 
   return (
     <div className="app-frame grid h-screen grid-rows-app overflow-hidden bg-transparent">
@@ -358,6 +372,12 @@ export function DesktopAppFrame({
         <NavRail
           activeView={navRailActiveView}
           unreadTotal={navRailUnreadTotal}
+          pluginEntries={pluginNavPages.map((page) => ({
+            pageId: page.id,
+            label: page.label,
+            icon: page.icon,
+            onSelect: () => onOpenPluginPage(page.id),
+          }))}
           onOpenSearch={onOpenSearch}
           onBackToChat={onBackToChat}
           onOpenRolesWorkspace={onOpenRolesWorkspace}
@@ -374,6 +394,7 @@ export function DesktopAppFrame({
         >
           {mainView.kind === "settings" ? (
             <SettingsSidebar
+              sections={settingsSidebarSections}
               activeSection={settingsSection}
               animating={sidebarState.animating && !sidebarState.resizing}
               collapsed={sidebarState.collapsed}
@@ -586,7 +607,11 @@ export function DesktopAppFrame({
             <SettingsPage
               bridgeReady={bridgeReady}
               section={settingsSection}
+              isSectionVisible={isSectionVisible}
             />
+          ) : null}
+          {mainView.kind === "plugin-page" && activePluginNavPage ? (
+            <activePluginNavPage.Component pageId={mainView.pageId} />
           ) : null}
         </main>
       </div>

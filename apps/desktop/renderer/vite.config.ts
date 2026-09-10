@@ -6,11 +6,20 @@ import react from "@vitejs/plugin-react";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const desktopRoot = resolve(here, "..");
+const repositoryRoot = resolve(desktopRoot, "..", "..");
 
 export default defineConfig({
   root: here,
   base: "./",
   plugins: [react()],
+  server: {
+    fs: {
+      // Plugin UI is compiled in from the top-level plugins/<id>/ui/ tree
+      // (see issue #174), which sits outside this Vite root (renderer/);
+      // without this, dev-server requests for those files are refused.
+      allow: [repositoryRoot],
+    },
+  },
   build: {
     outDir: resolve(desktopRoot, "renderer-dist"),
     emptyOutDir: true,

@@ -1,3 +1,4 @@
+import { BridgeError } from "../shared/bridgeInvoke";
 import type { StoryTimeBand } from "./storyTime";
 
 /** A Story entry shown in the launcher. */
@@ -147,12 +148,9 @@ export type StoryCreationInput = {
 };
 
 /** Stable error exposed by the Story bridge client. */
-export class StoryBridgeError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-  ) {
-    super(message);
+export class StoryBridgeError extends BridgeError {
+  constructor(message: string, code: string) {
+    super(message, code);
     this.name = "StoryBridgeError";
   }
 }

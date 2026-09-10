@@ -62,6 +62,9 @@ export function cloneView(view: AppMainView): AppMainView {
   if (view.kind === "role-assets") {
     return { kind: "role-assets", roleId: view.roleId };
   }
+  if (view.kind === "plugin-page") {
+    return { kind: "plugin-page", pageId: view.pageId };
+  }
   return { kind: view.kind };
 }
 
@@ -75,6 +78,9 @@ export function viewsEqual(left: AppMainView, right: AppMainView): boolean {
   }
   if (left.kind === "role-assets" && right.kind === "role-assets") {
     return left.roleId === right.roleId;
+  }
+  if (left.kind === "plugin-page" && right.kind === "plugin-page") {
+    return left.pageId === right.pageId;
   }
   return true;
 }

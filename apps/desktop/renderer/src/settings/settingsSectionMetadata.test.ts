@@ -4,14 +4,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   createInitialSettingsSubsectionState,
+  getSettingsSubsections,
   resolveSettingsSubsectionId,
-  settingsSubsections,
 } from "./settingsSectionMetadata.js";
 
 describe("settingsSectionMetadata", () => {
   it("keeps every configured subsection attached to its owning domain", () => {
-    assert.deepEqual(settingsSubsections.models.map((item) => item.id), ["catalog"]);
-    assert.deepEqual(settingsSubsections.channels.map((item) => item.id), ["telegram", "qq", "qqbot"]);
+    assert.deepEqual(getSettingsSubsections("models").map((item) => item.id), ["catalog"]);
+    assert.deepEqual(getSettingsSubsections("channels").map((item) => item.id), ["telegram", "qq", "qqbot"]);
   });
 
   it("falls back to the first subsection when persisted selection is invalid", () => {

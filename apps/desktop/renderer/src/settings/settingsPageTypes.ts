@@ -1,6 +1,8 @@
+import type { DraftSavePhase } from "../shared/serialDraftQueue";
 import type { SettingsFormData } from "../shared/types";
 
-export type SettingsSavePhase = "idle" | "saving" | "error";
+/** Historical name for `DraftSavePhase`, kept for this domain's existing consumers. */
+export type SettingsSavePhase = DraftSavePhase;
 
 /** Applies one immutable update to the current settings draft. */
 export type SettingsDraftUpdater = (
@@ -12,4 +14,15 @@ export type SettingsSectionEditorProps = {
   draft: SettingsFormData;
   subsectionId: string;
   updateDraft: SettingsDraftUpdater;
+};
+
+/** One tab within a settings section's sub-navigation. */
+export type SettingsSubsection = {
+  id: string;
+  label: string;
+};
+
+/** Props for a settings section that owns its own data (no shared draft). */
+export type StandaloneSettingsSectionProps = {
+  subsectionId: string;
 };

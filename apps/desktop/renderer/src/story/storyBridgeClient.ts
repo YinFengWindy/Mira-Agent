@@ -1,7 +1,6 @@
+import { invokeBridgePayload, type DesktopInvoke } from "../shared/bridgeInvoke";
 import type { StoryCgGallery, StoryCreationInput, StoryDetails, StoryResource, StorySummary } from "./types";
 import { StoryBridgeError } from "./types";
-
-type DesktopInvoke = typeof window.miraDesktop.invoke;
 
 type StorySummaryPayload = {
   story_id: string;
@@ -26,10 +25,8 @@ type StoryCgGalleryPayload = {
   items: StoryResourcePayload[];
 };
 
-async function invokePayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>) {
-  const response = await invoke({ method, payload });
-  if (response.error) throw new StoryBridgeError(response.error.message, response.error.code);
-  return response.payload as T;
+function invokePayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>): Promise<T> {
+  return invokeBridgePayload<T>(invoke, method, payload, StoryBridgeError);
 }
 
 function toStorySummary(story: StorySummaryPayload): StorySummary {
