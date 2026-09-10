@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import numpy as np
 
-import plugins.akasha.core as _core
-import plugins.akasha.replay as _replay
-from plugins.akasha.core import (
+import plugins.akasha.backend.core as _core
+import plugins.akasha.backend.replay as _replay
+from plugins.akasha.backend.core import (
     AkashaCandidate, normalize, build_dense_message_index, dense_candidates,
 )
 

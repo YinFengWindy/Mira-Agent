@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from memory2.store import MemoryStore2
-from plugins.default_memory.engine.lifecycle import DefaultMemoryEngine
+from plugins.default_memory.backend.engine.lifecycle import DefaultMemoryEngine
 
 
 @pytest.mark.asyncio

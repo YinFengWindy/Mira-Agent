@@ -5,4 +5,4 @@
   * fast_dense.install()       —— 向量化 dense_message_candidates
   * dump.dump_to_db(path, store) —— 末尾一次性批量落库（复用 embedding_cache）
 """
-from plugins.akasha.fast import mem_store, graph_fast, fast_dense, dump  # noqa: F401
+from plugins.akasha.backend.fast import mem_store, graph_fast, fast_dense, dump  # noqa: F401

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +18,30 @@ from bus.event_bus import EventBus
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES_DIR = REPOSITORY_ROOT / "tests" / "fixtures" / "plugins"
+
+# 插件包根目录下不属于后端代码、因此不进 backend/ 的条目
+_PACKAGE_LEVEL_ENTRIES = {"manifest.yaml", "plugin.disabled", "_conf_schema.json"}
+
+
+def stage_plugin_fixture(name: str, dest_root: Path) -> Path:
+    """把扁平布局的测试夹具就地重整成内核要求的 `<id>/backend/` 布局。
+
+    `tests/fixtures/plugins/` 服务的是旧 `PluginManager`（扁平 `plugin.py`），
+    而 spec 要求那批存量测试**原样**通过，作为「迁移未破坏行为」的证据，所以
+    夹具本身保持旧形状。新内核要求 backend/ 布局，由这里重整，避免同一份夹具
+    在仓库里留两份逐字重复、日后必然分叉的副本。#184 删除旧系统后，夹具可以
+    直接改成新布局，这个函数随之删除。
+    """
+
+    target = dest_root / name
+    shutil.copytree(FIXTURES_DIR / name, target)
+    backend = target / "backend"
+    backend.mkdir()
+    for item in sorted(target.iterdir()):
+        if item.name == "backend" or item.name in _PACKAGE_LEVEL_ENTRIES:
+            continue
+        shutil.move(str(item), str(backend / item.name))
+    return target
 
 
 @pytest.fixture(autouse=True)

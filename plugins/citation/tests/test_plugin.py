@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_citation_plugin_module() -> Any:
-    path = REPO_ROOT / "plugins" / "citation" / "plugin.py"
+    path = REPO_ROOT / "plugins" / "citation" / "backend" / "plugin.py"
     spec = importlib.util.spec_from_file_location("test_citation_plugin", path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))

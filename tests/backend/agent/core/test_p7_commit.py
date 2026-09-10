@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 def _load_meme_plugin_class() -> Any:
-    path = REPO_ROOT / "plugins" / "meme" / "plugin.py"
+    path = REPO_ROOT / "plugins" / "meme" / "backend" / "plugin.py"
     spec = importlib.util.spec_from_file_location(
         "test_p7_meme_plugin",
         path,

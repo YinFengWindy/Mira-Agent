@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from plugins.akasha.core import (
+from plugins.akasha.backend.core import (
     # Types shared with core
     ActivationEventRow,
     ActivationTrace,
@@ -66,8 +66,8 @@ from core.memory.engine import (
     MemoryToolSpec,
 )
 from memory2.embedder import Embedder
-from plugins.akasha.config import AkashaConfig, resolve_akasha_db_path
-from plugins.akasha.store import AkashaStore
+from plugins.akasha.backend.config import AkashaConfig, resolve_akasha_db_path
+from plugins.akasha.backend.store import AkashaStore
 
 if TYPE_CHECKING:
     from bus.event_bus import EventBus
@@ -108,7 +108,7 @@ class AkashaMemoryEngine:
                 MemoryCapability.SEMANTICS_RICH_MEMORY,
             }
         ),
-        notes={"owner": "plugins.akasha.engine", "truth": "sessions.db/messages"},
+        notes={"owner": "plugins.akasha.backend.engine", "truth": "sessions.db/messages"},
     )
 
     def __init__(
@@ -161,7 +161,7 @@ class AkashaMemoryEngine:
 
     # 启动时自动检查 / 建 FTS IDF 表。缺失或漂移过大时重建。
     def _ensure_idf_table(self) -> None:
-        from plugins.akasha.core import (
+        from plugins.akasha.backend.core import (
             build_idf_table, idf_table_is_stale, load_idf_from_db, set_idf_table,
         )
         sessions_db = str(self._session_db_path)

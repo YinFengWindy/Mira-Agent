@@ -10,7 +10,7 @@ import pytest
 from agent.tools.memorize import MemorizeTool
 from memory2.memorizer import Memorizer
 from memory2.store import MemoryStore2
-from plugins.default_memory.engine import DefaultMemoryEngine
+from plugins.default_memory.backend.engine import DefaultMemoryEngine
 
 
 def _make_default_engine(

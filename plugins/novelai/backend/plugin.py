@@ -23,8 +23,8 @@ from core.integrations.novelai.service import NovelAIService
 from core.integrations.novelai.store import NovelAIStore
 from core.net.http import get_default_http_requester
 from core.roles.store import RoleStore
-from plugins.novelai.auto_cg import AutoCgPolicy
-from plugins.novelai.auto_cg_controller import AutoCgController
+from plugins.novelai.backend.auto_cg import AutoCgPolicy
+from plugins.novelai.backend.auto_cg_controller import AutoCgController
 
 logger = logging.getLogger(__name__)
 

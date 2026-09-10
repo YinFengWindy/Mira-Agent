@@ -8,7 +8,7 @@ from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 from bus.events_lifecycle import DesktopPetActionRequested
 from core.roles.store import RolePetPackage, RoleStore
-from plugins.desktop_pet.tool import DesktopPetActionTool
+from plugins.desktop_pet.backend.tool import DesktopPetActionTool
 
 
 def _build_tool(tmp_path: Path, *, clock_value: list[float]) -> tuple[DesktopPetActionTool, ToolRegistry]:

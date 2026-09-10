@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from agent.plugins import Plugin
 from core.roles.store import RoleStore
-from plugins.desktop_pet.tool import DesktopPetActionTool
+from plugins.desktop_pet.backend.tool import DesktopPetActionTool
 
 
 class DesktopPetPlugin(Plugin):

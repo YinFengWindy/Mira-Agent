@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -11,15 +10,15 @@ from bus.event_bus import EventBus
 from agent.tools.registry import ToolRegistry
 
 from tests.backend.agent.plugin_host.conftest import (
-    FIXTURES_DIR,
     before_turn_ctx,
     make_kernel,
+    stage_plugin_fixture,
 )
 
 
 @pytest.mark.asyncio
 async def test_legacy_decorator_handler_fires_and_unbinds_on_unload(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -36,8 +35,8 @@ async def test_legacy_decorator_handler_fires_and_unbinds_on_unload(tmp_path: Pa
 @pytest.mark.asyncio
 async def test_direct_event_bus_subscription_unbound_on_unload(tmp_path: Path):
     """修复既有缺陷：插件在 initialize 里直接 event_bus.on 且不自行 off。"""
-    plugin_dir = tmp_path / "direct_sub"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "direct_sub" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
@@ -79,7 +78,7 @@ class DirectSub(Plugin):
 
 @pytest.mark.asyncio
 async def test_legacy_tool_registered_then_unregistered(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")
+    stage_plugin_fixture("weather", tmp_path)
     bus = EventBus()
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=bus, tools=tools)
@@ -94,9 +93,9 @@ async def test_legacy_tool_registered_then_unregistered(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_init_failure_rolls_back_only_failed_plugin(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
-    broken_dir = tmp_path / "zbroken"
-    broken_dir.mkdir()
+    stage_plugin_fixture("hello", tmp_path)
+    broken_dir = tmp_path / "zbroken" / "backend"
+    broken_dir.mkdir(parents=True)
     (broken_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
@@ -135,8 +134,8 @@ class Broken(Plugin):
 
 @pytest.mark.asyncio
 async def test_strict_mode_raises_on_init_failure(tmp_path: Path):
-    broken_dir = tmp_path / "broken"
-    broken_dir.mkdir()
+    broken_dir = tmp_path / "broken" / "backend"
+    broken_dir.mkdir(parents=True)
     (broken_dir / "plugin.py").write_text(
         "from agent.plugins import Plugin\n"
         "class Broken(Plugin):\n"
@@ -154,8 +153,8 @@ async def test_strict_mode_raises_on_init_failure(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_terminate_runs_before_unbind(tmp_path: Path):
     """terminate 中插件自行 off 自己的订阅（scene_awareness 模式）不应报错。"""
-    plugin_dir = tmp_path / "self_off"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "self_off" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx

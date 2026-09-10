@@ -112,8 +112,8 @@ class PluginKernel:
             logger.warning("manifest.yaml 读取失败 (%s): %s", child, e)
             manifest = None
         if manifest is None or not manifest.is_v2:
-            # legacy 目录（含旧四字段 manifest）以 plugin.py 为准入条件
-            if not (child / "plugin.py").exists():
+            # legacy 目录（含旧四字段 manifest）以 backend/plugin.py 为准入条件
+            if not (child / "backend" / "plugin.py").exists():
                 return None
             manifest = synthesize_legacy_manifest(child)
         entry_file = child / manifest.entry

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -13,10 +12,10 @@ from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 
 from tests.backend.agent.plugin_host.conftest import (
-    FIXTURES_DIR,
     REPOSITORY_ROOT,
     before_turn_ctx,
     make_kernel,
+    stage_plugin_fixture,
 )
 
 _EXPECTED_TOP_LEVEL_PLUGINS = {
@@ -80,8 +79,8 @@ _V2_MANIFEST = (
 
 def _write_v2_plugin(root: Path) -> Path:
     plugin_dir = root / "v2demo"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(_V2_PLUGIN, encoding="utf-8")
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(_V2_PLUGIN, encoding="utf-8")
     (plugin_dir / "manifest.yaml").write_text(_V2_MANIFEST, encoding="utf-8")
     return plugin_dir
 
@@ -118,8 +117,8 @@ async def test_v2_plugin_setup_and_unload(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_v2_capability_gating(tmp_path: Path):
     plugin_dir = tmp_path / "gated"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
         """
 captured: dict = {}
 
@@ -153,8 +152,8 @@ async def setup(ctx):
 @pytest.mark.asyncio
 async def test_v2_setup_failure_rolls_back_effects(tmp_path: Path):
     plugin_dir = tmp_path / "v2broken"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
 
@@ -185,7 +184,7 @@ async def _on_turn(event):
 
 @pytest.mark.asyncio
 async def test_disabled_marker_skips_plugin(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
@@ -196,14 +195,20 @@ async def test_disabled_marker_skips_plugin(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
-    kernel = make_kernel([FIXTURES_DIR, FIXTURES_DIR], event_bus=EventBus())
+    _ = stage_plugin_fixture("hello", tmp_path)
+    _ = stage_plugin_fixture("weather", tmp_path)
+    kernel = make_kernel([tmp_path, tmp_path], event_bus=EventBus())
+
     records = kernel.discover()
-    assert len({r.name for r in records}) == len(records)
+
+    # 同一目录被列两次，同名插件只应出现一次
+    assert {r.name for r in records} == {"hello", "weather"}
+    assert len(records) == 2
 
 
 @pytest.mark.asyncio
 async def test_runtime_disable_then_enable(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -223,7 +228,7 @@ async def test_runtime_disable_then_enable(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_load_all_is_idempotent(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -237,8 +242,8 @@ async def test_load_all_is_idempotent(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_telegram_bot_commands_aggregated(tmp_path: Path):
-    plugin_dir = tmp_path / "cmds"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "cmds" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         "from agent.plugins import Plugin\n"
         "class Cmds(Plugin):\n"
@@ -254,7 +259,7 @@ async def test_telegram_bot_commands_aggregated(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")
+    stage_plugin_fixture("weather", tmp_path)
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=EventBus(), tools=tools)
     await kernel.load_all()

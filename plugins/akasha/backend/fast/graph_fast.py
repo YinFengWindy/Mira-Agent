@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import math
 
-import plugins.akasha.core as _core
-import plugins.akasha.replay as _replay
-from plugins.akasha.core import (
+import plugins.akasha.backend.core as _core
+import plugins.akasha.backend.replay as _replay
+from plugins.akasha.backend.core import (
     AkashaCandidate, _GraphPathAggregate, GRAPH_DIRECT_BIAS, GRAPH_EXPAND_LIMIT,
     STRENGTH_CAP, effective_edge_weight, has_user_turn as _orig_has_user_turn, recover_resource,
 )

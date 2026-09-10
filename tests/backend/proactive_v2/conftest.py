@@ -23,7 +23,7 @@ from agent.core.proactive_turn.gates import (
     ProactiveGateDecision,
     ProactiveMode,
 )
-from plugins.relationship_proactive.plugin import RelationshipLonelinessGate
+from plugins.relationship_proactive.backend.plugin import RelationshipLonelinessGate
 
 
 # ── FakeStateStore ────────────────────────────────────────────────────────

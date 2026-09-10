@@ -6,7 +6,7 @@ from agent.lifecycle.types import AfterTurnCtx, BeforeTurnCtx
 from agent.plugins import Plugin, on_after_turn, on_before_turn
 from bus.events_lifecycle import ProactiveMessageCommitted
 from core.roles.store import RoleStore
-from plugins.scene_awareness.controller import SceneAwarenessController
+from plugins.scene_awareness.backend.controller import SceneAwarenessController
 
 logger = logging.getLogger(__name__)
 

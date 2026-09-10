@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from plugins.observe.collector import GlobalErrorCollector
+from plugins.observe.backend.collector import GlobalErrorCollector
 
 
 @pytest.mark.asyncio

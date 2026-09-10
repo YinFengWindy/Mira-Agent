@@ -10,11 +10,11 @@ from typing import cast
 
 import pytest
 
-_db = importlib.import_module("plugins.observe.db")
-_events = importlib.import_module("plugins.observe.events")
-_writer = importlib.import_module("plugins.observe.collector")
-_collector = importlib.import_module("plugins.observe.collector")
-_writermod = importlib.import_module("plugins.observe.writer")
+_db = importlib.import_module("plugins.observe.backend.db")
+_events = importlib.import_module("plugins.observe.backend.events")
+_writer = importlib.import_module("plugins.observe.backend.collector")
+_collector = importlib.import_module("plugins.observe.backend.collector")
+_writermod = importlib.import_module("plugins.observe.backend.writer")
 
 open_db = cast(Callable[[Path], sqlite3.Connection], getattr(_db, "open_db"))
 GlobalErrorTrace = getattr(_events, "GlobalErrorTrace")

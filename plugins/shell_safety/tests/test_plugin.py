@@ -38,7 +38,7 @@ def _run(coro: Any) -> Any:
 def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "shell_safety")
+    shutil.copytree(PLUGIN_DIR / "backend", root / "shell_safety")
     return root
 
 

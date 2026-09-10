@@ -165,7 +165,7 @@ def _make_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> Age
 def _tool_loop_guard_hooks() -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
-        shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
+        shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard" / "backend", plugin_dir)
         mgr = PluginManager(plugin_dirs=[Path(tmp)], event_bus=EventBus())
         asyncio.run(mgr.load_all())
         return mgr.tool_hooks

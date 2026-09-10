@@ -102,7 +102,7 @@ def test_dev_launch_makes_top_level_plugins_importable(tmp_path: Path):
         "import main",
         f"code = main.main(['init', '--workspace', {str(workspace)!r},"
         f" '--config', {str(config_path)!r}])",
-        "import plugins.default_memory.config",
+        "import plugins.default_memory.backend.config",
         "print('PLUGINS_IMPORTABLE', code)",
     ])
     result = subprocess.run(

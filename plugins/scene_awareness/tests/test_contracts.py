@@ -3,7 +3,7 @@ from typing import Any, cast
 import pytest
 
 from agent.provider import ToolCall
-from plugins.scene_awareness.contracts import (
+from plugins.scene_awareness.backend.contracts import (
     SCENE_DECISION_TOOL_NAME,
     SceneDecisionProtocolError,
     parse_scene_decision_tool_call,

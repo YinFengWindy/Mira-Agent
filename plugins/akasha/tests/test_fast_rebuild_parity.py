@@ -11,14 +11,14 @@ import numpy as np
 import pytest
 
 try:
-    import plugins.akasha.core as core
-    import plugins.akasha.replay as replay
-    from plugins.akasha.config import AkashaConfig
-    from plugins.akasha.fast import fast_dense, graph_fast
-    from plugins.akasha.fast.dump import dump_to_db
-    from plugins.akasha.fast.mem_store import CapturingMemoryStore
-    from plugins.akasha.replay import AkashaReplayRuntime, ReplayMessage
-    from plugins.akasha.store import AkashaStore
+    import plugins.akasha.backend.core as core
+    import plugins.akasha.backend.replay as replay
+    from plugins.akasha.backend.config import AkashaConfig
+    from plugins.akasha.backend.fast import fast_dense, graph_fast
+    from plugins.akasha.backend.fast.dump import dump_to_db
+    from plugins.akasha.backend.fast.mem_store import CapturingMemoryStore
+    from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage
+    from plugins.akasha.backend.store import AkashaStore
 except Exception:  # pragma: no cover - host 依赖缺失时跳过
     pytest.skip("akasha host 依赖缺失", allow_module_level=True)
 
@@ -274,21 +274,21 @@ def _build_online_path(tmp_path: Path) -> Path:
 
 
 def test_fast_matches_online_turn_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("plugins.akasha.core.get_jieba_keywords", lambda _: "")
+    monkeypatch.setattr("plugins.akasha.backend.core.get_jieba_keywords", lambda _: "")
     online = _snapshot(_build_online_path(tmp_path))
     fast = _snapshot(_build_fast(tmp_path, "online"))
     assert fast == online
 
 
 def test_fast_rebuild_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("plugins.akasha.core.get_jieba_keywords", lambda _: "")
+    monkeypatch.setattr("plugins.akasha.backend.core.get_jieba_keywords", lambda _: "")
     a = _snapshot(_build_fast(tmp_path, "a"))
     b = _snapshot(_build_fast(tmp_path, "b"))
     assert a == b
 
 
 def test_fast_rebuild_restores_global_patches(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("plugins.akasha.core.get_jieba_keywords", lambda _: "")
+    monkeypatch.setattr("plugins.akasha.backend.core.get_jieba_keywords", lambda _: "")
     originals = (
         core.graph_expand_candidates,
         core.has_user_turn,

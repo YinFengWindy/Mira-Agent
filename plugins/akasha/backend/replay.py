@@ -11,8 +11,8 @@ from typing import Protocol, Sequence
 
 import numpy as np
 
-from plugins.akasha.config import AkashaConfig
-from plugins.akasha.core import (
+from plugins.akasha.backend.config import AkashaConfig
+from plugins.akasha.backend.core import (
     ActivationEventRow,
     ActivationTrace,
     ActivationUpdate,
@@ -34,7 +34,7 @@ from plugins.akasha.core import (
     parse_ts_unix,
     turn_key,
 )
-from plugins.akasha.engine import (
+from plugins.akasha.backend.engine import (
     AkashaCard,
     _candidate_signals,
     _card_dedupe_key,

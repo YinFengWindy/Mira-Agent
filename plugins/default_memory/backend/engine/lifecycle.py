@@ -28,7 +28,7 @@ from memory2.post_response_worker import PostResponseMemoryWorker
 from memory2.procedure_tagger import ProcedureTagger
 from memory2.retriever import Retriever
 from memory2.store import VEC_DIM, MemoryStore2
-from plugins.default_memory.config import DefaultMemoryConfig, resolve_memory_db_path
+from plugins.default_memory.backend.config import DefaultMemoryConfig, resolve_memory_db_path
 from bootstrap.runtime.construction import track_build_resource
 
 from .admin import _AdminMixin
@@ -40,7 +40,7 @@ from .query import _QueryMixin
 if TYPE_CHECKING:
     from bus.event_bus import EventBus
 
-logger = logging.getLogger("plugins.default_memory.engine")
+logger = logging.getLogger("plugins.default_memory.backend.engine")
 
 
 def _build_entry_source_ref(base_source_ref: str, entry: str) -> str:
@@ -72,7 +72,7 @@ class DefaultMemoryEngine(
                 MemoryCapability.SEMANTICS_RICH_MEMORY,
             }
         ),
-        notes={"owner": "plugins.default_memory.engine"},
+        notes={"owner": "plugins.default_memory.backend.engine"},
     )
 
     def __init__(

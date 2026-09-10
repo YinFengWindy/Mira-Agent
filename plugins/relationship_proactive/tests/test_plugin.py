@@ -15,7 +15,7 @@ from agent.core.proactive_turn.gates import (
 from agent.plugins.context import PluginContext, PluginKVStore
 from bus.event_bus import EventBus
 from bus.events_lifecycle import SceneObservationCommitted
-from plugins.relationship_proactive.plugin import RelationshipProactivePlugin
+from plugins.relationship_proactive.backend.plugin import RelationshipProactivePlugin
 
 
 def _context() -> ProactiveGateContext:
