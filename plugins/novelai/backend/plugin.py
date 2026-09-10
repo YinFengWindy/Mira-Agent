@@ -135,8 +135,14 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
         generate_tool=tool,
         tool_registry=ctx.tools,
     )
-    ctx.events.on(SceneObservationCommitted, auto_cg_controller.schedule)
+    # 顺序要紧，别调换。`EffectScope.dispose_all` 从尾部 pop，所以**先登记的最后释放**：
+    # `ctx.effect` 放在 `ctx.events.on` 之前，卸载时才会先退订 `SceneObservationCommitted`
+    # 再 `await auto_cg_controller.terminate()`——与 v2 之前的 `terminate()` 一致，那个顺序
+    # 是故意的。反过来的话会漏任务：`terminate()` 只 cancel/await 当时已在 `self._tasks`
+    # 里的任务，而退订还挂着的话，它 await 期间来一条 SceneObservationCommitted 就会经
+    # `schedule()` 起一个新任务，既不会被 cancel 也不会被 await，而 terminate 不会再跑第二次。
     ctx.effect("auto_cg_controller", auto_cg_controller.terminate)
+    ctx.events.on(SceneObservationCommitted, auto_cg_controller.schedule)
 
     ctx.tool_hooks.add_handler(
         lambda event: auto_cg.guard(event.session_key, event.arguments),

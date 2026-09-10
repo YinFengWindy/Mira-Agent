@@ -28,8 +28,19 @@ const initialForm: ImageStudioFormState = {
   model: "nai-diffusion-4-5-curated",
 };
 
-const NOVELAI_DEFAULT_MODEL = "nai-diffusion-4-5-curated";
-const NOVELAI_NSFW_MODEL = "nai-diffusion-4-5-full";
+/**
+ * Fallbacks for the two configured model ids, used only until the plugin's
+ * config has loaded.
+ *
+ * `default_model` / `nsfw_model` are real fields on `NovelAIConfig`, so the
+ * schema-generated settings section renders them as editable. Resolving the
+ * model from the config draft rather than from these constants is what keeps
+ * an edited value from being silently ignored here — before #180 those fields
+ * existed in `[integrations.novelai]` but no settings UI surfaced them, so the
+ * hardcoded literals happened to agree with the default.
+ */
+const NOVELAI_DEFAULT_MODEL_FALLBACK = "nai-diffusion-4-5-curated";
+const NOVELAI_NSFW_MODEL_FALLBACK = "nai-diffusion-4-5-full";
 
 function parsePositiveInteger(value: string): number | null {
   if (!value.trim()) return null;
@@ -127,11 +138,17 @@ export function useImageStudioState({ client, activeRole, roles }: UseImageStudi
   }, [activeRole?.id, roles]);
 
   const resolvedMode = form.baseImagePath.trim() ? "img2img" : "txt2img";
+  const configuredDefaultModel = typeof config.draft?.default_model === "string"
+    ? config.draft.default_model
+    : "";
+  const configuredNsfwModel = typeof config.draft?.nsfw_model === "string"
+    ? config.draft.nsfw_model
+    : "";
   const resolvedModel = useMemo(() => (
     nsfwEnabled
-      ? NOVELAI_NSFW_MODEL
-      : NOVELAI_DEFAULT_MODEL
-  ), [nsfwEnabled]);
+      ? configuredNsfwModel || NOVELAI_NSFW_MODEL_FALLBACK
+      : configuredDefaultModel || NOVELAI_DEFAULT_MODEL_FALLBACK
+  ), [configuredDefaultModel, configuredNsfwModel, nsfwEnabled]);
 
   const validationError = useMemo(() => {
     if (resolvedMode === "img2img" && !form.baseImagePath.trim()) {
