@@ -11,6 +11,9 @@ export type SurfacePlacement = {
   workArea: { x: number; y: number; width: number; height: number };
 };
 
+/** One entry of the native context menu a surface can ask the host to open. */
+export type SurfaceMenuItem = { id: string; label: string };
+
 /**
  * The self-directed half of the DesktopSurface capability, handed to a
  * plugin's surface component.
@@ -40,7 +43,7 @@ export type SurfaceHandle = {
    */
   ready(): void;
   /** Opens a native context menu over this surface; resolves the chosen id, or null. */
-  showContextMenu(items: { id: string; label: string }[]): Promise<string | null>;
+  showContextMenu(items: SurfaceMenuItem[]): Promise<string | null>;
   /** Brings the main application window forward. */
   activateMainWindow(): void;
 };
