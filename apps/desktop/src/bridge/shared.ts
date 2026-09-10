@@ -162,14 +162,6 @@ export type SettingsFormData = {
     embeddingBaseUrl: string;
     outputDimensionality: string;
   };
-  integrations: {
-    novelaiEnabled: boolean;
-    novelaiToken: string;
-    novelaiNsfwEnabled: boolean;
-    novelaiAddQualityTags: boolean;
-    novelaiUndesiredContentPreset: number;
-    novelaiAutoWritebackRoleAssets: boolean;
-  };
   voice: {
     enabled: boolean;
     hotkey: string;

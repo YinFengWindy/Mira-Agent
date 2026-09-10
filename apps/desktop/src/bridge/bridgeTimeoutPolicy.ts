@@ -11,8 +11,11 @@ export const bridgeTimeoutPolicy = Object.freeze({
 });
 
 const imageGenerationMethods = new Set([
-  "novelai.generate",
-  "novelai.regenerateMessageMedia",
+  // Issue #180: novelai's generation methods moved onto the plugin RPC
+  // namespace (plugin.<id>.<method>), called through the injected
+  // PluginRpcClient which always prefixes with "plugin.novelai.".
+  "plugin.novelai.generate",
+  "plugin.novelai.regenerateMessageMedia",
   "roles.differences.generate",
 ]);
 

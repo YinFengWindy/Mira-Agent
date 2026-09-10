@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.integrations.novelai.store import NovelAIStore
+from plugins.novelai.backend.store import NovelAIStore
 
 
 def _write_generation_source(

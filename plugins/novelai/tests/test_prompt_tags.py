@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from core.integrations.novelai.prompt_tags import PromptTagStore
+from plugins.novelai.backend.prompt_tags import PromptTagStore
 
 
 def _entry(**overrides: object) -> dict[str, object]:

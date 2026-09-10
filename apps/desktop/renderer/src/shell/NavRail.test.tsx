@@ -13,7 +13,6 @@ function renderRail(overrides?: Partial<Parameters<typeof NavRail>[0]>) {
       onOpenSearch={() => undefined}
       onBackToChat={() => undefined}
       onOpenRolesWorkspace={() => undefined}
-      onOpenImageStudio={() => undefined}
       onOpenStory={() => undefined}
       onOpenSettings={() => undefined}
       {...overrides}
@@ -22,9 +21,9 @@ function renderRail(overrides?: Partial<Parameters<typeof NavRail>[0]>) {
 }
 
 describe("NavRail", () => {
-  it("renders the six primary navigation entries in order", () => {
+  it("renders the five primary navigation entries in order", () => {
     const markup = renderRail();
-    const labels = ["搜索", "消息", "角色", "生图", "故事", "设置"];
+    const labels = ["搜索", "消息", "角色", "故事", "设置"];
 
     for (const label of labels) {
       assert.match(markup, new RegExp(`aria-label="${label}"`));

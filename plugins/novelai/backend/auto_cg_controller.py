@@ -3,20 +3,30 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
-from agent.tools.image_generate import GenerateImageTool
-from agent.tools.registry import ToolRegistry
 from bus.events_lifecycle import SceneObservationCommitted
-from core.integrations.novelai.models import NovelAISettings
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
+from plugins.novelai.backend.models import NovelAISettings
+from plugins.novelai.backend.tool import GenerateImageTool
 
 logger = logging.getLogger(__name__)
 
 _MAX_GENERATION_RETRIES = 1
 _REQUIRED_TRANSITIONS = {"started", "changed"}
+
+
+class _ToolLookup(Protocol):
+    """Structural type for the one thing this controller needs: tool lookup.
+
+    Satisfied by both the raw ``ToolRegistry`` and the ``ToolsCapability``
+    wrapper the v2 plugin runtime hands out (``ctx.tools``) — tests build the
+    former directly, ``plugin.py`` passes the latter.
+    """
+
+    def get_tool(self, name: str) -> Any: ...
 
 
 class AutoCgController:
@@ -30,7 +40,7 @@ class AutoCgController:
         policy: AutoCgPolicy,
         session_manager: Any,
         generate_tool: GenerateImageTool,
-        tool_registry: ToolRegistry,
+        tool_registry: _ToolLookup,
     ) -> None:
         self._settings = settings
         self._role_store = role_store

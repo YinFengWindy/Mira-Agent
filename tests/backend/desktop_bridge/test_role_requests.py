@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -20,16 +21,18 @@ def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     image.save(path)
 
 
-class FakeNovelAI:
+class FakeImageTool:
+    """Fakes the shared ``generate_image`` tool's JSON-string contract."""
+
     def __init__(self, output_dir: Path) -> None:
         self.output_dir = output_dir
         self.index = 0
 
-    async def generate(self, _request):
+    async def execute(self, **_kwargs) -> str:
         self.index += 1
         output = self.output_dir / f"generated-{self.index}.png"
         _write_image(output, (210, 80, 110))
-        return SimpleNamespace(output_paths=[str(output)])
+        return json.dumps({"output_paths": [str(output)]})
 
 
 @pytest.mark.asyncio
@@ -162,7 +165,7 @@ async def test_role_difference_rpc_publishes_progress_and_returns_updated_role(
         session_manager=session_manager,
         agent_loop=SimpleNamespace(process_direct=AsyncMock()),
         event_bus=EventBus(),
-        novelai_service=FakeNovelAI(generated_dir),
+        image_tool=FakeImageTool(generated_dir),
     )
     events: list[dict] = []
     service.add_event_listener(events.append)

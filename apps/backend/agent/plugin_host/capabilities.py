@@ -107,6 +107,25 @@ class ToolsCapability:
         if name in self._contributions.tool_names:
             self._contributions.tool_names.remove(name)
 
+    def get_tool(self, name: str) -> Any:
+        """Looks up another tool by name (e.g. to invoke it directly).
+
+        Read-only passthrough to the underlying ``ToolRegistry`` — unlike
+        ``register``, there is no lifecycle to own here, so this does not need
+        an ``EffectScope`` entry. Registration itself must still go through
+        ``register`` above so the tool is reclaimed on unload; this only lets
+        a plugin look up and call a tool (its own or another's).
+        """
+        if self._registry is None:
+            return None
+        return self._registry.get_tool(name)
+
+    def get_context(self) -> dict[str, str]:
+        """Returns the current tool-call context (read-only passthrough)."""
+        if self._registry is None:
+            return {}
+        return self._registry.get_context()
+
 
 class LifecycleCapability:
     """向 Shiori 定义的 phase 槽位贡献模块；槽位顺序语义仍由核心拥有。"""

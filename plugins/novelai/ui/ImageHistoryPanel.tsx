@@ -1,5 +1,5 @@
-import { toFileUrl } from "../shared/format";
-import { cx } from "../shared/styles";
+import { toFileUrl } from "../../../apps/desktop/renderer/src/shared/format";
+import { cx } from "../../../apps/desktop/renderer/src/shared/styles";
 import type { ImageHistoryRecord } from "./types";
 
 type ImageHistoryPanelProps = {

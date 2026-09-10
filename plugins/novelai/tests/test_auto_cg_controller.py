@@ -10,7 +10,7 @@ from agent.plugins.context import PluginKVStore
 from agent.tools.message_push import MessagePushTool
 from agent.tools.registry import ToolRegistry
 from bus.events_lifecycle import SceneObservationCommitted
-from core.integrations.novelai.models import NovelAISettings
+from plugins.novelai.backend.models import NovelAISettings
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
 from plugins.novelai.backend.auto_cg_controller import AutoCgController
 from bootstrap.runtime.generations import RuntimeCandidate

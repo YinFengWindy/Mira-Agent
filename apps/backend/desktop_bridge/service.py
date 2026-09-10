@@ -6,7 +6,7 @@ from core.common.cleanup import run_cleanup_steps
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 from agent.looping.core import AgentLoop
 from agent.plugin_host.rpc import PluginRpcRegistry
@@ -18,14 +18,6 @@ from bus.events_lifecycle import (
     TurnCommitted,
 )
 from conversation.service import ConversationService
-from core.integrations.novelai import (
-    NovelAIClient,
-    NovelAIService,
-    NovelAIStore,
-    PromptTagStore,
-)
-from core.integrations.novelai.models import NovelAISettings
-from core.net.http import get_default_http_requester
 from core.roles import (
     RoleAggregateService,
     RolePetPackageService,
@@ -37,8 +29,6 @@ from core.roles.model_runtime import ModelConfigurationError, RoleModelRuntime
 from desktop_bridge.app_service import DesktopAppService
 from desktop_bridge.chat_requests import DesktopChatRequestHandler
 from desktop_bridge.chat_service import ChatTurnBusyError, DesktopChatService
-from desktop_bridge.image_requests import DesktopImageRequestHandler
-from desktop_bridge.image_service import DesktopImageService
 from desktop_bridge.method_policy import MethodPolicy, resolve_plugin_method_policy
 from desktop_bridge.models import BridgeError, BridgeEvent, BridgeResponse
 from desktop_bridge.plugin_requests import DesktopPluginRequestHandler
@@ -93,8 +83,6 @@ class DesktopBridgeService:
         event_bus: EventBus,
         role_service: RoleAggregateService | None = None,
         config: Any = None,
-        novelai_service: NovelAIService | None = None,
-        novelai_store: NovelAIStore | None = None,
         push_tool: MessagePushTool | None = None,
         relationship_runtime: RoleRelationshipRuntimeService | None = None,
         presence: Any | None = None,
@@ -205,20 +193,12 @@ class DesktopBridgeService:
             ),
         )
         self.voice_assets = self.voice_handler.assets
-        self.novelai_store = novelai_store or NovelAIStore(workspace)
-        self.prompt_tag_store = PromptTagStore(workspace)
-        self.novelai_service = novelai_service or self._build_novelai_service()
+        # 生图能力（服务层、工具、桥接方法）在 issue #180 全量归位为 novelai 插件；
+        # 角色差分生成改经 generate_image 工具调用，不再直接持有 NovelAI 服务。
         self.role_difference_service = RoleDifferenceGenerationService(
             role_store=self.role_store,
-            novelai_service=self.novelai_service,
+            image_tool=image_tool,
             workspace=self.workspace,
-        )
-        self.image_service = DesktopImageService(
-            role_service=self.role_service,
-            session_manager=session_manager,
-            novelai_service=self.novelai_service,
-            novelai_store=self.novelai_store,
-            prompt_tag_store=self.prompt_tag_store,
         )
         self.story_simulation = StorySimulationHandler(
             workspace=workspace,
@@ -256,11 +236,6 @@ class DesktopBridgeService:
                 start_chat_turn=lambda **kwargs: self._start_chat_turn(**kwargs),
                 session_presenter=self.session_presenter,
                 sanitize_voice_metrics=_sanitize_voice_metrics,
-            ),
-            images=DesktopImageRequestHandler(
-                image_service=self.image_service,
-                session_presenter=self.session_presenter,
-                emit_session_updated=self._emit_session_updated,
             ),
             voice=self.voice_handler,
             stories=self.story_simulation,
@@ -627,24 +602,6 @@ class DesktopBridgeService:
 
     def _sync_desktop_session_thread(self, session: Session, *, role_id: str) -> None:
         self.app_service.sync_desktop_session_thread(session, role_id=role_id)
-
-    def _build_novelai_service(self) -> NovelAIService | None:
-        if self.config is None:
-            return None
-        settings = cast(
-            NovelAISettings,
-            getattr(self.config, "novelai", NovelAISettings()),
-        )
-        return NovelAIService(
-            settings=settings,
-            client=NovelAIClient(
-                get_default_http_requester("external_default"),
-                settings,
-            ),
-            store=self.novelai_store,
-            role_store=self.role_store,
-            workspace=self.workspace,
-        )
 
     async def handle(
         self,

@@ -43,9 +43,20 @@ export type StandaloneSettingsSectionEntry = {
 
 export type SettingsSectionEntry = EditorSettingsSectionEntry | StandaloneSettingsSectionEntry;
 
-/** Props injected into a plugin-contributed full-page navigation surface. */
+/**
+ * Props injected into a plugin-contributed full-page navigation surface.
+ *
+ * `activeRoleId` mirrors the shell's own "role currently open in chat"
+ * state (`DesktopAppFrame`'s own `activeRoleId` prop) — it is ambient
+ * context every nav.page occupant may want (e.g. to prefill a form with the
+ * role the user was just chatting with), not something specific to one
+ * plugin. It is optional and best-effort: it reflects whatever role was
+ * last opened via chat, empty string when none has been, and is not
+ * threaded to any other plugin surface (settings.section, DesktopSurface).
+ */
 export type PluginNavPageProps = {
   pageId: string;
+  activeRoleId?: string;
 };
 
 export type NavPageEntry = {

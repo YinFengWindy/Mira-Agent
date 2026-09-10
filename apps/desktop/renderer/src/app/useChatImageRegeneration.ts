@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import type { ChatImageHistoryEntry } from "../chat/chatImageHistory";
+import { createPluginRpcClient } from "../plugins/pluginBridgeClient";
 import type { SessionMessage, SessionPayload, SessionSummary } from "../shared/types";
 import {
   mergeSessionSummaryAndMessage,
   parseSessionMessageUpdatePayload,
 } from "./useDesktopSessionState";
+
+const novelAiClient = createPluginRpcClient("novelai");
 
 type UseChatImageRegenerationArgs = {
   activeSessionKey: string;
@@ -50,19 +53,12 @@ export function useChatImageRegeneration({
     setRegeneratingKeys(new Set(regeneratingKeysRef.current));
     setError("");
     try {
-      const res = await window.miraDesktop.invoke({
-        method: "novelai.regenerateMessageMedia",
-        payload: {
-          session_key: targetSessionKey,
-          message_id: target.messageId,
-          media_index: target.mediaIndex,
-        },
+      const payload = await novelAiClient.call<Record<string, unknown>>("regenerateMessageMedia", {
+        session_key: targetSessionKey,
+        message_id: target.messageId,
+        media_index: target.mediaIndex,
       });
-      if (res.error) {
-        setError(res.error.message);
-        return;
-      }
-      const update = parseSessionMessageUpdatePayload(res.payload);
+      const update = parseSessionMessageUpdatePayload(payload);
       if (!update || !update.message || update.session.key !== targetSessionKey) {
         setError("重新生成返回了不匹配的会话。");
         return;

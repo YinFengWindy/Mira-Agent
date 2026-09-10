@@ -1,109 +1,56 @@
+"""novelai 插件装配：生图工具、自动 CG、桥接 RPC 与配置全部收拢在这里。
+
+v2 插件（issue #180）：不再继承旧 ``Plugin`` ABC，改为 ``setup(ctx)`` 一次性
+装配。``on_tool_pre`` / ``on_tool_result`` / ``on_after_reasoning`` 三个旧装饰器
+底层都只是把处理函数登记进事件总线（见 ``agent.plugin_host.legacy``），
+v2 下用 ``ctx.events.on`` / ``ctx.tool_hooks.add_handler`` 直接登记，行为完全
+等价，只是登记方式从"扫描装饰器元数据"变成"setup() 里显式调用"。
+"""
+
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from agent.lifecycle.types import (
     AfterReasoningCtx,
     AfterToolResultCtx,
-    PreToolCtx,
 )
-from agent.plugins import (
-    Plugin,
-    on_after_reasoning,
-    on_tool_pre,
-    on_tool_result,
-)
-from agent.tools.image_generate import GenerateImageTool
 from bus.events_lifecycle import SceneObservationCommitted
-from core.integrations.novelai.client import NovelAIClient
-from core.integrations.novelai.models import NovelAISettings
-from core.integrations.novelai.service import NovelAIService
-from core.integrations.novelai.store import NovelAIStore
 from core.net.http import get_default_http_requester
 from core.roles.store import RoleStore
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
 from plugins.novelai.backend.auto_cg_controller import AutoCgController
+from plugins.novelai.backend.client import NovelAIClient
+from plugins.novelai.backend.config import NovelAIConfig
+from plugins.novelai.backend.models import NovelAISettings
+from plugins.novelai.backend.prompt_tags import PromptTagStore
+from plugins.novelai.backend.rpc import NovelAIRpcHandlers
+from plugins.novelai.backend.service import NovelAIService
+from plugins.novelai.backend.store import NovelAIStore
+from plugins.novelai.backend.tool import GenerateImageTool
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 logger = logging.getLogger(__name__)
 
 
-class NovelAIPlugin(Plugin):
-    """Register the NovelAI image generation tool and attach generated media."""
+class _MediaTracker:
+    """Attaches media produced by ``generate_image`` to the reply that follows it.
 
-    name = "novelai"
+    Ported unchanged from the legacy ``NovelAIPlugin``: a tool result can be
+    produced well before ``after_reasoning`` runs, and a subsequent
+    ``message_push`` may already have delivered the same media (automatic
+    scene CG), so pending media is tracked per session and consumed once by
+    whichever happens first.
+    """
 
-    async def initialize(self) -> None:
-        workspace = self.context.workspace
-        if workspace is None:
-            raise RuntimeError("NovelAI 插件需要 workspace")
-        app_config = self.context.app_config
-        settings = cast(
-            NovelAISettings,
-            getattr(app_config, "novelai", NovelAISettings()),
-        )
-        self._settings = settings
-        role_store = RoleStore(workspace)
-        service = NovelAIService(
-            settings=settings,
-            client=NovelAIClient(
-                get_default_http_requester("external_default"),
-                settings,
-            ),
-            store=NovelAIStore(workspace),
-            role_store=role_store,
-            workspace=workspace,
-        )
-        self._tool = GenerateImageTool(
-            service,
-            context_provider=self.context.tool_registry.get_context,
-        )
-        self._auto_cg = AutoCgPolicy(self.context.kv_store)
-        self._auto_cg_controller = AutoCgController(
-            settings=settings,
-            role_store=role_store,
-            policy=self._auto_cg,
-            session_manager=self.context.session_manager,
-            generate_tool=self._tool,
-            tool_registry=self.context.tool_registry,
-        )
-        self._scene_handler = self._handle_scene_observation
-        self.context.event_bus.on(SceneObservationCommitted, self._scene_handler)
+    def __init__(self, auto_cg: AutoCgPolicy) -> None:
+        self._auto_cg = auto_cg
         self._pending_media: dict[str, list[str]] = {}
-        self.context.tool_registry.register(
-            self._tool,
-            risk="external-side-effect",
-            always_on=True,
-            search_hint="生图 生成图片 NovelAI 立绘 场景图",
-            source_type="plugin",
-            source_name=self.name,
-        )
 
-    def _handle_scene_observation(self, event: SceneObservationCommitted) -> None:
-        self._auto_cg_controller.schedule(event)
-
-    @on_tool_pre(tool_name="generate_image")
-    async def guard_auto_cg(
-        self,
-        event: PreToolCtx,
-    ):
-        """Enforce cooldown and scene deduplication before automatic CG calls."""
-
-        return self._auto_cg.guard(event.session_key, event.arguments)
-
-    async def terminate(self) -> None:
-        handler = getattr(self, "_scene_handler", None)
-        if handler is not None:
-            self.context.event_bus.off(SceneObservationCommitted, handler)
-        controller = getattr(self, "_auto_cg_controller", None)
-        if controller is not None:
-            await controller.terminate()
-        tool = getattr(self, "_tool", None)
-        if tool is not None:
-            self.context.tool_registry.unregister(tool.name)
-
-    @on_tool_result()
     async def collect_generated_media(self, event: AfterToolResultCtx) -> None:
         if event.tool_name != "generate_image" or event.status != "success":
             return
@@ -122,7 +69,6 @@ class NovelAIPlugin(Plugin):
             )
         self._pending_media.setdefault(event.session_key, []).extend(media)
 
-    @on_tool_result()
     async def consume_pushed_media(self, event: AfterToolResultCtx) -> None:
         if event.tool_name != "message_push" or event.status != "success":
             return
@@ -141,12 +87,112 @@ class NovelAIPlugin(Plugin):
         else:
             _ = self._pending_media.pop(event.session_key, None)
 
-    @on_after_reasoning()
     async def attach_generated_media(self, ctx: AfterReasoningCtx) -> AfterReasoningCtx:
         media = self._pending_media.pop(ctx.session_key, [])
         if media:
             ctx.media.extend(media)
         return ctx
+
+
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 novelai：生图服务层、工具、自动 CG、桥接 RPC。"""
+
+    workspace = ctx.workspace
+    if workspace is None:
+        raise RuntimeError("NovelAI 插件需要 workspace")
+    settings = _load_settings(ctx)
+    role_store = RoleStore(workspace)
+    novelai_store = NovelAIStore(workspace)
+    prompt_tag_store = PromptTagStore(workspace)
+    service = NovelAIService(
+        settings=settings,
+        client=NovelAIClient(
+            get_default_http_requester("external_default"),
+            settings,
+        ),
+        store=novelai_store,
+        role_store=role_store,
+        workspace=workspace,
+        prompt_tag_store=prompt_tag_store,
+    )
+    tool = GenerateImageTool(
+        service,
+        context_provider=ctx.tools.get_context,
+    )
+    ctx.tools.register(
+        tool,
+        risk="external-side-effect",
+        always_on=True,
+        search_hint="生图 生成图片 NovelAI 立绘 场景图",
+    )
+
+    auto_cg = AutoCgPolicy(ctx.kv)
+    auto_cg_controller = AutoCgController(
+        settings=settings,
+        role_store=role_store,
+        policy=auto_cg,
+        session_manager=ctx.session_manager,
+        generate_tool=tool,
+        tool_registry=ctx.tools,
+    )
+    ctx.events.on(SceneObservationCommitted, auto_cg_controller.schedule)
+    ctx.effect("auto_cg_controller", auto_cg_controller.terminate)
+
+    ctx.tool_hooks.add_handler(
+        lambda event: auto_cg.guard(event.session_key, event.arguments),
+        tool_name_filter="generate_image",
+        handler_name="guard_auto_cg",
+    )
+
+    tracker = _MediaTracker(auto_cg)
+    ctx.events.on(AfterToolResultCtx, tracker.collect_generated_media)
+    ctx.events.on(AfterToolResultCtx, tracker.consume_pushed_media)
+    ctx.events.on(AfterReasoningCtx, tracker.attach_generated_media)
+
+    _register_rpc(
+        ctx,
+        NovelAIRpcHandlers(
+            novelai_service=service,
+            novelai_store=novelai_store,
+            prompt_tag_store=prompt_tag_store,
+            session_manager=ctx.session_manager,
+            relationship_runtime=ctx.relationship_runtime,
+        ),
+    )
+
+
+def _load_settings(ctx: "PluginRuntimeContext") -> NovelAISettings:
+    """Builds the runtime settings dataclass from the validated ``[plugins.novelai]`` config.
+
+    ``ctx.config`` only carries the *overridden* raw values; running them
+    through ``NovelAIConfig`` fills in the rest from its declared defaults
+    (identical to ``NovelAISettings``'s own), so this is the single place that
+    resolves "declared override + default" instead of duplicating defaults.
+    """
+
+    config = NovelAIConfig.model_validate(ctx.config.as_dict())
+    return NovelAISettings(**config.model_dump())
+
+
+def _register_rpc(ctx: "PluginRuntimeContext", handlers: NovelAIRpcHandlers) -> None:
+    # Local import: RPC concurrency policy types live in the desktop bridge;
+    # deferring the import to setup() keeps the plugin's module-load path from
+    # requiring the desktop bridge dependency chain (matches the discipline
+    # documented on agent.plugin_host.capabilities.RpcCapability.register).
+    from desktop_bridge.method_policy import Concurrency
+
+    ctx.rpc.register("generate", handlers.generate, concurrency=Concurrency.INTEGRATION)
+    ctx.rpc.register(
+        "regenerateMessageMedia",
+        handlers.regenerate_message_media,
+        concurrency=Concurrency.INTEGRATION,
+    )
+    ctx.rpc.register("history", handlers.history, concurrency=Concurrency.READ_ONLY)
+    ctx.rpc.register(
+        "prompt_tags.list", handlers.prompt_tags_list, concurrency=Concurrency.READ_ONLY,
+    )
+    ctx.rpc.register("prompt_tags.upsert", handlers.prompt_tags_upsert)
+    ctx.rpc.register("prompt_tags.delete", handlers.prompt_tags_delete)
 
 
 def _safe_json(text: str) -> dict[str, Any]:

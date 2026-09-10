@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from core.integrations.novelai.models import (
+from plugins.novelai.backend.models import (
     GeneratedImageRecord,
     NovelAIGenerationSource,
     NovelAIMode,

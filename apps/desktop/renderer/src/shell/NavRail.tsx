@@ -2,10 +2,8 @@ import type React from "react";
 import { BookOpenText, Chats, GearSix, MagnifyingGlass, Users } from "@phosphor-icons/react";
 import { cx } from "../shared/styles";
 
-const novelAiLogoDark = new URL("../assets/novelai-logo-dark.svg", import.meta.url).href;
-
 /** The rail's fixed built-in workspace targets (excludes the "search" action button, which never becomes an active view). */
-export type BuiltinNavRailViewId = "messages" | "roles" | "image" | "story" | "settings";
+export type BuiltinNavRailViewId = "messages" | "roles" | "story" | "settings";
 
 /**
  * Identifies the workspace a rail entry points to; null when no view entry
@@ -48,7 +46,6 @@ type NavRailProps = {
   onOpenSearch: () => void;
   onBackToChat: () => void;
   onOpenRolesWorkspace: () => void;
-  onOpenImageStudio: () => void;
   onOpenStory: () => void;
   onOpenSettings: () => void;
 };
@@ -64,7 +61,6 @@ export function NavRail({
   onOpenSearch,
   onBackToChat,
   onOpenRolesWorkspace,
-  onOpenImageStudio,
   onOpenStory,
   onOpenSettings,
 }: NavRailProps) {
@@ -72,7 +68,6 @@ export function NavRail({
     { id: "search", label: "搜索", icon: MagnifyingGlass, onSelect: onOpenSearch },
     { id: "messages", label: "消息", icon: Chats, onSelect: onBackToChat, showUnreadBadge: true },
     { id: "roles", label: "角色", icon: Users, onSelect: onOpenRolesWorkspace },
-    { id: "image", label: "生图", imageSrc: novelAiLogoDark, onSelect: onOpenImageStudio },
     { id: "story", label: "故事", icon: BookOpenText, onSelect: onOpenStory },
     ...pluginEntries.map((entry) => ({
       id: pluginNavRailViewId(entry.pageId),

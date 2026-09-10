@@ -1,7 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
-import type { RoleRecord } from "../shared/types";
-import type { SettingsFormData } from "../shared/types";
-import { saveImageSettings } from "./imageSettingsPersistence";
+import { usePluginConfigController } from "../../../apps/desktop/renderer/src/plugins/usePluginConfigController";
+import type { PluginRpcClient } from "../../../apps/desktop/renderer/src/plugins/pluginBridgeClient";
+import type { RoleRecord } from "../../../apps/desktop/renderer/src/shared/types";
 import type {
   ImageGenerateResult,
   ImageHistoryRecord,
@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 type UseImageStudioStateArgs = {
-  active: boolean;
+  client: PluginRpcClient;
   activeRole: RoleRecord | null;
   roles: RoleRecord[];
 };
@@ -55,15 +55,21 @@ function resolvePresetSize(sizePreset: ImageStudioFormState["sizePreset"]): {
   }
 }
 
-/** Manages image studio state so the shell sidebar and preview area stay in sync. */
-export function useImageStudioState({ active, activeRole, roles }: UseImageStudioStateArgs) {
+/**
+ * Manages image studio state so the plugin page's sidebar and preview area
+ * stay in sync. Manual generation and history go through the injected
+ * `plugin.novelai.*` RPC client; NSFW/quality-tag/undesired-content settings
+ * go through the plugin's own `[plugins.novelai]` config channel (issue
+ * #180) instead of the old shared settings draft.
+ */
+export function useImageStudioState({ client, activeRole, roles }: UseImageStudioStateArgs) {
   const [form, setForm] = useState<ImageStudioFormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState<ImageHistoryRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [latestResult, setLatestResult] = useState<ImageGenerateResult | null>(null);
   const [error, setError] = useState("");
-  const [settingsFormData, setSettingsFormData] = useState<SettingsFormData | null>(null);
+  const config = usePluginConfigController("novelai");
 
   const roleItems = useMemo(() => (
     roles.map((role) => ({
@@ -73,55 +79,43 @@ export function useImageStudioState({ active, activeRole, roles }: UseImageStudi
     }))
   ), [roles]);
 
-  const nsfwEnabled = Boolean(settingsFormData?.integrations.novelaiNsfwEnabled);
+  const nsfwEnabled = Boolean(config.draft?.nsfw_enabled);
+  const addQualityTags = Boolean(config.draft?.add_quality_tags);
+  const undesiredContentPreset = Number(config.draft?.undesired_content_preset ?? 0);
 
   const loadHistory = useCallback(async (): Promise<void> => {
-    const response = await window.miraDesktop.invoke({
-      method: "novelai.history",
-      payload: {
+    try {
+      const payload = await client.call<{ records: ImageHistoryRecord[] }>("history", {
         role_id: form.roleId,
         limit: 24,
-      },
-    });
-    if (response.error) {
-      setError(response.error.message);
-      return;
+      });
+      const records = Array.isArray(payload.records) ? payload.records : [];
+      setHistory(records);
+      setSelectedRecordId((current) => (
+        records.some((record) => record.id === current)
+          ? current
+          : (records[0]?.id ?? "")
+      ));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : String(loadError));
     }
-    const records = Array.isArray(response.payload.records)
-      ? response.payload.records as ImageHistoryRecord[]
-      : [];
-    setHistory(records);
-    setSelectedRecordId((current) => (
-      records.some((record) => record.id === current)
-        ? current
-        : (records[0]?.id ?? "")
-    ));
-  }, [form.roleId]);
+  }, [client, form.roleId]);
 
+  // Runs once on mount plus whenever the active role changes. History is not
+  // reloaded here: the effect below re-fires on its own once `form.roleId`
+  // settles, so doing it here too would fetch twice for one role change.
   useEffect(() => {
-    if (!active) return undefined;
-
-    let cancelled = false;
     setLatestResult(null);
     setError("");
+    setForm((current) => ({
+      ...current,
+      roleId: current.roleId || activeRole?.id || "",
+    }));
+  }, [activeRole?.id]);
 
-    void (async () => {
-      const [settingsResult] = await Promise.all([
-        window.miraDesktop.readSettings(),
-        loadHistory(),
-      ]);
-      if (cancelled) return;
-      setSettingsFormData(settingsResult.formData);
-      setForm((current) => ({
-        ...current,
-        roleId: current.roleId || activeRole?.id || "",
-      }));
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [active, activeRole?.id, loadHistory]);
+  useEffect(() => {
+    void loadHistory();
+  }, [loadHistory]);
 
   useEffect(() => {
     setForm((current) => {
@@ -138,8 +132,6 @@ export function useImageStudioState({ active, activeRole, roles }: UseImageStudi
       ? NOVELAI_NSFW_MODEL
       : NOVELAI_DEFAULT_MODEL
   ), [nsfwEnabled]);
-  const addQualityTags = Boolean(settingsFormData?.integrations.novelaiAddQualityTags);
-  const undesiredContentPreset = Number(settingsFormData?.integrations.novelaiUndesiredContentPreset ?? 0);
 
   const validationError = useMemo(() => {
     if (resolvedMode === "img2img" && !form.baseImagePath.trim()) {
@@ -180,57 +172,43 @@ export function useImageStudioState({ active, activeRole, roles }: UseImageStudi
     setSubmitting(true);
     setError("");
     try {
-      const response = await window.miraDesktop.invoke({
-        method: "novelai.generate",
-        payload: {
-          role_id: form.roleId,
-          session_key: form.roleId ? `role:${form.roleId}` : "desktop:image-studio",
-          prompt: form.prompt,
-          mode: resolvedMode,
-          base_image_path: form.baseImagePath,
-          strength: resolvedMode === "img2img" ? form.strength : undefined,
-          noise: resolvedMode === "img2img" ? form.noise : undefined,
-          negative_prompt: form.negativePrompt,
-          size_preset: form.sizePreset,
-          custom_width: form.sizePreset === "custom" ? parsePositiveInteger(form.customWidth) : undefined,
-          custom_height: form.sizePreset === "custom" ? parsePositiveInteger(form.customHeight) : undefined,
-          model: resolvedModel,
-        },
+      const payload = await client.call<{ result: ImageGenerateResult }>("generate", {
+        role_id: form.roleId,
+        session_key: form.roleId ? `role:${form.roleId}` : "desktop:image-studio",
+        prompt: form.prompt,
+        mode: resolvedMode,
+        base_image_path: form.baseImagePath,
+        strength: resolvedMode === "img2img" ? form.strength : undefined,
+        noise: resolvedMode === "img2img" ? form.noise : undefined,
+        negative_prompt: form.negativePrompt,
+        size_preset: form.sizePreset,
+        custom_width: form.sizePreset === "custom" ? parsePositiveInteger(form.customWidth) : undefined,
+        custom_height: form.sizePreset === "custom" ? parsePositiveInteger(form.customHeight) : undefined,
+        model: resolvedModel,
       });
-      if (response.error) {
-        setError(response.error.message);
-        return;
-      }
-      const result = response.payload.result as ImageGenerateResult;
+      const result = payload.result;
       setLatestResult(result);
       await loadHistory();
       startTransition(() => {
         setSelectedRecordId(result.record_id);
       });
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : String(submitError));
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function persistImageSettings(patch: Partial<SettingsFormData["integrations"]>): Promise<void> {
-    if (!settingsFormData) return;
-    try {
-      setSettingsFormData(await saveImageSettings(window.miraDesktop, patch));
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : String(saveError));
-    }
+  function handleToggleNsfwEnabled(): void {
+    config.updateDraft((current) => ({ ...current, nsfw_enabled: !nsfwEnabled }));
   }
 
-  async function handleToggleNsfwEnabled(): Promise<void> {
-    await persistImageSettings({ novelaiNsfwEnabled: !nsfwEnabled });
+  function handleToggleAddQualityTags(): void {
+    config.updateDraft((current) => ({ ...current, add_quality_tags: !addQualityTags }));
   }
 
-  async function handleToggleAddQualityTags(): Promise<void> {
-    await persistImageSettings({ novelaiAddQualityTags: !addQualityTags });
-  }
-
-  async function handleChangeUndesiredContentPreset(value: number): Promise<void> {
-    await persistImageSettings({ novelaiUndesiredContentPreset: value });
+  function handleChangeUndesiredContentPreset(value: number): void {
+    config.updateDraft((current) => ({ ...current, undesired_content_preset: value }));
   }
 
   return {
@@ -253,8 +231,8 @@ export function useImageStudioState({ active, activeRole, roles }: UseImageStudi
     onPickBaseImage: () => void handlePickBaseImage(),
     onSelectRecord: (record: ImageHistoryRecord) => setSelectedRecordId(record.id),
     onSubmit: () => void handleSubmit(),
-    onChangeUndesiredContentPreset: (value: number) => void handleChangeUndesiredContentPreset(value),
-    onToggleAddQualityTags: () => void handleToggleAddQualityTags(),
-    onToggleNsfwEnabled: () => void handleToggleNsfwEnabled(),
+    onChangeUndesiredContentPreset: (value: number) => handleChangeUndesiredContentPreset(value),
+    onToggleAddQualityTags: () => handleToggleAddQualityTags(),
+    onToggleNsfwEnabled: () => handleToggleNsfwEnabled(),
   };
 }

@@ -107,7 +107,9 @@ model = "text-embedding-v3"
 api_key = "sk-..."
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
-[integrations.novelai]
+# novelai 插件配置（issue #180 起归位为共置插件；旧版 [integrations.novelai]
+# 在首次启动时自动一次性迁移到这里，无需手动改动既有配置文件）。
+[plugins.novelai]
 enabled = false
 token = "${NOVELAI_TOKEN}"
 base_url = "https://image.novelai.net"

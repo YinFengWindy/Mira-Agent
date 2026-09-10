@@ -1,8 +1,8 @@
-import { Select, type SelectOption } from "../shared/ui/Select";
+import { Select, type SelectOption } from "../../../apps/desktop/renderer/src/shared/ui/Select";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { toFileUrl } from "../shared/format";
-import { DeleteIcon, ResetIcon, UploadIcon } from "../shared/icons";
-import { cx, focusResetClass, inputClass } from "../shared/styles";
+import { toFileUrl } from "../../../apps/desktop/renderer/src/shared/format";
+import { DeleteIcon, ResetIcon, UploadIcon } from "../../../apps/desktop/renderer/src/shared/icons";
+import { cx, focusResetClass, inputClass } from "../../../apps/desktop/renderer/src/shared/styles";
 import type { ImageSizePreset, ImageStudioFormState } from "./types";
 
 type RolePickerItem = {

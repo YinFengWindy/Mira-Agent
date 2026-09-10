@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 import uuid
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from core.integrations.novelai import GenerateImageRequest, NovelAIService
 from core.roles import RoleStore
 
 # Progress events are deliberately smaller than the final serialized role snapshot.
@@ -31,17 +31,24 @@ DEFAULT_ROLE_DIFFERENCE_MOODS: dict[str, str] = {
 
 
 class RoleDifferenceGenerationService:
-    """Generates stable role-expression images and persists them atomically."""
+    """Generates stable role-expression images and persists them atomically.
+
+    Calls the shared ``generate_image`` tool (looked up once, at construction
+    time, the same way ``story_simulation`` does) rather than holding a
+    NovelAI service directly — that service layer lives entirely inside the
+    novelai plugin since issue #180, and disappears along with it when the
+    plugin is disabled.
+    """
 
     def __init__(
         self,
         *,
         role_store: RoleStore,
-        novelai_service: NovelAIService | None,
+        image_tool: Any | None,
         workspace: Path,
     ) -> None:
         self._role_store = role_store
-        self._novelai_service = novelai_service
+        self._image_tool = image_tool
         self._workspace = workspace
         self._active_roles: set[str] = set()
 
@@ -60,7 +67,7 @@ class RoleDifferenceGenerationService:
             raise ValueError("role_id 和 base_asset 不能为空")
         if clean_role_id in self._active_roles:
             raise ValueError("该角色正在生成差分")
-        if self._novelai_service is None:
+        if self._image_tool is None:
             raise ValueError("NovelAI 未配置")
 
         role = self._role_store.get_role(clean_role_id)
@@ -104,33 +111,32 @@ class RoleDifferenceGenerationService:
                     completed=index,
                     stages=stages,
                 )
-                result = await self._novelai_service.generate(
-                    GenerateImageRequest(
-                        prompt=(
-                            "same character as the reference image, consistent face, "
-                            "hairstyle, hair color, eye color, outfit and body proportions, "
-                            "single character, centered upper body, anime illustration, "
-                            f"solid pure white background (#FFFFFF), no background elements, "
-                            f"{expression_prompt}"
-                        ),
-                        negative_prompt=(
-                            "different character, multiple characters, scenery, complex "
-                            "background, colored background, off-white background, "
-                            "gray background, background shadows, cropped head, extra limbs, "
-                            "blurry, low quality"
-                        ),
-                        mode="img2img",
-                        base_image_path=str(base_path),
-                        strength=0.38,
-                        noise=0.08,
-                        size_preset="square",
-                        steps=24,
-                        seed=_stable_seed(base_hash, difference_id),
-                        sampler="k_euler_ancestral",
-                    )
+                raw = await self._image_tool.execute(
+                    prompt=(
+                        "same character as the reference image, consistent face, "
+                        "hairstyle, hair color, eye color, outfit and body proportions, "
+                        "single character, centered upper body, anime illustration, "
+                        f"solid pure white background (#FFFFFF), no background elements, "
+                        f"{expression_prompt}"
+                    ),
+                    negative_prompt=(
+                        "different character, multiple characters, scenery, complex "
+                        "background, colored background, off-white background, "
+                        "gray background, background shadows, cropped head, extra limbs, "
+                        "blurry, low quality"
+                    ),
+                    mode="img2img",
+                    base_image_path=str(base_path),
+                    strength=0.38,
+                    noise=0.08,
+                    size_preset="square",
+                    steps=24,
+                    seed=_stable_seed(base_hash, difference_id),
+                    sampler="k_euler_ancestral",
                 )
+                output_paths = _tool_output_paths(raw)
                 generated_path = Path(
-                    str(result.output_paths[0] if result.output_paths else "").strip()
+                    str(output_paths[0] if output_paths else "").strip()
                 )
                 if not generated_path.is_file():
                     raise ValueError(f"{difference_id} 未返回有效图片")
@@ -252,6 +258,18 @@ class RoleDifferenceGenerationService:
         result = emitter(payload)
         if inspect.isawaitable(result):
             await result
+
+
+def _tool_output_paths(raw: object) -> list[str]:
+    """Parses ``generate_image``'s JSON-string result into its output paths."""
+
+    text = str(getattr(raw, "text", raw) or "").strip()
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("NovelAI 工具未返回图片路径") from exc
+    paths = payload.get("output_paths") if isinstance(payload, dict) else None
+    return [str(item).strip() for item in paths] if isinstance(paths, list) else []
 
 
 def _sha256_file(path: Path) -> str:

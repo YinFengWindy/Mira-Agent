@@ -2,11 +2,6 @@ import type React from "react";
 import { ChatImageLightbox } from "../chat/ChatImageLightbox";
 import { ChatSurface } from "../chat/ChatSurface";
 import type { ChatMessageNavigationScroller } from "../chat/useChatScrollController";
-import { ImageStudioPage } from "../image/ImageStudioPage";
-import { ImageStudioSidebar } from "../image/ImageStudioSidebar";
-import { PromptTagLibraryPage } from "../image/PromptTagLibraryPage";
-import { PromptTagWorkspaceSidebar, type PromptTagWorkspaceSectionId } from "../image/PromptTagWorkspaceSidebar";
-import { useImageStudioState } from "../image/useImageStudioState";
 import { ConfirmDialog } from "../roles/ConfirmDialog";
 import { RoleAssetsPage } from "../roles/RoleAssetsPage";
 import { RoleCreatePage } from "../roles/RoleCreatePage";
@@ -33,8 +28,6 @@ import type {
 import type { RoleCardImportState } from "./roleCardImportState";
 import { TitleBar } from "../shell/TitleBar";
 import type { WorkspaceFeedback } from "./appState";
-
-type ImageStudioStateViewModel = ReturnType<typeof useImageStudioState>;
 
 type SidebarViewState = {
   collapsed: boolean;
@@ -70,10 +63,6 @@ type DesktopAppFrameProps = {
   settingsSection: SettingsSectionId;
   onBackToChat: () => void;
   onOpenSettingsSection: (section: SettingsSectionId) => void;
-  imageStudioViewActive: boolean;
-  imagePromptTagsViewActive: boolean;
-  promptTagWorkspaceSection: PromptTagWorkspaceSectionId;
-  onOpenPromptTagWorkspaceSection: (section: PromptTagWorkspaceSectionId) => void;
   roleWorkspaceViewActive: boolean;
   roleWorkspaceSection: RoleWorkspaceSectionId;
   onOpenRoleWorkspaceSection: (section: RoleWorkspaceSectionId) => void;
@@ -86,9 +75,6 @@ type DesktopAppFrameProps = {
   onOpenStory: () => void;
   onOpenPluginPage: (pageId: string) => void;
   onOpenRole: (roleId: string) => void;
-  onOpenImageStudio: () => void;
-  onOpenPromptTagLibrary: () => void;
-  imageStudioState: ImageStudioStateViewModel;
   workspaceFeedback: WorkspaceFeedback | null;
   activeRole: RoleRecord | null;
   activeSession: SessionPayload | null;
@@ -125,7 +111,6 @@ type DesktopAppFrameProps = {
   onSendMessage: (request: ChatSendRequest) => Promise<boolean>;
   onCancelChat: () => void;
   onLoadOlderMessages: (sessionKey: string) => Promise<boolean>;
-  imageHistorySidebar: RightSidebarViewState;
   detailRole: RoleRecord | null;
   pendingRoleCardAction: PendingRoleCardAction;
   onOpenRoleManagementDetail: (roleId: string) => void;
@@ -208,10 +193,6 @@ export function DesktopAppFrame({
   settingsSection,
   onBackToChat,
   onOpenSettingsSection,
-  imageStudioViewActive,
-  imagePromptTagsViewActive,
-  promptTagWorkspaceSection,
-  onOpenPromptTagWorkspaceSection,
   roleWorkspaceViewActive,
   roleWorkspaceSection,
   onOpenRoleWorkspaceSection,
@@ -224,9 +205,6 @@ export function DesktopAppFrame({
   onOpenStory,
   onOpenPluginPage,
   onOpenRole,
-  onOpenImageStudio,
-  onOpenPromptTagLibrary,
-  imageStudioState,
   workspaceFeedback,
   activeRole,
   activeSession,
@@ -259,7 +237,6 @@ export function DesktopAppFrame({
   onSendMessage,
   onCancelChat,
   onLoadOlderMessages,
-  imageHistorySidebar,
   detailRole,
   pendingRoleCardAction,
   onOpenRoleManagementDetail,
@@ -327,15 +304,13 @@ export function DesktopAppFrame({
     ? "messages"
     : roleWorkspaceViewActive
       ? "roles"
-      : imageStudioViewActive || imagePromptTagsViewActive
-        ? "image"
-        : mainView.kind === "story"
-          ? "story"
-          : mainView.kind === "settings"
-            ? "settings"
-            : mainView.kind === "plugin-page"
-              ? pluginNavRailViewId(mainView.pageId)
-              : null;
+      : mainView.kind === "story"
+        ? "story"
+        : mainView.kind === "settings"
+          ? "settings"
+          : mainView.kind === "plugin-page"
+            ? pluginNavRailViewId(mainView.pageId)
+            : null;
   const navRailUnreadTotal = Object.values(unreadCounts).reduce((total, count) => total + count, 0);
   // nav.page entries are compiled in statically (see pluginUiModules.ts); listed here
   // rather than threaded through props, matching how this frame already owns view
@@ -381,7 +356,6 @@ export function DesktopAppFrame({
           onOpenSearch={onOpenSearch}
           onBackToChat={onBackToChat}
           onOpenRolesWorkspace={onOpenRolesWorkspace}
-          onOpenImageStudio={onOpenImageStudio}
           onOpenStory={onOpenStory}
           onOpenSettings={onOpenSettings}
         />
@@ -401,30 +375,6 @@ export function DesktopAppFrame({
               width={sidebarState.width}
               onOpenSection={onOpenSettingsSection}
               onBeginResize={sidebarState.onBeginResize}
-            />
-          ) : imagePromptTagsViewActive ? (
-            <PromptTagWorkspaceSidebar activeSection={promptTagWorkspaceSection} animating={sidebarState.animating && !sidebarState.resizing} collapsed={sidebarState.collapsed} width={sidebarState.width} onOpenSection={onOpenPromptTagWorkspaceSection} onBeginResize={sidebarState.onBeginResize} />
-          ) : imageStudioViewActive ? (
-            <ImageStudioSidebar
-              bridgeReady={bridgeReady}
-              animating={sidebarState.animating && !sidebarState.resizing}
-              collapsed={sidebarState.collapsed}
-              width={sidebarState.width}
-              form={imageStudioState.form}
-              nsfwEnabled={imageStudioState.nsfwEnabled}
-              addQualityTags={imageStudioState.addQualityTags}
-              undesiredContentPreset={imageStudioState.undesiredContentPreset}
-              roleItems={imageStudioState.roleItems}
-              submitting={imageStudioState.submitting}
-              validationError={imageStudioState.validationError}
-              onOpenPromptTagLibrary={onOpenPromptTagLibrary}
-              onBeginResize={sidebarState.onBeginResize}
-              onChange={imageStudioState.onChange}
-              onPickBaseImage={imageStudioState.onPickBaseImage}
-              onSubmit={imageStudioState.onSubmit}
-              onToggleAddQualityTags={imageStudioState.onToggleAddQualityTags}
-              onChangeUndesiredContentPreset={imageStudioState.onChangeUndesiredContentPreset}
-              onToggleNsfwEnabled={imageStudioState.onToggleNsfwEnabled}
             />
           ) : roleWorkspaceViewActive ? (
             <RoleWorkspaceSidebar
@@ -514,30 +464,6 @@ export function DesktopAppFrame({
               onToggleChatLatestImageSidebar={chatLatestImageSidebar.toggle}
             />
           ) : null}
-          {mainView.kind === "image-studio" ? (
-            <ImageStudioPage
-              activeRecord={imageStudioState.activeRecord}
-              error={imageStudioState.error}
-              generating={imageStudioState.submitting}
-              history={imageStudioState.history}
-              latestResult={imageStudioState.latestResult}
-              selectedRecordId={imageStudioState.selectedRecordId}
-              historySidebarCollapsed={imageHistorySidebar.collapsed}
-              historySidebarWidth={imageHistorySidebar.width}
-              historySidebarAnimating={imageHistorySidebar.animating}
-              historySidebarResizing={imageHistorySidebar.resizing}
-              onSelectRecord={imageStudioState.onSelectRecord}
-              onToggleHistorySidebar={imageHistorySidebar.toggle}
-              onBeginHistorySidebarResize={imageHistorySidebar.beginResize}
-            />
-          ) : null}
-          {mainView.kind === "image-prompt-tags" ? (
-            <PromptTagLibraryPage
-              bridgeReady={bridgeReady}
-              section={promptTagWorkspaceSection}
-              onOpenSection={onOpenPromptTagWorkspaceSection}
-            />
-          ) : null}
           {mainView.kind === "roles-list" ? (
             <RoleManagementPage
               activeRoleId={activeRoleId}
@@ -611,7 +537,7 @@ export function DesktopAppFrame({
             />
           ) : null}
           {mainView.kind === "plugin-page" && activePluginNavPage ? (
-            <activePluginNavPage.Component pageId={mainView.pageId} />
+            <activePluginNavPage.Component pageId={mainView.pageId} activeRoleId={activeRoleId} />
           ) : null}
         </main>
       </div>
