@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 
 [tool.black]
 line-length = 88
-target-version = ["py314"]
+target-version = ["py312"]
 include = '\.pyi?$'
 
 [tool.ruff.lint]
