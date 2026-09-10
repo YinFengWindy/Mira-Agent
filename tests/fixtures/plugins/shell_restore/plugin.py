@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from agent.lifecycle.types import PreToolCtx
 from agent.plugins import Plugin, on_tool_pre
-from plugins.shell_restore.plugin import rewrite_rm_to_mv as _rewrite_rm_to_mv
+from plugins.shell_restore.backend.plugin import rewrite_rm_to_mv as _rewrite_rm_to_mv
 
 
 class ShellRestore(Plugin):

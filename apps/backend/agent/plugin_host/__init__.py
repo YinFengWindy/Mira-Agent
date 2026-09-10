@@ -6,11 +6,13 @@ from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle, PluginRecord, PluginState
 from agent.plugin_host.kernel import HostServices, PluginKernel
 from agent.plugin_host.manifest import (
+    DEFAULT_ENTRY,
     KNOWN_CAPABILITIES,
     ManifestError,
     PluginManifest,
     load_manifest,
 )
+from agent.plugin_host.plugin_data import DISABLED_MARKER
 from agent.plugin_host.runtime_context import (
     CapabilityNotGranted,
     PluginRuntimeContext,
@@ -19,6 +21,8 @@ from agent.plugin_host.tool_hooks import PluginToolHook
 
 __all__ = [
     "CapabilityNotGranted",
+    "DEFAULT_ENTRY",
+    "DISABLED_MARKER",
     "EffectScope",
     "HostServices",
     "KNOWN_CAPABILITIES",

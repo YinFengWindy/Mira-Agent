@@ -18,8 +18,8 @@ from bus.events_lifecycle import RoleDeleted, TurnCommitted
 from core.memory.engine import MemoryQuery, MemoryQueryIntent, MemoryScope
 from agent.plugins.context import PluginContext, PluginKVStore
 from agent.config_models import Config, MemoryConfig, MemoryEmbeddingConfig
-from plugins.akasha.config import AkashaConfig
-from plugins.akasha.engine import (
+from plugins.akasha.backend.config import AkashaConfig
+from plugins.akasha.backend.engine import (
     ActivationTrace,
     AkashaCandidate,
     AkashaMemoryEngine,
@@ -28,16 +28,16 @@ from plugins.akasha.engine import (
     _compute_candidates,
     _load_turn_card,
 )
-from plugins.akasha.core import (
+from plugins.akasha.backend.core import (
     AkashaNode,
     activation_edge_updates,
     build_dense_message_index,
     dense_message_candidates,
     reinforce_boost_from_payload,
 )
-from plugins.akasha.plugin import AkashaPlugin
-from plugins.akasha.replay import AkashaReplayRuntime, ReplayMessage, _turn_messages
-from plugins.akasha.store import (
+from plugins.akasha.backend.plugin import AkashaPlugin
+from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage, _turn_messages
+from plugins.akasha.backend.store import (
     ActivationEventRow,
     AkashaStore,
     EdgeUpdate,
@@ -131,7 +131,7 @@ def test_akasha_engine_passes_embedding_dimension_to_embedder(
         async def aclose(self) -> None:
             return None
 
-    monkeypatch.setattr("plugins.akasha.engine.Embedder", _Embedder)
+    monkeypatch.setattr("plugins.akasha.backend.engine.Embedder", _Embedder)
 
     engine = AkashaMemoryEngine(
         config=Config(
@@ -616,7 +616,7 @@ def test_replay_writes_query_log_with_activation_items(
 ) -> None:
     db_path = tmp_path / "sessions.db"
     _init_sessions_db(db_path)
-    monkeypatch.setattr("plugins.akasha.core.get_jieba_keywords", lambda _: "")
+    monkeypatch.setattr("plugins.akasha.backend.core.get_jieba_keywords", lambda _: "")
     replay_store = AkashaStore(tmp_path / "replay.db")
     old_messages = [
         SourceMessage("s:0", "s", 0, "user", "第一条用户消息需要完整展示", "2026-01-01T00:00:00+00:00"),

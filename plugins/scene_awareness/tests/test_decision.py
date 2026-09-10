@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agent.provider import LLMResponse, ToolCall
-from plugins.scene_awareness.contracts import SCENE_DECISION_TOOL_NAME
-from plugins.scene_awareness.decision import SceneDecisionInput, decide_scene
+from plugins.scene_awareness.backend.contracts import SCENE_DECISION_TOOL_NAME
+from plugins.scene_awareness.backend.decision import SceneDecisionInput, decide_scene
 
 
 def _scene_tool_call(**overrides: Any) -> ToolCall:

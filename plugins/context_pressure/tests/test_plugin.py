@@ -9,7 +9,7 @@ import pytest
 from agent.lifecycle.types import AfterStepCtx
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
-from plugins.context_pressure.plugin import (
+from plugins.context_pressure.backend.plugin import (
     ContextPressureStopModule,
     _CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS,
 )

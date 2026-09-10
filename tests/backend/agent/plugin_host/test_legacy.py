@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-import shutil
+import json
 from pathlib import Path
 
 import pytest
 
+from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from agent.tools.registry import ToolRegistry
 
 from tests.backend.agent.plugin_host.conftest import (
-    FIXTURES_DIR,
     before_turn_ctx,
     make_kernel,
+    stage_plugin_fixture,
 )
 
 
 @pytest.mark.asyncio
 async def test_legacy_decorator_handler_fires_and_unbinds_on_unload(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -40,7 +41,8 @@ async def test_legacy_tool_hook_name_matches_v2_convention(tmp_path: Path):
     f"plugin:{plugin_id}:{handler_name}"，与旧 PluginManager 逐字一致。"""
     plugin_dir = tmp_path / "legacy_hook"
     plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(
+    (plugin_dir / "backend").mkdir()
+    (plugin_dir / "backend" / "plugin.py").write_text(
         "from agent.lifecycle.types import PreToolCtx\n"
         "from agent.plugins import Plugin, on_tool_pre\n"
         "class LegacyHook(Plugin):\n"
@@ -60,8 +62,8 @@ async def test_legacy_tool_hook_name_matches_v2_convention(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_direct_event_bus_subscription_unbound_on_unload(tmp_path: Path):
     """修复既有缺陷：插件在 initialize 里直接 event_bus.on 且不自行 off。"""
-    plugin_dir = tmp_path / "direct_sub"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "direct_sub" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
@@ -103,7 +105,7 @@ class DirectSub(Plugin):
 
 @pytest.mark.asyncio
 async def test_legacy_tool_registered_then_unregistered(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")
+    stage_plugin_fixture("weather", tmp_path)
     bus = EventBus()
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=bus, tools=tools)
@@ -118,9 +120,9 @@ async def test_legacy_tool_registered_then_unregistered(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_init_failure_rolls_back_only_failed_plugin(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
-    broken_dir = tmp_path / "zbroken"
-    broken_dir.mkdir()
+    stage_plugin_fixture("hello", tmp_path)
+    broken_dir = tmp_path / "zbroken" / "backend"
+    broken_dir.mkdir(parents=True)
     (broken_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
@@ -159,8 +161,8 @@ class Broken(Plugin):
 
 @pytest.mark.asyncio
 async def test_strict_mode_raises_on_init_failure(tmp_path: Path):
-    broken_dir = tmp_path / "broken"
-    broken_dir.mkdir()
+    broken_dir = tmp_path / "broken" / "backend"
+    broken_dir.mkdir(parents=True)
     (broken_dir / "plugin.py").write_text(
         "from agent.plugins import Plugin\n"
         "class Broken(Plugin):\n"
@@ -176,10 +178,66 @@ async def test_strict_mode_raises_on_init_failure(tmp_path: Path):
 
 
 @pytest.mark.asyncio
+async def test_legacy_plugin_config_migrates_from_the_pre_move_plugin_root(
+    tmp_path: Path,
+):
+    """插件包上移前遗留的 `plugin_config.json` 必须在装配 legacy 插件前迁移。
+
+    `_load_plugin_config`（被 legacy 适配器复用）只从新插件目录读
+    `plugin_config.json`；不迁移的话用户此前的配置覆盖会静默失效（#178 复审 #4）。
+    """
+    plugins_root = tmp_path / "plugins"
+    plugin_dir = plugins_root / "configured"
+    backend_dir = plugin_dir / "backend"
+    backend_dir.mkdir(parents=True)
+    _ = (plugin_dir / "_conf_schema.json").write_text(
+        json.dumps({"max_results": {"default": 5}}), encoding="utf-8"
+    )
+    _ = (backend_dir / "plugin.py").write_text(
+        """
+from agent.lifecycle.types import BeforeTurnCtx
+from agent.plugins import Plugin
+
+
+class Configured(Plugin):
+    name = "configured"
+
+    async def initialize(self):
+        self.context.event_bus.on(BeforeTurnCtx, self._on_turn)
+
+    async def _on_turn(self, event):
+        event.extra_metadata["max_results"] = self.context.config.get("max_results")
+        return event
+""".strip(),
+        encoding="utf-8",
+    )
+    legacy_root = tmp_path / "apps" / "backend" / "plugins"
+    legacy_config = legacy_root / "configured" / "plugin_config.json"
+    legacy_config.parent.mkdir(parents=True)
+    _ = legacy_config.write_text(json.dumps({"max_results": 42}), encoding="utf-8")
+
+    bus = EventBus()
+    kernel = PluginKernel(
+        [plugins_root],
+        services=HostServices(
+            event_bus=bus,
+            workspace=tmp_path / "workspace",
+            legacy_plugin_root=legacy_root,
+        ),
+    )
+    await kernel.load_all()
+
+    result = await bus.emit(before_turn_ctx())
+    assert result.extra_metadata.get("max_results") == 42
+    assert (plugin_dir / "plugin_config.json").exists()
+    assert not legacy_config.exists()
+
+
+@pytest.mark.asyncio
 async def test_terminate_runs_before_unbind(tmp_path: Path):
     """terminate 中插件自行 off 自己的订阅（scene_awareness 模式）不应报错。"""
-    plugin_dir = tmp_path / "self_off"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "self_off" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx

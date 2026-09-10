@@ -11,7 +11,7 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.integrations.novelai.models import NovelAISettings
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
-from plugins.novelai.auto_cg import AutoCgPolicy
+from plugins.novelai.backend.auto_cg import AutoCgPolicy
 
 logger = logging.getLogger(__name__)
 

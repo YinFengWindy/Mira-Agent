@@ -27,6 +27,9 @@ KNOWN_CAPABILITIES = frozenset(
 # legacy Plugin ABC 经适配器运行时隐式获得全部能力（旧 PluginContext 语义）
 LEGACY_CAPABILITIES = tuple(sorted(KNOWN_CAPABILITIES))
 
+# 插件包布局为 plugins/<id>/{backend,ui,tests}/，后端入口固定在 backend/ 下
+DEFAULT_ENTRY = "backend/plugin.py"
+
 
 class ManifestError(Exception):
     """manifest 缺失必填字段或声明了未知 capability。"""
@@ -40,7 +43,9 @@ class PluginManifest:
     version: str | None = None
     desc: str | None = None
     author: str | None = None
-    entry: str = "plugin.py"
+    # 插件包统一为 plugins/<id>/{backend,ui,tests}/ 布局（#178），入口默认落在
+    # backend/ 下；manifest 显式写 entry 时以它为准。
+    entry: str = DEFAULT_ENTRY
     capabilities: tuple[str, ...] = ()
     config_model: str | None = None
     api: int = 1
@@ -74,7 +79,7 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
         version=_optional_str(raw.get("version")),
         desc=_optional_str(raw.get("desc")),
         author=_optional_str(raw.get("author")),
-        entry=str(raw.get("entry") or "plugin.py"),
+        entry=str(raw.get("entry") or DEFAULT_ENTRY),
         capabilities=capabilities,
         config_model=_optional_str(raw.get("config_model")),
         api=api,
@@ -86,7 +91,7 @@ def synthesize_legacy_manifest(plugin_dir: Path) -> PluginManifest:
     """为无 manifest（或旧四字段 manifest）的 legacy 插件合成隐式 manifest。"""
     return PluginManifest(
         id=plugin_dir.name,
-        entry="plugin.py",
+        entry=DEFAULT_ENTRY,
         capabilities=LEGACY_CAPABILITIES,
         api=1,
     )

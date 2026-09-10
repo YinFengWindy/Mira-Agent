@@ -17,7 +17,7 @@ from bus.event_bus import EventBus
 from bus.events_lifecycle import SceneObservationCommitted
 from core.integrations.novelai.models import NovelAISettings
 from core.roles.store import RoleStore
-from plugins.novelai.plugin import NovelAIPlugin
+from plugins.novelai.backend.plugin import NovelAIPlugin
 from session.manager import SessionManager
 
 
@@ -48,7 +48,7 @@ async def test_plugin_registers_tool_and_attaches_generated_media(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     plugin = NovelAIPlugin()
@@ -94,7 +94,7 @@ async def test_plugin_does_not_attach_media_already_sent_by_message_push(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     plugin = NovelAIPlugin()
@@ -149,7 +149,7 @@ async def test_plugin_generates_required_scene_cg_from_observation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     _ = RoleStore(tmp_path).create_role(
@@ -212,7 +212,7 @@ async def test_required_scene_change_bypasses_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     _ = RoleStore(tmp_path).create_role(
@@ -264,7 +264,7 @@ async def test_same_scene_respects_manual_generation_and_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     _ = RoleStore(tmp_path).create_role(
@@ -312,7 +312,7 @@ async def test_plugin_records_auto_cg_state_only_after_successful_media(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "plugins.novelai.plugin.get_default_http_requester",
+        "plugins.novelai.backend.plugin.get_default_http_requester",
         lambda profile: SimpleNamespace(),
     )
     plugin = NovelAIPlugin()

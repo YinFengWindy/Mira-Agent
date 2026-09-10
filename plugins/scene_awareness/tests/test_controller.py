@@ -17,9 +17,9 @@ from bus.events_lifecycle import (
     SceneObservationCommitted,
 )
 from core.roles.store import RoleStore
-from plugins.scene_awareness.contracts import SceneDecisionProtocolError
-from plugins.scene_awareness.controller import SceneAwarenessController
-from plugins.scene_awareness.decision import SceneDecision
+from plugins.scene_awareness.backend.contracts import SceneDecisionProtocolError
+from plugins.scene_awareness.backend.controller import SceneAwarenessController
+from plugins.scene_awareness.backend.decision import SceneDecision
 from session.manager import SessionManager
 from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime, current_runtime_lease

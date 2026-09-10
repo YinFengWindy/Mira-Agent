@@ -15,7 +15,7 @@ from core.memory.engine import (
 from core.memory.utils import resolve_memory_scope
 from memory2.rule_schema import build_procedure_rule_schema
 
-logger = logging.getLogger("plugins.default_memory.engine")
+logger = logging.getLogger("plugins.default_memory.backend.engine")
 
 
 def _coerce_emotional_weight(value: object) -> int:

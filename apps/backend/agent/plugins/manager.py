@@ -229,6 +229,9 @@ class PluginManager:
             tool_registry=self._tool_registry,
             plugin_id=plugin_id,
             plugin_dir=plugin_dir,
+            # TODO(#184): 旧 PluginManager 无活跃调用方，kv 仍写插件目录，未同步
+            # agent.plugin_host.plugin_data 的 workspace 落盘修复（issue #209）。
+            # 删除旧插件系统时这整个类一并移除，不在这里单独修。
             kv_store=PluginKVStore(plugin_dir / ".kv.json"),
             config=plugin_config,
             app_config=self._app_config,

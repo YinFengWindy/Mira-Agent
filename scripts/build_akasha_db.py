@@ -27,21 +27,21 @@ add_project_roots_to_sys_path()
 
 from agent.config_models import Config
 from core.common.workspace import resolve_default_workspace
-from plugins.akasha.config import (
+from plugins.akasha.backend.config import (
     AkashaConfig,
     load_akasha_config,
     resolve_akasha_db_path,
 )
-from plugins.akasha.core import (
+from plugins.akasha.backend.core import (
     SourceMessage,
     parse_ts_unix,
     reinforce_boost_from_payload,
     turn_key,
 )
-from plugins.akasha.fast import fast_dense, graph_fast
-from plugins.akasha.fast.mem_store import CapturingMemoryStore
-from plugins.akasha.replay import AkashaReplayRuntime, ReplayMessage
-from plugins.akasha.store import (
+from plugins.akasha.backend.fast import fast_dense, graph_fast
+from plugins.akasha.backend.fast.mem_store import CapturingMemoryStore
+from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage
+from plugins.akasha.backend.store import (
     AkashaStore,
     SourceSessionSnapshot,
 )
@@ -86,7 +86,7 @@ def _load_script_config(
     *,
     db_path: str,
 ) -> AkashaConfig:
-    # 1. 插件配置仍从 plugins/akasha/config.local.toml 读取。
+    # 1. 插件配置仍从 plugins/akasha/backend/config.local.toml 读取。
     config = load_akasha_config()
     if db_path.strip():
         return replace(config, db_path=db_path)
@@ -295,7 +295,7 @@ def _run() -> MigrationStats:
     dense_install = cast("Callable[[], None]", getattr(fast_dense, "install"))
     dump_to_db = cast(
         "Callable[[AkashaStore, CapturingMemoryStore], dict[str, int]]",
-        getattr(importlib.import_module("plugins.akasha.fast.dump"), "dump_to_db"),
+        getattr(importlib.import_module("plugins.akasha.backend.fast.dump"), "dump_to_db"),
     )
     graph_install(mem)
     dense_install()

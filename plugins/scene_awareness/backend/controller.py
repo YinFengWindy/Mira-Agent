@@ -15,12 +15,12 @@ from bus.events_lifecycle import (
 )
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
-from plugins.scene_awareness.contracts import (
+from plugins.scene_awareness.backend.contracts import (
     SceneDecision,
     SceneDecisionInput,
     SceneDecisionProtocolError,
 )
-from plugins.scene_awareness.decision import (
+from plugins.scene_awareness.backend.decision import (
     decide_scene,
 )
 

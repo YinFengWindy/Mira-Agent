@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import cast
 
-from plugins.qqbot.plugin import QQBotConfigModel, QQBotPlugin
+from plugins.qqbot.backend.plugin import QQBotConfigModel, QQBotPlugin
 
 
 def test_qqbot_plugin_skips_channel_without_credentials() -> None:

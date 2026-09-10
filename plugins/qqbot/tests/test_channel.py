@@ -14,8 +14,8 @@ from bus.event_bus import EventBus
 from bus.events import InboundMessage, OutboundMessage
 from infra.channels.base import AttachmentStore
 from infra.channels.contract import ChannelContext
-import plugins.qqbot.channel as qqbot_channel
-from plugins.qqbot.channel import QQBotChannel
+import plugins.qqbot.backend.channel as qqbot_channel
+from plugins.qqbot.backend.channel import QQBotChannel
 
 
 class _Bus:

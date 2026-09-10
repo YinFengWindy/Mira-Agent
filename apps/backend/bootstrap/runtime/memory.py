@@ -19,7 +19,7 @@ def validate_memory_transition(previous: Config, candidate: Config, workspace: P
     """Rejects incompatible vector spaces without silently rebuilding stored data."""
     if not candidate.memory.enabled or (candidate.memory.engine or "default") != "default":
         return
-    from plugins.default_memory.config import load_default_memory_config, resolve_memory_db_path
+    from plugins.default_memory.backend.config import load_default_memory_config, resolve_memory_db_path
     from memory2.store import VEC_DIM
 
     path = resolve_memory_db_path(workspace=workspace, default_config=load_default_memory_config())

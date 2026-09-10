@@ -2,7 +2,7 @@ from pathlib import Path
 
 from agent.plugins.context import PluginKVStore
 from agent.tool_hooks.types import HookOutcome
-from plugins.novelai.auto_cg import AutoCgPolicy
+from plugins.novelai.backend.auto_cg import AutoCgPolicy
 
 
 def test_auto_cg_policy_enforces_cooldown_dedup_and_manual_bypass(

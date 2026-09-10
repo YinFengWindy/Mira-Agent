@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from plugins.plugin_undo.plugin import _find_last_passive_turn, _undo_last_turn
+from plugins.plugin_undo.backend.plugin import _find_last_passive_turn, _undo_last_turn
 from session.manager import SessionManager
 
 _FRAME = '<system-reminder data-system-context-frame="true">内部</system-reminder>'

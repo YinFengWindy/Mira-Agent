@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 
 from agent.lifecycle.types import BeforeTurnCtx, TurnState
 from agent.plugins import Plugin
-from plugins.akasha.config import load_akasha_config, resolve_akasha_db_path
-from plugins.akasha.store import AkashaStore
+from plugins.akasha.backend.config import load_akasha_config, resolve_akasha_db_path
+from plugins.akasha.backend.store import AkashaStore
 
 _CTX_SLOT = "session:ctx"
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")

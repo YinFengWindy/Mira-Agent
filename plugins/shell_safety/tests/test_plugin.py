@@ -23,6 +23,7 @@ def _run(coro: Any) -> Any:
 def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
+    # 复制整个插件包（含 manifest 与 backend/），内核按 plugins/<id>/backend/plugin.py 发现
     shutil.copytree(PLUGIN_DIR, root / "shell_safety")
     return root
 

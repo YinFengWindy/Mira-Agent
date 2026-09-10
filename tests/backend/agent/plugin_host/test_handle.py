@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -15,7 +14,7 @@ from agent.plugin_host.handle import (
 from agent.plugin_host.manifest import PluginManifest
 from bus.event_bus import EventBus
 
-from tests.backend.agent.plugin_host.conftest import FIXTURES_DIR, make_kernel
+from tests.backend.agent.plugin_host.conftest import make_kernel, stage_plugin_fixture
 
 
 def _make_handle(plugin_id: str = "demo") -> PluginHandle:
@@ -84,7 +83,7 @@ def _state_of(kernel: object, name: str) -> str:
 
 @pytest.mark.asyncio
 async def test_successful_load_reaches_active(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
     assert _state_of(kernel, "hello") == PluginState.ACTIVE.name
@@ -92,8 +91,8 @@ async def test_successful_load_reaches_active(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_init_failure_reaches_failed_and_records_error(tmp_path: Path):
-    plugin_dir = tmp_path / "broken"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "broken" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         "from agent.plugins import Plugin\n"
         "class Broken(Plugin):\n"
@@ -113,7 +112,7 @@ async def test_init_failure_reaches_failed_and_records_error(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_disabled_marker_reaches_disabled_state(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
@@ -124,7 +123,7 @@ async def test_disabled_marker_reaches_disabled_state(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_unload_discards_handle_so_plugin_can_reload(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
 

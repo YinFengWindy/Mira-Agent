@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, mkdir, rm } from "node:fs/promises";
-import { basename, delimiter, join, resolve } from "node:path";
+import { basename, delimiter, join, relative, resolve, sep } from "node:path";
 import { resolveReleaseManifest } from "./release-manifest.mjs";
 
 const releaseManifest = resolveReleaseManifest();
@@ -26,11 +26,20 @@ await mkdir(runtimeRoot, { recursive: true });
 const stagingRoot = resolve(workRoot, "plugins-staging");
 await mkdir(stagingRoot, { recursive: true });
 const stagedPluginsDir = join(stagingRoot, "plugins");
-await cp(join(repositoryRoot, "plugins"), stagedPluginsDir, {
+const pluginsSourceDir = join(repositoryRoot, "plugins");
+await cp(pluginsSourceDir, stagedPluginsDir, {
   recursive: true,
   filter: (source) => {
-    const name = basename(source);
-    return name !== "tests" && name !== "__pycache__";
+    if (basename(source) === "__pycache__") return false;
+    // Only drop the plugin-level `plugins/<id>/tests/` directory (and its
+    // contents), matched by path depth from the plugins root. A basename-only
+    // check would also exclude `plugins/<id>/backend/**/tests` or future
+    // `ui/**/tests` directories that are not pytest fixtures.
+    const relativePath = relative(pluginsSourceDir, source);
+    if (relativePath === "") return true;
+    const segments = relativePath.split(sep);
+    if (segments.length >= 2 && segments[1] === "tests") return false;
+    return true;
   },
 });
 

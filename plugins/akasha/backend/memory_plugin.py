@@ -4,12 +4,12 @@ from pathlib import Path
 
 from agent.config_models import Config
 from core.memory.plugin import MemoryPluginBuildDeps, MemoryPluginRuntime
-from plugins.akasha.config import (
+from plugins.akasha.backend.config import (
     ensure_akasha_config_file,
     load_akasha_config,
     resolve_akasha_db_path,
 )
-from plugins.akasha.engine import AkashaMemoryEngine
+from plugins.akasha.backend.engine import AkashaMemoryEngine
 
 
 class MemoryPlugin:

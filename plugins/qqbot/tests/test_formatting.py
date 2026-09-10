@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from plugins.qqbot.formatting import format_turn_live, iter_stream_chunks
+from plugins.qqbot.backend.formatting import format_turn_live, iter_stream_chunks
 
 
 def test_stream_chunks_are_cumulative_replacements() -> None:

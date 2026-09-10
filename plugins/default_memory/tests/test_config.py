@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from plugins.default_memory.config import (
+from plugins.default_memory.backend.config import (
     load_default_memory_config,
     resolve_memory_db_path,
 )

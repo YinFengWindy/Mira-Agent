@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from plugins.akasha.core import serialize_f32
-from plugins.akasha.store import AkashaStore
+from plugins.akasha.backend.core import serialize_f32
+from plugins.akasha.backend.store import AkashaStore
 
 
 def _now_iso() -> str:

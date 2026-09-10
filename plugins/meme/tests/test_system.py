@@ -1,4 +1,4 @@
-"""Unit tests for plugins/meme/runtime.py."""
+"""Unit tests for plugins/meme/backend/runtime.py."""
 import importlib.util
 import json
 import sys
@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _load_meme_runtime() -> Any:
-    path = REPO_ROOT / "plugins" / "meme" / "runtime.py"
+    path = REPO_ROOT / "plugins" / "meme" / "backend" / "runtime.py"
     spec = importlib.util.spec_from_file_location("test_meme_runtime", path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))

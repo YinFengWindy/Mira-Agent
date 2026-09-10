@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from agent.plugins.context import PluginContext, PluginKVStore
-from plugins.plugin_undo.plugin import PluginUndo, UndoCommandModule
+from plugins.plugin_undo.backend.plugin import PluginUndo, UndoCommandModule
 from session.manager import SessionManager
 
 

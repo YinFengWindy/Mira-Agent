@@ -9,7 +9,7 @@ import pytest
 
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
-from plugins.setup_helper.plugin import ChatIdCommandModule
+from plugins.setup_helper.backend.plugin import ChatIdCommandModule
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
