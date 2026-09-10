@@ -47,6 +47,15 @@ export type DesktopPetBinding = {
 
 export type DesktopPetPosition = { x: number; y: number };
 
+/**
+ * The pet's fixed surface body, matching one cell of the Codex sprite atlas.
+ *
+ * The host clamps and positions this rectangle; a speech bubble grows the
+ * window beyond it through a surface extension without changing the body.
+ * Kept in step with `spriteCell` in `plugins/desktop_pet/surface/spriteContract.ts`.
+ */
+export const desktopPetBody = { width: 192, height: 208 };
+
 /** Available display area for positioning the transparent desktop-pet window. */
 export type DesktopPetWorkArea = {
   x: number;

@@ -7,5 +7,18 @@
     "types": ["vite/client"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "../tests/integration/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "../tests/integration/**/*.ts",
+    // Colocated plugin UI, compiled into this renderer's bundle by the
+    // `import.meta.glob` entries in `src/plugins/pluginUiModules.ts` and
+    // `src/surface/pluginSurfaceModules.ts`. Without these globs, moving
+    // plugin-owned renderer code out of `src/` would silently drop it from
+    // typecheck — the code would still ship, just unchecked.
+    "../../../plugins/*/ui/**/*.ts",
+    "../../../plugins/*/ui/**/*.tsx",
+    "../../../plugins/*/surface/**/*.ts",
+    "../../../plugins/*/surface/**/*.tsx"
+  ]
 }

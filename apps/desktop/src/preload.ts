@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { PreloadLocalAssetCache } from "./assets/preloadLocalAssetCache.js";
 import { localAssetScheme } from "./assets/localAssetContract.js";
-import { surfaceMessageChannel, surfacePositionChannel } from "./surface/host.js";
+import { surfaceMessageChannel, surfacePositionChannel, surfaceStateChannel } from "./surface/host.js";
 import { surfaceChannels } from "./surface/ipc.js";
 import type {
   BridgeEvent,
@@ -146,51 +146,8 @@ const api: DesktopApi = {
   dismissPetObservationBubble() {
     return ipcRenderer.invoke("desktop:pet-observation-dismiss") as Promise<void>;
   },
-  beginPetDrag(offsetX, offsetY, screenX, screenY) {
-    ipcRenderer.send("desktop:pet-drag-start", { offsetX, offsetY, screenX, screenY });
-  },
-  movePet(screenX, screenY) {
-    ipcRenderer.send("desktop:pet-drag-move", { screenX, screenY });
-  },
-  endPetDrag(screenX, screenY, velocityX, velocityY) {
-    ipcRenderer.send("desktop:pet-drag-end", { screenX, screenY, velocityX, velocityY });
-  },
-  openPetRole() {
-    ipcRenderer.send("desktop:pet-open");
-  },
-  openPetMenu() {
-    ipcRenderer.send("desktop:pet-context-menu");
-  },
-  petRendererReady() {
-    ipcRenderer.send("desktop:pet-renderer-ready");
-  },
-  setPetBubbleHeight(height) {
-    ipcRenderer.send("desktop:pet-bubble-height", height);
-  },
-  onPetLoad(listener) {
-    ipcRenderer.on("desktop:pet-load", listener);
-  },
-  offPetLoad(listener) {
-    ipcRenderer.off("desktop:pet-load", listener);
-  },
-  onPetPlay(listener) {
-    ipcRenderer.on("desktop:pet-play", listener);
-  },
-  offPetPlay(listener) {
-    ipcRenderer.off("desktop:pet-play", listener);
-  },
-  onPetObservation(listener) {
-    ipcRenderer.on("desktop:pet-observation", listener);
-  },
-  offPetObservation(listener) {
-    ipcRenderer.off("desktop:pet-observation", listener);
-  },
-  onPetBubbleLayout(listener) {
-    ipcRenderer.on("desktop:pet-bubble-layout", listener);
-  },
-  offPetBubbleLayout(listener) {
-    ipcRenderer.off("desktop:pet-bubble-layout", listener);
-  },
+  // The pet's own drag, sprite, bubble and menu channels are gone: since #181-B
+  // the pet is a plugin surface and uses the generic `surface` API below.
   surfaces: {
     create(pluginId, surfaceId, spec, anchor) {
       return ipcRenderer.invoke(surfaceChannels.create, {
@@ -222,6 +179,9 @@ const api: DesktopApi = {
     post(pluginId, surfaceId, message) {
       ipcRenderer.send(surfaceChannels.post, { pluginId, surfaceId, message });
     },
+    setState(pluginId, surfaceId, state) {
+      ipcRenderer.send(surfaceChannels.setState, { pluginId, surfaceId, state });
+    },
   },
   surface: {
     beginDrag(offset) {
@@ -249,6 +209,20 @@ const api: DesktopApi = {
       const wrapped = (_event: unknown, payload: unknown) => listener(payload);
       ipcRenderer.on(surfaceMessageChannel, wrapped);
       return () => ipcRenderer.off(surfaceMessageChannel, wrapped);
+    },
+    onState(listener) {
+      const wrapped = (_event: unknown, payload: unknown) => listener(payload);
+      ipcRenderer.on(surfaceStateChannel, wrapped);
+      return () => ipcRenderer.off(surfaceStateChannel, wrapped);
+    },
+    ready() {
+      ipcRenderer.send(surfaceChannels.ready, {});
+    },
+    showContextMenu(items) {
+      return ipcRenderer.invoke(surfaceChannels.contextMenu, { items }) as Promise<string | null>;
+    },
+    activateMainWindow() {
+      ipcRenderer.send(surfaceChannels.activateMainWindow, {});
     },
   },
   onVoiceCaptureCommand(listener) {

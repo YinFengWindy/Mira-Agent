@@ -9,8 +9,7 @@ export type PetObservationPayload = {
   persistent: boolean;
 };
 
-/** Layout assigned by the main process after measuring a full pet reply bubble. */
-export type PetBubbleLayout = {
-  placement: "above" | "below";
-  height: number;
-};
+// `PetBubbleLayout` used to live here: the main process measured the reply
+// bubble and told the pet renderer which side to draw it on. Since #181-B the
+// pet decides that itself from the work area the host reports, and asks for a
+// surface extension — see `plugins/desktop_pet/surface/bubbleExtension.ts`.

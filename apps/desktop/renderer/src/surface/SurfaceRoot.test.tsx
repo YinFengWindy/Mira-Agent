@@ -19,6 +19,10 @@ const noopSurface: SurfaceHandle = {
   setClickThrough() {},
   onPlacement() { return () => {}; },
   onMessage() { return () => {}; },
+  onState() { return () => {}; },
+  ready() {},
+  async showContextMenu() { return null; },
+  activateMainWindow() {},
 };
 
 let errors: unknown[][] = [];

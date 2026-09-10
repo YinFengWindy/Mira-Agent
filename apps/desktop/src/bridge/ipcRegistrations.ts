@@ -58,8 +58,6 @@ export type RegisterDesktopIpcOptions = {
   openLocalAttachment: (value: string) => Promise<LocalAssetOpenResult>;
   desktopPet: DesktopPetController;
   desktopObservation: DesktopObservationController;
-  onOpenPetRole: () => void;
-  onShowPetContextMenu: (window: BrowserWindow) => void;
   voiceRecorder: BrowserVoiceRecorder;
   voiceController: DesktopVoiceController;
   voicePlayback: BrowserVoicePlayback;
@@ -133,8 +131,6 @@ export function registerDesktopIpcHandlers(
     openLocalAttachment,
     desktopPet,
     desktopObservation,
-    onOpenPetRole,
-    onShowPetContextMenu,
     voiceRecorder,
     voiceController,
     voicePlayback,
@@ -278,57 +274,11 @@ export function registerDesktopIpcHandlers(
     if (!desktopPet.isPetWindow(petWindow)) return;
     desktopObservation.dismissBubble();
   });
-  host.on("desktop:pet-renderer-ready", (event) => {
-    desktopPet.rendererReady(host.windowFromWebContents(event.sender));
-  });
-  host.on("desktop:pet-bubble-height", (event, height: unknown) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (!desktopPet.isPetWindow(petWindow)) return;
-    desktopPet.setBubbleHeight(Number(height));
-  });
-  host.on("desktop:pet-drag-start", (event, payload?: { offsetX?: unknown; offsetY?: unknown; screenX?: unknown; screenY?: unknown }) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (!desktopPet.isPetWindow(petWindow)) return;
-    desktopPet.beginDrag(
-      Number(payload?.offsetX),
-      Number(payload?.offsetY),
-      Number(payload?.screenX),
-      Number(payload?.screenY),
-    );
-  });
-  host.on("desktop:pet-drag-move", (event, payload?: { screenX?: unknown; screenY?: unknown }) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (!desktopPet.isPetWindow(petWindow)) return;
-    const screenX = Number(payload?.screenX);
-    const screenY = Number(payload?.screenY);
-    if (!Number.isFinite(screenX) || !Number.isFinite(screenY)) return;
-    desktopPet.moveDrag({ x: screenX, y: screenY });
-  });
-  host.on("desktop:pet-drag-end", (event, payload?: {
-    screenX?: unknown;
-    screenY?: unknown;
-    velocityX?: unknown;
-    velocityY?: unknown;
-  }) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (!desktopPet.isPetWindow(petWindow)) return;
-    const screenX = Number(payload?.screenX);
-    const screenY = Number(payload?.screenY);
-    const velocityX = Number(payload?.velocityX);
-    const velocityY = Number(payload?.velocityY);
-    desktopPet.endDrag(
-      Number.isFinite(screenX) && Number.isFinite(screenY) ? { x: screenX, y: screenY } : undefined,
-      Number.isFinite(velocityX) && Number.isFinite(velocityY) ? { x: velocityX, y: velocityY } : undefined,
-    );
-  });
-  host.on("desktop:pet-open", (event) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (desktopPet.isPetWindow(petWindow)) onOpenPetRole();
-  });
-  host.on("desktop:pet-context-menu", (event) => {
-    const petWindow = host.windowFromWebContents(event.sender);
-    if (petWindow && desktopPet.isPetWindow(petWindow)) onShowPetContextMenu(petWindow);
-  });
+  // The pet's ready / bubble-height / drag / open / context-menu channels are
+  // gone. Since #181-B the pet is a plugin surface, so those requests arrive on
+  // the generic DesktopSurface channels in `src/surface/ipc.ts`, where the host
+  // attributes them by the sending window's identity rather than by a
+  // pet-specific check here.
   host.registerVoiceIpc({ desktopPet, voiceRecorder, voiceController, voicePlayback });
   host.handle("desktop:pick-chat-attachments", async (_event, options?: { multiple?: boolean }) => {
     const result = await host.showOpenDialog({

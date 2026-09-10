@@ -1,22 +1,16 @@
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-  background: transparent;
-}
-
-body {
-  user-select: none;
-}
-
-#root {
-  display: block;
-}
+/*
+ * Pet surface styling.
+ *
+ * The document-level reset (transparent background, zero margin, full height,
+ * no scrollbars) is NOT here: `renderer/surface.html` owns it, because every
+ * plugin surface window needs it and a plugin restyling the host's document
+ * would reach outside its own contribution. This file styles only what the pet
+ * draws, so a second plugin surface cannot be broken by loading it.
+ */
 
 .pet-surface {
+  /* Scoped rather than set on `body`: dragging must not select bubble text. */
+  user-select: none;
   display: flex;
   align-items: flex-start;
   width: 100%;

@@ -88,8 +88,6 @@ function setup(overrides: {
       restore: async () => { observationCalls.push("restore"); },
       dismissBubble: () => { observationCalls.push("dismissBubble"); },
     },
-    onOpenPetRole: () => { petCalls.push({ method: "onOpenPetRole", args: [] }); },
-    onShowPetContextMenu: () => { petCalls.push({ method: "onShowPetContextMenu", args: [] }); },
     voiceRecorder: {},
     voiceController: {},
     voicePlayback: {},
@@ -199,28 +197,19 @@ describe("desktop ipc permission boundaries", () => {
     assert.deepEqual(ipc.observationCalls, ["dismissBubble"]);
   });
 
-  it("reports bubble height only for the active pet window", () => {
+  it("keeps no pet-specific window channels of its own", () => {
     const ipc = setup();
+    const petChannels = [...ipc.channels.handled, ...ipc.channels.listened]
+      .filter((channel) => channel.startsWith("desktop:pet-"));
 
-    ipc.sendMessage("desktop:pet-bubble-height", ipc.windows.other.webContents, 120);
-    assert.deepEqual(ipc.petCalls, []);
-
-    ipc.sendMessage("desktop:pet-bubble-height", ipc.windows.pet.webContents, 120);
-    assert.deepEqual(ipc.petCalls, [{ method: "setBubbleHeight", args: [120] }]);
-  });
-
-  it("delegates the pet renderer handshake to the active pet controller", () => {
-    const ipc = setup();
-
-    ipc.sendMessage("desktop:pet-renderer-ready", ipc.windows.pet.webContents);
-
-    assert.equal(ipc.petCalls.length, 1);
-    assert.equal(ipc.petCalls[0].method, "rendererReady");
-    assert.equal(
-      (ipc.petCalls[0].args[0] as unknown as FakeWindow).label,
-      "pet",
-      "the handshake must carry the window that sent it",
-    );
+    // Since #181-B the pet's window is a plugin surface: its ready handshake,
+    // bubble sizing, drag, double click and context menu arrive on the generic
+    // DesktopSurface channels and are attributed there by window identity.
+    // What is left here is the pet's *domain* plumbing, not its window.
+    assert.deepEqual(petChannels.sort(), [
+      "desktop:pet-observation-dismiss",
+      "desktop:pet-sync",
+    ]);
   });
 
   it("routes external links through the shared policy before reaching the shell", async () => {

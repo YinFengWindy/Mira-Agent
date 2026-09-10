@@ -40,9 +40,18 @@ export type DesktopSurfacesApi = {
   workArea(pluginId: string, surfaceId: string): Promise<SurfacePlacementPayload["workArea"]>;
   setPosition(pluginId: string, surfaceId: string, position: { x: number; y: number }): void;
   moveTo(pluginId: string, surfaceId: string, position: { x: number; y: number }, durationMs: number): void;
-  /** Relays a payload to the surface renderer, delivered on `onMessage`. */
+  /** Relays a transient payload to the surface renderer, delivered on `onMessage`. */
   post(pluginId: string, surfaceId: string, message: unknown): void;
+  /**
+   * Sets the surface's retained state, replayed whenever its renderer reports
+   * ready. Use this for anything the surface must still be showing after a
+   * reload; use `post` for one-shot events.
+   */
+  setState(pluginId: string, surfaceId: string, state: unknown): void;
 };
+
+/** One entry of a surface-owned native context menu. */
+export type SurfaceMenuItemPayload = { id: string; label: string };
 
 /**
  * Drives the surface window the caller is already inside.
@@ -56,7 +65,20 @@ export type DesktopSurfaceSelfApi = {
   setExtension(extension: { side: "above" | "below"; size: number }): void;
   setClickThrough(clickThrough: boolean): void;
   onPlacement(listener: (placement: SurfacePlacementPayload) => void): () => void;
+  /** Transient one-shot payloads from the plugin's own `surfaces.post`. */
   onMessage(listener: (payload: unknown) => void): () => void;
+  /** Retained state from `surfaces.setState`, replayed after `ready()`. */
+  onState(listener: (state: unknown) => void): () => void;
+  /**
+   * Announces that this renderer has installed its listeners, so the host can
+   * replay the retained state and the current placement. Without it a surface
+   * that mounts after its state was set would come up blank.
+   */
+  ready(): void;
+  /** Opens a native context menu over this surface; resolves the chosen id, or null. */
+  showContextMenu(items: SurfaceMenuItemPayload[]): Promise<string | null>;
+  /** Brings the main application window forward. */
+  activateMainWindow(): void;
 };
 
 export type BridgeResponse = {
@@ -315,34 +337,14 @@ export type DesktopApi = {
   windowState(): Promise<WindowState>;
   /** Synchronizes the desktop-pet window with the role saved by the detail form. */
   syncPet(forceVisible?: boolean): Promise<void>;
-  /** Dismisses the active safe observation bubble. */
+  /**
+   * Dismisses the active safe observation bubble.
+   *
+   * Still a pet-shaped host call: the pet's surface uses it directly until
+   * observation itself becomes a plugin (#220) and reaches the pet over
+   * plugin-to-plugin messaging (#218).
+   */
   dismissPetObservationBubble(): Promise<void>;
-  /** Starts following the system cursor from the given local pet offset and screen sample. */
-  beginPetDrag(offsetX: number, offsetY: number, screenX?: number, screenY?: number): void;
-  /** Applies an immediate renderer cursor sample during a pet drag. */
-  movePet(screenX: number, screenY: number): void;
-  /** Stops the current pet drag and optionally starts a Codex-style release glide. */
-  endPetDrag(screenX?: number, screenY?: number, velocityX?: number, velocityY?: number): void;
-  /** Restores the main Shiori window from a pet double click. */
-  openPetRole(): void;
-  /** Opens the native context menu for the desktop-pet window. */
-  openPetMenu(): void;
-  /** Announces that the pet renderer has installed its initial-state listeners. */
-  petRendererReady(): void;
-  /** Reports the rendered full-reply bubble height so the main process can resize the transparent pet window. */
-  setPetBubbleHeight(height: number): void;
-  /** Subscribes to package loads from the dedicated desktop-pet window. */
-  onPetLoad(listener: (event: unknown, payload: unknown) => void): void;
-  offPetLoad(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to sprite state transitions from the desktop-pet controller. */
-  onPetPlay(listener: (event: unknown, payload: unknown) => void): void;
-  offPetPlay(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to safe observation status and speech-bubble updates. */
-  onPetObservation(listener: (event: unknown, payload: unknown) => void): void;
-  offPetObservation(listener: (event: unknown, payload: unknown) => void): void;
-  /** Subscribes to main-process placement updates for the current full-reply bubble. */
-  onPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
-  offPetBubbleLayout(listener: (event: unknown, payload: unknown) => void): void;
   /**
    * The DesktopSurface capability (#181): plugin-owned desktop windows.
    *

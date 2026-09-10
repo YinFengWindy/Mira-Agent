@@ -2,8 +2,14 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { X } from "@phosphor-icons/react";
 import { spriteActionDurationMs, spriteCell, spriteFramePosition, spritePlaybackFrameAt, type SpriteState } from "./spriteContract";
 import { useCodexPetInteraction } from "./useCodexPetInteraction";
-import type { PetBubbleLayout, PetObservationPayload } from "../../../src/observation/types";
-import type { VoiceStatePayload } from "../../../src/bridge/shared";
+import { noPetBubble, type PetBubblePlacement } from "./bubbleExtension";
+import { openPetContextMenu } from "./petMenu";
+import type { SurfaceHandle } from "../../../apps/desktop/renderer/src/surface/pluginSurfaceRegistry";
+// TEMPORARY COUPLING: screen observation is still a host feature. It becomes a
+// plugin in #220, and then reaches the pet through plugin-to-plugin messaging
+// (#218); until then the pet consumes the host's payload type directly.
+import type { PetObservationPayload } from "../../../apps/desktop/src/observation/types";
+import type { VoiceStatePayload } from "../../../apps/desktop/src/bridge/shared";
 
 type CodexSpritePetRendererProps = {
   spritesheetUrl: string;
@@ -11,14 +17,20 @@ type CodexSpritePetRendererProps = {
   transientState?: SpriteState | null;
   onTransientFinished?: () => void;
   observation: PetObservationPayload;
-  bubbleLayout: PetBubbleLayout;
+  /** Which side the bubble occupies; chosen by this plugin, not by the host. */
+  bubbleLayout?: PetBubblePlacement;
   voice?: VoiceStatePayload;
+  /** The window this pet is rendering inside; null in a plain render test. */
+  surface?: SurfaceHandle | null;
+  /** Reports the measured bubble height so the surface can be resized around it. */
+  onBubbleHeight?: (height: number) => void;
 };
 
 /** Renders the fixed Codex sprite atlas with its documented state rows and cadence. */
-export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState = null, onTransientFinished = noop, observation, bubbleLayout, voice = { status: "idle" } }: CodexSpritePetRendererProps) {
+export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState = null, onTransientFinished = noop, observation, bubbleLayout = noPetBubble, voice = { status: "idle" }, surface = null, onBubbleHeight = noop }: CodexSpritePetRendererProps) {
   const [frame, setFrame] = useState(0);
   const { interactionState, isDragging, pointerHandlers } = useCodexPetInteraction(
+    surface,
     typeof window === "undefined" ? null : window.miraDesktop,
   );
   const observationState: SpriteState | null = observation.status === "reviewing"
@@ -69,8 +81,8 @@ export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState =
   }, [activePlaybackFrame.duration, activeState, frame]);
 
   useEffect(() => {
-    if (!bubbleText) window.miraDesktop.setPetBubbleHeight(0);
-  }, [bubbleText]);
+    if (!bubbleText) onBubbleHeight(0);
+  }, [bubbleText, onBubbleHeight]);
 
   const surfaceClass = bubbleText
     ? `pet-surface pet-bubble-${bubbleLayout.placement}`
@@ -78,7 +90,7 @@ export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState =
 
   return (
     <div className={surfaceClass}>
-      {bubbleText ? <PetBubble text={bubbleText} persistent={!voiceBubble && observation.persistent} /> : null}
+      {bubbleText ? <PetBubble text={bubbleText} persistent={!voiceBubble && observation.persistent} onHeight={onBubbleHeight} /> : null}
       <div
         aria-label="桌宠"
         className={isDragging ? "pet-drag-region pet-dragging" : "pet-drag-region"}
@@ -86,7 +98,7 @@ export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState =
         onLostPointerCapture={pointerHandlers.onPointerCancel}
         onContextMenu={(event) => {
           event.preventDefault();
-          window.miraDesktop.openPetMenu();
+          if (surface) void openPetContextMenu(surface, window.miraDesktop);
         }}
         style={{
           width: spriteCell.width,
@@ -103,18 +115,18 @@ export function CodexSpritePetRenderer({ spritesheetUrl, state, transientState =
 
 function noop(): void {}
 
-function PetBubble({ text, persistent }: { text: string; persistent: boolean }) {
+function PetBubble({ text, persistent, onHeight }: { text: string; persistent: boolean; onHeight: (height: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const reportHeight = () => window.miraDesktop.setPetBubbleHeight(element.scrollHeight);
+    const reportHeight = () => onHeight(element.scrollHeight);
     reportHeight();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(reportHeight);
     observer?.observe(element);
     return () => observer?.disconnect();
-  }, [persistent, text]);
+  }, [onHeight, persistent, text]);
 
   return (
     <div
@@ -131,6 +143,9 @@ function PetBubble({ text, persistent }: { text: string; persistent: boolean }) 
           title="关闭消息"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={() => {
+            // TEMPORARY COUPLING: dismissing an observation bubble is still a
+            // host call. Observation becomes a plugin in #220 and then reaches
+            // the pet over plugin-to-plugin messaging (#218).
             void window.miraDesktop.dismissPetObservationBubble();
           }}
         >

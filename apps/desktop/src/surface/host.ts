@@ -49,23 +49,78 @@ export type SurfaceWindowHandle = {
 
 type TimerHandle = { readonly __surfaceTimer?: never } | ReturnType<typeof setTimeout>;
 
+/**
+ * Why a surface came to rest, for the in-process settle observer.
+ *
+ * A plugin's host-side code often wants to remember where its surface ended
+ * up, but only some of these reasons represent the user moving it: growing a
+ * panel or replaying state on reload lands the surface at the position it
+ * already had, and treating those as a move means rewriting persisted state
+ * every time a bubble appears.
+ */
+export type SurfaceSettleReason =
+  | "create"
+  | "position"
+  | "extension"
+  | "drag"
+  | "momentum"
+  | "move"
+  | "ready";
+
+/** Where a surface settled, as reported to both the renderer and the settle observer. */
+export type SurfacePlacementInfo = {
+  anchor: SurfacePoint;
+  bodyOffset: SurfacePoint;
+  workArea: SurfaceWorkArea;
+};
+
 export type DesktopSurfaceHostOptions = {
   createWindow(key: SurfaceKey, spec: SurfaceSpec): SurfaceWindowHandle;
   workAreaFor(window: SurfaceWindowHandle): SurfaceWorkArea;
+  /**
+   * Stable identity of the display a surface sits on.
+   *
+   * Separate from `workAreaFor` because a work area is a rectangle: two
+   * displays can present the same one, and a single display's changes when a
+   * taskbar moves. Callers that remember a per-display position need identity,
+   * not geometry.
+   */
+  displayIdFor?(window: SurfaceWindowHandle): string;
   cursorScreenPoint(): SurfacePoint;
+  /**
+   * Notified in-process whenever a surface comes to rest.
+   *
+   * Deliberately not an IPC message: this is how main-process code that owns a
+   * surface (today the pet controller, until 181-C/D move it into the plugin)
+   * learns a drag or glide finished, without the renderer having to report a
+   * position it was never told. Never called from a drag, glide or tween frame.
+   */
+  onSettled?(key: SurfaceKey, placement: SurfacePlacementInfo, reason: SurfaceSettleReason): void;
+  /** Opens a native context menu over a surface; resolves the chosen id, or null. */
+  showContextMenu?(
+    window: SurfaceWindowHandle,
+    items: SurfaceMenuItem[],
+  ): Promise<string | null>;
+  /** Brings the main application window forward; a surface has no other way to. */
+  activateMainWindow?(): void;
   /** Injectable so glide and tween arithmetic is deterministic under test. */
   now?: () => number;
   setTimer?: (callback: () => void, delayMs: number) => TimerHandle;
   clearTimer?: (handle: TimerHandle) => void;
 };
 
+/** One entry of a surface-owned native context menu. */
+export type SurfaceMenuItem = { id: string; label: string };
+
 /** Identifies one surface: a plugin may own more than one. */
 export type SurfaceKey = { pluginId: string; surfaceId: string };
 
 /** Channel the host pushes a surface's resolved anchor on after every move. */
 export const surfacePositionChannel = "desktop:surface-position";
-/** Channel the host relays plugin-authored payloads to a surface renderer on. */
+/** Channel the host relays transient plugin-authored payloads to a surface renderer on. */
 export const surfaceMessageChannel = "desktop:surface-message";
+/** Channel carrying a surface's retained state, replayed whenever it reports ready. */
+export const surfaceStateChannel = "desktop:surface-state";
 
 export class DesktopSurfaceError extends Error {}
 
@@ -84,6 +139,17 @@ type SurfaceRecord = {
   momentumTimer: TimerHandle | null;
   move: { from: SurfacePoint; to: SurfacePoint; startedAtMs: number; durationMs: number } | null;
   moveTimer: TimerHandle | null;
+  /** Last value passed to `setState`, replayed on `markReady`. See `setState`. */
+  retained: { payload: unknown } | null;
+  /**
+   * Whether the plugin wants this surface on screen.
+   *
+   * Tracked so a renderer reload cannot un-hide a surface: the reloaded
+   * renderer calls `ready()` again, and `markReady` shows the window so a
+   * surface never sits there blank. Without this flag that would resurrect a
+   * surface the plugin had explicitly hidden.
+   */
+  visible: boolean;
 };
 
 /**
@@ -136,6 +202,8 @@ export class DesktopSurfaceHost {
       momentumTimer: null,
       move: null,
       moveTimer: null,
+      retained: null,
+      visible: true,
     };
     this.surfaces.set(id, record);
     // A window closed by the OS (or by Electron shutting down) must not leave
@@ -145,7 +213,7 @@ export class DesktopSurfaceHost {
     });
     if (spec.clickThrough) window.setIgnoreMouseEvents(true, { forward: true });
     const applied = this.applyAnchor(record, anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "create");
     return applied;
   }
 
@@ -185,11 +253,14 @@ export class DesktopSurfaceHost {
   }
 
   show(key: SurfaceKey): void {
-    this.require(key).window.showInactive();
+    const record = this.require(key);
+    record.visible = true;
+    record.window.showInactive();
   }
 
   hide(key: SurfaceKey): void {
     const record = this.require(key);
+    record.visible = false;
     this.stopInteractions(record);
     record.window.hide();
   }
@@ -199,7 +270,7 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     this.stopInteractions(record);
     const applied = this.applyAnchor(record, anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "position");
     return applied;
   }
 
@@ -208,7 +279,7 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     record.extension = extension;
     this.applyAnchor(record, record.anchor);
-    this.notifyPlacement(record);
+    this.notifyPlacement(record, "extension");
   }
 
   /** The work area of the display the surface currently sits on. */
@@ -217,15 +288,85 @@ export class DesktopSurfaceHost {
     return this.options.workAreaFor(record.window);
   }
 
+  /** Stable identity of the display the surface currently sits on. */
+  displayId(key: SurfaceKey): string {
+    const record = this.require(key);
+    return this.options.displayIdFor?.(record.window) ?? "";
+  }
+
   setClickThrough(key: SurfaceKey, clickThrough: boolean): void {
     this.require(key).window.setIgnoreMouseEvents(clickThrough, { forward: true });
   }
 
-  /** Relays a plugin-authored payload to its own surface renderer. */
+  /**
+   * Relays a *transient* plugin-authored payload to its own surface renderer.
+   *
+   * Not retained: a renderer that mounts (or reloads) after this call will
+   * never see it. Use it for one-shot events — "play this animation now" —
+   * and `setState` for anything the surface must still be showing afterwards.
+   */
   postMessage(key: SurfaceKey, payload: unknown): void {
     const record = this.surfaces.get(surfaceKeyId(key));
     if (!record || record.window.isDestroyed()) return;
     record.window.send(surfaceMessageChannel, payload);
+  }
+
+  /**
+   * Sets the surface's *retained* state, replayed whenever it reports ready.
+   *
+   * A surface renderer mounts asynchronously and can reload at any time, so a
+   * plugin that only pushed state once would leave a blank window behind. The
+   * host holding the latest state means the plugin does not have to implement
+   * a ready handshake — or remember it exists. This is the generic form of
+   * what the desktop pet's `sendCurrentLoad` does by hand today.
+   */
+  setState(key: SurfaceKey, payload: unknown): void {
+    const record = this.surfaces.get(surfaceKeyId(key));
+    if (!record) return;
+    record.retained = { payload };
+    if (!record.window.isDestroyed()) record.window.send(surfaceStateChannel, payload);
+  }
+
+  /**
+   * Handles a surface renderer announcing it has installed its listeners.
+   *
+   * Replays the retained state and the current placement, so the renderer
+   * never has to ask for either, then re-asserts visibility — with
+   * `showInactive`, so a surface never steals focus.
+   *
+   * The show matters for *reloads*, not for the first paint: a renderer that
+   * reloads calls `ready()` again, and a surface the plugin had hidden must
+   * not come back with it, which is what `visible` guards. It does not
+   * suppress the empty transparent rectangle between `create` and the first
+   * paint — `desktopSurfaceWindowOptions` does not pass `show: false`, so
+   * Electron shows the window as soon as it is constructed. That predates
+   * this capability (the pet's own window behaved the same) and closing it
+   * needs an end-to-end Electron check this repo cannot run in unit tests.
+   * Tracked in #222.
+   */
+  markReady(key: SurfaceKey): void {
+    const record = this.require(key);
+    if (record.retained) record.window.send(surfaceStateChannel, record.retained.payload);
+    this.notifyPlacement(record, "ready");
+    if (record.visible) record.window.showInactive();
+  }
+
+  /**
+   * Opens a native context menu over the surface and resolves the chosen id.
+   *
+   * Native menus are a main-process capability; a renderer can only draw its
+   * own DOM, which cannot escape a transparent window's bounds.
+   */
+  async showContextMenu(key: SurfaceKey, items: SurfaceMenuItem[]): Promise<string | null> {
+    const record = this.require(key);
+    const show = this.options.showContextMenu;
+    if (!show || items.length === 0) return null;
+    return await show(record.window, items);
+  }
+
+  /** Brings the main application window forward on the surface's behalf. */
+  activateMainWindow(): void {
+    this.options.activateMainWindow?.();
   }
 
   /**
@@ -250,7 +391,7 @@ export class DesktopSurfaceHost {
     const record = this.require(key);
     this.stopDrag(record);
     if (!velocity || (velocity.x === 0 && velocity.y === 0)) {
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "drag");
       return;
     }
     record.momentum = { position: record.anchor, velocity };
@@ -266,7 +407,7 @@ export class DesktopSurfaceHost {
     this.stopInteractions(record);
     if (durationMs <= 0) {
       this.applyAnchor(record, target);
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "move");
       return;
     }
     const workArea = this.options.workAreaFor(record.window);
@@ -306,7 +447,7 @@ export class DesktopSurfaceHost {
     record.momentum = { position: applied, velocity };
     if (shouldStopSurfaceMomentum(record.momentum, now - record.momentumStartedAtMs, record.momentumConfig)) {
       this.stopMomentum(record);
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "momentum");
       return;
     }
     record.momentumTimer = this.setTimer(() => this.advanceMomentum(record), surfaceMomentumIntervalMs);
@@ -327,7 +468,7 @@ export class DesktopSurfaceHost {
     });
     if (progress >= 1) {
       record.move = null;
-      this.notifyPlacement(record);
+      this.notifyPlacement(record, "move");
       return;
     }
     record.moveTimer = this.setTimer(() => this.advanceMove(record), surfaceMoveFrameMs);
@@ -355,14 +496,22 @@ export class DesktopSurfaceHost {
    * primitives exist to avoid. A renderer does not need screen coordinates
    * while the host is moving its window; it needs them once the motion stops.
    */
-  private notifyPlacement(record: SurfaceRecord): void {
+  private notifyPlacement(record: SurfaceRecord, reason: SurfaceSettleReason): void {
     const window = record.window;
     if (window.isDestroyed()) return;
-    window.send(surfacePositionChannel, {
+    const placement: SurfacePlacementInfo = {
       anchor: record.anchor,
       bodyOffset: surfaceBodyOffset(record.extension),
       workArea: this.options.workAreaFor(window),
-    });
+    };
+    window.send(surfacePositionChannel, placement);
+    try {
+      this.options.onSettled?.(record.key, placement, reason);
+    } catch {
+      // An observer that throws must not take down the glide or tween timer
+      // this can be called from, nor leave a surface mid-motion. Whoever
+      // installs the observer owns reporting its own failures.
+    }
   }
 
   /** Re-reads the anchor from the OS, for callers that suspect the window moved behind us. */
