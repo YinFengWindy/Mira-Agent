@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parent
 VENV_SITE_PACKAGES = REPO_ROOT / ".venv" / "Lib" / "site-packages"
 if VENV_SITE_PACKAGES.exists():
     sys.path.insert(0, str(VENV_SITE_PACKAGES))
