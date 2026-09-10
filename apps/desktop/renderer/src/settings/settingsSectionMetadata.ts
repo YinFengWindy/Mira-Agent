@@ -1,56 +1,44 @@
+import { pluginUiRegistry, type SettingsSectionEntry } from "../plugins/pluginUiRegistry";
+import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSections";
 import type { SettingsSectionId } from "./SettingsSidebar";
+import type { SettingsSubsection } from "./settingsPageTypes";
 
-export type SettingsSubsection = {
-  id: string;
-  label: string;
-};
+export type { SettingsSubsection };
 
-/** Lists the available subsections for every settings domain. */
-export const settingsSubsections: Record<SettingsSectionId, SettingsSubsection[]> = {
-  models: [
-    { id: "catalog", label: "模型注册" },
-  ],
-  channels: [
-    { id: "telegram", label: "Telegram" },
-    { id: "qq", label: "QQ" },
-    { id: "qqbot", label: "QQBot" },
-  ],
-  memory: [
-    { id: "general", label: "基础" },
-    { id: "embedding", label: "Embedding" },
-  ],
-  integrations: [
-    { id: "novelai", label: "NovelAI" },
-  ],
-  voice: [
-    { id: "provider", label: "供应商" },
-    { id: "input", label: "输入" },
-  ],
-  advanced: [
-    { id: "general", label: "基础" },
-  ],
-  about: [{ id: "updates", label: "应用更新" }],
-};
+registerBuiltinSettingsSections();
 
-/** Builds the initial active subsection for each settings domain. */
-export function createInitialSettingsSubsectionState(): Record<SettingsSectionId, string> {
-  return {
-    models: settingsSubsections.models[0]?.id ?? "",
-    channels: settingsSubsections.channels[0]?.id ?? "",
-    memory: settingsSubsections.memory[0]?.id ?? "",
-    integrations: settingsSubsections.integrations[0]?.id ?? "",
-    voice: settingsSubsections.voice[0]?.id ?? "",
-    advanced: settingsSubsections.advanced[0]?.id ?? "",
-    about: settingsSubsections.about[0]?.id ?? "",
-  };
+/** Lists every currently registered settings section, built-ins first. */
+export function listSettingsSections(
+  isPluginEnabled?: (pluginId: string) => boolean,
+): SettingsSectionEntry[] {
+  return pluginUiRegistry.listSettingsSections(isPluginEnabled);
+}
+
+/** Returns the sub-navigation tabs a section declared; empty when unregistered. */
+export function getSettingsSubsections(sectionId: SettingsSectionId): SettingsSubsection[] {
+  return pluginUiRegistry.getSettingsSection(sectionId)?.subsections ?? [];
+}
+
+/**
+ * Builds the initial active subsection for every currently registered
+ * section. Keyed by plain `string` (not `SettingsSectionId`): this is a
+ * dynamic lookup map, not an exhaustively-cased record, and section ids
+ * include plugin ids only known at runtime.
+ */
+export function createInitialSettingsSubsectionState(
+  sections: SettingsSectionEntry[] = listSettingsSections(),
+): Record<string, string> {
+  return Object.fromEntries(
+    sections.map((section) => [section.id, section.subsections[0]?.id ?? ""]),
+  );
 }
 
 /** Resolves an active subsection, falling back to the first available option. */
 export function resolveSettingsSubsectionId(
   sectionId: SettingsSectionId,
-  activeSubsections: Record<SettingsSectionId, string>,
+  activeSubsections: Record<string, string>,
 ): string | null {
-  const subsections = settingsSubsections[sectionId];
+  const subsections = getSettingsSubsections(sectionId);
   const activeId = activeSubsections[sectionId];
   return subsections.some((item) => item.id === activeId)
     ? activeId

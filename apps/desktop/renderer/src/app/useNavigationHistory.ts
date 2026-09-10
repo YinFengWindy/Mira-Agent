@@ -151,6 +151,17 @@ export function useNavigationHistory({
     }
   }
 
+  /** Opens a plugin-contributed nav.page full-page surface by its registry id. */
+  function openPluginPage(pageId: string, options?: { recordHistory?: boolean }): void {
+    const nextView: AppMainView = { kind: "plugin-page", pageId };
+    setSidebarAnimating(true);
+    setSidebarCollapsed(false);
+    setMainView(nextView);
+    if (options?.recordHistory !== false) {
+      pushNavigationEntry(buildNavigationEntry(nextView));
+    }
+  }
+
   function openPromptTagLibrary(options?: { recordHistory?: boolean }): void {
     const nextView: AppMainView = { kind: "image-prompt-tags" };
     setSidebarCollapsed(false);
@@ -209,6 +220,10 @@ export function useNavigationHistory({
       openStoryWorkspace({ recordHistory: false });
       return;
     }
+    if (nextEntry.view.kind === "plugin-page") {
+      openPluginPage(nextEntry.view.pageId, { recordHistory: false });
+      return;
+    }
     if (nextEntry.view.kind === "roles-list" || nextEntry.view.kind === "role-create") {
       openRoleWorkspaceView(nextEntry.view);
       return;
@@ -257,6 +272,7 @@ export function useNavigationHistory({
     openPromptTagLibrary,
     openSettingsWorkspace,
     openRoleWorkspace,
+    openPluginPage,
     navigateHistory,
     pushNavigationEntry,
   };

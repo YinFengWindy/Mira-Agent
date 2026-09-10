@@ -60,6 +60,19 @@ describe("appState", () => {
     assert.equal(viewsEqual(storyEntry.view, { kind: "chat" }), false);
   });
 
+  it("distinguishes plugin nav pages by their page id", () => {
+    const pluginEntry: NavigationEntry = {
+      view: { kind: "plugin-page", pageId: "demo" },
+      activeRoleId: "mira",
+      settingsSection: "models",
+    };
+
+    assert.deepEqual(cloneView(pluginEntry.view), { kind: "plugin-page", pageId: "demo" });
+    assert.equal(viewsEqual(pluginEntry.view, { kind: "plugin-page", pageId: "demo" }), true);
+    assert.equal(viewsEqual(pluginEntry.view, { kind: "plugin-page", pageId: "other" }), false);
+    assert.equal(viewsEqual(pluginEntry.view, { kind: "chat" }), false);
+  });
+
   it("recognizes proactive assistant pushes from the latest assistant message", () => {
     const proactiveSession = createSession({
       messages: [

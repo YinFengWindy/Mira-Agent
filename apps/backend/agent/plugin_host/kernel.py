@@ -50,6 +50,10 @@ from bus.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
+# 启停状态与插件自己的配置同住 [plugins.<id>] 表，但它归宿主所有、不是插件配置
+# 模型的字段。凡是整表读写这张表的地方都必须认得这个键，否则会互相覆盖。
+PLUGIN_ENABLED_CONFIG_KEY = "enabled"
+
 
 @dataclass
 class HostServices:
@@ -178,6 +182,10 @@ class PluginKernel:
             handle.state = PluginState.DISABLED
             logger.info("插件已禁用（%s）: %s", DISABLED_MARKER, record.name)
             return
+        if not self._config_enabled(record.manifest.id):
+            handle.state = PluginState.DISABLED
+            logger.info("插件已禁用（配置状态）: %s", record.name)
+            return
         handle.state = PluginState.LOADING
         try:
             self._import_entry(handle)
@@ -197,6 +205,17 @@ class PluginKernel:
         handle.state = PluginState.ACTIVE
         self._active_order.append(record.name)
         logger.info("插件已加载: %s", record.name)
+
+    def _config_enabled(self, plugin_id: str) -> bool:
+        """Reads the ``[plugins.<id>].enabled`` config flag; absent means enabled.
+
+        This is the enable/disable source of truth introduced by issue #174
+        (desktop plugin management list, hot load/unload) — independent of
+        the legacy ``plugin.disabled`` marker file above, which stays as-is
+        for compatibility but is not something new code should rely on.
+        """
+        stored = self._services.plugin_configs.get(plugin_id, {})
+        return bool(stored.get(PLUGIN_ENABLED_CONFIG_KEY, True))
 
     def _import_entry(self, handle: PluginHandle) -> None:
         record = handle.record

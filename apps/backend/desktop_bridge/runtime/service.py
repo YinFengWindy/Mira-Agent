@@ -24,6 +24,7 @@ from desktop_bridge.models import BridgeError, BridgeResponse
 from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
 from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.runtime.plugin_config import RuntimePluginConfig
+from desktop_bridge.runtime.plugin_management import RuntimePluginManagement
 from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
 from desktop_bridge.service import DesktopBridgeService
 
@@ -50,6 +51,7 @@ class ReloadableDesktopService:
         self.settings = RuntimeSettingsApplication(app, config_path, roles)
         self.role_tasks = RuntimeRoleTasks(app, roles)
         self.plugin_config = RuntimePluginConfig(app, self.settings)
+        self.plugin_management = RuntimePluginManagement(app, self.settings)
         lease = app.pin()
         self._current = _ServiceGeneration(build_desktop_service(lease.core, roles), lease)
         self._entries = [self._current]
@@ -105,29 +107,33 @@ class ReloadableDesktopService:
                                   error=BridgeError("invalid_request", "payload 必须是对象"))
         policy = self.resolve_method_policy(method)
         if policy.handler is Handler.SETTINGS:
-            try:
+            async def compute_settings_result():
                 result = self.status() if method == "runtime.status" else await self.settings.apply(
                     payload, prepare_service=self._prepare, publish_service=self._publish,
                 )
                 if method == "runtime.apply":
                     await self.publish_event({"id": request_id, "type": "event",
                                               "method": "runtime.applied", "payload": result})
-                return BridgeResponse(request_id, "response", method, result)
-            except RuntimeApplyError as exc:
-                return BridgeResponse(request_id, "response", method,
-                                      error=BridgeError(exc.code, str(exc), exc.details))
+                return result
+            return await self._respond_or_apply_error(request_id, method, compute_settings_result)
         if policy.handler is Handler.PLUGIN_CONFIG:
-            try:
-                result = (
+            async def compute_plugin_config_result():
+                return (
                     self.plugin_config.get(payload) if method == "plugin.config.get"
                     else await self.plugin_config.set(
                         payload, prepare_service=self._prepare, publish_service=self._publish,
                     )
                 )
-                return BridgeResponse(request_id, "response", method, result)
-            except RuntimeApplyError as exc:
-                return BridgeResponse(request_id, "response", method,
-                                      error=BridgeError(exc.code, str(exc), exc.details))
+            return await self._respond_or_apply_error(request_id, method, compute_plugin_config_result)
+        if policy.handler is Handler.PLUGIN_MANAGEMENT:
+            async def compute_plugin_management_result():
+                return (
+                    self.plugin_management.list(payload) if method == "plugins.list"
+                    else await self.plugin_management.set_enabled(
+                        payload, prepare_service=self._prepare, publish_service=self._publish,
+                    )
+                )
+            return await self._respond_or_apply_error(request_id, method, compute_plugin_management_result)
         if policy.handler is Handler.ROLE_TASKS:
             role_id = str(payload.get("role_id") or "")
             try:
@@ -160,6 +166,21 @@ class ReloadableDesktopService:
             entry.requests -= 1
             if not entry.requests:
                 entry.idle.set()
+
+    async def _respond_or_apply_error(self, request_id: str, method: str, compute):
+        """Runs one SETTINGS/PLUGIN_CONFIG/PLUGIN_MANAGEMENT handler.
+
+        These three branches share one shape: call into a runtime-apply-style
+        helper, then turn a ``RuntimeApplyError`` into a structured
+        ``BridgeError`` response. Centralized here so that shape is written
+        once instead of once per branch.
+        """
+        try:
+            result = await compute()
+            return BridgeResponse(request_id, "response", method, result)
+        except RuntimeApplyError as exc:
+            return BridgeResponse(request_id, "response", method,
+                                  error=BridgeError(exc.code, str(exc), exc.details))
 
     def _owner(self, routing: OwnerRouting, payload):
         for entry in self._entries:

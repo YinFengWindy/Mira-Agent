@@ -37,6 +37,9 @@ import type { RoleSessionCache } from "./chat/roleSessionCache";
 import type { ChatMessageNavigationScroller } from "./chat/useChatScrollController";
 import { DesktopErrorBoundary } from "./diagnostics/DesktopErrorBoundary";
 import { registerRendererGlobalDiagnostics } from "./diagnostics/rendererGlobalDiagnostics";
+// Registers every plugin's compiled-in settings.section/nav.page contributions
+// into pluginUiRegistry before any component (nav rail, settings sidebar) reads it.
+import "./plugins/pluginUiModules";
 import { useImageStudioState } from "./image/useImageStudioState";
 import { type PromptTagWorkspaceSectionId } from "./image/PromptTagWorkspaceSidebar";
 import { createRoleFormFromRole, syncRoleFormMoodConfig } from "./roles/roleFormState";
@@ -249,6 +252,7 @@ function App(): React.ReactElement {
     openPromptTagLibrary,
     openSettingsWorkspace,
     openRoleWorkspace,
+    openPluginPage,
     navigateHistory,
     pushNavigationEntry,
   } = useNavigationHistory({
@@ -628,6 +632,7 @@ function App(): React.ReactElement {
       onOpenSearch={() => setShowSearchDialog(true)}
       onOpenRolesWorkspace={() => openRoleWorkspace({ kind: "roles-list" })}
       onOpenStory={() => openStoryWorkspace()}
+      onOpenPluginPage={(pageId) => openPluginPage(pageId)}
       onOpenRole={(roleId) => void openRole(roleId, null, { recordHistory: true })}
       onOpenImageStudio={() => openImageStudio()}
       onOpenPromptTagLibrary={() => { setPromptTagWorkspaceSection("list"); openPromptTagLibrary(); }}
