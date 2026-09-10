@@ -303,3 +303,74 @@ async def test_get_returns_json_safe_defaults(tmp_path, monkeypatch):
     finally:
         await service.aclose()
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_set_survives_the_kernel_generation_being_replaced(tmp_path, monkeypatch):
+    """写入过程中旧 generation 被处置，不能变成 internal_error。
+
+    ``plugin.config.set`` 要等设置事务的锁，期间别的 apply 可能发布新 generation
+    并处置旧内核，其 schema 注册表随之注销。若写入路径在锁内再回查注册表，就会
+    抛 KeyError 并被外层兜成 internal_error。这里在校验完成后直接把内核的 schema
+    注销掉，模拟那一刻的状态。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        kernel = app.core.plugin_manager
+        assert kernel is not None
+        original_merge = service.plugin_config._settings.apply
+
+        async def _apply_with_disposed_kernel(*args, **kwargs):
+            # 模拟旧代被处置：schema 注册表已清空
+            kernel.config_schemas.unregister("qqbot")
+            return await original_merge(*args, **kwargs)
+
+        monkeypatch.setattr(
+            service.plugin_config._settings, "apply", _apply_with_disposed_kernel
+        )
+
+        response = await _request(service, "plugin.config.set", {
+            "plugin_id": "qqbot", "operation_id": "op-stale",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        })
+
+        assert response.error is None, response.error
+        assert response.payload["values"]["app_id"] == "app-1"
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
+    tmp_path, monkeypatch
+):
+    """同一请求原样重试不能因为无关设置变了就被判成操作冲突。
+
+    幂等指纹若取派生出来的整份配置文本，任何无关改动都会让指纹漂移，重试同一个
+    operation_id 就会返回 runtime_operation_conflict——而 renderer 的保存队列正是
+    靠原样重试来做幂等的。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        payload = {
+            "plugin_id": "qqbot", "operation_id": "op-retry",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        }
+        first = await _request(service, "plugin.config.set", payload)
+        assert first.error is None, first.error
+
+        # 无关设置发生变化：直接改动已提交的配置文本
+        service.settings.config_text = service.settings.config_text + (
+            '\n[plugins.unrelated]\nflag = true\n'
+        )
+
+        retry = await _request(service, "plugin.config.set", dict(payload))
+
+        assert retry.error is None, retry.error
+        assert retry.payload["values"]["app_id"] == "app-1"
+    finally:
+        await service.aclose()
+        await app.shutdown()

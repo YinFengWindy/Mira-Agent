@@ -48,15 +48,31 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
 
     lines = config_toml.splitlines(keepends=True)
     prefix_segments = ["plugins", plugin_id]
-    start, end = _locate_table(lines, prefix_segments)
+    spans = _locate_owned_spans(lines, prefix_segments)
     block = _render_table(plugin_id, values)
-    if start is None:
+    if not spans:
         return _append_table(config_toml, block)
-    return "".join(lines[:start] + [block] + lines[end:])
+    # 新表整体写在第一段的位置，其余归属本插件的表段（可能被无关表隔开）一并移除；
+    # 只处理第一段会把后面的旧子表留下，生成重复表声明，整份文档随即无法解析。
+    out: list[str] = list(lines[: spans[0][0]])
+    out.append(block)
+    previous_end = spans[0][1]
+    for start, end in spans[1:]:
+        out.extend(lines[previous_end:start])
+        previous_end = end
+    out.extend(lines[previous_end:])
+    return "".join(out)
 
 
-def _locate_table(lines: list[str], prefix_segments: list[str]) -> tuple[int | None, int]:
-    """Returns the ``[start, end)`` line span owned by ``prefix_segments``, if present.
+def _locate_owned_spans(
+    lines: list[str], prefix_segments: list[str]
+) -> list[tuple[int, int]]:
+    """Returns every ``[start, end)`` line span whose table is owned by the prefix.
+
+    A plugin's main table and its sub-tables are usually contiguous, but nothing
+    in TOML requires that — an unrelated table may sit between them, and both
+    orderings parse identically. Collecting every owned span (merging adjacent
+    ones) is therefore the only correct basis for replacement.
 
     Only lines that begin a new top-level TOML statement (depth 0, not inside
     a multi-line string) are considered as header candidates; continuation
@@ -64,8 +80,7 @@ def _locate_table(lines: list[str], prefix_segments: list[str]) -> tuple[int | N
     their stripped text looks like.
     """
 
-    start: int | None = None
-    end = len(lines)
+    headers: list[tuple[int, bool]] = []
     depth = 0
     in_multiline_basic = False
     in_multiline_literal = False
@@ -81,15 +96,18 @@ def _locate_table(lines: list[str], prefix_segments: list[str]) -> tuple[int | N
         if not match:
             continue
         segments = _parse_key_path(match.group(2))
-        owned = segments[: len(prefix_segments)] == prefix_segments
-        if start is None:
-            if owned:
-                start = index
-            continue
+        headers.append((index, segments[: len(prefix_segments)] == prefix_segments))
+
+    spans: list[tuple[int, int]] = []
+    for position, (start, owned) in enumerate(headers):
         if not owned:
-            end = index
-            break
-    return start, end
+            continue
+        end = headers[position + 1][0] if position + 1 < len(headers) else len(lines)
+        if spans and spans[-1][1] == start:
+            spans[-1] = (spans[-1][0], end)
+        else:
+            spans.append((start, end))
+    return spans
 
 
 def _scan_line(

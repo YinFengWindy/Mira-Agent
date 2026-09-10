@@ -44,6 +44,7 @@ class RuntimeSettingsApplication:
         self, payload: dict[str, Any], *, prepare_service: Callable,
         publish_service: Callable,
         build_config_toml: Callable[[str], str] | None = None,
+        fingerprint_source: Any = None,
     ) -> dict[str, Any]:
         """Applies a complete draft once; failures leave draft ownership with the UI.
 
@@ -57,9 +58,13 @@ class RuntimeSettingsApplication:
         async with self._lock:
             if build_config_toml is not None:
                 payload = {**payload, "config_toml": build_config_toml(self.config_text)}
-            return await self._apply(payload, prepare_service, publish_service)
+            return await self._apply(
+                payload, prepare_service, publish_service, fingerprint_source,
+            )
 
-    async def _apply(self, payload, prepare_service, publish_service):
+    async def _apply(
+        self, payload, prepare_service, publish_service, fingerprint_source=None,
+    ):
         text = payload.get("config_toml")
         operation_id = payload.get("operation_id")
         updates = payload.get("role_model_updates", [])
@@ -67,8 +72,13 @@ class RuntimeSettingsApplication:
             raise RuntimeApplyError("runtime_invalid_request", "配置内容和操作 ID 不能为空")
         if not isinstance(updates, list) or any(not isinstance(item, dict) for item in updates):
             raise RuntimeApplyError("runtime_invalid_request", "角色模型更新必须是数组")
+        # 幂等指纹默认取完整草稿文本——设置页拥有整份草稿，重试会原样重放它。
+        # 派生式调用方（如 plugin.config.set 只改一张表）必须改用它自己的逻辑
+        # 载荷：派生文本会随无关设置的变化而变，重试同一请求就会被误判为
+        # runtime_operation_conflict。
+        identity = text if fingerprint_source is None else fingerprint_source
         fingerprint = hashlib.sha256(json.dumps(
-            {"config": text, "updates": updates}, sort_keys=True, ensure_ascii=False,
+            {"config": identity, "updates": updates}, sort_keys=True, ensure_ascii=False,
         ).encode("utf-8")).hexdigest()
         previous = self._results.get(operation_id)
         if previous is not None:

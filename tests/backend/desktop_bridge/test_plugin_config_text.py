@@ -224,3 +224,30 @@ def test_a_quoted_key_header_is_located_by_its_unquoted_value():
     parsed = tomllib.loads(result)
     assert parsed["plugins"]["my.plugin"] == {"a": 2}
     assert parsed["other"] == {"z": 9}
+
+
+def test_replaces_owned_subtables_separated_by_an_unrelated_table():
+    """目标插件的主表与子表之间夹着无关表时，后面的旧子表也必须被替换掉。
+
+    TOML 不要求同一张表的子表紧跟主表，两种顺序解析结果完全一样。只处理第一段
+    连续区间会把后面的旧子表留在原地，与新写入的子表构成重复表声明，整份文档
+    随即无法解析——写入被拒，用户的插件配置永远存不上。
+    """
+    original = (
+        "[plugins.demo]\n"
+        "a = 1\n"
+        "\n"
+        "[plugins.other]\n"
+        "keep = true\n"
+        "\n"
+        "[plugins.demo.nested]\n"
+        "b = 2\n"
+    )
+
+    merged = merge_plugin_table(original, "demo", {"a": 9, "nested": {"b": 8}})
+
+    parsed = tomllib.loads(merged)
+    assert parsed["plugins"]["demo"] == {"a": 9, "nested": {"b": 8}}
+    assert parsed["plugins"]["other"] == {"keep": True}
+    # 旧子表不得残留（残留会造成重复表声明）
+    assert merged.count("[plugins.demo.nested]") == 1

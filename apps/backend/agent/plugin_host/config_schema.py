@@ -39,6 +39,18 @@ def format_validation_error(error: ValidationError) -> str:
     return "; ".join(parts)
 
 
+def validate_against(
+    model_cls: type[BaseModel], values: dict[str, Any]
+) -> dict[str, Any]:
+    """Validates and normalizes values against a config model.
+
+    与 ``PluginConfigSchemaRegistry.validate`` 等价，但直接接收模型类，供需要
+    跨 generation 边界持有模型的调用方使用。
+    """
+
+    return model_cls.model_validate(values).model_dump(mode="json")
+
+
 def resolve_config_model(record: PluginRecord) -> type[BaseModel] | None:
     """Returns the plugin's declared config model class, or None when undeclared."""
 
@@ -129,6 +141,16 @@ class PluginConfigSchemaRegistry:
             for name, field_info in model_cls.model_fields.items()
             if not field_info.is_required()
         }
+
+    def model_for(self, plugin_id: str) -> type[BaseModel] | None:
+        """Returns the plugin's registered config model, or None.
+
+        写入路径应当在开始时取出模型类并一路持有它，而不是反复回查注册表：
+        注册表随 generation 生灭，一次配置写入跨越了事务锁的等待，期间旧代可能
+        已被处置、schema 随之注销，再查就会抛 KeyError。模型类本身是不可变的，
+        与 generation 无关。
+        """
+        return self._models.get(plugin_id)
 
     def validate(self, plugin_id: str, values: dict[str, Any]) -> dict[str, Any]:
         """Validates and normalizes values against the plugin's model.

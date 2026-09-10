@@ -11,9 +11,12 @@ import tomllib
 from collections.abc import Callable
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from agent.plugin_host.config_schema import format_validation_error
+from agent.plugin_host.config_schema import (
+    format_validation_error,
+    validate_against,
+)
 from agent.plugin_host.kernel import PluginKernel
 from bootstrap.app import AppRuntime
 from desktop_bridge.plugin_config_text import merge_plugin_table
@@ -60,12 +63,16 @@ class RuntimePluginConfig:
         if not isinstance(operation_id, str) or not operation_id.strip():
             raise RuntimeApplyError("runtime_invalid_request", "操作 ID 不能为空")
         kernel = self._plugin_kernel()
-        if kernel is None or plugin_id not in kernel.config_schemas:
+        # 取出模型类并一路持有：本方法要等事务锁，期间可能有别的 apply 发布新
+        # generation 并处置旧内核，届时再回查注册表会抛 KeyError（并发保存直接
+        # 变成 internal_error）。模型类不可变，与 generation 无关。
+        model_cls = kernel.config_schemas.model_for(plugin_id) if kernel else None
+        if model_cls is None:
             raise RuntimeApplyError(
                 "plugin_config_unsupported", f"插件 {plugin_id} 未声明配置模型",
             )
         try:
-            normalized = kernel.config_schemas.validate(plugin_id, values)
+            normalized = validate_against(model_cls, values)
         except ValidationError as exc:
             raise RuntimeApplyError(
                 "plugin_config_invalid", format_validation_error(exc),
@@ -80,7 +87,7 @@ class RuntimePluginConfig:
         def _merge(current_text: str) -> str:
             merged = merge_plugin_table(current_text, plugin_id, normalized)
             self._assert_config_round_trip(
-                kernel, plugin_id, current_text, merged, normalized,
+                model_cls, plugin_id, current_text, merged, normalized,
             )
             return merged
 
@@ -93,6 +100,10 @@ class RuntimePluginConfig:
             prepare_service=prepare_service,
             publish_service=publish_service,
             build_config_toml=_merge,
+            # 幂等指纹按"本次逻辑操作"计算，而不是派生出来的整份配置文本：
+            # 后者会随无关设置的变化而变，导致同一请求原样重试被误判为
+            # runtime_operation_conflict。
+            fingerprint_source={"plugin_id": plugin_id, "values": normalized},
         )
         return {"plugin_id": plugin_id, "values": normalized, **result}
 
@@ -103,7 +114,7 @@ class RuntimePluginConfig:
 
     @staticmethod
     def _assert_config_round_trip(
-        kernel: PluginKernel,
+        model_cls: type[BaseModel],
         plugin_id: str,
         original_text: str,
         merged_text: str,
@@ -152,7 +163,7 @@ class RuntimePluginConfig:
             )
         stored = after.get("plugins", {}).get(plugin_id, {})
         try:
-            reread = kernel.config_schemas.validate(plugin_id, stored)
+            reread = validate_against(model_cls, stored)
         except ValidationError as exc:
             raise RuntimeApplyError(
                 "plugin_config_unrepresentable",
