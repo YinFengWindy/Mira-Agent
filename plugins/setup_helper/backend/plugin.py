@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from agent.lifecycle.types import BeforeTurnCtx, TurnState
-from agent.plugins import Plugin
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 
 class ChatIdCommandModule:
@@ -23,15 +25,10 @@ class ChatIdCommandModule:
         return frame
 
 
-class SetupHelper(Plugin):
-    name = "setup_helper"
-    desc = "快速查询当前会话 chat_id，用于配置 proactive"
-
-    def telegram_bot_commands(self) -> list[tuple[str, str]]:
-        return [("chatid", "查看我的 chat_id（配置 proactive 用）")]
-
-    def before_turn_modules(self) -> list[object]:
-        return cast("list[object]", [ChatIdCommandModule()])
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 setup_helper：贡献 before_turn 命令模块与 /chatid bot 命令。"""
+    ctx.lifecycle.contribute("before_turn", cast("list[object]", [ChatIdCommandModule()]))
+    ctx.bot_commands.add("chatid", "查看我的 chat_id（配置 proactive 用）")
 
 
 def _normalize_command(content: str) -> str:

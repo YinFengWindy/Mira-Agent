@@ -23,6 +23,7 @@ from agent.plugin_host.runtime_context import (
     CapabilityNotGranted,
     PluginRuntimeContext,
 )
+from agent.plugin_host.tool_hooks import PluginToolHook
 
 __all__ = [
     "CapabilityNotGranted",
@@ -43,6 +44,7 @@ __all__ = [
     "PluginRpcRegistry",
     "PluginRuntimeContext",
     "PluginState",
+    "PluginToolHook",
     "ScopedEventBus",
     "load_manifest",
     "resolve_config_model",

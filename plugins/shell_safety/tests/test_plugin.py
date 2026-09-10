@@ -2,29 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import pytest
-
-from agent.plugins.manager import PluginManager
-from agent.plugins.registry import plugin_registry
+from agent.plugin_host import HostServices, PluginKernel
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
 
 PLUGIN_DIR = Path(__file__).resolve().parents[3] / "plugins" / "shell_safety"
-
-
-@pytest.fixture(autouse=True)
-def _clean_registry() -> Iterator[None]:
-    plugin_registry._handlers._handlers.clear()
-    plugin_registry._classes.clear()
-    plugin_registry._instances.clear()
-    yield
-    plugin_registry._handlers._handlers.clear()
-    plugin_registry._classes.clear()
-    plugin_registry._instances.clear()
 
 
 async def _invoke(tool_name: str, arguments: dict[str, Any]) -> Any:
@@ -38,16 +23,17 @@ def _run(coro: Any) -> Any:
 def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR / "backend", root / "shell_safety")
+    # 复制整个插件包（含 manifest 与 backend/），内核按 plugins/<id>/backend/plugin.py 发现
+    shutil.copytree(PLUGIN_DIR, root / "shell_safety")
     return root
 
 
 def _run_shell(root: Path, command: str) -> Any:
     bus = EventBus()
-    mgr = PluginManager(plugin_dirs=[root], event_bus=bus)
-    _run(mgr.load_all())
+    kernel = PluginKernel([root], services=HostServices(event_bus=bus))
+    _run(kernel.load_all())
     return _run(
-        ToolExecutor(mgr.tool_hooks).execute(
+        ToolExecutor(kernel.tool_hooks).execute(
             ToolExecutionRequest(
                 call_id="c1",
                 tool_name="shell",
@@ -57,6 +43,16 @@ def _run_shell(root: Path, command: str) -> Any:
             _invoke,
         )
     )
+
+
+def test_shell_safety_hook_name_matches_legacy_convention(tmp_path: Path) -> None:
+    """hook 名由 ToolHooksCapability 统一生成，须与旧系统
+    f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
+    bus = EventBus()
+    kernel = PluginKernel([_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus))
+    _run(kernel.load_all())
+
+    assert [h.name for h in kernel.tool_hooks] == ["plugin:shell_safety:block_interactive_shell"]
 
 
 def test_shell_safety_blocks_sudo_without_non_interactive(tmp_path: Path) -> None:

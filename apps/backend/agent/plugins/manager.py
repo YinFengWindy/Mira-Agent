@@ -22,12 +22,11 @@ from agent.lifecycle.types import (
     BeforeStepCtx,
     BeforeToolCallCtx,
     BeforeTurnCtx,
-    PreToolCtx,
     PromptRenderCtx,
 )
+from agent.plugin_host.tool_hooks import PluginToolHook, build_hook_name
 from agent.plugins.registry import MetadataKind, PluginEventType, plugin_registry
 from agent.tool_hooks.base import ToolHook
-from agent.tool_hooks.types import HookContext, HookOutcome
 from agent.core.proactive_turn.gates import ProactiveGate
 from bus.event_bus import EventBus
 from infra.channels.contract import Channel
@@ -371,8 +370,10 @@ class PluginManager:
             if md.kind != MetadataKind.TOOL_HOOK:
                 continue
             bound = functools.partial(md.handler, instance)
-            hook = _PluginToolHook(
-                name=f"plugin:{getattr(instance, 'name', module_path)}:{md.handler_name}",
+            hook = PluginToolHook(
+                name=build_hook_name(
+                    str(getattr(instance, "name", module_path)), md.handler_name
+                ),
                 handler=bound,
                 tool_name_filter=md.hook_tool_name,
             )
@@ -598,54 +599,6 @@ def _make_execute(bound: Any) -> Any:
             result = await result
         return str(result)
     return execute
-
-
-class _PluginToolHook(ToolHook):
-    """将插件的 @on_tool_pre handler 适配为 ToolExecutor 的 ToolHook 接口。"""
-
-    event = "pre_tool_use"
-
-    def __init__(
-        self,
-        name: str,
-        handler: Any,
-        tool_name_filter: str | None = None,
-    ) -> None:
-        self.name = name
-        self._handler = handler
-        self._tool_name_filter = tool_name_filter
-
-    def matches(self, ctx: HookContext) -> bool:
-        if self._tool_name_filter is None:
-            return True
-        return ctx.request.tool_name == self._tool_name_filter
-
-    async def run(self, ctx: HookContext) -> HookOutcome:
-        # 1. 构造 PreToolCtx（复制 arguments，避免插件直接改原对象）
-        event = PreToolCtx(
-            session_key=ctx.request.session_key,
-            channel=ctx.request.channel,
-            chat_id=ctx.request.chat_id,
-            tool_name=ctx.request.tool_name,
-            arguments=dict(ctx.current_arguments),
-            call_id=ctx.request.call_id,
-            source=ctx.request.source,
-            request_text=ctx.request.request_text,
-            tool_batch=ctx.request.tool_batch,
-            tool_batch_index=ctx.request.tool_batch_index,
-        )
-        # 2. 调插件 handler，返回值决定行为
-        result = self._handler(event)
-        if inspect.isawaitable(result):
-            result = await result
-        # 3. None → 不改参；dict → 新 arguments；HookOutcome → 允许插件直接 deny
-        if result is None:
-            return HookOutcome()
-        if isinstance(result, HookOutcome):
-            return result
-        if isinstance(result, dict):
-            return HookOutcome(updated_input=cast("dict[str, Any]", result))
-        return HookOutcome()
 
 
 def _is_plugin_disabled(plugin_dir: Path) -> bool:

@@ -16,6 +16,7 @@ from typing import Any, cast
 
 from agent.plugin_host.capabilities import (
     BackgroundCapability,
+    BotCommandsCapability,
     ChannelsCapability,
     LifecycleCapability,
     ProactiveGatesCapability,
@@ -293,7 +294,7 @@ class PluginKernel:
                 handle.contributions, handle.effects
             ),
             "tool_hooks": lambda: ToolHooksCapability(
-                handle.contributions, handle.effects
+                handle.contributions, handle.effects, handle.plugin_id
             ),
             "proactive_gates": lambda: ProactiveGatesCapability(
                 handle.contributions, handle.effects
@@ -303,6 +304,9 @@ class PluginKernel:
             ),
             "background": lambda: BackgroundCapability(
                 handle.effects, handle.plugin_id
+            ),
+            "bot_commands": lambda: BotCommandsCapability(
+                handle.contributions, handle.effects
             ),
             "rpc": lambda: RpcCapability(self.rpc, handle.effects, handle.plugin_id),
         }
@@ -409,13 +413,18 @@ class PluginKernel:
 
     @property
     def telegram_bot_commands(self) -> list[tuple[str, str]]:
+        """聚合两条来源：legacy 实例的 telegram_bot_commands() 与 v2 的 bot_commands 贡献。
+
+        迁移期两条路径并存，任何一侧插件的命令都不应"静默消失"；两条来源之间不做
+        去重，若同一命令被两侧同时贡献会重复出现（目前没有插件这样做，暂不处理）。
+        """
         commands: list[tuple[str, str]] = []
         for handle in self._active_handles():
             getter = getattr(handle.instance, "telegram_bot_commands", None)
-            if getter is None:
-                continue
-            for command, description in getter():
-                commands.append((str(command), str(description)))
+            if getter is not None:
+                for command, description in getter():
+                    commands.append((str(command), str(description)))
+            commands.extend(handle.contributions.bot_commands)
         return commands
 
 

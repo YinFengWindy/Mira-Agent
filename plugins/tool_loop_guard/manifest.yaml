@@ -1,0 +1,7 @@
+api: 2
+id: tool_loop_guard
+version: '0.1.0'
+desc: 检测连续重复的工具调用并提前截断
+capabilities:
+  - tool_hooks
+  - config

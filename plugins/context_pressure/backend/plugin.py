@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from agent.lifecycle.types import AfterStepCtx
-from agent.plugins import Plugin
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _CTX_SLOT = "step:ctx"
 _EARLY_STOP_REASON_SLOT = "step:early_stop_reason"
@@ -41,10 +43,6 @@ class ContextPressureStopModule:
         return frame
 
 
-class ContextPressurePlugin(Plugin):
-    name = "context_pressure"
-    version = "0.1.0"
-    desc = "上下文压力过高时请求被动循环阶段性收尾"
-
-    def after_step_modules(self) -> list[object]:
-        return [ContextPressureStopModule()]
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 context_pressure：贡献 after_step 阶段的收尾请求模块。"""
+    ctx.lifecycle.contribute("after_step", [ContextPressureStopModule()])

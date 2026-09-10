@@ -1,0 +1,4 @@
+api: 2
+id: shell_restore
+capabilities:
+  - tool_hooks

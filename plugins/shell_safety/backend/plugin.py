@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import shlex
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agent.lifecycle.types import PreToolCtx
-from agent.plugins import Plugin, on_tool_pre
 from agent.tool_hooks import HookOutcome
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 INTERACTIVE_COMMANDS = {
     "vi",
@@ -25,12 +28,9 @@ PACKAGE_WRITE_OPTIONS = {
 }
 
 
-class ShellSafety(Plugin):
-    name = "shell_safety"
-    version = "0.1.0"
-    desc = "阻止 shell 工具执行容易卡住的交互式命令"
+class _ShellSafetyGuard:
+    """阻止 shell 工具执行容易卡住的交互式命令；v2 插件不再继承旧 Plugin ABC。"""
 
-    @on_tool_pre(tool_name="shell")
     async def block_interactive_shell(self, event: PreToolCtx) -> HookOutcome | None:
         command = str(event.arguments.get("command") or "").strip()
         if not command:
@@ -116,3 +116,13 @@ class ShellSafety(Plugin):
             if name == "crontab" and tokens[index + 1] == "-e":
                 return True
         return False
+
+
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 shell_safety：注册 shell 工具的 pre-tool hook。
+
+    hook 名由 ToolHooksCapability 统一生成（plugin:{plugin_id}:{handler.__name__}），
+    插件不再直接引用宿主的 PluginToolHook 或自行拼接 hook 名（#182 评审）。
+    """
+    guard = _ShellSafetyGuard()
+    ctx.tool_hooks.add_handler(guard.block_interactive_shell, tool_name_filter="shell")
