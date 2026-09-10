@@ -12,6 +12,7 @@ from typing import Any, cast
 
 from pydantic import BaseModel, ValidationError
 
+from agent.plugin_host.config_schema import format_validation_error
 from agent.lifecycle.types import (
     AfterReasoningCtx,
     AfterStepCtx,
@@ -496,7 +497,7 @@ def _load_plugin_config(
         try:
             return config_model.model_validate(raw_config or {})
         except ValidationError as e:
-            raise _PluginConfigError(_format_validation_error(e)) from e
+            raise _PluginConfigError(format_validation_error(e)) from e
     # 1. 读取 _conf_schema.json，提取每个字段的 default 值
     from agent.plugins.config import PluginConfig
     schema_path = plugin_dir / "_conf_schema.json"
@@ -536,14 +537,6 @@ def _load_plugin_config(
             else:
                 logger.warning("plugin_config.json 格式错误，期望 dict (%s)", plugin_dir)
     return PluginConfig(values)
-
-
-def _format_validation_error(error: ValidationError) -> str:
-    parts: list[str] = []
-    for item in error.errors():
-        path = ".".join(str(part) for part in item.get("loc", ())) or "<root>"
-        parts.append(f"{path}: {item.get('msg', 'invalid')}")
-    return "; ".join(parts)
 
 
 def _load_module_list(instance: Any, method_name: str) -> list[object]:

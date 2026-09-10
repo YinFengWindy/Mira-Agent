@@ -19,8 +19,13 @@ from agent.plugin_host.capabilities import (
     ChannelsCapability,
     LifecycleCapability,
     ProactiveGatesCapability,
+    RpcCapability,
     ToolHooksCapability,
     ToolsCapability,
+)
+from agent.plugin_host.config_schema import (
+    PluginConfigSchemaRegistry,
+    resolve_config_model,
 )
 from agent.plugin_host.effects import EffectScope
 from agent.plugin_host.events import ScopedEventBus
@@ -38,6 +43,7 @@ from agent.plugin_host.plugin_data import (
     migrate_legacy_plugin_config,
     open_plugin_kv,
 )
+from agent.plugin_host.rpc import PluginRpcRegistry
 from agent.plugin_host.runtime_context import PluginRuntimeContext
 from bus.event_bus import EventBus
 
@@ -86,6 +92,9 @@ class PluginKernel:
         self._strict = strict
         self._handles: dict[str, PluginHandle] = {}
         self._active_order: list[str] = []
+        # 每个内核（= 每个 runtime generation）独立一份 RPC/配置 schema 注册表
+        self.rpc = PluginRpcRegistry()
+        self.config_schemas = PluginConfigSchemaRegistry()
 
     # ── 发现 ──────────────────────────────────────────────────────────────
 
@@ -171,6 +180,7 @@ class PluginKernel:
         handle.state = PluginState.LOADING
         try:
             self._import_entry(handle)
+            self._register_config_schema(handle)
             if record.manifest.is_v2:
                 await self._setup_v2(handle)
             else:
@@ -203,6 +213,22 @@ class PluginKernel:
 
             plugin_registry.remove_plugin(record.import_path)
             raise LegacyPluginError(f"插件 {record.name} 导入失败: {e}") from e
+
+    def _register_config_schema(self, handle: PluginHandle) -> None:
+        """解析并登记插件的配置模型（若声明了）；失败时向上抛出触发本插件回滚。
+
+        model 解析对 v2 manifest 的 ``config_model`` 与 legacy ``ConfigModel``
+        类属性一视同仁（后者要求入口模块已导入完成 __init_subclass__ 注册，
+        此时机点在 _import_entry 之后，两条路径都已满足）。
+        """
+        model_cls = resolve_config_model(handle.record)
+        if model_cls is None:
+            return
+        self.config_schemas.register(handle.plugin_id, model_cls)
+        handle.effects.add(
+            "config_schema",
+            lambda: self.config_schemas.unregister(handle.plugin_id),
+        )
 
     async def _setup_v2(self, handle: PluginHandle) -> None:
         module = sys.modules[handle.record.import_path]
@@ -259,6 +285,7 @@ class PluginKernel:
             "background": lambda: BackgroundCapability(
                 handle.effects, handle.plugin_id
             ),
+            "rpc": lambda: RpcCapability(self.rpc, handle.effects, handle.plugin_id),
         }
         return {
             name: builders[name]()
