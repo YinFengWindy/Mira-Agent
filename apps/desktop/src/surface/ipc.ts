@@ -1,5 +1,10 @@
 import type { SurfaceExtension, SurfacePoint, SurfaceSpec, SurfaceWorkArea } from "./contract.js";
-import { DesktopSurfaceError, type DesktopSurfaceHost, type SurfaceKey } from "./host.js";
+import {
+  DesktopSurfaceError,
+  type DesktopSurfaceHost,
+  type SurfaceKey,
+  type SurfaceMenuItem,
+} from "./host.js";
 
 /**
  * IPC channels for the DesktopSurface capability.
@@ -35,6 +40,10 @@ export const surfaceChannels = {
   hide: "desktop:surface-hide",
   workArea: "desktop:surface-work-area",
   post: "desktop:surface-post",
+  setState: "desktop:surface-set-state",
+  ready: "desktop:surface-ready",
+  contextMenu: "desktop:surface-context-menu",
+  activateMainWindow: "desktop:surface-activate-main-window",
   setPosition: "desktop:surface-set-position",
   setExtension: "desktop:surface-set-extension",
   setClickThrough: "desktop:surface-set-click-through",
@@ -110,6 +119,30 @@ export function registerSurfaceIpc(host: SurfaceIpcHost, options: RegisterSurfac
   host.on(surfaceChannels.post, (_event, payload) => {
     const key = readKey(payload);
     if (key) surfaces.postMessage(key, (payload as { message?: unknown }).message);
+  });
+
+  host.on(surfaceChannels.setState, (_event, payload) => {
+    const key = readKey(payload);
+    if (key) surfaces.setState(key, (payload as { state?: unknown }).state);
+  });
+
+  host.on(surfaceChannels.ready, (event) => {
+    const key = ownSurface(event);
+    if (key) guard(surfaceChannels.ready, () => surfaces.markReady(key));
+  });
+
+  host.on(surfaceChannels.activateMainWindow, (event) => {
+    // Attributed by window identity: only a live surface may pull the main
+    // window forward, so a stale renderer cannot steal focus after teardown.
+    if (ownSurface(event)) surfaces.activateMainWindow();
+  });
+
+  host.handle(surfaceChannels.contextMenu, async (event, payload) => {
+    const key = ownSurface(event);
+    if (!key) return null;
+    const items = readMenuItems(payload);
+    if (!items) return null;
+    return await surfaces.showContextMenu(key, items);
   });
 
   host.on(surfaceChannels.setPosition, (event, payload) => {
@@ -201,6 +234,26 @@ function readPointNamed(payload: unknown, xKey: string, yKey: string): SurfacePo
   const y = readNumber(source[yKey]);
   if (x === null || y === null) return null;
   return { x, y };
+}
+
+/**
+ * Reads a context-menu request, rejecting the whole menu if any entry is
+ * malformed rather than silently opening a menu with items missing — a menu
+ * that is quietly one item short looks like a feature that stopped working.
+ */
+function readMenuItems(payload: unknown): SurfaceMenuItem[] | null {
+  if (payload === null || typeof payload !== "object") return null;
+  const items = (payload as { items?: unknown }).items;
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const parsed: SurfaceMenuItem[] = [];
+  for (const item of items) {
+    if (item === null || typeof item !== "object") return null;
+    const { id, label } = item as { id?: unknown; label?: unknown };
+    if (typeof id !== "string" || !id) return null;
+    if (typeof label !== "string" || !label) return null;
+    parsed.push({ id, label });
+  }
+  return parsed;
 }
 
 function readExtension(payload: unknown): SurfaceExtension | null {

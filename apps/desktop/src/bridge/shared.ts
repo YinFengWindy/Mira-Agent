@@ -40,9 +40,18 @@ export type DesktopSurfacesApi = {
   workArea(pluginId: string, surfaceId: string): Promise<SurfacePlacementPayload["workArea"]>;
   setPosition(pluginId: string, surfaceId: string, position: { x: number; y: number }): void;
   moveTo(pluginId: string, surfaceId: string, position: { x: number; y: number }, durationMs: number): void;
-  /** Relays a payload to the surface renderer, delivered on `onMessage`. */
+  /** Relays a transient payload to the surface renderer, delivered on `onMessage`. */
   post(pluginId: string, surfaceId: string, message: unknown): void;
+  /**
+   * Sets the surface's retained state, replayed whenever its renderer reports
+   * ready. Use this for anything the surface must still be showing after a
+   * reload; use `post` for one-shot events.
+   */
+  setState(pluginId: string, surfaceId: string, state: unknown): void;
 };
+
+/** One entry of a surface-owned native context menu. */
+export type SurfaceMenuItemPayload = { id: string; label: string };
 
 /**
  * Drives the surface window the caller is already inside.
@@ -56,7 +65,20 @@ export type DesktopSurfaceSelfApi = {
   setExtension(extension: { side: "above" | "below"; size: number }): void;
   setClickThrough(clickThrough: boolean): void;
   onPlacement(listener: (placement: SurfacePlacementPayload) => void): () => void;
+  /** Transient one-shot payloads from the plugin's own `surfaces.post`. */
   onMessage(listener: (payload: unknown) => void): () => void;
+  /** Retained state from `surfaces.setState`, replayed after `ready()`. */
+  onState(listener: (state: unknown) => void): () => void;
+  /**
+   * Announces that this renderer has installed its listeners, so the host can
+   * replay the retained state and the current placement. Without it a surface
+   * that mounts after its state was set would come up blank.
+   */
+  ready(): void;
+  /** Opens a native context menu over this surface; resolves the chosen id, or null. */
+  showContextMenu(items: SurfaceMenuItemPayload[]): Promise<string | null>;
+  /** Brings the main application window forward. */
+  activateMainWindow(): void;
 };
 
 export type BridgeResponse = {

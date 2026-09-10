@@ -29,8 +29,20 @@ export type SurfaceHandle = {
   setClickThrough(clickThrough: boolean): void;
   /** Subscribes to placement updates; returns an unsubscribe function. */
   onPlacement(listener: (placement: SurfacePlacement) => void): () => void;
-  /** Subscribes to payloads the plugin's own backend relayed to this surface. */
+  /** Subscribes to transient one-shot payloads relayed to this surface. */
   onMessage(listener: (payload: unknown) => void): () => void;
+  /** Subscribes to retained state, which the host replays after `ready()`. */
+  onState(listener: (state: unknown) => void): () => void;
+  /**
+   * Announces that this component has installed its listeners, so the host
+   * replays the retained state and the current placement. A surface that never
+   * calls this comes up blank whenever it mounts after its state was set.
+   */
+  ready(): void;
+  /** Opens a native context menu over this surface; resolves the chosen id, or null. */
+  showContextMenu(items: { id: string; label: string }[]): Promise<string | null>;
+  /** Brings the main application window forward. */
+  activateMainWindow(): void;
 };
 
 /** Props a plugin-authored surface component receives. */

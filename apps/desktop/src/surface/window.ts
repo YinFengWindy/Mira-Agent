@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, Menu, screen } from "electron";
 import { rendererDevServerUrl, rendererSurfaceDist, preloadScript } from "../paths.js";
 import {
   attachDesktopWindowSecurity,
@@ -6,7 +6,7 @@ import {
   validateRendererDevServerUrl,
 } from "../windowSecurity.js";
 import { desktopSurfaceWindowOptions, type SurfaceSpec, type SurfaceWorkArea } from "./contract.js";
-import type { SurfaceKey, SurfaceWindowHandle } from "./host.js";
+import type { SurfaceKey, SurfaceMenuItem, SurfaceWindowHandle } from "./host.js";
 import { surfaceQueryString } from "./entry.js";
 
 /**
@@ -79,4 +79,37 @@ export function workAreaForSurface(handle: SurfaceWindowHandle): SurfaceWorkArea
 /** The native cursor location, which only the main process can read. */
 export function cursorScreenPoint() {
   return screen.getCursorScreenPoint();
+}
+
+/**
+ * Opens a native context menu over a surface and resolves the chosen item's id.
+ *
+ * Resolves `null` when the menu closes without a choice — Electron reports a
+ * dismissal only through the `menu-will-close` event, not through the click
+ * callbacks, so the promise has to be settled from both sides or a plugin
+ * awaiting it would hang forever on an Escape key.
+ */
+export function showSurfaceContextMenu(
+  handle: SurfaceWindowHandle,
+  items: SurfaceMenuItem[],
+): Promise<string | null> {
+  const window = BrowserWindow.fromId(handle.id);
+  if (!window || window.isDestroyed()) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const menu = Menu.buildFromTemplate(
+      items.map((item) => ({ label: item.label, click: () => settle(item.id) })),
+    );
+    menu.once("menu-will-close", () => {
+      // Fires before a click callback does, so defer the dismissal until the
+      // click (if any) has had its turn.
+      setImmediate(() => settle(null));
+    });
+    menu.popup({ window });
+  });
 }

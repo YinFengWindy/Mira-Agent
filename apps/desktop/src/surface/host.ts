@@ -53,19 +53,31 @@ export type DesktopSurfaceHostOptions = {
   createWindow(key: SurfaceKey, spec: SurfaceSpec): SurfaceWindowHandle;
   workAreaFor(window: SurfaceWindowHandle): SurfaceWorkArea;
   cursorScreenPoint(): SurfacePoint;
+  /** Opens a native context menu over a surface; resolves the chosen id, or null. */
+  showContextMenu?(
+    window: SurfaceWindowHandle,
+    items: SurfaceMenuItem[],
+  ): Promise<string | null>;
+  /** Brings the main application window forward; a surface has no other way to. */
+  activateMainWindow?(): void;
   /** Injectable so glide and tween arithmetic is deterministic under test. */
   now?: () => number;
   setTimer?: (callback: () => void, delayMs: number) => TimerHandle;
   clearTimer?: (handle: TimerHandle) => void;
 };
 
+/** One entry of a surface-owned native context menu. */
+export type SurfaceMenuItem = { id: string; label: string };
+
 /** Identifies one surface: a plugin may own more than one. */
 export type SurfaceKey = { pluginId: string; surfaceId: string };
 
 /** Channel the host pushes a surface's resolved anchor on after every move. */
 export const surfacePositionChannel = "desktop:surface-position";
-/** Channel the host relays plugin-authored payloads to a surface renderer on. */
+/** Channel the host relays transient plugin-authored payloads to a surface renderer on. */
 export const surfaceMessageChannel = "desktop:surface-message";
+/** Channel carrying a surface's retained state, replayed whenever it reports ready. */
+export const surfaceStateChannel = "desktop:surface-state";
 
 export class DesktopSurfaceError extends Error {}
 
@@ -84,6 +96,8 @@ type SurfaceRecord = {
   momentumTimer: TimerHandle | null;
   move: { from: SurfacePoint; to: SurfacePoint; startedAtMs: number; durationMs: number } | null;
   moveTimer: TimerHandle | null;
+  /** Last value passed to `setState`, replayed on `markReady`. See `setState`. */
+  retained: { payload: unknown } | null;
 };
 
 /**
@@ -136,6 +150,7 @@ export class DesktopSurfaceHost {
       momentumTimer: null,
       move: null,
       moveTimer: null,
+      retained: null,
     };
     this.surfaces.set(id, record);
     // A window closed by the OS (or by Electron shutting down) must not leave
@@ -221,11 +236,63 @@ export class DesktopSurfaceHost {
     this.require(key).window.setIgnoreMouseEvents(clickThrough, { forward: true });
   }
 
-  /** Relays a plugin-authored payload to its own surface renderer. */
+  /**
+   * Relays a *transient* plugin-authored payload to its own surface renderer.
+   *
+   * Not retained: a renderer that mounts (or reloads) after this call will
+   * never see it. Use it for one-shot events — "play this animation now" —
+   * and `setState` for anything the surface must still be showing afterwards.
+   */
   postMessage(key: SurfaceKey, payload: unknown): void {
     const record = this.surfaces.get(surfaceKeyId(key));
     if (!record || record.window.isDestroyed()) return;
     record.window.send(surfaceMessageChannel, payload);
+  }
+
+  /**
+   * Sets the surface's *retained* state, replayed whenever it reports ready.
+   *
+   * A surface renderer mounts asynchronously and can reload at any time, so a
+   * plugin that only pushed state once would leave a blank window behind. The
+   * host holding the latest state means the plugin does not have to implement
+   * a ready handshake — or remember it exists. This is the generic form of
+   * what the desktop pet's `sendCurrentLoad` does by hand today.
+   */
+  setState(key: SurfaceKey, payload: unknown): void {
+    const record = this.surfaces.get(surfaceKeyId(key));
+    if (!record) return;
+    record.retained = { payload };
+    if (!record.window.isDestroyed()) record.window.send(surfaceStateChannel, payload);
+  }
+
+  /**
+   * Handles a surface renderer announcing it has installed its listeners.
+   *
+   * Replays the retained state and the current placement, so the renderer
+   * never has to ask for either.
+   */
+  markReady(key: SurfaceKey): void {
+    const record = this.require(key);
+    if (record.retained) record.window.send(surfaceStateChannel, record.retained.payload);
+    this.notifyPlacement(record);
+  }
+
+  /**
+   * Opens a native context menu over the surface and resolves the chosen id.
+   *
+   * Native menus are a main-process capability; a renderer can only draw its
+   * own DOM, which cannot escape a transparent window's bounds.
+   */
+  async showContextMenu(key: SurfaceKey, items: SurfaceMenuItem[]): Promise<string | null> {
+    const record = this.require(key);
+    const show = this.options.showContextMenu;
+    if (!show || items.length === 0) return null;
+    return await show(record.window, items);
+  }
+
+  /** Brings the main application window forward on the surface's behalf. */
+  activateMainWindow(): void {
+    this.options.activateMainWindow?.();
   }
 
   /**

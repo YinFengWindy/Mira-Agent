@@ -7,7 +7,12 @@ import { startBridge, wireBridgeEvents } from "./bridge/bridgeLifecycle.js";
 import { logDesktopDiagnostic } from "./diagnostics.js";
 import { registerDesktopIpc, registerDesktopSurfaceIpc } from "./bridge/ipc.js";
 import { DesktopSurfaceHost } from "./surface/host.js";
-import { createDesktopSurfaceWindow, cursorScreenPoint, workAreaForSurface } from "./surface/window.js";
+import {
+  createDesktopSurfaceWindow,
+  cursorScreenPoint,
+  showSurfaceContextMenu,
+  workAreaForSurface,
+} from "./surface/window.js";
 import { openGrantedLocalAsset } from "./assets/localAssetOpen.js";
 import { LocalAssetRegistry, localAssetScheme } from "./assets/localAssetRegistry.js";
 import { ensureDesktopRuntimeConfig, resolveDesktopRuntimePaths } from "./runtimePaths.js";
@@ -394,6 +399,8 @@ void app.whenReady().then(() => {
     createWindow: (key, spec) => createDesktopSurfaceWindow(key, spec, { openLocalAttachment }),
     workAreaFor: workAreaForSurface,
     cursorScreenPoint,
+    showContextMenu: showSurfaceContextMenu,
+    activateMainWindow: showOrCreateDesktopWindow,
   });
   registerDesktopSurfaceIpc(desktopSurfaces);
   getOrCreateDesktopWindow();

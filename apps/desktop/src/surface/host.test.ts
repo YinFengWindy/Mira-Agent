@@ -6,6 +6,7 @@ import {
   DesktopSurfaceHost,
   surfaceMessageChannel,
   surfacePositionChannel,
+  surfaceStateChannel,
   type SurfaceKey,
   type SurfaceWindowHandle,
 } from "./host.js";
@@ -315,4 +316,110 @@ test("messages are relayed only to the plugin's own surface", () => {
 test("posting to a surface that is already gone is a no-op, not a throw", () => {
   const { host } = setup();
   host.postMessage(key, { hello: "world" });
+});
+
+test("retained state is replayed when the renderer reports ready", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 100, y: 100 });
+  // State set before the renderer finished mounting. Without replay the window
+  // comes up blank, which on a transparent surface is indistinguishable from
+  // "the plugin is broken".
+  host.setState(key, { sprite: "idle" });
+
+  host.markReady(key);
+
+  assert.deepEqual(
+    windows[0].sent.filter((item) => item.channel === surfaceStateChannel).map((item) => item.payload),
+    [{ sprite: "idle" }, { sprite: "idle" }],
+  );
+  assert.equal(
+    windows[0].positionMessages().length,
+    2,
+    "ready must also replay the placement, so the renderer can lay out without asking",
+  );
+});
+
+test("only the latest retained state is replayed, and transient messages never are", () => {
+  const { host, windows } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  host.setState(key, { sprite: "idle" });
+  host.setState(key, { sprite: "walk" });
+  host.postMessage(key, { play: "wave" });
+
+  const before = windows[0].sent.length;
+  host.markReady(key);
+
+  const replayed = windows[0].sent.slice(before);
+  assert.deepEqual(
+    replayed.filter((item) => item.channel === surfaceStateChannel).map((item) => item.payload),
+    [{ sprite: "walk" }],
+  );
+  assert.equal(
+    replayed.some((item) => item.channel === surfaceMessageChannel),
+    false,
+    "a one-shot 'play this animation' must not fire again on every reload",
+  );
+});
+
+test("ready on a surface that is already gone is refused rather than crashed on", () => {
+  const { host } = setup();
+  assert.throws(() => host.markReady(key), DesktopSurfaceError);
+});
+
+test("a context menu resolves the chosen id and targets the surface's own window", async () => {
+  const seen: { id: number; items: { id: string; label: string }[] }[] = [];
+  const windows: FakeWindow[] = [];
+  const host = new DesktopSurfaceHost({
+    createWindow: () => { const window = new FakeWindow(); windows.push(window); return window; },
+    workAreaFor: () => workArea,
+    cursorScreenPoint: () => ({ x: 0, y: 0 }),
+    showContextMenu: async (window, items) => {
+      seen.push({ id: window.id, items });
+      return items[1]?.id ?? null;
+    },
+  });
+  host.create(key, spec, { x: 0, y: 0 });
+
+  const chosen = await host.showContextMenu(key, [
+    { id: "open", label: "显示主窗口" },
+    { id: "hide", label: "隐藏" },
+  ]);
+
+  assert.equal(chosen, "hide");
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].id, windows[0].id);
+});
+
+test("an empty menu resolves null without bothering the platform", async () => {
+  let called = 0;
+  const host = new DesktopSurfaceHost({
+    createWindow: () => new FakeWindow(),
+    workAreaFor: () => workArea,
+    cursorScreenPoint: () => ({ x: 0, y: 0 }),
+    showContextMenu: async () => { called += 1; return null; },
+  });
+  host.create(key, spec, { x: 0, y: 0 });
+  assert.equal(await host.showContextMenu(key, []), null);
+  assert.equal(called, 0, "an empty menu must not pop an empty native menu");
+});
+
+test("a host without menu support resolves null instead of throwing", async () => {
+  const { host } = setup();
+  host.create(key, spec, { x: 0, y: 0 });
+  assert.equal(await host.showContextMenu(key, [{ id: "a", label: "A" }]), null);
+});
+
+test("activating the main window is forwarded, and tolerated when unsupported", () => {
+  let activated = 0;
+  const host = new DesktopSurfaceHost({
+    createWindow: () => new FakeWindow(),
+    workAreaFor: () => workArea,
+    cursorScreenPoint: () => ({ x: 0, y: 0 }),
+    activateMainWindow: () => { activated += 1; },
+  });
+  host.activateMainWindow();
+  assert.equal(activated, 1);
+
+  const { host: bare } = setup();
+  bare.activateMainWindow();
 });

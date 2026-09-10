@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { PreloadLocalAssetCache } from "./assets/preloadLocalAssetCache.js";
 import { localAssetScheme } from "./assets/localAssetContract.js";
-import { surfaceMessageChannel, surfacePositionChannel } from "./surface/host.js";
+import { surfaceMessageChannel, surfacePositionChannel, surfaceStateChannel } from "./surface/host.js";
 import { surfaceChannels } from "./surface/ipc.js";
 import type {
   BridgeEvent,
@@ -222,6 +222,9 @@ const api: DesktopApi = {
     post(pluginId, surfaceId, message) {
       ipcRenderer.send(surfaceChannels.post, { pluginId, surfaceId, message });
     },
+    setState(pluginId, surfaceId, state) {
+      ipcRenderer.send(surfaceChannels.setState, { pluginId, surfaceId, state });
+    },
   },
   surface: {
     beginDrag(offset) {
@@ -249,6 +252,20 @@ const api: DesktopApi = {
       const wrapped = (_event: unknown, payload: unknown) => listener(payload);
       ipcRenderer.on(surfaceMessageChannel, wrapped);
       return () => ipcRenderer.off(surfaceMessageChannel, wrapped);
+    },
+    onState(listener) {
+      const wrapped = (_event: unknown, payload: unknown) => listener(payload);
+      ipcRenderer.on(surfaceStateChannel, wrapped);
+      return () => ipcRenderer.off(surfaceStateChannel, wrapped);
+    },
+    ready() {
+      ipcRenderer.send(surfaceChannels.ready, {});
+    },
+    showContextMenu(items) {
+      return ipcRenderer.invoke(surfaceChannels.contextMenu, { items }) as Promise<string | null>;
+    },
+    activateMainWindow() {
+      ipcRenderer.send(surfaceChannels.activateMainWindow, {});
     },
   },
   onVoiceCaptureCommand(listener) {
