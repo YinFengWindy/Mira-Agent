@@ -5,7 +5,9 @@ import { localAssetSchemePrivileges, registerLocalAssetProtocol } from "./assets
 import { DesktopBridgeClient } from "./bridge/bridgeClient.js";
 import { startBridge, wireBridgeEvents } from "./bridge/bridgeLifecycle.js";
 import { logDesktopDiagnostic } from "./diagnostics.js";
-import { registerDesktopIpc } from "./bridge/ipc.js";
+import { registerDesktopIpc, registerDesktopSurfaceIpc } from "./bridge/ipc.js";
+import { DesktopSurfaceHost } from "./surface/host.js";
+import { createDesktopSurfaceWindow, cursorScreenPoint, workAreaForSurface } from "./surface/window.js";
 import { openGrantedLocalAsset } from "./assets/localAssetOpen.js";
 import { LocalAssetRegistry, localAssetScheme } from "./assets/localAssetRegistry.js";
 import { ensureDesktopRuntimeConfig, resolveDesktopRuntimePaths } from "./runtimePaths.js";
@@ -49,6 +51,7 @@ let desktopWindow: BrowserWindow | null = null;
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let desktopPetSettings: DesktopPetSettings;
 let desktopPet: DesktopPetController | null = null;
+let desktopSurfaces: DesktopSurfaceHost | null = null;
 let desktopObservation: DesktopObservationController | null = null;
 let voiceRecorder: BrowserVoiceRecorder | null = null;
 let voiceController: DesktopVoiceController | null = null;
@@ -384,6 +387,15 @@ void app.whenReady().then(() => {
     onVoiceSettingsChanged: reloadVoiceSettings,
     onPetVisibilityChanged: syncDesktopPetRuntimeState,
   });
+  // DesktopSurface (#181). The desktop pet still runs on its own bespoke
+  // window path above; it moves onto this capability in the follow-up tickets,
+  // at which point `DesktopPetController` and `pet.html` go away.
+  desktopSurfaces = new DesktopSurfaceHost({
+    createWindow: (key, spec) => createDesktopSurfaceWindow(key, spec, { openLocalAttachment }),
+    workAreaFor: workAreaForSurface,
+    cursorScreenPoint,
+  });
+  registerDesktopSurfaceIpc(desktopSurfaces);
   getOrCreateDesktopWindow();
   if (trayLifecycleEnabled) {
     desktopTray = createDesktopTray({

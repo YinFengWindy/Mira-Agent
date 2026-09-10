@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 /**
- * Reproducible build smoke check for the plugin UI glob consumed by
- * `renderer/src/plugins/pluginUiModules.ts`.
+ * Reproducible build smoke check for the two plugin globs:
+ * `renderer/src/plugins/pluginUiModules.ts` (main-window slots) and
+ * `renderer/src/surface/pluginSurfaceModules.ts` (plugin-owned desktop
+ * windows, #181).
  *
- * The repo currently ships no `plugins/<id>/ui/` directory, so the
- * `import.meta.glob` pattern in that file (one wildcard segment for `<id>`,
- * then a fixed `ui/index.tsx` suffix) matches zero files, and a plain
- * `pnpm run build:renderer` succeeding proves nothing about whether that
- * glob resolves to the right place. This script creates a
- * throwaway plugin UI module under the real top-level `plugins/` tree with a
- * recognizable marker string, runs a real renderer build against it, asserts
- * the marker made it into the bundled output, and removes the throwaway
- * plugin directory afterwards (on success or failure) so it is safe to
- * re-run repeatedly on a clean checkout.
+ * The repo ships no `plugins/<id>/ui/` or `plugins/<id>/surface/` directory,
+ * so both `import.meta.glob` patterns (one wildcard segment for `<id>`, then a
+ * fixed suffix) match zero files, and a plain `pnpm run build:renderer`
+ * succeeding proves nothing about whether either glob resolves to the right
+ * place. This script creates a throwaway plugin under the real top-level
+ * `plugins/` tree carrying both entry points, each with its own recognizable
+ * marker, runs a real renderer build against it, asserts both markers made it
+ * into the bundled output, and removes the throwaway plugin directory
+ * afterwards (on success or failure) so it is safe to re-run repeatedly on a
+ * clean checkout.
+ *
+ * The two markers are checked separately on purpose: the surface entry lands
+ * in a *different* rollup entry (`surface.html`) from the UI one, so a single
+ * combined check would let a broken surface glob hide behind a working UI one.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -27,9 +33,11 @@ const repoRoot = resolve(desktopRoot, "..", "..");
 
 const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
 const marker = `PLUGIN_UI_BUILD_SMOKE_${suffix}`;
+const surfaceMarker = `PLUGIN_SURFACE_BUILD_SMOKE_${suffix}`;
 const pluginId = `plugin_ui_build_smoke_${suffix}`;
 const pluginDir = join(repoRoot, "plugins", pluginId);
 const uiDir = join(pluginDir, "ui");
+const surfaceDir = join(pluginDir, "surface");
 
 /** Recursively searches built JS output for the marker string. */
 async function bundleContainsMarker(dir, needle) {
@@ -65,6 +73,22 @@ async function main() {
     "utf-8",
   );
 
+  await mkdir(surfaceDir, { recursive: true });
+  await writeFile(
+    join(surfaceDir, "index.tsx"),
+    [
+      "// Throwaway fixture written by test-plugin-ui-build-smoke.mjs; not meant to be committed.",
+      `const MARKER = ${JSON.stringify(surfaceMarker)};`,
+      "",
+      "export default {",
+      `  pluginId: ${JSON.stringify(pluginId)},`,
+      "  surface: { component: () => MARKER },",
+      "};",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+
   const outDir = await mkdtemp(join(tmpdir(), "plugin-ui-build-smoke-"));
   try {
     await viteBuild({
@@ -73,14 +97,19 @@ async function main() {
       build: { outDir, emptyOutDir: true },
     });
 
-    const found = await bundleContainsMarker(outDir, marker);
-    if (!found) {
-      throw new Error(
-        `expected marker ${marker} to appear in the built renderer bundle, but it did not. ` +
-          "The plugins/<id>/ui/index.tsx glob in pluginUiModules.ts is not matching real build output.",
-      );
+    const checks = [
+      { marker, glob: "plugins/<id>/ui/index.tsx", source: "pluginUiModules.ts" },
+      { marker: surfaceMarker, glob: "plugins/<id>/surface/index.tsx", source: "pluginSurfaceModules.ts" },
+    ];
+    for (const check of checks) {
+      if (!(await bundleContainsMarker(outDir, check.marker))) {
+        throw new Error(
+          `expected marker ${check.marker} to appear in the built renderer bundle, but it did not. ` +
+            `The ${check.glob} glob in ${check.source} is not matching real build output.`,
+        );
+      }
     }
-    console.log(`[plugin-ui-build-smoke] passed: marker for ${pluginId} found in the built bundle.`);
+    console.log(`[plugin-ui-build-smoke] passed: ui and surface markers for ${pluginId} found in the built bundle.`);
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
