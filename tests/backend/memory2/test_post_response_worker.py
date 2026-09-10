@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -9,6 +10,11 @@ from memory2.memorizer import Memorizer
 from memory2.post_response_worker import PostResponseMemoryWorker
 from memory2.rule_schema import build_procedure_rule_schema
 from memory2.store import MemoryStore2
+
+
+class _Resp:
+    def __init__(self, content: str) -> None:
+        self.content = content
 
 
 class _DummyProvider:
@@ -279,6 +285,49 @@ def test_collect_explicit_memorized_accepts_item_id_format():
     summaries, protected = worker._collect_explicit_memorized(tool_chain)
     assert summaries == ["规则B"]
     assert "memu_12345" in protected
+
+
+def test_consume_budget_reports_affordability_and_remaining_tokens():
+    worker = PostResponseMemoryWorker(
+        memorizer=cast(Any, _DummyMemorizer()),
+        retriever=cast(Any, _DummyRetriever([])),
+        light_provider=cast(Any, _DummyProvider()),
+        light_model="test",
+    )
+
+    assert worker._consume_budget(10, 3) == (True, 7)
+
+
+def test_extract_invalidation_topics_returns_topics_parsed_from_light_model():
+    provider = SimpleNamespace(chat=AsyncMock(return_value=_Resp('["topic"]')))
+    worker = PostResponseMemoryWorker(
+        memorizer=cast(Any, _DummyMemorizer()),
+        retriever=cast(Any, _DummyRetriever([])),
+        light_provider=cast(Any, provider),
+        light_model="test",
+    )
+
+    topics, _remain = asyncio.run(
+        worker._extract_invalidation_topics("你之前这个流程错了", 700)
+    )
+
+    assert topics == ["topic"]
+
+
+def test_check_invalidate_returns_ids_selected_by_light_model():
+    provider = SimpleNamespace(chat=AsyncMock(return_value=_Resp('["x1"]')))
+    worker = PostResponseMemoryWorker(
+        memorizer=cast(Any, _DummyMemorizer()),
+        retriever=cast(Any, _DummyRetriever([])),
+        light_provider=cast(Any, provider),
+        light_model="test",
+    )
+
+    ids, _remain = asyncio.run(
+        worker._check_invalidate("topic", [{"id": "x1", "summary": "旧规则"}], 700)
+    )
+
+    assert ids == ["x1"]
 
 
 def test_extract_invalidation_topics_skips_when_token_budget_exhausted():

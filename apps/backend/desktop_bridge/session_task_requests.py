@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal, overload
 
 from core.roles import RoleAggregateService
 from session.manager import Session
@@ -57,7 +57,6 @@ class DesktopSessionTaskRequestHandler:
             )
         if method == "session.messagesPage":
             session_key = self._desktop_session_key(payload, required=True)
-            assert session_key is not None
             meta = self._app_service.session_manager._store.get_session_meta(session_key)
             if meta is None:
                 session = Session(key=session_key)
@@ -114,7 +113,6 @@ class DesktopSessionTaskRequestHandler:
             )
         if method == "session.imageHistory":
             session_key = self._desktop_session_key(payload, required=True)
-            assert session_key is not None
             return self._session_presenter.serialize_image_history(session_key)
         if method == "session.updateDisplayState":
             active_illustration = payload.get("active_illustration")
@@ -200,6 +198,16 @@ class DesktopSessionTaskRequestHandler:
     @staticmethod
     def _role_id(payload: dict[str, Any]) -> str:
         return str(payload.get("role_id") or "").strip()
+
+    @overload
+    def _desktop_session_key(
+        self, payload: dict[str, Any], *, required: Literal[True]
+    ) -> str: ...
+
+    @overload
+    def _desktop_session_key(
+        self, payload: dict[str, Any], *, required: Literal[False]
+    ) -> str | None: ...
 
     def _desktop_session_key(
         self,

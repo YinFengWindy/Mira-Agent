@@ -107,3 +107,33 @@ async def test_proactive_loop_wrapper_methods_cover_paths(tmp_path: Path):
     loop._mcp_pool.connect_all.assert_awaited_once()
     loop._run_loop.assert_awaited_once()
     loop._mcp_pool.disconnect_all.assert_awaited_once()
+
+
+def test_next_interval_falls_back_to_configured_interval_without_presence():
+    """没有 presence 时无法算 energy，应直接用配置的固定间隔。"""
+    loop = ProactiveLoop.__new__(ProactiveLoop)
+    loop._cfg = SimpleNamespace(
+        interval_seconds=10,
+        score_weight_energy=0.5,
+        tick_interval_s1=3,
+        tick_interval_s0=4,
+        tick_jitter=0.0,
+    )
+    loop._presence = None
+    loop._trace_proactive_rate_decision = MagicMock()
+    loop._sense = SimpleNamespace(target_session_key=lambda: "telegram:1")
+
+    assert loop._next_interval() == 10
+
+
+def test_sample_random_memory_reads_long_term_and_workspace_guide(tmp_path: Path):
+    loop = ProactiveLoop.__new__(ProactiveLoop)
+    loop._rng = None
+    loop._memory = SimpleNamespace(
+        read_long_term=lambda: "remember",
+        get_memory_context=lambda: "ctx",
+    )
+    loop._sessions = SimpleNamespace(workspace=tmp_path)
+    (tmp_path / "AGENTS.md").write_text("guide", encoding="utf-8")
+
+    assert loop._sample_random_memory(1)

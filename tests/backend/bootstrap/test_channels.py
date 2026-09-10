@@ -1,10 +1,17 @@
 import sys
+import types
 from types import ModuleType
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from agent.config_models import ChannelsConfig, Config, TelegramChannelConfig
+from agent.config_models import (
+    ChannelsConfig,
+    Config,
+    QQChannelConfig,
+    TelegramChannelConfig,
+)
 from agent.tools.message_push import MessagePushTool
 from bootstrap.channels import start_channels
 from bus.event_bus import EventBus
@@ -89,3 +96,292 @@ async def test_model_only_change_reuses_independently_owned_qqbot_connection(tmp
         await new.stop()
         await changed.stop()
         await resources.aclose()
+
+
+@pytest.mark.asyncio
+async def test_start_channels_wires_telegram_and_qq(monkeypatch, tmp_path):
+    starts: list[str] = []
+    registrations: list[tuple[str, list[str]]] = []
+
+    fake_telegram_channel = types.ModuleType("infra.channels.telegram_channel")
+    fake_qq_channel = types.ModuleType("infra.channels.qq_channel")
+
+    class _TelegramChannel:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.name = kwargs.get("channel_name", "telegram")
+
+        async def start(self, ctx) -> None:
+            starts.append("telegram")
+            ctx.push_tool.register_channel(
+                self.name,
+                text=self.send,
+                stream_text=self.send_stream,
+                file=self.send_file,
+                image=self.send_image,
+            )
+
+        async def stop(self) -> None:
+            starts.append("telegram.stop")
+
+        async def send(self, *args, **kwargs):
+            return None
+
+        async def send_stream(self, *args, **kwargs):
+            return None
+
+        async def send_file(self, *args, **kwargs):
+            return None
+
+        async def send_image(self, *args, **kwargs):
+            return None
+
+    class _QQChannel:
+        name = "qq"
+
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        async def start(self, ctx) -> None:
+            starts.append("qq")
+            ctx.push_tool.register_channel(
+                self.name,
+                text=self.send,
+                file=self.send_file,
+                image=self.send_image,
+            )
+
+        async def stop(self) -> None:
+            starts.append("qq.stop")
+
+        async def send(self, *args, **kwargs):
+            return None
+
+        async def send_file(self, *args, **kwargs):
+            return None
+
+        async def send_image(self, *args, **kwargs):
+            return None
+
+    class _QQBotChannel:
+        name = "qqbot"
+
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            self.context_hub = None
+
+        async def start(self, ctx) -> None:
+            starts.append("qqbot")
+            self.context_hub = ctx.channel_hub
+            ctx.push_tool.register_channel(
+                self.name,
+                text=self.send_proactive,
+                stream_text=self.send_stream,
+            )
+
+        async def stop(self) -> None:
+            starts.append("qqbot.stop")
+
+        async def send_proactive(self, *args, **kwargs):
+            return None
+
+        async def send_stream(self, *args, **kwargs):
+            return None
+
+    fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
+    fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
+
+    class _PushTool(MessagePushTool):
+        def register_channel(self, name: str, **kwargs) -> None:
+            registrations.append((name, sorted(kwargs)))
+
+    config = Config(
+        provider="openai",
+        model="m",
+        api_key="k",
+        channels=ChannelsConfig(
+            telegram=TelegramChannelConfig(token="tg-token"),
+            qq=QQChannelConfig(bot_uin="10001"),
+        ),
+    )
+    resources = SharedHttpResources()
+    event_bus = EventBus()
+    try:
+        controller = object()
+        plugin_channel = _QQBotChannel(event_bus=event_bus)
+        session_manager = types.SimpleNamespace(workspace=tmp_path)
+        host = await start_channels(
+            config,
+            bus=MessageBus(),
+            session_manager=cast(Any, session_manager),
+            push_tool=cast(Any, _PushTool()),
+            http_resources=resources,
+            event_bus=event_bus,
+            interrupt_controller=cast(Any, controller),
+            plugin_channels=[cast(Any, plugin_channel)],
+        )
+        await host.start_all()
+    finally:
+        await resources.aclose()
+
+    tg, qq, qqbot = host.channels
+    assert starts == ["telegram", "qq", "qqbot"]
+    assert registrations == [
+        ("telegram", ["file", "image", "stream_text", "text"]),
+        ("qq", ["file", "image", "text"]),
+        ("qqbot", ["stream_text", "text"]),
+    ]
+    assert tg.kwargs["event_bus"] is event_bus
+    assert tg.kwargs["interrupt_controller"] is controller
+    assert tg.kwargs["channel_hub"] is qq.kwargs["channel_hub"]
+    assert tg.kwargs["channel_hub"] is not None
+    assert qq.kwargs["interrupt_controller"] is controller
+    assert qqbot.kwargs["event_bus"] is event_bus
+    assert qqbot.context_hub is tg.kwargs["channel_hub"]
+
+
+@pytest.mark.asyncio
+async def test_start_channels_skips_unfilled_optional_channels(monkeypatch, tmp_path):
+    starts: list[str] = []
+
+    fake_telegram_channel = types.ModuleType("infra.channels.telegram_channel")
+    fake_qq_channel = types.ModuleType("infra.channels.qq_channel")
+
+    class _TelegramChannel:
+        async def start(self) -> None:
+            starts.append("telegram")
+
+    class _QQChannel:
+        async def start(self) -> None:
+            starts.append("qq")
+
+    fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
+    fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
+
+    class _PushTool(MessagePushTool):
+        def register_channel(self, name: str, **kwargs) -> None:
+            raise AssertionError(f"unexpected channel registration: {name}")
+
+    config = Config(
+        provider="openai",
+        model="m",
+        api_key="k",
+        channels=ChannelsConfig(
+            telegram=None,
+            qq=None,
+        ),
+    )
+    resources = SharedHttpResources()
+    try:
+        host = await start_channels(
+            config,
+            bus=MessageBus(),
+            session_manager=cast(Any, object()),
+            push_tool=cast(Any, _PushTool()),
+            http_resources=resources,
+            event_bus=EventBus(),
+        )
+    finally:
+        await resources.aclose()
+
+    assert host.channels == []
+    assert starts == []
+
+
+@pytest.mark.asyncio
+async def test_start_channels_skips_channel_constructor_failures(monkeypatch):
+    fake_telegram_channel = types.ModuleType("infra.channels.telegram_channel")
+    fake_qq_channel = types.ModuleType("infra.channels.qq_channel")
+
+    class _TelegramChannel:
+        def __init__(self, **kwargs):
+            raise ValueError("invalid telegram configuration")
+
+    class _QQChannel:
+        name = "qq"
+
+        def __init__(self, **kwargs):
+            pass
+
+    fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
+    fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
+
+    config = Config(
+        provider="openai",
+        model="m",
+        api_key="k",
+        channels=ChannelsConfig(
+            telegram=TelegramChannelConfig(token="tg-token"),
+            qq=QQChannelConfig(bot_uin="10001"),
+        ),
+    )
+    resources = SharedHttpResources()
+    try:
+        host = await start_channels(
+            config,
+            bus=MessageBus(),
+            session_manager=cast(Any, object()),
+            push_tool=MessagePushTool(),
+            http_resources=resources,
+            event_bus=EventBus(),
+        )
+    finally:
+        await resources.aclose()
+
+    assert [channel.name for channel in host.channels] == ["qq"]
+
+
+@pytest.mark.asyncio
+async def test_start_channels_desktop_mode_skips_message_channels(
+    monkeypatch,
+    tmp_path,
+):
+    starts: list[str] = []
+
+    fake_telegram_channel = types.ModuleType("infra.channels.telegram_channel")
+    fake_qq_channel = types.ModuleType("infra.channels.qq_channel")
+
+    class _TelegramChannel:
+        def __init__(self, **kwargs):
+            starts.append("telegram.init")
+
+    class _QQChannel:
+        def __init__(self, **kwargs):
+            starts.append("qq.init")
+
+    fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
+    fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
+
+    config = Config(
+        provider="openai",
+        model="m",
+        api_key="k",
+        channels=ChannelsConfig(
+            telegram=TelegramChannelConfig(token="tg-token"),
+            qq=QQChannelConfig(bot_uin="10001"),
+        ),
+    )
+    resources = SharedHttpResources()
+    try:
+        host = await start_channels(
+            config,
+            bus=MessageBus(),
+            session_manager=cast(Any, object()),
+            push_tool=MessagePushTool(),
+            http_resources=resources,
+            event_bus=EventBus(),
+            enable_message_channels=False,
+        )
+    finally:
+        await resources.aclose()
+
+    assert host.channels == []
+    assert starts == []

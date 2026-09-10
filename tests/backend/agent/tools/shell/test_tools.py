@@ -1114,3 +1114,45 @@ async def test_bg_pump_done_evicts_registry_and_log(monkeypatch, tmp_path):
 
     assert task_id not in shell_mod._BG_REGISTRY
     assert not Path(log_path).exists()
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_rejects_empty_and_disallowed_commands():
+    tool = ShellTool()
+
+    assert "命令不能为空" in await tool.execute(command="")
+    assert "不被允许" in await tool.execute(command="nc localhost 1")
+
+
+@pytest.mark.asyncio
+async def test_shell_tool_reports_nonzero_exit_code_in_output():
+    tool = ShellTool()
+
+    async def _fake_subprocess(command, **kwargs):
+        class _P:
+            returncode = 2
+            pid = 0
+
+            async def wait(self_):
+                return 2
+
+        p = _P()
+        buf_out = [b"out"]
+        buf_err = [b"err"]
+
+        async def _read_out(_size=-1):
+            return buf_out.pop(0) if buf_out else b""
+
+        async def _read_err(_size=-1):
+            return buf_err.pop(0) if buf_err else b""
+
+        p.stdout = SimpleNamespace(read=_read_out)
+        p.stderr = SimpleNamespace(read=_read_err)
+        return p
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("agent.tools.shell.asyncio.create_subprocess_shell", _fake_subprocess)
+        result = json.loads(await tool.execute(command="echo 1", timeout=999))
+
+    assert result["exit_code"] == 2
+    assert "Exit code 2" in result["output"]

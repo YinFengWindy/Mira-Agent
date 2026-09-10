@@ -121,3 +121,16 @@ def test_sample_chunks_are_original_content():
     all_chunks = split_memory_chunks(MEMORY_MD)
     for chunk in result:
         assert chunk in all_chunks
+
+
+def test_split_and_sample_memory_chunks_over_long_text():
+    import random
+
+    text = "## A\n\n第一段\n\n- 一\n- 二\n\n## B\n\n很长内容 " + ("句子。" * 80)
+
+    chunks = split_memory_chunks(text, max_chunk_chars=30)
+    sampled = sample_memory_chunks(text, 2, rng=random.Random(1))
+
+    assert chunks
+    assert len(sampled) == 2
+    assert sample_memory_chunks("", 2) == []

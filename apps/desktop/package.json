@@ -13,7 +13,7 @@
     "build:renderer": "vite build --config renderer/vite.config.ts",
     "dev": "pnpm run build:main && pnpm run build:preload && node scripts/dev.mjs",
     "dev:renderer": "vite --config renderer/vite.config.ts",
-    "lint": "eslint --config eslint.config.js src renderer/src",
+    "lint": "eslint --config eslint.config.js src renderer/src tests/integration",
     "start": "pnpm run build && electron .",
     "start:built": "electron .",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p renderer/tsconfig.json --noEmit",
