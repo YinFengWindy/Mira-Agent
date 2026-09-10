@@ -32,6 +32,7 @@ from agent.plugin_host.kernel import PLUGIN_ENABLED_CONFIG_KEY, PluginKernel
 from bootstrap.app import AppRuntime
 from desktop_bridge.plugin_config_text import merge_plugin_table
 from desktop_bridge.runtime.apply import (
+    DerivedWrite,
     RuntimeApplyError,
     RuntimeSettingsApplication,
     assert_plugin_table_isolated,
@@ -64,7 +65,8 @@ class RuntimePluginManagement:
                 "enabled": self._enabled(plugin_id),
                 "state": state["state"] if state else "DISCOVERED",
                 "error": state["error"] if state else "",
-                "has_config_schema": plugin_id in kernel.config_schemas,
+                # __contains__ 已随 #177 的死代码清理移除，改用 schema_for 判定
+                "has_config_schema": kernel.config_schemas.schema_for(plugin_id) is not None,
             })
         return {"plugins": plugins}
 
@@ -106,7 +108,13 @@ class RuntimePluginManagement:
             apply_payload,
             prepare_service=prepare_service,
             publish_service=publish_service,
-            build_config_toml=_merge,
+            # 幂等指纹取本次逻辑操作（哪个插件、开还是关），而不是派生出来的
+            # 整份配置文本：后者会随无关设置的变化而变，同一请求原样重试就会被
+            # 误判为 runtime_operation_conflict。
+            derive=DerivedWrite(
+                build_config_toml=_merge,
+                fingerprint_payload={"plugin_id": plugin_id, "enabled": enabled},
+            ),
         )
         return {"plugin_id": plugin_id, "enabled": enabled, **result}
 

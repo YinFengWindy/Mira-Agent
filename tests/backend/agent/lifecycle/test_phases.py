@@ -71,7 +71,7 @@ from agent.prompting import PromptSectionRender
 from agent.turns.outbound import OutboundDispatch
 from session.manager import SessionManager
 
-_observe_db = importlib.import_module("plugins.observe.db")
+_observe_db = importlib.import_module("plugins.observe.backend.db")
 open_observe_db = cast(
     Callable[[Path], sqlite3.Connection],
     getattr(_observe_db, "open_db"),

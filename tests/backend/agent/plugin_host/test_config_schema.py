@@ -184,7 +184,6 @@ def test_registry_schema_for_and_defaults_for_undeclared_plugin_are_none():
 
     assert registry.schema_for("missing") is None
     assert registry.defaults_for("missing") is None
-    assert "missing" not in registry
 
 
 def test_registry_schema_for_exports_json_schema_and_defaults():
@@ -197,7 +196,6 @@ def test_registry_schema_for_exports_json_schema_and_defaults():
     assert schema is not None
     assert schema["properties"]["api_key"]["default"] == ""
     assert defaults == {"api_key": "", "max_results": 5}
-    assert "demo" in registry
 
 
 def test_registry_validate_normalizes_values():
@@ -223,5 +221,4 @@ def test_registry_unregister_removes_model():
 
     registry.unregister("demo")
 
-    assert "demo" not in registry
     assert registry.schema_for("demo") is None

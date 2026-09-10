@@ -15,6 +15,7 @@ import pytest
 
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
+from conftest import stage_plugin_fixture
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -38,8 +39,10 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Stages qqbot (has ConfigModel), hello (has none) and a nullable-default model."""
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    shutil.copytree(_HELLO_FIXTURE_DIR, root / "hello")
-    shutil.copytree(_NULLABLE_FIXTURE_DIR, root / "nullable_config")
+    # 夹具是旧扁平布局、内核要求 backend/；不重整这些插件根本不会被加载，
+    # 而「无配置模型返回 schema=None」这类断言在插件缺席时同样成立，测试会假绿。
+    _ = stage_plugin_fixture("hello", root)
+    _ = stage_plugin_fixture("nullable_config", root)
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 
 
@@ -91,6 +94,10 @@ async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(tmp_p
         assert response.error is None, response.error
         assert response.payload["schema"] is None
         assert response.payload["values"] == {}
+        # 插件缺席时上面两条同样成立，必须确认它真的被加载了，否则是假绿
+        kernel = app.core.plugin_manager
+        assert kernel is not None
+        assert any(item["id"] == "hello" for item in kernel.states())
     finally:
         await service.aclose()
         await app.shutdown()
@@ -300,6 +307,148 @@ async def test_get_returns_json_safe_defaults(tmp_path, monkeypatch):
         assert response.payload["values"]["mode"] == "quiet"
         # 最直接的证据：整个响应能被 JSON 序列化
         _ = json.dumps(response.payload)
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_set_survives_the_kernel_generation_being_replaced(tmp_path, monkeypatch):
+    """写入过程中旧 generation 被处置，不能变成 internal_error。
+
+    ``plugin.config.set`` 要等设置事务的锁，期间别的 apply 可能发布新 generation
+    并处置旧内核，其 schema 注册表随之注销。若写入路径在锁内再回查注册表，就会
+    抛 KeyError 并被外层兜成 internal_error。这里在校验完成后直接把内核的 schema
+    注销掉，模拟那一刻的状态。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        kernel = app.core.plugin_manager
+        assert kernel is not None
+        original_merge = service.plugin_config._settings.apply
+
+        async def _apply_with_disposed_kernel(*args, **kwargs):
+            # 模拟旧代被处置：schema 注册表已清空
+            kernel.config_schemas.unregister("qqbot")
+            return await original_merge(*args, **kwargs)
+
+        monkeypatch.setattr(
+            service.plugin_config._settings, "apply", _apply_with_disposed_kernel
+        )
+
+        response = await _request(service, "plugin.config.set", {
+            "plugin_id": "qqbot", "operation_id": "op-stale",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        })
+
+        assert response.error is None, response.error
+        assert response.payload["values"]["app_id"] == "app-1"
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
+    tmp_path, monkeypatch
+):
+    """同一请求原样重试不能因为无关设置变了就被判成操作冲突。
+
+    幂等指纹若取派生出来的整份配置文本，任何无关改动都会让指纹漂移，重试同一个
+    operation_id 就会返回 runtime_operation_conflict——而 renderer 的保存队列正是
+    靠原样重试来做幂等的。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        payload = {
+            "plugin_id": "qqbot", "operation_id": "op-retry",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        }
+        first = await _request(service, "plugin.config.set", payload)
+        assert first.error is None, first.error
+
+        # 无关设置发生变化：直接改动已提交的配置文本
+        service.settings.config_text = service.settings.config_text + (
+            '\n[plugins.unrelated]\nflag = true\n'
+        )
+
+        retry = await _request(service, "plugin.config.set", dict(payload))
+
+        assert retry.error is None, retry.error
+        assert retry.payload["values"]["app_id"] == "app-1"
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_identical_retry_hits_memo_even_when_re_deriving_would_now_fail_the_guard(
+    tmp_path, monkeypatch,
+):
+    """原样重试必须直接命中幂等 memo，不能重新触发合并与整份文档回读守卫。
+
+    幂等短路曾经发生在派生（合并 + 回读守卫）之后：同一请求原样重试仍会重新
+    跑一遍合并与守卫。这里在首次成功后，把已提交的基准文本改成一份 tomllib
+    无法解析的文本，模拟"重试时基准文本已经变化到会让守卫拒绝"的场景——如果
+    重试真的重新派生，会在这里踩中 ``_assert_config_round_trip`` 的解析失败，
+    返回 plugin_config_unrepresentable 而不是命中 memo 返回第一次的结果。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        payload = {
+            "plugin_id": "qqbot", "operation_id": "op-retry-guard",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        }
+        first = await _request(service, "plugin.config.set", payload)
+        assert first.error is None, first.error
+
+        # 基准文本被换成一份语法上无法解析的文本；重新派生必然会在回读守卫的
+        # tomllib.loads(original_text) 这一步失败。
+        service.settings.config_text = service.settings.config_text + "\n[broken\n"
+
+        retry = await _request(service, "plugin.config.set", dict(payload))
+
+        assert retry.error is None, retry.error
+        assert retry.payload == first.payload
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_set_rejects_a_dotted_key_form_it_cannot_locate(tmp_path, monkeypatch):
+    """``[plugins]`` 下用点分键写目标插件（合法 TOML）时必须被明确拒绝。
+
+    定位器只认独立的表头行；``[plugins]`` 表下 ``qqbot.app_id = "existing"``
+    这类点分键合法但定位不到，若照常走追加分支会生成 ``plugins.qqbot`` 的重复
+    表声明，解析失败后被守卫报出一个跟真实原因（点分键）毫无关系的
+    plugin_config_unrepresentable 文案；用户永远存不上，也看不懂问题在哪。
+
+    错误码本身不足以证明新守卫生效了：重复表声明就算不被新守卫拦截，也会在
+    下游 ``_assert_config_round_trip`` 解析合并后文本失败时得到同一个
+    plugin_config_unrepresentable 错误码，只是文案不同——所以这里额外断言
+    消息文本里出现"点分键"，这是只有新守卫才会给出的措辞。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        before = path.read_text(encoding="utf-8")
+        service.settings.config_text = (
+            before + '\n[plugins]\nqqbot.app_id = "existing"\n'
+        )
+
+        response = await _request(service, "plugin.config.set", {
+            "plugin_id": "qqbot", "operation_id": "op-dotted",
+            "values": {"app_id": "app-1", "client_secret": "secret-1"},
+        })
+
+        assert response.error is not None
+        assert response.error.code == "plugin_config_unrepresentable"
+        assert "点分键" in response.error.message
+        assert path.read_text(encoding="utf-8") == before
     finally:
         await service.aclose()
         await app.shutdown()

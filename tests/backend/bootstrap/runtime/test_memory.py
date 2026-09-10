@@ -9,7 +9,7 @@ from bootstrap.runtime.memory import MemoryStorageIncompatibleError, validate_me
 def test_existing_vector_storage_allows_connection_changes_but_rejects_new_vector_space(tmp_path, monkeypatch):
     path = tmp_path / "memory.db"
     path.touch()
-    monkeypatch.setattr("plugins.default_memory.config.resolve_memory_db_path", lambda **_: path)
+    monkeypatch.setattr("plugins.default_memory.backend.config.resolve_memory_db_path", lambda **_: path)
     original = Config(provider="", model="", api_key="", model_registrations=[])
     original.memory.enabled = True
     credentials = replace(original, memory=replace(original.memory, embedding=replace(original.memory.embedding, api_key="changed")))
@@ -21,7 +21,7 @@ def test_existing_vector_storage_allows_connection_changes_but_rejects_new_vecto
 
 
 def test_new_storage_can_select_its_initial_embedding_space(tmp_path, monkeypatch):
-    monkeypatch.setattr("plugins.default_memory.config.resolve_memory_db_path", lambda **_: tmp_path / "missing.db")
+    monkeypatch.setattr("plugins.default_memory.backend.config.resolve_memory_db_path", lambda **_: tmp_path / "missing.db")
     original = Config(provider="", model="", api_key="", model_registrations=[])
     changed = replace(original, memory=replace(original.memory, enabled=True, embedding=replace(original.memory.embedding, model="new-embedding")))
     validate_memory_transition(original, changed, tmp_path)

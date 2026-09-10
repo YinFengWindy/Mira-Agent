@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
-import { delimiter, join, resolve } from "node:path";
+import { cp, mkdir, rm } from "node:fs/promises";
+import { basename, delimiter, join, relative, resolve, sep } from "node:path";
 import { resolveReleaseManifest } from "./release-manifest.mjs";
 
 const releaseManifest = resolveReleaseManifest();
@@ -16,6 +16,32 @@ if (!existsSync(python)) {
 await rm(runtimeRoot, { recursive: true, force: true });
 await rm(workRoot, { recursive: true, force: true });
 await mkdir(runtimeRoot, { recursive: true });
+
+// Plugin packages keep their own `tests/` alongside their source (see
+// plugins/<id>/tests/), so a plain directory copy would ship pytest-only
+// modules (~925K) to end users and make PyInstaller's submodule collector
+// try to import them. Stage a filtered copy of `plugins/` that drops each
+// plugin's `tests/` directory and `__pycache__`, then point PyInstaller at
+// the staging copy instead of the real source tree.
+const stagingRoot = resolve(workRoot, "plugins-staging");
+await mkdir(stagingRoot, { recursive: true });
+const stagedPluginsDir = join(stagingRoot, "plugins");
+const pluginsSourceDir = join(repositoryRoot, "plugins");
+await cp(pluginsSourceDir, stagedPluginsDir, {
+  recursive: true,
+  filter: (source) => {
+    if (basename(source) === "__pycache__") return false;
+    // Only drop the plugin-level `plugins/<id>/tests/` directory (and its
+    // contents), matched by path depth from the plugins root. A basename-only
+    // check would also exclude `plugins/<id>/backend/**/tests` or future
+    // `ui/**/tests` directories that are not pytest fixtures.
+    const relativePath = relative(pluginsSourceDir, source);
+    if (relativePath === "") return true;
+    const segments = relativePath.split(sep);
+    if (segments.length >= 2 && segments[1] === "tests") return false;
+    return true;
+  },
+});
 
 const dataSeparator = delimiter;
 const args = [
@@ -35,9 +61,9 @@ const args = [
   "--paths",
   backendRoot,
   "--paths",
-  repositoryRoot,
+  stagingRoot,
   "--add-data",
-  `${join(repositoryRoot, "plugins")}${dataSeparator}plugins`,
+  `${stagedPluginsDir}${dataSeparator}plugins`,
   "--add-data",
   `${join(backendRoot, "skills")}${dataSeparator}skills`,
   "--add-data",

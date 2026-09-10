@@ -18,7 +18,7 @@ from bus.event_bus import EventBus
 from bus.queue import MessageBus
 from core.net.http import SharedHttpResources
 from session.manager import SessionManager
-from plugins.qqbot.channel import QQBotChannel
+from plugins.qqbot.backend.channel import QQBotChannel
 
 
 @pytest.mark.asyncio

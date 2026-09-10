@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
 
 from agent.plugin_host import PluginState
+from agent.plugin_host.plugin_data import plugin_data_dir
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 
 from tests.backend.agent.plugin_host.conftest import (
-    FIXTURES_DIR,
     REPOSITORY_ROOT,
     before_turn_ctx,
     make_kernel,
+    stage_plugin_fixture,
 )
 
 _EXPECTED_TOP_LEVEL_PLUGINS = {
@@ -44,9 +44,16 @@ def test_discover_finds_all_top_level_plugins():
     plugins_dir = REPOSITORY_ROOT / "plugins"
     kernel = make_kernel([plugins_dir], event_bus=EventBus())
 
-    names = {record.name for record in kernel.discover()}
+    records = kernel.discover()
+    names = {record.name for record in records}
 
     assert names == _EXPECTED_TOP_LEVEL_PLUGINS
+    # discover() 只报出名字证明不了入口真的存在；record.entry_file 必须是磁盘上
+    # 真实存在的文件，否则装配阶段 import 会直接失败（#178 复审 #11）。
+    for record in records:
+        assert record.entry_file.is_file(), (
+            f"{record.name} 的 entry_file 不存在: {record.entry_file}"
+        )
 
 
 _V2_PLUGIN = """
@@ -79,22 +86,29 @@ _V2_MANIFEST = (
 
 def _write_v2_plugin(root: Path) -> Path:
     plugin_dir = root / "v2demo"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(_V2_PLUGIN, encoding="utf-8")
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(_V2_PLUGIN, encoding="utf-8")
     (plugin_dir / "manifest.yaml").write_text(_V2_MANIFEST, encoding="utf-8")
     return plugin_dir
 
 
 @pytest.mark.asyncio
-async def test_v2_plugin_setup_and_unload(tmp_path: Path):
+async def test_v2_plugin_setup_and_unload(
+    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+):
     plugin_dir = _write_v2_plugin(tmp_path)
+    # workspace 必须独立于插件扫描根（tmp_path），否则"kv 不写插件目录"这条
+    # 断言即使内核实现退化成从插件目录派生 workspace 也检测不出来（#178 复审 #9）。
+    workspace = tmp_path_factory.mktemp("v2demo-workspace")
     bus = EventBus()
-    kernel = make_kernel([tmp_path], event_bus=bus)
+    kernel = make_kernel([tmp_path], event_bus=bus, workspace=workspace)
     await kernel.load_all()
 
     assert kernel.loaded_count == 1
     assert [m.__class__.__name__ for m in kernel.before_turn_modules] == ["StampModule"]
-    assert (plugin_dir / ".kv.json").exists()
+    # kv 落在 workspace 而不是插件目录（issue #209）
+    assert (plugin_data_dir(workspace, "v2demo") / "kv.json").exists()
+    assert not (plugin_dir / ".kv.json").exists()
 
     import sys
 
@@ -114,8 +128,8 @@ async def test_v2_plugin_setup_and_unload(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_v2_capability_gating(tmp_path: Path):
     plugin_dir = tmp_path / "gated"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
         """
 captured: dict = {}
 
@@ -149,8 +163,8 @@ async def setup(ctx):
 @pytest.mark.asyncio
 async def test_v2_setup_failure_rolls_back_effects(tmp_path: Path):
     plugin_dir = tmp_path / "v2broken"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(
         """
 from agent.lifecycle.types import BeforeTurnCtx
 
@@ -181,7 +195,7 @@ async def _on_turn(event):
 
 @pytest.mark.asyncio
 async def test_disabled_marker_skips_plugin(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
@@ -193,7 +207,7 @@ async def test_disabled_marker_skips_plugin(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_config_enabled_false_skips_plugin(tmp_path: Path):
     """启停(issue #174)的来源是配置状态，不是 plugin.disabled 文件。"""
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     kernel = make_kernel(
         [tmp_path], event_bus=EventBus(), plugin_configs={"hello": {"enabled": False}},
     )
@@ -205,7 +219,7 @@ async def test_config_enabled_false_skips_plugin(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
 
@@ -214,14 +228,20 @@ async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
-    kernel = make_kernel([FIXTURES_DIR, FIXTURES_DIR], event_bus=EventBus())
+    _ = stage_plugin_fixture("hello", tmp_path)
+    _ = stage_plugin_fixture("weather", tmp_path)
+    kernel = make_kernel([tmp_path, tmp_path], event_bus=EventBus())
+
     records = kernel.discover()
-    assert len({r.name for r in records}) == len(records)
+
+    # 同一目录被列两次，同名插件只应出现一次
+    assert {r.name for r in records} == {"hello", "weather"}
+    assert len(records) == 2
 
 
 @pytest.mark.asyncio
 async def test_runtime_disable_then_enable(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -241,7 +261,7 @@ async def test_runtime_disable_then_enable(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_load_all_is_idempotent(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "hello", tmp_path / "hello")
+    stage_plugin_fixture("hello", tmp_path)
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -255,8 +275,8 @@ async def test_load_all_is_idempotent(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_telegram_bot_commands_aggregated(tmp_path: Path):
-    plugin_dir = tmp_path / "cmds"
-    plugin_dir.mkdir()
+    plugin_dir = tmp_path / "cmds" / "backend"
+    plugin_dir.mkdir(parents=True)
     (plugin_dir / "plugin.py").write_text(
         "from agent.plugins import Plugin\n"
         "class Cmds(Plugin):\n"
@@ -285,8 +305,8 @@ _RPC_MANIFEST = "api: 2\nid: rpcdemo\ncapabilities:\n  - rpc\n"
 @pytest.mark.asyncio
 async def test_v2_plugin_rpc_method_callable_then_gone_after_unload(tmp_path: Path):
     plugin_dir = tmp_path / "rpcdemo"
-    plugin_dir.mkdir()
-    (plugin_dir / "plugin.py").write_text(_RPC_PLUGIN, encoding="utf-8")
+    (plugin_dir / "backend").mkdir(parents=True)
+    (plugin_dir / "backend" / "plugin.py").write_text(_RPC_PLUGIN, encoding="utf-8")
     (plugin_dir / "manifest.yaml").write_text(_RPC_MANIFEST, encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
@@ -304,7 +324,7 @@ async def test_v2_plugin_rpc_method_callable_then_gone_after_unload(tmp_path: Pa
 
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
-    shutil.copytree(FIXTURES_DIR / "weather", tmp_path / "weather")
+    stage_plugin_fixture("weather", tmp_path)
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=EventBus(), tools=tools)
     await kernel.load_all()

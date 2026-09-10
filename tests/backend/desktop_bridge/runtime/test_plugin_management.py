@@ -14,6 +14,7 @@ import pytest
 from agent.config import load_config_text
 from agent.plugin_host.handle import PluginState
 from bootstrap.app import AppRuntime, RuntimeFeatures
+from conftest import stage_plugin_fixture
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -49,11 +50,14 @@ def _stage_plugin_dirs(
 ) -> None:
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    shutil.copytree(_HELLO_FIXTURE_DIR, root / "hello")
+    # 夹具是旧扁平布局，内核要求 backend/；不重整就根本不会被加载
+    _ = stage_plugin_fixture("hello", root)
     if with_rpc_demo:
         rpc_demo_dir = root / "rpc_demo"
-        rpc_demo_dir.mkdir(parents=True)
-        (rpc_demo_dir / "plugin.py").write_text(_RPC_DEMO_PLUGIN_PY, encoding="utf-8")
+        (rpc_demo_dir / "backend").mkdir(parents=True)
+        (rpc_demo_dir / "backend" / "plugin.py").write_text(
+            _RPC_DEMO_PLUGIN_PY, encoding="utf-8"
+        )
         (rpc_demo_dir / "manifest.yaml").write_text(_RPC_DEMO_MANIFEST, encoding="utf-8")
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 

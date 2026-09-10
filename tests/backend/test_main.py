@@ -102,18 +102,24 @@ def test_dev_launch_makes_top_level_plugins_importable(tmp_path: Path):
         "import main",
         f"code = main.main(['init', '--workspace', {str(workspace)!r},"
         f" '--config', {str(config_path)!r}])",
-        "import plugins.default_memory.config",
+        "import plugins.default_memory.backend.config",
         "print('PLUGINS_IMPORTABLE', code)",
     ])
     result = subprocess.run(
         [sys.executable, "-c", probe],
         cwd=backend_root,
         capture_output=True,
-        text=True,
+        # 入口把 stdout/stderr 统一成 UTF-8，而 text=True 按宿主 locale 解码
+        # （中文 Windows 上是 cp936），读取线程会以 UnicodeDecodeError 死掉，
+        # 测试于是只在 UTF-8 locale 的 CI 上通过。显式固定编码。
+        encoding="utf-8",
+        errors="replace",
     )
 
     assert result.returncode == 0, result.stderr
     assert "PLUGINS_IMPORTABLE 0" in result.stdout
+
+
 @pytest.mark.asyncio
 async def test_module_entrypoint_exit_codes(monkeypatch: pytest.MonkeyPatch):
     """以 `python -m main` 方式运行时的三条退出路径。"""

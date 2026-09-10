@@ -27,6 +27,7 @@
     ".venv",
     ".venv-test",
     "tests",
+    "plugins/*/tests",
     "private_tests",
     "benchmarks"
   ],

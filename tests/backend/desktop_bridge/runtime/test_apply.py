@@ -10,7 +10,11 @@ import pytest
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
 from core.roles.store import RoleStore
-from desktop_bridge.runtime.apply import RuntimeSettingsApplication
+from desktop_bridge.runtime.apply import (
+    DerivedWrite,
+    RuntimeApplyError,
+    RuntimeSettingsApplication,
+)
 
 
 def _config(*, optimizer: bool) -> str:
@@ -69,7 +73,10 @@ async def test_build_config_toml_sees_the_text_committed_by_a_queued_apply(tmp_p
                 {"operation_id": "second"},
                 prepare_service=lambda core: None,
                 publish_service=lambda service: None,
-                build_config_toml=_derive,
+                derive=DerivedWrite(
+                    build_config_toml=_derive,
+                    fingerprint_payload={"marker": "second"},
+                ),
             )
 
         first = asyncio.create_task(_first())
@@ -89,5 +96,96 @@ async def test_build_config_toml_sees_the_text_committed_by_a_queued_apply(tmp_p
             "派生回调看到的是陈旧文本，说明合并发生在事务锁之外，"
             "并发的 runtime.apply 会被静默覆盖"
         )
+    finally:
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_a_derived_write_retry_never_reruns_the_deriver(tmp_path: Path):
+    """派生式写入的原样重试必须直接命中幂等 memo，不能重新触发派生。
+
+    幂等短路曾经发生在派生之后：``apply`` 先跑 ``build_config_toml``，直到
+    ``_apply`` 内部才查 memo。同一请求原样重试因此仍会重新派生一次——如果
+    派生逻辑（如插件配置的整份文档回读守卫）在两次请求之间失效，一次本该
+    命中 memo、原样返回第一次结果的重试就会失败。这里让派生回调在第二次
+    被调用时直接断言失败，只有 memo 检查真的抢在派生之前发生，这个回调才
+    不会被再次调用。
+    """
+    config = _config(optimizer=False)
+    path = tmp_path / "config.toml"
+    path.write_text(config, encoding="utf-8")
+    app = AppRuntime(
+        load_config_text(config), tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    settings = RuntimeSettingsApplication(app, path, RoleStore(tmp_path))
+    try:
+        call_count = 0
+
+        def _derive(current: str) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count > 1:
+                raise AssertionError(
+                    "build_config_toml re-ran on a memoized retry; the memo check "
+                    "must short-circuit before deriving"
+                )
+            return current
+
+        derive = DerivedWrite(
+            build_config_toml=_derive, fingerprint_payload={"op": "x"},
+        )
+        payload = {"operation_id": "op-retry"}
+
+        first = await settings.apply(
+            payload, prepare_service=lambda core: None,
+            publish_service=lambda service: None, derive=derive,
+        )
+        retry = await settings.apply(
+            dict(payload), prepare_service=lambda core: None,
+            publish_service=lambda service: None, derive=derive,
+        )
+
+        assert retry == first
+        assert call_count == 1
+    finally:
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_a_fingerprint_payload_that_cannot_be_json_encoded_is_rejected_cleanly(
+    tmp_path: Path,
+):
+    """指纹载荷不可 JSON 序列化时必须转成 RuntimeApplyError，而不是让 TypeError 逃出 apply。
+
+    ``fingerprint_payload`` 只标注了一个具体类型（``dict[str, Any]``），本身不
+    保证内容可序列化；若不加守卫，``json.dumps`` 抛出的 ``TypeError`` 会直接
+    逃出 ``apply``，在桥接层被兜成一个跟真实原因无关的 internal_error。
+    """
+    config = _config(optimizer=False)
+    path = tmp_path / "config.toml"
+    path.write_text(config, encoding="utf-8")
+    app = AppRuntime(
+        load_config_text(config), tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    settings = RuntimeSettingsApplication(app, path, RoleStore(tmp_path))
+    try:
+        derive = DerivedWrite(
+            build_config_toml=lambda current: current,
+            fingerprint_payload={"bad": object()},
+        )
+
+        with pytest.raises(RuntimeApplyError) as excinfo:
+            await settings.apply(
+                {"operation_id": "op-bad-fingerprint"},
+                prepare_service=lambda core: None,
+                publish_service=lambda service: None,
+                derive=derive,
+            )
+
+        assert excinfo.value.code == "runtime_invalid_request"
     finally:
         await app.shutdown()

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import tomllib
 
-from desktop_bridge.plugin_config_text import merge_plugin_table
+import pytest
+
+from desktop_bridge.plugin_config_text import PluginTableConflict, merge_plugin_table
 
 
 def test_appends_a_new_table_when_missing():
@@ -224,3 +226,76 @@ def test_a_quoted_key_header_is_located_by_its_unquoted_value():
     parsed = tomllib.loads(result)
     assert parsed["plugins"]["my.plugin"] == {"a": 2}
     assert parsed["other"] == {"z": 9}
+
+
+def test_replaces_owned_subtables_separated_by_an_unrelated_table():
+    """目标插件的主表与子表之间夹着无关表时，后面的旧子表也必须被替换掉。
+
+    TOML 不要求同一张表的子表紧跟主表，两种顺序解析结果完全一样。只处理第一段
+    连续区间会把后面的旧子表留在原地，与新写入的子表构成重复表声明，整份文档
+    随即无法解析——写入被拒，用户的插件配置永远存不上。
+    """
+    original = (
+        "[plugins.demo]\n"
+        "a = 1\n"
+        "\n"
+        "[plugins.other]\n"
+        "keep = true\n"
+        "\n"
+        "[plugins.demo.nested]\n"
+        "b = 2\n"
+    )
+
+    merged = merge_plugin_table(original, "demo", {"a": 9, "nested": {"b": 8}})
+
+    parsed = tomllib.loads(merged)
+    assert parsed["plugins"]["demo"] == {"a": 9, "nested": {"b": 8}}
+    assert parsed["plugins"]["other"] == {"keep": True}
+    # 旧子表不得残留（残留会造成重复表声明）
+    assert merged.count("[plugins.demo.nested]") == 1
+
+
+def test_a_dotted_key_form_under_plugins_is_rejected_not_duplicated():
+    """``[plugins]`` 表下用点分键写目标插件（合法 TOML）时，定位器找不到独立
+    表头，必须拒绝而不是追加出一份重复的 ``[plugins.demo]`` 声明。
+
+    追加会让文档同时持有 ``plugins.demo`` 的两份声明（点分键赋的一份、新追加
+    表头的一份），随即无法被 ``tomllib`` 解析——用户的写入被一个看不懂的解析
+    错误挡住，而不是一个指向真实原因（点分键）的错误。
+    """
+    text = "[plugins]\ndemo.a = 1\n"
+
+    with pytest.raises(PluginTableConflict):
+        merge_plugin_table(text, "demo", {"a": 2})
+
+
+def test_an_inline_table_form_under_plugins_is_rejected_not_duplicated():
+    text = "plugins = { demo = { a = 1 } }\n"
+
+    with pytest.raises(PluginTableConflict):
+        merge_plugin_table(text, "demo", {"a": 2})
+
+
+def test_a_genuinely_new_plugin_id_still_appends_normally_despite_the_new_guard():
+    """点分键守卫只应拦截"目标插件已经以定位不到的形式存在"的情况；一个从未
+    出现过的 plugin_id 必须继续正常走追加路径。
+    """
+    text = "[plugins]\nother.a = 1\n"
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    parsed = tomllib.loads(result)
+    assert parsed["plugins"]["demo"] == {"a": 2}
+    assert parsed["plugins"]["other"] == {"a": 1}
+
+
+def test_a_malformed_original_document_does_not_crash_the_new_guard():
+    """新守卫在检测点分键冲突前会尝试解析整份原文；原文若本就无法解析，必须
+    安静地放弃检测（把报错留给下游更清楚的回读守卫），而不是让 ``tomllib``
+    的解析异常从这里逃出去。
+    """
+    text = "[plugins\ndemo = 1\n"
+
+    result = merge_plugin_table(text, "demo", {"a": 2})
+
+    assert "[plugins.demo]" in result
