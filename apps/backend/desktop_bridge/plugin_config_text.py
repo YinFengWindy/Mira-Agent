@@ -3,10 +3,12 @@
 ``plugin.config.set`` must rewrite exactly one plugin's table while leaving
 the rest of the persisted config file untouched (ordering, unrelated tables,
 most surrounding comments). A full ``toml.dumps`` round-trip of the whole
-document would lose comments and reorder tables, so this module locates the
-existing ``[plugins.<id>]`` block (and any of its own sub-tables) by line
-scanning and replaces only that span; when the table does not exist yet, it
-appends a new one.
+document would lose comments and reorder tables, so this module locates
+every existing ``[plugins.<id>]`` block (its main table and any of its own
+sub-tables, which TOML allows to sit anywhere in the file, possibly
+separated by unrelated tables) by line scanning and replaces that whole set
+of spans with a single freshly rendered block at the first span's position;
+when no such span exists yet, it appends a new one.
 
 The scan is statement-aware, not a naive per-line regex match: it tracks
 bracket depth and multi-line (triple-quoted) string state across lines so a
@@ -16,6 +18,15 @@ table header. Header lines are also matched with any trailing ``# comment``
 stripped first, and header paths are parsed key-by-key (quoted segments
 included) so a quoted or dotted plugin id is matched correctly instead of by
 raw substring comparison.
+
+Known limitation: the scan only recognizes *standalone table-header* lines.
+A plugin's table can also legally exist through dotted keys under
+``[plugins]`` (``demo.a = 1``) or an inline table (``demo = { a = 1 }``);
+this module does not rewrite either form in place. When no header-based span
+is found but the target plugin id is already present in the document some
+other way, ``merge_plugin_table`` raises ``PluginTableConflict`` instead of
+appending a duplicate ``[plugins.<id>]`` header, which would otherwise
+produce two conflicting declarations of the same table and fail to parse.
 
 Known limitation: comment/blank lines sitting directly between the target
 table's last line and the next table's header are treated as part of the
@@ -28,6 +39,7 @@ everything from the next table's header onward is preserved exactly.
 from __future__ import annotations
 
 import re
+import tomllib
 from typing import Any
 
 import toml
@@ -38,12 +50,29 @@ import toml
 _HEADER_RE = re.compile(r"^(\[{1,2})\s*([^\[\]]+?)\s*(\]{1,2})\s*$")
 
 
+class PluginTableConflict(ValueError):
+    """The target plugin's table already exists in a form this module cannot locate.
+
+    Raised instead of silently appending a duplicate ``[plugins.<id>]``
+    header over a dotted-key or inline-table declaration of the same plugin.
+    """
+
+    def __init__(self, plugin_id: str) -> None:
+        super().__init__(
+            f"plugin {plugin_id!r} already has values under [plugins] written as "
+            "dotted keys or an inline table, which this merge cannot locate and replace"
+        )
+        self.plugin_id = plugin_id
+
+
 def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any]) -> str:
     """Returns ``config_toml`` with ``[plugins.<plugin_id>]`` replaced by ``values``.
 
-    Everything before the replaced table and everything from the next
+    Everything before the replaced table(s) and everything from the next
     unrelated header onward is preserved exactly; only the target plugin's
-    own table (including its sub-tables) is rewritten.
+    own table (including its sub-tables) is rewritten. Raises
+    ``PluginTableConflict`` when the plugin already has values in the
+    document under a form this function cannot locate (see module docstring).
     """
 
     lines = config_toml.splitlines(keepends=True)
@@ -51,6 +80,7 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
     spans = _locate_owned_spans(lines, prefix_segments)
     block = _render_table(plugin_id, values)
     if not spans:
+        _reject_if_owned_by_an_unlocatable_form(config_toml, plugin_id)
         return _append_table(config_toml, block)
     # 新表整体写在第一段的位置，其余归属本插件的表段（可能被无关表隔开）一并移除；
     # 只处理第一段会把后面的旧子表留下，生成重复表声明，整份文档随即无法解析。
@@ -64,6 +94,27 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
     return "".join(out)
 
 
+def _reject_if_owned_by_an_unlocatable_form(config_toml: str, plugin_id: str) -> None:
+    """Raises ``PluginTableConflict`` if ``plugin_id`` already has values elsewhere.
+
+    ``_locate_owned_spans`` only recognizes standalone table-header lines, so
+    this parses the whole document with ``tomllib`` to check whether
+    ``plugins.<plugin_id>`` already holds a value some other legal-TOML way
+    (dotted keys, an inline table). A parse failure here means the original
+    text is already malformed independently of this merge; that is reported
+    by the round-trip guard's own parse of the same text with a clearer
+    message, so this simply defers to it instead of raising here.
+    """
+
+    try:
+        document = tomllib.loads(config_toml)
+    except tomllib.TOMLDecodeError:
+        return
+    plugins = document.get("plugins")
+    if isinstance(plugins, dict) and plugin_id in plugins:
+        raise PluginTableConflict(plugin_id)
+
+
 def _locate_owned_spans(
     lines: list[str], prefix_segments: list[str]
 ) -> list[tuple[int, int]]:
@@ -71,8 +122,9 @@ def _locate_owned_spans(
 
     A plugin's main table and its sub-tables are usually contiguous, but nothing
     in TOML requires that — an unrelated table may sit between them, and both
-    orderings parse identically. Collecting every owned span (merging adjacent
-    ones) is therefore the only correct basis for replacement.
+    orderings parse identically. Collecting every owned span is therefore the
+    only correct basis for replacement; ``merge_plugin_table`` is responsible
+    for stitching the unrelated text between non-adjacent spans back in.
 
     Only lines that begin a new top-level TOML statement (depth 0, not inside
     a multi-line string) are considered as header candidates; continuation
@@ -103,10 +155,7 @@ def _locate_owned_spans(
         if not owned:
             continue
         end = headers[position + 1][0] if position + 1 < len(headers) else len(lines)
-        if spans and spans[-1][1] == start:
-            spans[-1] = (spans[-1][0], end)
-        else:
-            spans.append((start, end))
+        spans.append((start, end))
     return spans
 
 
@@ -237,8 +286,8 @@ def _render_table(plugin_id: str, values: dict[str, Any]) -> str:
     never emits a multi-line value: strings are written with their newlines
     escaped, so no value line can be mistaken for a table header. ``values``
     is always a validated ``model_dump(mode="json")`` result, which is why the
-    naive line scan is sufficient here but not in ``_locate_table``, where the
-    input is a user-authored document.
+    naive line scan is sufficient here but not in ``_locate_owned_spans``,
+    where the input is a user-authored document.
     """
 
     rendered = toml.dumps({plugin_id: values})

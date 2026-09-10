@@ -111,9 +111,6 @@ class PluginConfigSchemaRegistry:
     def unregister(self, plugin_id: str) -> None:
         self._models.pop(plugin_id, None)
 
-    def __contains__(self, plugin_id: str) -> bool:
-        return plugin_id in self._models
-
     def schema_for(self, plugin_id: str) -> dict[str, Any] | None:
         """Returns the JSON Schema for a plugin's config model, or None."""
         model_cls = self._models.get(plugin_id)
@@ -157,6 +154,11 @@ class PluginConfigSchemaRegistry:
 
         Raises ``KeyError`` when the plugin has no registered model, and
         ``pydantic.ValidationError`` when ``values`` fails validation.
+
+        Thin delegate to ``validate_against`` for callers that only have a
+        plugin id in hand, not the resolved model class; the write path
+        holds the model class itself instead (see ``model_for``), since it
+        must survive across the apply lock even if this registry's entry is
+        unregistered mid-wait.
         """
-        model_cls = self._models[plugin_id]
-        return model_cls.model_validate(values).model_dump(mode="json")
+        return validate_against(self._models[plugin_id], values)

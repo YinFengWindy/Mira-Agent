@@ -374,3 +374,74 @@ async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
     finally:
         await service.aclose()
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_identical_retry_hits_memo_even_when_re_deriving_would_now_fail_the_guard(
+    tmp_path, monkeypatch,
+):
+    """原样重试必须直接命中幂等 memo，不能重新触发合并与整份文档回读守卫。
+
+    幂等短路曾经发生在派生（合并 + 回读守卫）之后：同一请求原样重试仍会重新
+    跑一遍合并与守卫。这里在首次成功后，把已提交的基准文本改成一份 tomllib
+    无法解析的文本，模拟"重试时基准文本已经变化到会让守卫拒绝"的场景——如果
+    重试真的重新派生，会在这里踩中 ``_assert_config_round_trip`` 的解析失败，
+    返回 plugin_config_unrepresentable 而不是命中 memo 返回第一次的结果。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        payload = {
+            "plugin_id": "qqbot", "operation_id": "op-retry-guard",
+            "values": {"app_id": "app-1", "client_secret": "s-1"},
+        }
+        first = await _request(service, "plugin.config.set", payload)
+        assert first.error is None, first.error
+
+        # 基准文本被换成一份语法上无法解析的文本；重新派生必然会在回读守卫的
+        # tomllib.loads(original_text) 这一步失败。
+        service.settings.config_text = service.settings.config_text + "\n[broken\n"
+
+        retry = await _request(service, "plugin.config.set", dict(payload))
+
+        assert retry.error is None, retry.error
+        assert retry.payload == first.payload
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_set_rejects_a_dotted_key_form_it_cannot_locate(tmp_path, monkeypatch):
+    """``[plugins]`` 下用点分键写目标插件（合法 TOML）时必须被明确拒绝。
+
+    定位器只认独立的表头行；``[plugins]`` 表下 ``qqbot.app_id = "existing"``
+    这类点分键合法但定位不到，若照常走追加分支会生成 ``plugins.qqbot`` 的重复
+    表声明，解析失败后被守卫报出一个跟真实原因（点分键）毫无关系的
+    plugin_config_unrepresentable 文案；用户永远存不上，也看不懂问题在哪。
+
+    错误码本身不足以证明新守卫生效了：重复表声明就算不被新守卫拦截，也会在
+    下游 ``_assert_config_round_trip`` 解析合并后文本失败时得到同一个
+    plugin_config_unrepresentable 错误码，只是文案不同——所以这里额外断言
+    消息文本里出现"点分键"，这是只有新守卫才会给出的措辞。
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, path, app = await _start_service(tmp_path)
+    try:
+        before = path.read_text(encoding="utf-8")
+        service.settings.config_text = (
+            before + '\n[plugins]\nqqbot.app_id = "existing"\n'
+        )
+
+        response = await _request(service, "plugin.config.set", {
+            "plugin_id": "qqbot", "operation_id": "op-dotted",
+            "values": {"app_id": "app-1", "client_secret": "secret-1"},
+        })
+
+        assert response.error is not None
+        assert response.error.code == "plugin_config_unrepresentable"
+        assert "点分键" in response.error.message
+        assert path.read_text(encoding="utf-8") == before
+    finally:
+        await service.aclose()
+        await app.shutdown()

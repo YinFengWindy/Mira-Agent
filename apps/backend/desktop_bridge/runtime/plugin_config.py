@@ -19,8 +19,12 @@ from agent.plugin_host.config_schema import (
 )
 from agent.plugin_host.kernel import PluginKernel
 from bootstrap.app import AppRuntime
-from desktop_bridge.plugin_config_text import merge_plugin_table
-from desktop_bridge.runtime.apply import RuntimeApplyError, RuntimeSettingsApplication
+from desktop_bridge.plugin_config_text import PluginTableConflict, merge_plugin_table
+from desktop_bridge.runtime.apply import (
+    DerivedWrite,
+    RuntimeApplyError,
+    RuntimeSettingsApplication,
+)
 
 
 class RuntimePluginConfig:
@@ -66,7 +70,18 @@ class RuntimePluginConfig:
         # 取出模型类并一路持有：本方法要等事务锁，期间可能有别的 apply 发布新
         # generation 并处置旧内核，届时再回查注册表会抛 KeyError（并发保存直接
         # 变成 internal_error）。模型类不可变，与 generation 无关。
-        model_cls = kernel.config_schemas.model_for(plugin_id) if kernel else None
+        #
+        # 已知的窄限制：这次模型查找发生在 apply() 的幂等 memo 检查之前，所以
+        # 原样重试一次已成功的写入，若插件恰好在两次请求之间被卸载，会在这里
+        # 因 model_cls is None 直接抛 plugin_config_unsupported，触不到 memo。
+        # 没有把 memo 检查前移到这里，是因为 memo 的指纹取的是"校验后的
+        # normalized 值"，而校验依赖这里的模型类——插件已卸载时二者都拿不到，
+        # 没有一份不依赖模型、又能区分"这确实是同一次写入"的指纹可用；用未校验
+        # 的原始 values 当指纹则会让一次成功写入和一次因校验规则变化而实际不同
+        # 的写入无法区分。维持现状：卸载窗口内的重试被拒绝，而不是被静默放行。
+        model_cls = (
+            kernel.config_schemas.model_for(plugin_id) if kernel is not None else None
+        )
         if model_cls is None:
             raise RuntimeApplyError(
                 "plugin_config_unsupported", f"插件 {plugin_id} 未声明配置模型",
@@ -84,8 +99,23 @@ class RuntimePluginConfig:
         # 不另起一套写盘逻辑（见 desktop_bridge/plugin_config_text.py）。
         # 合并与守卫都在事务锁内进行：本方法只改一张表、其余文本沿用"当前已提交
         # 的配置"，若在锁外读取基准文本，并发的 runtime.apply 会被整份覆盖掉。
+        # 但当幂等 memo 命中时，apply() 根本不会调用这个回调——见
+        # RuntimeSettingsApplication.apply 的文档。
         def _merge(current_text: str) -> str:
-            merged = merge_plugin_table(current_text, plugin_id, normalized)
+            try:
+                merged = merge_plugin_table(current_text, plugin_id, normalized)
+            except PluginTableConflict as exc:
+                # 目标插件已经以本模块定位不到的形式存在于文档中（[plugins] 下的
+                # 点分键，或内联表）：照常追加会生成重复的 [plugins.<id>] 声明，
+                # 使整份文档无法解析，用户只会看到一个跟真实原因毫不相干的
+                # "配置中存在无法用 TOML 表达的值"。这里直接给出能指导用户的错误。
+                raise RuntimeApplyError(
+                    "plugin_config_unrepresentable",
+                    f"插件 {plugin_id} 的配置已经以点分键或内联表的形式写在 "
+                    "[plugins] 表下，无法通过设置页定位替换；请先在配置文件中把它"
+                    "整理成独立的 [plugins."
+                    f"{plugin_id}] 表，再通过设置页保存",
+                ) from exc
             self._assert_config_round_trip(
                 model_cls, plugin_id, current_text, merged, normalized,
             )
@@ -99,11 +129,13 @@ class RuntimePluginConfig:
             apply_payload,
             prepare_service=prepare_service,
             publish_service=publish_service,
-            build_config_toml=_merge,
             # 幂等指纹按"本次逻辑操作"计算，而不是派生出来的整份配置文本：
             # 后者会随无关设置的变化而变，导致同一请求原样重试被误判为
             # runtime_operation_conflict。
-            fingerprint_source={"plugin_id": plugin_id, "values": normalized},
+            derive=DerivedWrite(
+                build_config_toml=_merge,
+                fingerprint_payload={"plugin_id": plugin_id, "values": normalized},
+            ),
         )
         return {"plugin_id": plugin_id, "values": normalized, **result}
 
