@@ -84,6 +84,7 @@ async def load_legacy_plugin(
             workspace=deps.workspace,
             plugin_id=plugin_id,
             plugin_dir=record.plugin_dir,
+            legacy_plugin_root=deps.legacy_plugin_root,
         ),
         config=plugin_config,
         app_config=deps.app_config,

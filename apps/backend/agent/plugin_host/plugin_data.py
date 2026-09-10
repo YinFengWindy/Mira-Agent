@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 PLUGIN_DATA_DIRNAME = "plugins"
 _KV_FILENAME = "kv.json"
 _LEGACY_KV_FILENAME = ".kv.json"
+_DISABLED_MARKER = "plugin.disabled"
 
 
 def plugin_data_dir(workspace: Path, plugin_id: str) -> Path:
@@ -33,13 +34,45 @@ def plugin_data_dir(workspace: Path, plugin_id: str) -> Path:
     return workspace / PLUGIN_DATA_DIRNAME / plugin_id
 
 
+def migrate_legacy_disabled_marker(
+    plugin_dir: Path, plugin_id: str, legacy_plugin_root: Path | None
+) -> None:
+    """把插件包上移前留下的 ``plugin.disabled`` 标记搬到新的插件目录。
+
+    与 kv 同一个病根：该标记被 gitignore 覆盖，目录重命名经 git 落到本地时不会
+    跟着搬，导致用户此前停用的插件在升级后**自己变回启用**。标记本身没有内容，
+    迁移只是重建它。
+    """
+
+    if legacy_plugin_root is None:
+        return
+    target = plugin_dir / _DISABLED_MARKER
+    legacy = legacy_plugin_root / plugin_id / _DISABLED_MARKER
+    if target.exists() or not legacy.exists():
+        return
+    _ = target.write_text("", encoding="utf-8")
+    logger.info("插件 %s 的停用标记已从 %s 迁移到 %s", plugin_id, legacy, target)
+    try:
+        legacy.unlink()
+    except OSError as error:
+        logger.warning("插件 %s 的旧停用标记删除失败，已忽略: %s", plugin_id, error)
+
+
 def open_plugin_kv(
-    *, workspace: Path | None, plugin_id: str, plugin_dir: Path
+    *,
+    workspace: Path | None,
+    plugin_id: str,
+    plugin_dir: Path,
+    legacy_plugin_root: Path | None = None,
 ) -> PluginKVStore:
     """Opens a plugin's KV store under the workspace, migrating legacy data once.
 
     宿主未提供 workspace 时直接报错，而不是退回写插件目录——那正是 #209 的
     病根，留一条静默回退等于把 bug 保留在最不容易被发现的路径上。
+
+    ``legacy_plugin_root`` 是插件包上移到仓库顶层之前的存放位置
+    （``apps/backend/plugins``）。`.kv.json` 被 gitignore 覆盖，所以目录重命名
+    经 git 落到本地时**不会**跟着搬——旧数据会留在那个位置，必须一并作为迁移来源。
     """
 
     if workspace is None:
@@ -48,25 +81,40 @@ def open_plugin_kv(
             "插件数据不能写入插件目录（见 issue #209）"
         )
     target = plugin_data_dir(workspace, plugin_id) / _KV_FILENAME
-    _migrate_legacy_kv(plugin_dir / _LEGACY_KV_FILENAME, target, plugin_id=plugin_id)
+    candidates = [plugin_dir / _LEGACY_KV_FILENAME]
+    if legacy_plugin_root is not None:
+        candidates.append(legacy_plugin_root / plugin_id / _LEGACY_KV_FILENAME)
+    _migrate_legacy_kv(candidates, target, plugin_id=plugin_id)
     return PluginKVStore(target)
 
 
-def _migrate_legacy_kv(legacy: Path, target: Path, *, plugin_id: str) -> None:
+def _migrate_legacy_kv(
+    candidates: list[Path], target: Path, *, plugin_id: str
+) -> None:
     """一次性把遗留在插件目录里的 ``.kv.json`` 搬到 workspace。
 
     不搬的话，已在使用 kv 的插件（novelai 的自动 CG 冷却与场景去重、
     scene_awareness 的会话场景状态）会在升级到本版本时状态归零——对 novelai
     而言意味着去重失效、同一场景被重复生图。
+
+    按 ``candidates`` 顺序取第一个存在的来源；其余候选即使也存在也只做清理，
+    避免旧位置残留在下次启动时又被当成"待迁移"。
     """
 
-    if target.exists() or not legacy.exists():
+    if target.exists():
+        return
+    source = next((path for path in candidates if path.exists()), None)
+    if source is None:
         return
     target.parent.mkdir(parents=True, exist_ok=True)
-    _ = target.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
-    try:
-        legacy.unlink()
-    except OSError as error:
-        # 打包形态下插件目录可能只读。数据已经落到新位置，旧文件残留无害且不再
-        # 被读取，不值得为删不掉它而让插件加载失败。
-        logger.warning("插件 %s 的旧 kv 文件删除失败，已忽略: %s", plugin_id, error)
+    _ = target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    logger.info("插件 %s 的 kv 数据已从 %s 迁移到 %s", plugin_id, source, target)
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            path.unlink()
+        except OSError as error:
+            # 打包形态下插件目录可能只读。数据已经落到新位置，旧文件残留无害且
+            # 不再被读取，不值得为删不掉它而让插件加载失败。
+            logger.warning("插件 %s 的旧 kv 文件删除失败，已忽略: %s", plugin_id, error)

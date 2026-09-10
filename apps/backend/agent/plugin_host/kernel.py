@@ -31,7 +31,10 @@ from agent.plugin_host.manifest import (
     load_manifest,
     synthesize_legacy_manifest,
 )
-from agent.plugin_host.plugin_data import open_plugin_kv
+from agent.plugin_host.plugin_data import (
+    migrate_legacy_disabled_marker,
+    open_plugin_kv,
+)
 from agent.plugin_host.runtime_context import PluginRuntimeContext
 from bus.event_bus import EventBus
 
@@ -52,6 +55,10 @@ class HostServices:
     light_model: str = ""
     plugin_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     relationship_runtime: Any = None
+    # 插件包上移到仓库顶层之前的位置（apps/backend/plugins）。gitignore 覆盖的
+    # 本地状态（.kv.json / plugin.disabled）不会随目录重命名搬走，需要从这里
+    # 一次性迁移；打包形态下该目录不存在，字段为 None 即可。
+    legacy_plugin_root: Path | None = None
 
 
 class PluginKernel:
@@ -147,6 +154,9 @@ class PluginKernel:
             return
         handle = PluginHandle(record=record, effects=EffectScope(record.manifest.id))
         self._handles[record.name] = handle
+        migrate_legacy_disabled_marker(
+            record.plugin_dir, handle.plugin_id, self._services.legacy_plugin_root
+        )
         if (record.plugin_dir / "plugin.disabled").exists():
             handle.state = PluginState.DISABLED
             logger.info("插件已禁用（plugin.disabled）: %s", record.name)
@@ -216,6 +226,7 @@ class PluginKernel:
                 workspace=services.workspace,
                 plugin_id=handle.plugin_id,
                 plugin_dir=handle.record.plugin_dir,
+                legacy_plugin_root=services.legacy_plugin_root,
             ),
             "config": lambda: PluginConfig(
                 services.plugin_configs.get(handle.plugin_id, {})
