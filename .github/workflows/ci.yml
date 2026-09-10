@@ -37,7 +37,10 @@ jobs:
         env:
           PYTHONWARNINGS: "ignore:.*AbstractEventLoopPolicy.*:DeprecationWarning"
         run: |
-          .venv/bin/pytest -q -W error tests/
+          # 不显式传路径：显式路径会覆盖 pytest.ini 的 testpaths
+          # （tests/backend plugins），导致搬到 plugins/*/tests/ 的用例在 CI
+          # 里一个都不会被收集（#178 复审 #1）。
+          .venv/bin/pytest -q -W error
 
   desktop-check-and-test:
     runs-on: ubuntu-latest

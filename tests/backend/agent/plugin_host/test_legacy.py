@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from agent.tools.registry import ToolRegistry
 
@@ -148,6 +150,62 @@ async def test_strict_mode_raises_on_init_failure(tmp_path: Path):
     with pytest.raises(Exception, match="candidate failure"):
         await kernel.load_all()
     assert kernel.loaded_count == 0
+
+
+@pytest.mark.asyncio
+async def test_legacy_plugin_config_migrates_from_the_pre_move_plugin_root(
+    tmp_path: Path,
+):
+    """插件包上移前遗留的 `plugin_config.json` 必须在装配 legacy 插件前迁移。
+
+    `_load_plugin_config`（被 legacy 适配器复用）只从新插件目录读
+    `plugin_config.json`；不迁移的话用户此前的配置覆盖会静默失效（#178 复审 #4）。
+    """
+    plugins_root = tmp_path / "plugins"
+    plugin_dir = plugins_root / "configured"
+    backend_dir = plugin_dir / "backend"
+    backend_dir.mkdir(parents=True)
+    _ = (plugin_dir / "_conf_schema.json").write_text(
+        json.dumps({"max_results": {"default": 5}}), encoding="utf-8"
+    )
+    _ = (backend_dir / "plugin.py").write_text(
+        """
+from agent.lifecycle.types import BeforeTurnCtx
+from agent.plugins import Plugin
+
+
+class Configured(Plugin):
+    name = "configured"
+
+    async def initialize(self):
+        self.context.event_bus.on(BeforeTurnCtx, self._on_turn)
+
+    async def _on_turn(self, event):
+        event.extra_metadata["max_results"] = self.context.config.get("max_results")
+        return event
+""".strip(),
+        encoding="utf-8",
+    )
+    legacy_root = tmp_path / "apps" / "backend" / "plugins"
+    legacy_config = legacy_root / "configured" / "plugin_config.json"
+    legacy_config.parent.mkdir(parents=True)
+    _ = legacy_config.write_text(json.dumps({"max_results": 42}), encoding="utf-8")
+
+    bus = EventBus()
+    kernel = PluginKernel(
+        [plugins_root],
+        services=HostServices(
+            event_bus=bus,
+            workspace=tmp_path / "workspace",
+            legacy_plugin_root=legacy_root,
+        ),
+    )
+    await kernel.load_all()
+
+    result = await bus.emit(before_turn_ctx())
+    assert result.extra_metadata.get("max_results") == 42
+    assert (plugin_dir / "plugin_config.json").exists()
+    assert not legacy_config.exists()
 
 
 @pytest.mark.asyncio

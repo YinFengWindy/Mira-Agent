@@ -4,13 +4,30 @@ agent 每次收到一条用户消息，经过 6 个生命周期阶段产出一�
 
 ## 先理解它怎么运转的
 
-插件放到 `plugins/` 目录下，启动时自动发现、加载、注册。过程：
+插件包统一放在仓库顶层 `plugins/<id>/` 下，采用 `{backend,ui,tests}` 三分布局，包自包含：
 
 ```
-PluginManager.discover()
-  → 扫描 plugins/ 下每个有 plugin.py 的子目录
-  → 动态 import plugin.py，Plugin.__init_subclass__() 自动注册
-  → 调用 initialize()，失败则回滚该插件的所有注册
+plugins/<id>/
+  manifest.yaml          # 包声明：id、entry、capabilities（v2 插件必填；legacy 插件可省略）
+  backend/
+    plugin.py             # 后端入口，默认路径；manifest 显式写 entry 时以它为准
+    ...                    # 插件其余后端模块
+  tests/                  # 该插件的单测，与插件包同目录、自包含
+  ui/                      # 预留：面向渲染进程的前端资源（暂无插件使用）
+  plugin_config.json       # 用户级配置覆盖，留在包根（gitignored，不进仓库）
+  plugin.disabled          # 存在即禁用该插件（gitignored，不进仓库）
+```
+
+启动时自动发现、加载、注册。过程：
+
+```
+PluginKernel.discover()
+  → 扫描 plugins/ 下每个子目录
+  → 含 manifest.yaml 且声明 api: 2 → 按 v2 契约解析（entry、capabilities 必填）
+  → 否则要求 backend/plugin.py 存在，合成隐式 legacy manifest
+  → 动态 import 入口文件（v2 是 manifest.entry，legacy 是 backend/plugin.py）
+  → v2 插件调用 setup(ctx)；legacy 插件走 Plugin.__init_subclass__() 自动注册 + initialize()
+  → 失败则回滚该插件已注册的一切（effect scope 逆序处置），不影响其他插件
 ```
 
 插件有 **4 种方式** 介入 agent 的行为。不是四种独立的系统，是同一份代码可以同时使用全部四种。
@@ -291,10 +308,10 @@ JSON Schema 从函数签名和 docstring 的 `Args:` 段自动生成。前两个
 ## 配置文件
 
 ```json
-// 插件目录下 _conf_schema.json（声明默认值）
+// 插件包根目录（不是 backend/）下 _conf_schema.json（声明默认值）
 {"max_results": {"default": 5, "description": "最大返回数"}}
 
-// 插件目录下 plugin_config.json（用户覆盖）
+// 插件包根目录下 plugin_config.json（用户覆盖，gitignored）
 {"max_results": 10}
 ```
 
@@ -306,7 +323,7 @@ JSON Schema 从函数签名和 docstring 的 `Args:` 段自动生成。前两个
 
 | 能力 | API |
 |------|-----|
-| KV 存储 | `self.context.kv_store.get/set/increment()` → `{plugin_dir}/.kv.json` |
+| KV 存储 | `self.context.kv_store.get/set/increment()` → workspace 下 `plugins/{plugin_id}/kv.json`（**不是**插件目录，见 issue #209：插件目录在打包形态下只读且升级即丢） |
 | 直接订阅 EventBus | `self.context.event_bus.on(TurnCommitted, handler)` — 不需要装饰器 |
 | 初始化 / 清理 | `async def initialize(self)`, `async def terminate(self)` |
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -19,9 +20,6 @@ from bus.event_bus import EventBus
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES_DIR = REPOSITORY_ROOT / "tests" / "fixtures" / "plugins"
 
-# 插件包根目录下不属于后端代码、因此不进 backend/ 的条目
-_PACKAGE_LEVEL_ENTRIES = {"manifest.yaml", "plugin.disabled", "_conf_schema.json"}
-
 
 def stage_plugin_fixture(name: str, dest_root: Path) -> Path:
     """把扁平布局的测试夹具就地重整成内核要求的 `<id>/backend/` 布局。
@@ -31,17 +29,36 @@ def stage_plugin_fixture(name: str, dest_root: Path) -> Path:
     夹具本身保持旧形状。新内核要求 backend/ 布局，由这里重整，避免同一份夹具
     在仓库里留两份逐字重复、日后必然分叉的副本。#184 删除旧系统后，夹具可以
     直接改成新布局，这个函数随之删除。
+
+    只把 Python 源码（`*.py` 与含 `__init__.py` 的 Python 子包）下沉到
+    `backend/`；其余一律留在包根——`manifest.yaml`、`plugin.disabled`、
+    `_conf_schema.json` 这类包级文件是已知例子，但白名单方式在新增夹具文件
+    时必须逐个更新，稍不注意就会把 `.kv.json` 这类非后端代码也错误下沉（曾经
+    发生：`counter/.kv.json` 被当成后端代码搬进 `backend/`，夹具静默失真且
+    不报错）。反过来按"是不是 Python 代码"判断更不容易漏。`__pycache__` 直接
+    跳过，不管在包根还是子目录里。
     """
 
     target = dest_root / name
-    shutil.copytree(FIXTURES_DIR / name, target)
+    shutil.copytree(FIXTURES_DIR / name, target, ignore=shutil.ignore_patterns("__pycache__"))
     backend = target / "backend"
-    backend.mkdir()
+    backend.mkdir(exist_ok=True)
     for item in sorted(target.iterdir()):
-        if item.name == "backend" or item.name in _PACKAGE_LEVEL_ENTRIES:
+        if item.name == "backend":
             continue
-        shutil.move(str(item), str(backend / item.name))
+        if _is_python_source(item):
+            shutil.move(str(item), str(backend / item.name))
     return target
+
+
+def _is_python_source(item: Path) -> bool:
+    """判断一个包根条目是否属于后端 Python 代码，需要下沉到 `backend/`。"""
+
+    if item.is_file():
+        return item.suffix == ".py"
+    if item.is_dir():
+        return (item / "__init__.py").exists()
+    return False
 
 
 @pytest.fixture(autouse=True)
@@ -73,14 +90,21 @@ def make_kernel(
     workspace: Path | None = None,
 ) -> PluginKernel:
     # 插件数据落在 workspace 而非插件目录（issue #209），而 legacy 适配器会为每个
-    # 插件装配 kv，因此夹具默认提供一个可写 workspace；测试传进来的插件目录本身
-    # 就是 tmp 目录，直接复用它即可。
+    # 插件装配 kv，因此夹具默认提供一个可写 workspace。这里刻意不复用
+    # plugin_dirs[0]：workspace 若等于插件扫描根，"数据不写插件目录"这类断言即使
+    # 内核实现改成直接从插件目录派生 workspace 也不会失败，隔离测试就失去了意义。
+    # 独立的临时目录才能真正证明 kv/config 走的是宿主传入的 workspace。
+    resolved_workspace = workspace
+    if resolved_workspace is None:
+        resolved_workspace = Path(
+            tempfile.mkdtemp(prefix="shiori-plugin-host-test-workspace-")
+        )
     return PluginKernel(
         plugin_dirs,
         services=HostServices(
             event_bus=event_bus,
             tool_registry=tools,
-            workspace=workspace or plugin_dirs[0],
+            workspace=resolved_workspace,
         ),
         namespace=namespace,
         strict=strict,

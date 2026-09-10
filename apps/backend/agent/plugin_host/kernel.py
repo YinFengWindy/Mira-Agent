@@ -27,12 +27,15 @@ from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle, PluginRecord, PluginState
 from agent.plugin_host.legacy import LegacyPluginError, load_legacy_plugin
 from agent.plugin_host.manifest import (
+    DEFAULT_ENTRY,
     ManifestError,
     load_manifest,
     synthesize_legacy_manifest,
 )
 from agent.plugin_host.plugin_data import (
+    DISABLED_MARKER,
     migrate_legacy_disabled_marker,
+    migrate_legacy_plugin_config,
     open_plugin_kv,
 )
 from agent.plugin_host.runtime_context import PluginRuntimeContext
@@ -119,8 +122,9 @@ class PluginKernel:
             logger.warning("manifest.yaml 读取失败 (%s): %s", child, e)
             manifest = None
         if manifest is None or not manifest.is_v2:
-            # legacy 目录（含旧四字段 manifest）以 backend/plugin.py 为准入条件
-            if not (child / "backend" / "plugin.py").exists():
+            # legacy 目录（含旧四字段 manifest）以 DEFAULT_ENTRY（backend/plugin.py）
+            # 为准入条件；与 manifest.py 共享同一个常量，避免布局改一处漏一处
+            if not (child / DEFAULT_ENTRY).exists():
                 return None
             manifest = synthesize_legacy_manifest(child)
         entry_file = child / manifest.entry
@@ -157,9 +161,12 @@ class PluginKernel:
         migrate_legacy_disabled_marker(
             record.plugin_dir, handle.plugin_id, self._services.legacy_plugin_root
         )
-        if (record.plugin_dir / "plugin.disabled").exists():
+        migrate_legacy_plugin_config(
+            record.plugin_dir, handle.plugin_id, self._services.legacy_plugin_root
+        )
+        if (record.plugin_dir / DISABLED_MARKER).exists():
             handle.state = PluginState.DISABLED
-            logger.info("插件已禁用（plugin.disabled）: %s", record.name)
+            logger.info("插件已禁用（%s）: %s", DISABLED_MARKER, record.name)
             return
         handle.state = PluginState.LOADING
         try:

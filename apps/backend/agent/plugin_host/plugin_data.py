@@ -8,16 +8,27 @@
 
 因此插件的私有状态统一落在 workspace 下，与会话库、角色、记忆、配置同处一地，
 按插件分目录。**插件目录是代码，用户数据归 workspace。**
+
+## 本文件里的迁移覆盖不到打包用户
+
+issue #209 的前提就是「NSIS 升级会整体重装 ``resources/``」。也就是说，打包
+形态下旧 kv／配置本来就已经被安装器删掉了——新版本首次启动时，下面这些
+``legacy_plugin_root`` / 插件目录里的迁移候选压根不存在，``_migrate_legacy_json``
+只是静默地什么都不做。**这里的一次性迁移实际只覆盖开发者（``git pull`` 到本地
+未被 gitignore 清理的旧文件）与便携形态，不要理解成"已经挽回了打包用户的历史
+数据"——那部分数据在安装器那一步就已经丢了，这份迁移救不回来。**
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
 # PluginKVStore 是通用工具而非旧系统语义，#184 删除旧插件系统时应把它移到
 # plugin_host 下；在那之前从原处导入，避免这次修复顺带扩大改动面。
 from agent.plugins.context import PluginKVStore
+from infra.persistence.json_store import atomic_save_json
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +36,10 @@ logger = logging.getLogger(__name__)
 PLUGIN_DATA_DIRNAME = "plugins"
 _KV_FILENAME = "kv.json"
 _LEGACY_KV_FILENAME = ".kv.json"
-_DISABLED_MARKER = "plugin.disabled"
+_CONFIG_FILENAME = "plugin_config.json"
+# 插件禁用标记文件名；公开导出供 kernel.py 复用，避免常量在两处各写一份
+# （#178 复审 #6）。
+DISABLED_MARKER = "plugin.disabled"
 
 
 def plugin_data_dir(workspace: Path, plugin_id: str) -> Path:
@@ -46,8 +60,8 @@ def migrate_legacy_disabled_marker(
 
     if legacy_plugin_root is None:
         return
-    target = plugin_dir / _DISABLED_MARKER
-    legacy = legacy_plugin_root / plugin_id / _DISABLED_MARKER
+    target = plugin_dir / DISABLED_MARKER
+    legacy = legacy_plugin_root / plugin_id / DISABLED_MARKER
     if target.exists() or not legacy.exists():
         return
     _ = target.write_text("", encoding="utf-8")
@@ -56,6 +70,29 @@ def migrate_legacy_disabled_marker(
         legacy.unlink()
     except OSError as error:
         logger.warning("插件 %s 的旧停用标记删除失败，已忽略: %s", plugin_id, error)
+
+
+def migrate_legacy_plugin_config(
+    plugin_dir: Path, plugin_id: str, legacy_plugin_root: Path | None
+) -> None:
+    """把插件包上移前留下的 ``plugin_config.json`` 搬到新的插件目录。
+
+    与 kv / plugin.disabled 同一病根：``plugins/*/plugin_config.json`` 被
+    gitignore 覆盖，目录重命名经 git 落到本地时不会跟着搬。
+    ``agent/plugins/manager.py::_load_plugin_config`` （被 legacy 适配器复用）
+    仍从新插件目录读取用户配置覆盖，不迁移会让用户此前的配置覆盖静默失效。
+
+    目标位置是插件包根目录（不是 workspace）——它是插件配置而非用户运行时
+    私有数据，挪进 workspace 属于另一个议题，这里不做。
+    """
+
+    if legacy_plugin_root is None:
+        return
+    target = plugin_dir / _CONFIG_FILENAME
+    legacy = legacy_plugin_root / plugin_id / _CONFIG_FILENAME
+    _migrate_legacy_json(
+        [legacy], target, plugin_id=plugin_id, description="配置覆盖"
+    )
 
 
 def open_plugin_kv(
@@ -84,21 +121,28 @@ def open_plugin_kv(
     candidates = [plugin_dir / _LEGACY_KV_FILENAME]
     if legacy_plugin_root is not None:
         candidates.append(legacy_plugin_root / plugin_id / _LEGACY_KV_FILENAME)
-    _migrate_legacy_kv(candidates, target, plugin_id=plugin_id)
+    _migrate_legacy_json(candidates, target, plugin_id=plugin_id, description="kv 数据")
     return PluginKVStore(target)
 
 
-def _migrate_legacy_kv(
-    candidates: list[Path], target: Path, *, plugin_id: str
+def _migrate_legacy_json(
+    candidates: list[Path], target: Path, *, plugin_id: str, description: str
 ) -> None:
-    """一次性把遗留在插件目录里的 ``.kv.json`` 搬到 workspace。
+    """一次性、原子地把 ``candidates`` 中第一个存在的 JSON 文件迁移到 ``target``。
 
     不搬的话，已在使用 kv 的插件（novelai 的自动 CG 冷却与场景去重、
     scene_awareness 的会话场景状态）会在升级到本版本时状态归零——对 novelai
     而言意味着去重失效、同一场景被重复生图。
 
-    按 ``candidates`` 顺序取第一个存在的来源；其余候选即使也存在也只做清理，
-    避免旧位置残留在下次启动时又被当成"待迁移"。
+    按 ``candidates`` 顺序取第一个存在的来源。**只删除真正被迁移的那一个
+    source**，其余候选原样保留：迁移成功后 ``target.exists()`` 会让函数直接
+    早退，其余候选之后永远不会再被读取，删除它们没有任何收益，只会把用户的
+    另一份数据静默销毁。
+
+    写入经临时文件 + 原子替换（复用 ``json_store.atomic_save_json``）：写到一半
+    失败不会留下半截 ``target``；source 的删除在写入成功之后才发生，因此写入
+    失败时 source 依然完整保留，不会出现"目标已存在但是损坏、旧数据也已经不
+    在"的永久损坏态。
     """
 
     if target.exists():
@@ -106,15 +150,14 @@ def _migrate_legacy_kv(
     source = next((path for path in candidates if path.exists()), None)
     if source is None:
         return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _ = target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-    logger.info("插件 %s 的 kv 数据已从 %s 迁移到 %s", plugin_id, source, target)
-    for path in candidates:
-        if not path.exists():
-            continue
-        try:
-            path.unlink()
-        except OSError as error:
-            # 打包形态下插件目录可能只读。数据已经落到新位置，旧文件残留无害且
-            # 不再被读取，不值得为删不掉它而让插件加载失败。
-            logger.warning("插件 %s 的旧 kv 文件删除失败，已忽略: %s", plugin_id, error)
+    data = json.loads(source.read_text(encoding="utf-8"))
+    atomic_save_json(target, data)
+    logger.info("插件 %s 的%s已从 %s 迁移到 %s", plugin_id, description, source, target)
+    try:
+        source.unlink()
+    except OSError as error:
+        # 打包形态下插件目录可能只读。数据已经落到新位置，旧文件残留无害且
+        # 不再被读取，不值得为删不掉它而让插件加载失败。
+        logger.warning(
+            "插件 %s 的旧%s文件删除失败，已忽略: %s", plugin_id, description, error
+        )
