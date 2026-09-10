@@ -50,6 +50,11 @@ def make_kernel(
     strict: bool = False,
     plugin_configs: dict[str, dict] | None = None,
     workspace: Path | None = None,
+    session_manager: object = None,
+    memory_engine: object = None,
+    light_provider: object = None,
+    light_model: str = "",
+    relationship_runtime: object = None,
 ) -> PluginKernel:
     # 插件数据落在 workspace 而非插件目录（issue #209），而 legacy 适配器会为每个
     # 插件装配 kv，因此夹具默认提供一个可写 workspace。这里刻意不复用
@@ -68,6 +73,11 @@ def make_kernel(
             tool_registry=tools,
             plugin_configs=plugin_configs or {},
             workspace=resolved_workspace,
+            session_manager=session_manager,
+            memory_engine=memory_engine,
+            light_provider=light_provider,
+            light_model=light_model,
+            relationship_runtime=relationship_runtime,
         ),
         namespace=namespace,
         strict=strict,

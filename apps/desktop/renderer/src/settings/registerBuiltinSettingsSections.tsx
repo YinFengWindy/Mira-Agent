@@ -37,7 +37,6 @@ export function registerBuiltinSettingsSections(): void {
     subsections: [
       { id: "telegram", label: "Telegram" },
       { id: "qq", label: "QQ" },
-      { id: "qqbot", label: "QQBot" },
     ],
     Component: ChannelsSettingsSection,
   }, "builtin");

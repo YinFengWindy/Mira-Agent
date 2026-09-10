@@ -25,30 +25,6 @@ export function ChannelsSettingsSection({
           </Field>
         </SettingsSectionCard>
       );
-    case "qqbot":
-      return (
-        <SettingsSectionCard>
-          <Field label="App ID">
-            <input
-              className={settingsInputClass}
-              value={draft.channels.qqBotAppId}
-              onChange={(event) => updateDraft((current) => ({
-                ...current,
-                channels: { ...current.channels, qqBotAppId: event.target.value },
-              }))}
-            />
-          </Field>
-          <Field label="Client Secret">
-            <SettingsSecretInput
-              value={draft.channels.qqBotClientSecret}
-              onChange={(value) => updateDraft((current) => ({
-                ...current,
-                channels: { ...current.channels, qqBotClientSecret: value },
-              }))}
-            />
-          </Field>
-        </SettingsSectionCard>
-      );
     default:
       return null;
   }

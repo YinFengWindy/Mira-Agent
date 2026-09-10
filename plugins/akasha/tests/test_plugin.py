@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import shutil
 import sqlite3
+import tempfile
 import threading
 from contextlib import closing
 from datetime import datetime, timezone
@@ -13,10 +16,10 @@ from unittest.mock import AsyncMock
 import pytest
 import numpy as np
 
+from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from bus.events_lifecycle import RoleDeleted, TurnCommitted
 from core.memory.engine import MemoryQuery, MemoryQueryIntent, MemoryScope
-from agent.plugins.context import PluginContext, PluginKVStore
 from agent.config_models import Config, MemoryConfig, MemoryEmbeddingConfig
 from plugins.akasha.backend.config import AkashaConfig
 from plugins.akasha.backend.engine import (
@@ -35,7 +38,7 @@ from plugins.akasha.backend.core import (
     dense_message_candidates,
     reinforce_boost_from_payload,
 )
-from plugins.akasha.backend.plugin import AkashaPlugin
+from plugins.akasha.backend.plugin import render_last_query
 from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage, _turn_messages
 from plugins.akasha.backend.store import (
     ActivationEventRow,
@@ -47,6 +50,7 @@ from scripts.build_akasha_db import _iter_replay_turns, _load_embeddings_from_ca
 
 
 QUERY_TS = datetime.fromtimestamp(1_700_000_000.0, timezone.utc)
+_AKASHA_PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _init_sessions_db(path: Path) -> None:
@@ -1263,32 +1267,35 @@ def test_undo_removes_akasha_turn_state_after_session_delete(tmp_path: Path) -> 
         store.close()
 
 
+def _load_akasha_kernel(*, memory_engine: object, workspace: Path) -> Any:
+    with tempfile.TemporaryDirectory() as tmp:
+        plugin_dir = Path(tmp) / "akasha"
+        shutil.copytree(_AKASHA_PLUGIN_ROOT, plugin_dir)
+        kernel = PluginKernel(
+            [Path(tmp)],
+            services=HostServices(
+                event_bus=EventBus(), workspace=workspace, memory_engine=memory_engine,
+            ),
+        )
+        asyncio.run(kernel.load_all())
+        assert kernel.loaded_count == 1
+        return kernel.telegram_bot_commands, kernel.before_turn_modules
+
+
 def test_akashalast_command_only_registers_for_akasha_engine(tmp_path: Path) -> None:
-    akasha = AkashaPlugin()
-    akasha.context = PluginContext(
-        event_bus=None,
-        tool_registry=None,
-        plugin_id="akasha",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".akasha-kv.json"),
-        workspace=tmp_path,
+    akasha_commands, akasha_modules = _load_akasha_kernel(
         memory_engine=SimpleNamespace(describe=lambda: SimpleNamespace(name="akasha")),
-    )
-    default = AkashaPlugin()
-    default.context = PluginContext(
-        event_bus=None,
-        tool_registry=None,
-        plugin_id="akasha",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".default-kv.json"),
         workspace=tmp_path,
+    )
+    default_commands, default_modules = _load_akasha_kernel(
         memory_engine=SimpleNamespace(describe=lambda: SimpleNamespace(name="default")),
+        workspace=tmp_path,
     )
 
-    assert akasha.telegram_bot_commands() == [("akashalast", "查看上一轮 Akasha 检索诊断")]
-    assert len(akasha.before_turn_modules()) == 1
-    assert default.telegram_bot_commands() == []
-    assert default.before_turn_modules() == []
+    assert akasha_commands == [("akashalast", "查看上一轮 Akasha 检索诊断")]
+    assert len(akasha_modules) == 1
+    assert default_commands == []
+    assert default_modules == []
 
 
 def test_akashalast_renders_latest_query_log(tmp_path: Path) -> None:
@@ -1348,18 +1355,7 @@ def test_akashalast_renders_latest_query_log(tmp_path: Path) -> None:
     finally:
         store.close()
 
-    plugin = AkashaPlugin()
-    plugin.context = PluginContext(
-        event_bus=None,
-        tool_registry=None,
-        plugin_id="akasha",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".kv.json"),
-        workspace=tmp_path,
-        memory_engine=SimpleNamespace(describe=lambda: SimpleNamespace(name="akasha")),
-    )
-
-    reply = plugin.render_last_query("s")
+    reply = render_last_query(tmp_path, "s")
 
     assert "🧠 Akasha 记忆检索诊断" in reply
     assert "📍 会话: `s` | seq `2`" in reply

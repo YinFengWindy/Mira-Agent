@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from zoneinfo import ZoneInfo
 
 from agent.lifecycle.types import BeforeTurnCtx, TurnState
-from agent.plugins import Plugin
 from plugins.akasha.backend.config import load_akasha_config, resolve_akasha_db_path
 from plugins.akasha.backend.store import AkashaStore
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 _CTX_SLOT = "session:ctx"
 _BEIJING_TZ = ZoneInfo("Asia/Shanghai")
@@ -20,8 +22,8 @@ class AkashaLastCommandModule:
     requires = ("before_turn.acquire_session", "session:session")
     produces = (_CTX_SLOT,)
 
-    def __init__(self, plugin: "AkashaPlugin") -> None:
-        self._plugin = plugin
+    def __init__(self, workspace: Path | None) -> None:
+        self._workspace = workspace
 
     async def run(self, frame: Any) -> Any:
         if _CTX_SLOT in frame.slots:
@@ -30,56 +32,56 @@ class AkashaLastCommandModule:
         command = _normalize_command(state.msg.content)
         if command not in {"/akashalast", "/akasha_last"}:
             return frame
-        if not self._plugin.is_active():
-            return frame
         frame.slots[_CTX_SLOT] = _abort_ctx(
             state,
-            self._plugin.render_last_query(state.session_key),
+            render_last_query(self._workspace, state.session_key),
         )
         return frame
 
 
-class AkashaPlugin(Plugin):
-    name = "akasha"
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 akasha 插件壳：仅当当前记忆引擎是 akasha 时贡献 /akashalast 命令与查询模块。
 
-    def telegram_bot_commands(self) -> list[tuple[str, str]]:
-        if not self.is_active():
-            return []
-        return [("akashalast", "查看上一轮 Akasha 检索诊断")]
+    记忆引擎本体（``AkashaMemoryEngine`` / ``MemoryPlugin``）不在此文件，由
+    ``core.memory.plugin`` 的独立契约装配（见同目录 ``memory_plugin.py``），
+    经 ``bootstrap/wiring.py`` 的 ``resolve_memory_plugin`` 接线，不受本次插件
+    系统迁移影响；这里只是给它接一个 v2 生命周期壳。
 
-    def before_turn_modules(self) -> list[object]:
-        if not self.is_active():
-            return []
-        return [AkashaLastCommandModule(self)]
+    是否激活只在装配时判定一次：``ctx.memory_engine`` 在同一次 kernel
+    generation 内固定不变（由 bootstrap 在构造 ``HostServices`` 时一次性注入），
+    与旧 ``is_active()`` 每次调用时动态判定的效果等价，因此不再需要
+    ``AkashaLastCommandModule.run()`` 内部重复判定。
+    """
+    if not _is_memory_engine(ctx.memory_engine, "akasha"):
+        return
+    ctx.bot_commands.add("akashalast", "查看上一轮 Akasha 检索诊断")
+    ctx.lifecycle.contribute("before_turn", [AkashaLastCommandModule(ctx.workspace)])
 
-    def is_active(self) -> bool:
-        return _is_memory_engine(getattr(self.context, "memory_engine", None), "akasha")
 
-    def render_last_query(self, session_key: str) -> str:
-        workspace = self.context.workspace
-        if workspace is None:
-            return "Akasha 诊断不可用：workspace 不存在。"
-        store = AkashaStore(
-            resolve_akasha_db_path(
-                workspace=workspace,
-                akasha_config=load_akasha_config(plugin_dir=Path(__file__).resolve().parent),
-            )
+def render_last_query(workspace: Path | None, session_key: str) -> str:
+    if workspace is None:
+        return "Akasha 诊断不可用：workspace 不存在。"
+    store = AkashaStore(
+        resolve_akasha_db_path(
+            workspace=workspace,
+            akasha_config=load_akasha_config(plugin_dir=Path(__file__).resolve().parent),
         )
-        try:
-            rows, _ = store.list_query_logs(
-                session_key=session_key,
-                page=1,
-                page_size=1,
-            )
-            if not rows:
-                return "暂无 Akasha 检索诊断记录。"
-            query_id = str(rows[0]["query_id"])
-            raw = store.get_query_log(query_id)
-        finally:
-            store.close()
-        if raw is None:
+    )
+    try:
+        rows, _ = store.list_query_logs(
+            session_key=session_key,
+            page=1,
+            page_size=1,
+        )
+        if not rows:
             return "暂无 Akasha 检索诊断记录。"
-        return _render_query_detail(raw)
+        query_id = str(rows[0]["query_id"])
+        raw = store.get_query_log(query_id)
+    finally:
+        store.close()
+    if raw is None:
+        return "暂无 Akasha 检索诊断记录。"
+    return _render_query_detail(raw)
 
 
 def _render_query_detail(raw: dict[str, object]) -> str:

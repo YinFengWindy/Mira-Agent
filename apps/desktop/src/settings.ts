@@ -169,7 +169,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const voiceAsr = asRecord(voice.asr);
   const voiceTts = asRecord(voice.tts);
   const plugins = asRecord(parsed.plugins);
-  const qqbot = asRecord(plugins.qqbot);
   return {
     configPath: configuredPath,
     formData: {
@@ -179,8 +178,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
       channels: {
         telegramToken: String(telegram.token ?? ""),
         qqBotUin: String(qq.bot_uin ?? ""),
-        qqBotAppId: String(qqbot.app_id ?? qqbot.appId ?? ""),
-        qqBotClientSecret: String(qqbot.client_secret ?? qqbot.clientSecret ?? ""),
       },
       memory: {
         enabled: Boolean(memory.enabled),
@@ -235,9 +232,18 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
         memoryOptimizerIntervalSeconds: Number(
           agentMaintenance.memory_optimizer_interval_seconds ?? 64800,
         ),
+        // feishu is excluded because that surface was retired from the runtime
+        // (the backend rejects [plugins.feishu] outright). qqbot used to be
+        // excluded too, back when its app_id/client_secret had a bespoke
+        // round-trip through channels.qqBot*; now that it owns a schema-driven
+        // settings.section (plugins/qqbot/ui/index.tsx) instead, it flows
+        // through this generic catch-all like any other plugin without
+        // dedicated UI (#183) — dropping it here would silently lose
+        // [plugins.qqbot] on the next unrelated settings save, since this
+        // whole document is rebuilt from formData on every save.
         pluginsRawToml: renderPluginBlocks(
           Object.entries(plugins)
-            .filter(([name]) => name !== "qqbot" && name !== "feishu")
+            .filter(([name]) => name !== "feishu")
             .map(([name, value]) => renderPluginSection(name, asRecord(value)))
             .join("\n"),
         ).trimEnd(),
@@ -296,10 +302,6 @@ function renderSettingsToml(formData: SettingsFormData): string {
     "[channels.qq]",
     `bot_uin = ${quote(formData.channels.qqBotUin)}`,
     "websocket_open_timeout_seconds = 5",
-    "",
-    "[plugins.qqbot]",
-    `app_id = ${quote(formData.channels.qqBotAppId)}`,
-    `client_secret = ${quote(formData.channels.qqBotClientSecret)}`,
     "",
     "[memory]",
     `enabled = ${formData.memory.enabled ? "true" : "false"}`,

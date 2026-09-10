@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from agent.core.proactive_turn.gates import (
     ProactiveGateAdapter,
     ProactiveGateCompletion,
@@ -9,9 +11,11 @@ from agent.core.proactive_turn.gates import (
     ProactiveGateDecision,
     ProactiveMode,
 )
-from agent.plugins import Plugin
 from bus.events_lifecycle import SceneObservationCommitted
 from core.roles.relationship_runtime import RoleRelationshipRuntimeService
+
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
 
 
 class _SceneFollowupGate(ProactiveGateAdapter):
@@ -70,32 +74,25 @@ class RelationshipLonelinessGate(ProactiveGateAdapter):
         )
 
 
-class RelationshipProactivePlugin(Plugin):
-    """Adapts the relationship runtime to the proactive gate seam."""
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 relationship_proactive：贡献主动 tick 准入 gate 并订阅场景决策事件。
 
-    name = "relationship_proactive"
+    ``ctx.relationship_runtime`` 在同一次 kernel generation 内固定不变（由
+    bootstrap 构造 ``HostServices`` 时一次性注入），因此是否贡献 gate 只需在
+    装配时判定一次，与旧 ``proactive_gates()`` 每次调用时动态判定 None 的效果
+    等价。
+    """
+    runtime = ctx.relationship_runtime
+    if runtime is None:
+        return
 
-    async def initialize(self) -> None:
-        self._scene_handler = self._handle_scene_observation
-        self.context.event_bus.on(SceneObservationCommitted, self._scene_handler)
-
-    def _handle_scene_observation(self, event: SceneObservationCommitted) -> None:
-        runtime = self.context.relationship_runtime
-        if runtime is None:
-            return
+    def _handle_scene_observation(event: SceneObservationCommitted) -> None:
         runtime.apply_scene_decision(
             event.session_key,
             event.transition,
             event.scene_key,
         )
 
-    def proactive_gates(self):
-        runtime = self.context.relationship_runtime
-        if runtime is None:
-            return []
-        return [_SceneFollowupGate(runtime), RelationshipLonelinessGate(runtime)]
-
-    async def terminate(self) -> None:
-        handler = getattr(self, "_scene_handler", None)
-        if handler is not None:
-            self.context.event_bus.off(SceneObservationCommitted, handler)
+    ctx.events.on(SceneObservationCommitted, _handle_scene_observation)
+    ctx.proactive_gates.add(_SceneFollowupGate(runtime))
+    ctx.proactive_gates.add(RelationshipLonelinessGate(runtime))

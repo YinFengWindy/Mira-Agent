@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from collections.abc import Mapping
-from contextlib import suppress
-from typing import Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, cast
 
-from agent.plugins import Plugin
 from bus.events_lifecycle import TurnCommitted
 from core.memory.events import MemoryWritten, RetrievalCompleted
 
@@ -15,72 +12,55 @@ from .collector import GlobalErrorCollector
 from .retention import run_retention_if_needed
 from .writer import TraceWriter
 
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
+
 logger = logging.getLogger("plugin.observe")
 
 
-@runtime_checkable
-class _ObserveWriter(Protocol):
-    def emit(self, event: object) -> None: ...
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 observe：workspace 存在时启动 writer/retention 后台任务并订阅遥测事件。
+
+    登记顺序刻意保持 [writer 后台任务, retention 后台任务, 全局错误采集器,
+    三个事件订阅]：卸载按 LIFO 逆序处置，因此实际清理顺序是
+    事件订阅 -> 采集器 uninstall（把内存中缓冲的错误 flush 进队列）->
+    retention 任务取消 -> writer 任务最后取消，writer 任务的取消时机晚于
+    采集器 flush，保证 flush 出的最后一批错误仍有机会被 writer 写盘——
+    与旧 terminate() 里"先 uninstall 采集器、再依次取消 retention/writer"的
+    手写顺序等价（#183）。
+    """
+    workspace = ctx.workspace
+    if workspace is None:
+        logger.warning("observe 插件缺少 workspace，跳过加载")
+        return
+
+    db_path = workspace / "observe" / "observe.db"
+    writer = TraceWriter(db_path)
+    _ = ctx.background.spawn(writer.run(), name="writer")
+    _ = ctx.background.spawn(run_retention_if_needed(db_path), name="retention")
+
+    collector = GlobalErrorCollector(writer)
+    collector.install()
+    ctx.effect("collector", collector.uninstall)
+
+    ctx.events.on(TurnCommitted, lambda event: _observe_turn_committed(writer, event))
+    ctx.events.on(RetrievalCompleted, lambda event: _observe_retrieval(writer, event))
+    ctx.events.on(MemoryWritten, lambda event: _observe_memory_written(writer, event))
 
 
-class ObservePlugin(Plugin):
-    name = "observe"
-
-    async def initialize(self) -> None:
-        workspace = self.context.workspace
-        if workspace is None:
-            logger.warning("observe 插件缺少 workspace，跳过加载")
-            return
-
-        self._writer = TraceWriter(workspace / "observe" / "observe.db")
-        self._writer_task = asyncio.create_task(
-            self._writer.run(),
-            name="observe_writer",
-        )
-        self._retention_task = asyncio.create_task(
-            run_retention_if_needed(workspace / "observe" / "observe.db"),
-            name="observe_retention",
-        )
-        self._collector = GlobalErrorCollector(self._writer)
-        self._collector.install()
-        self.context.event_bus.on(TurnCommitted, self._observe_turn_committed)
-        self.context.event_bus.on(RetrievalCompleted, self._observe_retrieval)
-        self.context.event_bus.on(MemoryWritten, self._observe_memory_written)
-
-    async def terminate(self) -> None:
-        collector = getattr(self, "_collector", None)
-        if collector is not None:
-            await collector.uninstall()
-        for task in (
-            getattr(self, "_retention_task", None),
-            getattr(self, "_writer_task", None),
-        ):
-            if task is None:
-                continue
-            _ = task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
-
-    def _observe_turn_committed(self, event: TurnCommitted) -> None:
-        writer = getattr(self, "_writer", None)
-        if not isinstance(writer, _ObserveWriter):
-            return
-        _emit_turn_trace(writer, event)
-
-    def _observe_retrieval(self, event: RetrievalCompleted) -> None:
-        writer = getattr(self, "_writer", None)
-        if not isinstance(writer, _ObserveWriter):
-            return
-        writer.emit(_to_rag_query_log(event))
-
-    def _observe_memory_written(self, event: MemoryWritten) -> None:
-        writer = getattr(self, "_writer", None)
-        if not isinstance(writer, _ObserveWriter):
-            return
-        writer.emit(_to_memory_write_trace(event))
+def _observe_turn_committed(writer: TraceWriter, event: TurnCommitted) -> None:
+    _emit_turn_trace(writer, event)
 
 
-def _emit_turn_trace(writer: _ObserveWriter, event: TurnCommitted) -> None:
+def _observe_retrieval(writer: TraceWriter, event: RetrievalCompleted) -> None:
+    writer.emit(_to_rag_query_log(event))
+
+
+def _observe_memory_written(writer: TraceWriter, event: MemoryWritten) -> None:
+    writer.emit(_to_memory_write_trace(event))
+
+
+def _emit_turn_trace(writer: TraceWriter, event: TurnCommitted) -> None:
     from .events import TurnTrace as TurnTraceEvent
 
     post_reply_budget = event.post_reply_budget

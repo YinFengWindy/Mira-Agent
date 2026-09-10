@@ -1,67 +1,52 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from agent.lifecycle.types import AfterTurnCtx, BeforeTurnCtx
-from agent.plugins import Plugin, on_after_turn, on_before_turn
 from bus.events_lifecycle import ProactiveMessageCommitted
 from core.roles.store import RoleStore
 from plugins.scene_awareness.backend.controller import SceneAwarenessController
 
+if TYPE_CHECKING:
+    from agent.plugin_host.runtime_context import PluginRuntimeContext
+
 logger = logging.getLogger(__name__)
 
 
-class SceneAwarenessPlugin(Plugin):
-    """Observe completed role turns and publish shared scene decisions."""
+async def setup(ctx: "PluginRuntimeContext") -> None:
+    """装配 scene_awareness：观察完成的角色回合并发布共享场景决策。
 
-    name = "scene_awareness"
+    ``ctx.effect`` 登记 ``controller.terminate()`` 作为自定义副作用，卸载时
+    取消并等待所有进行中的场景观察后台任务，对齐旧 ``terminate()`` 的收尾。
+    """
+    workspace = ctx.workspace
+    if workspace is None:
+        raise RuntimeError("场景观察插件需要 workspace")
+    controller = SceneAwarenessController(
+        role_store=RoleStore(workspace),
+        session_manager=ctx.session_manager,
+        event_bus=ctx.events,
+        kv_store=ctx.kv,
+        light_provider=ctx.light_provider,
+        light_model=ctx.light_model,
+    )
+    if ctx.light_provider is None or not ctx.light_model.strip():
+        logger.warning("场景观察缺少 light_model provider，后台判定已禁用")
 
-    async def initialize(self) -> None:
-        workspace = self.context.workspace
-        if workspace is None:
-            raise RuntimeError("场景观察插件需要 workspace")
-        self._controller = SceneAwarenessController(
-            role_store=RoleStore(workspace),
-            session_manager=self.context.session_manager,
-            event_bus=self.context.event_bus,
-            kv_store=self.context.kv_store,
-            light_provider=self.context.light_provider,
-            light_model=self.context.light_model,
-        )
-        self._proactive_handler = self._handle_proactive_message
-        self.context.event_bus.on(
-            ProactiveMessageCommitted,
-            self._proactive_handler,
-        )
-        if self.context.light_provider is None or not self.context.light_model.strip():
-            logger.warning("场景观察缺少 light_model provider，后台判定已禁用")
-
-    @property
-    def scene_tasks(self):
-        """Return a snapshot of in-flight scene observation tasks."""
-
-        return self._controller.tasks
-
-    @on_before_turn()
-    async def capture_passive_turn(self, ctx: BeforeTurnCtx) -> BeforeTurnCtx:
+    async def _capture_passive_turn(event: BeforeTurnCtx) -> BeforeTurnCtx:
         """Capture the passive turn before reasoning mutates its context."""
+        controller.capture_passive_turn(event)
+        return event
 
-        self._controller.capture_passive_turn(ctx)
-        return ctx
-
-    @on_after_turn()
-    async def schedule_passive_turn(self, ctx: AfterTurnCtx) -> None:
+    async def _schedule_passive_turn(event: AfterTurnCtx) -> None:
         """Schedule observation after a passive text turn completes."""
+        controller.schedule_passive_turn(event)
 
-        self._controller.schedule_passive_turn(ctx)
+    def _handle_proactive_message(event: ProactiveMessageCommitted) -> None:
+        controller.schedule_proactive_turn(event)
 
-    def _handle_proactive_message(self, event: ProactiveMessageCommitted) -> None:
-        self._controller.schedule_proactive_turn(event)
-
-    async def terminate(self) -> None:
-        handler = getattr(self, "_proactive_handler", None)
-        if handler is not None:
-            self.context.event_bus.off(ProactiveMessageCommitted, handler)
-        controller = getattr(self, "_controller", None)
-        if controller is not None:
-            await controller.terminate()
+    ctx.events.on(BeforeTurnCtx, _capture_passive_turn)
+    ctx.events.on(AfterTurnCtx, _schedule_passive_turn)
+    ctx.events.on(ProactiveMessageCommitted, _handle_proactive_message)
+    ctx.effect("controller_terminate", controller.terminate)

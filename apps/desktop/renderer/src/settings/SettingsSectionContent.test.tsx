@@ -14,8 +14,6 @@ function createSettingsFormData(): SettingsFormData {
     channels: {
       telegramToken: "telegram-token",
       qqBotUin: "10001",
-      qqBotAppId: "qq-app",
-      qqBotClientSecret: "qq-secret",
     },
     memory: {
       enabled: true,
@@ -69,7 +67,7 @@ describe("SettingsSectionContent", () => {
   it("routes every settings domain to its editor", () => {
     const cases = [
       { sectionId: "models", subsectionId: "catalog", expected: "gpt-agent" },
-      { sectionId: "channels", subsectionId: "qqbot", expected: "qq-app" },
+      { sectionId: "channels", subsectionId: "qq", expected: "10001" },
       { sectionId: "memory", subsectionId: "embedding", expected: "embed-model" },
       { sectionId: "integrations", subsectionId: "novelai", expected: "novel-token" },
       { sectionId: "voice", subsectionId: "provider", expected: "secret-id" },

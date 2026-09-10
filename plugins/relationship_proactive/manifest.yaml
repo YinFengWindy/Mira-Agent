@@ -1,0 +1,7 @@
+api: 2
+id: relationship_proactive
+desc: 关系驱动的主动 tick 准入策略（孤独度回退、场景后续跟进）
+capabilities:
+  - relationship_runtime
+  - events
+  - proactive_gates

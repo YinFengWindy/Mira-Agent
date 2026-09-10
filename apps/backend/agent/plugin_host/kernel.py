@@ -309,6 +309,14 @@ class PluginKernel:
                 handle.contributions, handle.effects
             ),
             "rpc": lambda: RpcCapability(self.rpc, handle.effects, handle.plugin_id),
+            # 直传引用，无需 effect 包装：宿主拥有这些服务的生命周期，插件只读，
+            # 卸载时无需撤销任何登记（对齐 legacy PluginContext 的同名字段）。
+            "workspace": lambda: services.workspace,
+            "memory_engine": lambda: services.memory_engine,
+            "session_manager": lambda: services.session_manager,
+            "light_provider": lambda: services.light_provider,
+            "light_model": lambda: services.light_model,
+            "relationship_runtime": lambda: services.relationship_runtime,
         }
         return {
             name: builders[name]()

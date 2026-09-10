@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -12,10 +13,11 @@ from agent.core.proactive_turn.gates import (
     ProactiveGateContext,
     ProactiveMode,
 )
-from agent.plugins.context import PluginContext, PluginKVStore
+from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from bus.events_lifecycle import SceneObservationCommitted
-from plugins.relationship_proactive.backend.plugin import RelationshipProactivePlugin
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _context() -> ProactiveGateContext:
@@ -27,22 +29,34 @@ def _context() -> ProactiveGateContext:
     )
 
 
-def test_scene_gate_claims_tick_and_advances_only_after_delivery(tmp_path: Path):
+def _load_relationship_proactive_kernel(
+    tmp_path: Path, *, relationship_runtime: object
+) -> tuple[PluginKernel, EventBus]:
+    root = tmp_path / "plugins"
+    root.mkdir()
+    shutil.copytree(
+        _REPO_ROOT / "plugins" / "relationship_proactive",
+        root / "relationship_proactive",
+    )
+    bus = EventBus()
+    kernel = PluginKernel(
+        [root],
+        services=HostServices(event_bus=bus, relationship_runtime=relationship_runtime),
+    )
+    return kernel, bus
+
+
+@pytest.mark.asyncio
+async def test_scene_gate_claims_tick_and_advances_only_after_delivery(tmp_path: Path):
     runtime = MagicMock()
     runtime.should_trigger_scene_followup.return_value = (
         True,
         {"attempt_index": 1},
     )
-    plugin = RelationshipProactivePlugin()
-    plugin.context = PluginContext(
-        event_bus=EventBus(),
-        tool_registry=None,
-        plugin_id="relationship_proactive",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".kv.json"),
-        relationship_runtime=runtime,
-    )
-    chain = ProactiveGateChain(plugin.proactive_gates())
+    kernel, _bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=runtime)
+    await kernel.load_all()
+    assert kernel.loaded_count == 1
+    chain = ProactiveGateChain(kernel.proactive_gates)
 
     result = chain.evaluate(_context())
 
@@ -61,7 +75,8 @@ def test_scene_gate_claims_tick_and_advances_only_after_delivery(tmp_path: Path)
     runtime.close_scene_followup.assert_not_called()
 
 
-def test_loneliness_gate_blocks_when_relationship_runtime_rejects(tmp_path: Path):
+@pytest.mark.asyncio
+async def test_loneliness_gate_blocks_when_relationship_runtime_rejects(tmp_path: Path):
     runtime = MagicMock()
     runtime.should_trigger_scene_followup.return_value = (False, {})
     runtime.should_trigger_proactive.return_value = (
@@ -72,17 +87,10 @@ def test_loneliness_gate_blocks_when_relationship_runtime_rejects(tmp_path: Path
             "trigger_threshold": 60,
         },
     )
-    plugin = RelationshipProactivePlugin()
-    plugin.context = PluginContext(
-        event_bus=EventBus(),
-        tool_registry=None,
-        plugin_id="relationship_proactive",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".kv.json"),
-        relationship_runtime=runtime,
-    )
+    kernel, _bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=runtime)
+    await kernel.load_all()
 
-    result = ProactiveGateChain(plugin.proactive_gates()).evaluate(_context())
+    result = ProactiveGateChain(kernel.proactive_gates).evaluate(_context())
 
     assert result.blocked is True
     assert result.reason == "cooldown"
@@ -97,17 +105,8 @@ def test_loneliness_gate_blocks_when_relationship_runtime_rejects(tmp_path: Path
 @pytest.mark.asyncio
 async def test_plugin_applies_shared_scene_observation(tmp_path: Path):
     runtime = MagicMock()
-    bus = EventBus()
-    plugin = RelationshipProactivePlugin()
-    plugin.context = PluginContext(
-        event_bus=bus,
-        tool_registry=None,
-        plugin_id="relationship_proactive",
-        plugin_dir=tmp_path,
-        kv_store=PluginKVStore(tmp_path / ".kv.json"),
-        relationship_runtime=runtime,
-    )
-    await plugin.initialize()
+    kernel, bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=runtime)
+    await kernel.load_all()
 
     await bus.fanout(
         SceneObservationCommitted(
@@ -128,4 +127,31 @@ async def test_plugin_applies_shared_scene_observation(tmp_path: Path):
         "started",
         "rain",
     )
-    await plugin.terminate()
+
+    # 卸载后场景事件不应再触发 relationship_runtime，证明订阅挂在插件作用域上
+    _ = await kernel.unload("relationship_proactive")
+    await bus.fanout(
+        SceneObservationCommitted(
+            session_key="role:mira",
+            channel="desktop",
+            chat_id="role:mira",
+            role_id="mira",
+            source="passive",
+            transition="closed",
+            scene_key="",
+            should_generate=False,
+            prompt="",
+        )
+    )
+    runtime.apply_scene_decision.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_setup_contributes_nothing_when_relationship_runtime_absent(tmp_path: Path):
+    """relationship_runtime 未接线时插件仍加载成功但不贡献任何 gate/订阅。"""
+    kernel, _bus = _load_relationship_proactive_kernel(tmp_path, relationship_runtime=None)
+
+    await kernel.load_all()
+
+    assert kernel.loaded_count == 1
+    assert kernel.proactive_gates == []
