@@ -259,6 +259,10 @@ async def fetch_pull(
                 pipeline.last_ctx = ctx
                 return FeedResult(drift_entered=True, base_score=0.0)
             logger.info("[proactive_v2] fetch: drift not entered")
+            ctx.terminal_action = "skip"
+            ctx.skip_reason = "no_content"
+            pipeline.last_ctx = ctx
+            return FeedResult(drift_entered=False, base_score=None)
         else:
             logger.info("[proactive_v2] fetch: no data and fallback off → skip")
             logger.info(

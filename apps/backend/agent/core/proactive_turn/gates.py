@@ -1,4 +1,4 @@
-"""Official plugin seam for proactive turn admission policies."""
+"""Global admission followed by independently evaluated core proactive motives."""
 
 from __future__ import annotations
 
@@ -36,8 +36,11 @@ class ProactiveGateDecision:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     @classmethod
-    def continue_(cls) -> "ProactiveGateDecision":
-        return cls(kind="continue")
+    def continue_(
+        cls, *, reason: str = "", metadata: Mapping[str, object] | None = None
+    ) -> "ProactiveGateDecision":
+        """Records a non-trigger without denying other motives or sources."""
+        return cls(kind="continue", reason=reason, metadata=dict(metadata or {}))
 
     @classmethod
     def block(
@@ -150,11 +153,16 @@ class ProactiveGateAdapter:
 
 
 class ProactiveGateChain:
-    """Evaluates official gates deterministically and owns their completion seam."""
+    """Evaluates global gates before core motives and routes selected-mode completion."""
 
-    def __init__(self, gates: Sequence[ProactiveGate] | None = None) -> None:
+    def __init__(
+        self,
+        gates: Sequence[ProactiveGate] | None = None,
+        *,
+        motives: Sequence[ProactiveGate] = (),
+    ) -> None:
         named: dict[str, ProactiveGate] = {}
-        for gate in gates or ():
+        for gate in [*(gates or ()), *motives]:
             name = str(gate.name).strip()
             if not name:
                 raise ValueError("Proactive gate name must not be empty")
@@ -162,9 +170,11 @@ class ProactiveGateChain:
                 raise ValueError(f"Duplicate proactive gate name: {name}")
             named[name] = gate
         self._gates_by_name = named
+        self._motive_names = {gate.name for gate in motives}
+        # Global admission always runs before core motives, regardless of priority.
         self._gates = tuple(
-            sorted(named.values(), key=lambda gate: (-int(gate.priority), gate.name))
-        )
+            sorted(gates or (), key=lambda gate: (-int(gate.priority), gate.name))
+        ) + tuple(sorted(motives, key=lambda gate: (-int(gate.priority), gate.name)))
 
     def evaluate(self, ctx: ProactiveGateContext) -> ProactiveGateResult:
         trace: list[ProactiveGateTraceItem] = []
@@ -173,6 +183,10 @@ class ProactiveGateChain:
             decision = gate.evaluate(ctx)
             duration_ms = int((perf_counter() - started) * 1000)
             self._validate_decision(gate, decision)
+            if gate.name in self._motive_names and decision.kind == "block":
+                raise ValueError(
+                    f"Core motive {gate.name} cannot block global admission"
+                )
             trace.append(
                 ProactiveGateTraceItem(
                     gate_name=gate.name,

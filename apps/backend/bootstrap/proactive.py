@@ -59,6 +59,7 @@ def build_proactive_runtime(
     agent_loop: AgentLoop,
     tool_hooks: list[ToolHook] | None = None,
     proactive_gates: list[ProactiveGate] | None = None,
+    proactive_motives: list[ProactiveGate] | None = None,
     event_bus: "EventBus | None" = None,
     provider_consumer: Callable[[LLMProvider], None] | None = None,
 ) -> tuple[list, dict[str, ProactiveLoop]]:
@@ -93,11 +94,14 @@ def build_proactive_runtime(
             light_provider=role_aware_provider,
             light_model=config.model,
             passive_busy_fn=(
-                agent_loop.processing_state.is_busy if agent_loop.processing_state else None
+                agent_loop.processing_state.is_busy
+                if agent_loop.processing_state
+                else None
             ),
             shared_tools=getattr(agent_loop, "tools", None),
             tool_hooks=tool_hooks,
             proactive_gates=proactive_gates,
+            proactive_motives=proactive_motives,
             event_bus=event_bus,
             role_prompt_fn=_build_role_prompt_resolver(workspace, role.id),
             tick_dispatcher=_build_role_tick_dispatcher(

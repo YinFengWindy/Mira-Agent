@@ -109,6 +109,9 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
             return ProactiveGateDecision.continue_()
 
     proactive_gate = _PassGate()
+    from agent.core.proactive_turn.strategies import RelationshipStrategy
+
+    motive = RelationshipStrategy(MagicMock())
 
     tasks, loops = build_proactive_runtime(
         cast(Any, config),
@@ -127,6 +130,7 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
             ),
         ),
         proactive_gates=[proactive_gate],
+        proactive_motives=[motive],
         event_bus=event_bus,
     )
 
@@ -144,6 +148,8 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
     assert created[1]["event_bus"] is event_bus
     assert created[0]["proactive_gates"] == [proactive_gate]
     assert created[1]["proactive_gates"] == [proactive_gate]
+    assert created[0]["proactive_motives"] == [motive]
+    assert created[1]["proactive_motives"] == [motive]
 
 
 def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypatch, tmp_path):
@@ -203,4 +209,3 @@ def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypat
     )
     assert mem_tasks == [] and optimizer is None
     create_optimizer.assert_called_once()
-

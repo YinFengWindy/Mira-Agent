@@ -5,6 +5,14 @@ from typing import Any
 
 
 @dataclass
+class ProactiveStrategiesConfig:
+    """Independent core motives, separate from the role's proactive master switch."""
+
+    scene_followup: bool = True
+    relationship: bool = True
+
+
+@dataclass
 class ProactiveConfig:
     """Proactive 配置
 

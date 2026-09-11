@@ -6,8 +6,7 @@ from typing import Any, Literal
 import uuid
 
 from agent.voice_config import VoiceConfig
-from proactive_v2.config import ProactiveConfig
-
+from proactive_v2.config import ProactiveConfig, ProactiveStrategiesConfig
 
 @dataclass
 class TelegramChannelConfig:
@@ -88,6 +87,9 @@ class Config:
     extra_body: dict = field(default_factory=dict)
     channels: ChannelsConfig = field(default_factory=ChannelsConfig)
     proactive: ProactiveConfig = field(default_factory=ProactiveConfig)
+    proactive_strategies: ProactiveStrategiesConfig = field(
+        default_factory=ProactiveStrategiesConfig
+    )
     memory_optimizer_enabled: bool = True
     memory_optimizer_interval_seconds: int = 64800
     light_model: str = ""

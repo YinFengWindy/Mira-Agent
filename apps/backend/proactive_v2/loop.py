@@ -87,6 +87,7 @@ class ProactiveLoop:
         shared_tools: ToolRegistry | None = None,
         tool_hooks: list[ToolHook] | None = None,
         proactive_gates: list[ProactiveGate] | None = None,
+        proactive_motives: list[ProactiveGate] | None = None,
         tick_dispatcher: Callable[[Callable[[], Any]], Any] | None = None,
         event_bus: EventBus | None = None,
         role_prompt_fn: Callable[[], str] | None = None,
@@ -106,7 +107,9 @@ class ProactiveLoop:
         self._passive_busy_fn = passive_busy_fn
         self._shared_tools = shared_tools
         self._tool_hooks = tool_hooks or []
-        self._proactive_gates = ProactiveGateChain(proactive_gates)
+        self._proactive_gates = ProactiveGateChain(
+            proactive_gates, motives=proactive_motives or ()
+        )
         self._tick_dispatcher = tick_dispatcher
         self._event_bus = event_bus
         if role_prompt_fn is None:

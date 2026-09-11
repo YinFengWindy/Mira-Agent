@@ -10,6 +10,12 @@ if TYPE_CHECKING:
     from agent.plugin_host import PluginKernel
 
 from agent.config_models import Config, WiringConfig
+from agent.core.proactive_turn.gates import ProactiveGate
+from agent.core.proactive_turn.strategies import (
+    SceneFollowupStrategy,
+    RelationshipStrategy,
+)
+from agent.core.proactive_turn.scene_subscription import SceneFollowupSubscription
 from agent.context import ContextBuilder
 from agent.looping.core import AgentLoop
 from agent.looping.ports import (
@@ -99,6 +105,8 @@ class CoreRuntime:
     memory_optimizer: Any | None = None
     screen_observation: ScreenObservationService | None = None
     additional_providers: list[LLMProvider] = field(default_factory=list)
+    proactive_motives: list[ProactiveGate] = field(default_factory=list)
+    scene_followup_subscription: SceneFollowupSubscription | None = None
 
     async def start(self) -> None:
         self.mcp_registry.start_connect_all_background()
@@ -145,6 +153,8 @@ class CoreRuntime:
             await spawn.manager.drain()
         await self.event_bus.drain()
         await self.memory_runtime.markdown.maintenance.drain()
+        if self.scene_followup_subscription is not None:
+            self.scene_followup_subscription.stop()
         steps = []
         if self.plugin_manager is not None:
             steps.append(("plugins.terminate", self.plugin_manager.terminate_all))
@@ -561,6 +571,23 @@ def build_core_runtime(
         role_runtime_registry=role_runtime_registry,
         plugin_manager=plugin_manager,
         screen_observation=screen_observation,
+        proactive_motives=[
+            *(
+                [SceneFollowupStrategy(relationship_runtime)]
+                if config.proactive_strategies.scene_followup
+                else []
+            ),
+            *(
+                [RelationshipStrategy(relationship_runtime)]
+                if config.proactive_strategies.relationship
+                else []
+            ),
+        ],
+        scene_followup_subscription=(
+            SceneFollowupSubscription(event_bus, relationship_runtime)
+            if config.proactive_strategies.scene_followup
+            else None
+        ),
     )
 
 

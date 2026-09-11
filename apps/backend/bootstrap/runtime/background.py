@@ -51,6 +51,7 @@ class RuntimeBackground:
                 agent_loop=core.loop,
                 tool_hooks=list(manager.tool_hooks) if manager else None,
                 proactive_gates=list(manager.proactive_gates) if manager else None,
+                proactive_motives=core.proactive_motives,
                 event_bus=core.event_bus,
                 provider_consumer=core.additional_providers.append,
             )
@@ -116,6 +117,8 @@ class RuntimeBackgroundMixin:
         if old_group is not None:
             old_group.stop()
         group = self._background_groups[candidate]
+        if candidate.core.scene_followup_subscription is not None:
+            candidate.core.scene_followup_subscription.start()
         self.proactive_loops = group.proactive_loops
         self._memory_optimizer = group.optimizer
         group.start(old_group)

@@ -13,6 +13,7 @@ function createSettingsFormData(
   overrides: Partial<SettingsFormData["models"]> = {},
 ): SettingsFormData {
   return {
+    proactiveStrategies: {},
     models: {
       registrations: overrides.registrations ?? [{ id: "00000000-0000-4000-a000-000000000001", provider: "openai", model: "gpt-main", apiKey: "", baseUrl: "", effort: "none" }],
     },
@@ -144,4 +145,29 @@ describe("saveSettingsPageData", () => {
     assert.deepEqual(result.nextDraft, draft);
     assert.equal(result.snapshot, null);
   });
+});
+
+
+describe("core proactive preferences in settings drafts", () => {
+  for (const preferences of [{}, { sceneFollowup: false, relationship: false }, { sceneFollowup: true }]) {
+    it(`preserves explicit and absent keys through draft cloning: ${JSON.stringify(preferences)}`, async () => {
+      const draft = createSettingsFormData();
+      draft.proactiveStrategies = preferences;
+      const persisted = createSettingsSnapshot();
+      persisted.formData.proactiveStrategies = preferences;
+      let saves = 0;
+      const result = await saveSettingsPageData({
+        saveSettings: async (submitted) => {
+          saves += 1;
+          assert.deepEqual(submitted.proactiveStrategies, preferences);
+          assert.notEqual(submitted.proactiveStrategies, draft.proactiveStrategies);
+          return { ok: true, generation: 2 };
+        },
+        readSettings: async () => persisted,
+      }, draft);
+      assert.equal(saves, 1);
+      assert.deepEqual(result.nextDraft.proactiveStrategies, preferences);
+      assert.notEqual(result.nextDraft.proactiveStrategies, persisted.formData.proactiveStrategies);
+    });
+  }
 });

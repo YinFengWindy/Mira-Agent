@@ -10,7 +10,9 @@ source_paths:
   - apps/backend/agent/core/proactive_turn/gates.py
   - apps/backend/agent/core/proactive_turn/phases.py
   - apps/backend/agent/core/proactive_turn/tick_logging.py
-  - plugins/relationship_proactive/plugin.py
+  - apps/backend/agent/core/proactive_turn/strategies.py
+  - apps/backend/agent/core/proactive_turn/scene_subscription.py
+  - apps/backend/agent/proactive_preferences.py
   - apps/backend/proactive_v2/drift_state.py
   - apps/backend/agent/core/drift_turn.py
 related:
@@ -25,7 +27,11 @@ related:
 
 `ProactiveLoop` 驱动周期性 tick。传感器、presence、时间、关系和记忆等信息形成 `AgentTickContext`，随后经过裁定、Agent tick 创建、工具执行和投递。`ProactiveStateStore` 保存节流、最近行为和裁定所需状态。
 
-关系门控的 `gate_exit` 保持兼容的门控类别；具体阻断原因（例如 `cooldown`、`below_threshold`）和判断 metadata 通过 gate trace 写入 `tick_log` 的 `gate_name`、`gate_reason` 与 `gate_metadata` 字段。已有数据库会在启动时补齐这些字段，因此冷却、阈值和关系条件不会再被统一的 `loneliness` 标签遮蔽。
+全局准入（目标、忙碌和扩展 gate）先运行；核心场景跟进、关系动机随后独立评估。关系阈值或关系专属冷却未满足只表示该动机未命中，不阻断 alerts/content 或 Drift。外部内容优先；没有外部内容时按场景跟进、关系 fallback、可用 Drift 的顺序选择。完全没有候选时不调用模型。只有实际用于本轮的场景动机才接收完成回写，外部内容送达不会增加场景跟进次数。
+
+未命中原因（如 `cooldown`、`below_threshold`）保留在 gate trace 和 tick_log 的 `gate_name`、`gate_reason`、`gate_metadata`，`gate_exit` 仅记录全局拒绝。核心策略随 runtime generation 装配；场景订阅在发布时启动，旧代接受的工作排空后清理，未发布候选不消费场景事件。
+
+`[agent.proactive_strategies]` 中的 `scene_followup` 与 `relationship` 是独立布尔开关，默认均为 true，角色主动总开关仍独立生效。配置加载将旧 `[plugins.relationship_proactive].enabled = false` 或两个旧代码位置的 `plugin.disabled` 一次性迁为缺失的核心开关；已有核心键优先。旧标记和配置可保留作历史数据，不再参与插件发现，核心键齐全后不再读取旧停用偏好。候选配置验证不做文件 IO。
 
 主动行为不是绕开会话的单独机器人：成功输出应写入权威角色会话，并复用统一工具、消息推送和渠道投递。生成与评分使用不同提示词边界：生成链路显式使用角色身份，评分器保持中性，并保留完整的 1-5 分标尺与领域判分规则。
 

@@ -140,3 +140,32 @@ def test_gate_chain_rejects_unknown_decision_kind():
 
     with pytest.raises(ValueError, match="unknown decision"):
         ProactiveGateChain([_Gate("invalid", 0, invalid, calls)]).evaluate(_ctx())
+
+
+def test_global_denial_precedes_higher_priority_core_motive():
+    calls: list[str] = []
+    chain = ProactiveGateChain(
+        [_Gate("global", -100, ProactiveGateDecision.block("busy"), calls)],
+        motives=[
+            _Gate(
+                "scene",
+                100,
+                ProactiveGateDecision.activate(
+                    ProactiveMode.SCENE_FOLLOWUP, reason="due"
+                ),
+                calls,
+            )
+        ],
+    )
+    result = chain.evaluate(_ctx())
+    assert result.blocked
+    assert result.reason == "busy"
+    assert calls == ["global"]
+
+
+def test_core_motive_cannot_veto_global_admission():
+    chain = ProactiveGateChain(
+        motives=[_Gate("relationship", 0, ProactiveGateDecision.block("cooldown"), [])]
+    )
+    with pytest.raises(ValueError, match="cannot block global admission"):
+        chain.evaluate(_ctx())

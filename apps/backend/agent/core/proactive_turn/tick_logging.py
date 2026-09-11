@@ -48,6 +48,11 @@ def record_tick_log_finish(
         final_message = str(result.outbound.content or "")
     elif ctx.final_message:
         final_message = ctx.final_message
+    # A motive miss remains diagnostic data, not a global gate_exit.
+    if not gate_name and ctx.gate_trace:
+        latest = ctx.gate_trace[-1]
+        gate_name, gate_reason = latest.gate_name, latest.reason
+        gate_metadata = dict(latest.metadata)
     state_store.record_tick_log_finish(
         tick_id=ctx.tick_id,
         session_key=session_key,
