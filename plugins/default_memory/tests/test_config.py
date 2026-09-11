@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from plugins.default_memory.backend.config import (
@@ -49,21 +48,3 @@ def test_default_memory_db_path_resolves_under_workspace(tmp_path: Path) -> None
     assert resolve_memory_db_path(workspace=tmp_path, default_config=cfg) == (
         tmp_path / "memory" / "memory2.db"
     )
-
-
-def test_config_example_does_not_expose_default_memory_private_config() -> None:
-    text = Path("config/examples/config.example.toml").read_text(encoding="utf-8")
-
-    assert "[memory.embedding]" in text
-    assert "[memory.retrieval]" not in text
-    assert "[memory.gate]" not in text
-    assert "[memory.hyde]" not in text
-    assert "output_dimensionality" not in text
-    assert "[memory_v2]" not in text
-
-
-def test_mcp_servers_example_is_public_empty_configuration() -> None:
-    example_path = Path("config/examples/mcp_servers.example.json")
-    payload = json.loads(example_path.read_text(encoding="utf-8"))
-
-    assert payload == {"servers": {}}

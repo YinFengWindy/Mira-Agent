@@ -4,7 +4,8 @@
   "venvPath": ".",
   "venv": ".venv",
   "extraPaths": [
-    "apps/backend"
+    "apps/backend",
+    "packages/plugin-testkit/src"
   ],
   "include": [
     "apps/backend/main.py",
@@ -20,7 +21,9 @@
     "apps/backend/proactive_v2",
     "apps/backend/prompts",
     "apps/backend/session",
-    "apps/backend/utils"
+    "apps/backend/utils",
+    "packages/plugin-testkit/src",
+    "scripts/verify_plugin_tests.py"
   ],
   "exclude": [
     ".venv",
@@ -28,7 +31,9 @@
     "tests",
     "plugins/*/tests",
     "private_tests",
-    "benchmarks"
+    "benchmarks",
+    "**/build",
+    "**/*.egg-info"
   ],
   "reportMissingTypeArgument": "warning",
   "reportPrivateUsage": "warning",

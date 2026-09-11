@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.lifecycle.types import AfterStepCtx
 from agent.plugin_host import HostServices, PluginKernel
@@ -14,7 +14,7 @@ from plugins.context_pressure.backend.plugin import (
     _CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _after_step_ctx(*, has_more: bool, tokens: int) -> AfterStepCtx:
@@ -36,7 +36,9 @@ def _after_step_ctx(*, has_more: bool, tokens: int) -> AfterStepCtx:
 @pytest.mark.asyncio
 async def test_requests_early_stop_when_pressure_exceeds_threshold() -> None:
     module = ContextPressureStopModule()
-    ctx = _after_step_ctx(has_more=True, tokens=_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS + 1)
+    ctx = _after_step_ctx(
+        has_more=True, tokens=_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS + 1
+    )
     frame = SimpleNamespace(slots={"step:ctx": ctx})
 
     result = await module.run(frame)
@@ -66,7 +68,9 @@ async def test_no_early_stop_below_threshold() -> None:
 @pytest.mark.asyncio
 async def test_no_early_stop_when_no_more_steps() -> None:
     module = ContextPressureStopModule()
-    ctx = _after_step_ctx(has_more=False, tokens=_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS + 1)
+    ctx = _after_step_ctx(
+        has_more=False, tokens=_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS + 1
+    )
     frame = SimpleNamespace(slots={"step:ctx": ctx})
 
     result = await module.run(frame)
@@ -83,7 +87,7 @@ async def test_setup_contributes_after_step_module_via_kernel(tmp_path: Path) ->
     """
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(REPO_ROOT / "plugins" / "context_pressure", root / "context_pressure")
+    stage_plugin_package(PLUGIN_DIR, root / "context_pressure")
     kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
     await kernel.load_all()
 

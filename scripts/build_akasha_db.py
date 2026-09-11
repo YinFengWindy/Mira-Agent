@@ -40,6 +40,12 @@ from plugins.akasha.backend.core import (
 )
 from plugins.akasha.backend.fast import fast_dense, graph_fast
 from plugins.akasha.backend.fast.mem_store import CapturingMemoryStore
+from plugins.akasha.backend.replay_inputs import (
+    iter_replay_turns as _iter_replay_turns,
+    load_embeddings_from_cache as _load_embeddings_from_cache,
+    skip_message as _skip_message,
+    skip_session_key as _skip_session_key,
+)
 from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage
 from plugins.akasha.backend.store import (
     AkashaStore,
@@ -72,7 +78,9 @@ def _parse_args() -> argparse.Namespace:
     )
     _ = parser.add_argument("--sessions-db", default="", help="原始 sessions.db 路径")
     _ = parser.add_argument("--db-path", default="", help="输出 akasha.db 路径")
-    _ = parser.add_argument("--progress-every", type=int, default=500, help="进度打印间隔")
+    _ = parser.add_argument(
+        "--progress-every", type=int, default=500, help="进度打印间隔"
+    )
     _ = parser.add_argument(
         "--embedding-model",
         default="",
@@ -101,13 +109,11 @@ def _iter_source_batches(
 ) -> Iterator[list[SourceMessage]]:
     # 1. 先批量读取，最终统一用核心时间解析器排序。
     with closing(sqlite3.connect(str(sessions_db))) as db:
-        cursor = db.execute(
-            """
+        cursor = db.execute("""
             SELECT id, session_key, seq, role, content, ts
             FROM messages
             WHERE role IN ('user', 'assistant')
-            """
-        )
+            """)
         while rows := cursor.fetchmany(max(1, batch_size)):
             yield [
                 SourceMessage(
@@ -135,8 +141,7 @@ def _load_source_messages(sessions_db: Path) -> list[SourceMessage]:
 def _load_session_snapshots(sessions_db: Path) -> list[SourceSessionSnapshot]:
     # 1. 只读取旧系统游标，用于回滚和迁移诊断。
     with closing(sqlite3.connect(str(sessions_db))) as db:
-        rows = db.execute(
-            """
+        rows = db.execute("""
             SELECT
                 s.key,
                 COALESCE(s.last_consolidated, 0),
@@ -146,8 +151,7 @@ def _load_session_snapshots(sessions_db: Path) -> list[SourceSessionSnapshot]:
             LEFT JOIN messages m ON m.session_key = s.key
             GROUP BY s.key
             ORDER BY s.key
-            """
-        ).fetchall()
+            """).fetchall()
     return [
         SourceSessionSnapshot(
             session_key=str(row[0]),
@@ -170,7 +174,11 @@ def _load_skip_message_ids(sessions_db: Path) -> set[str]:
         except json.JSONDecodeError:
             parsed = {}
         extra = cast(dict[str, object], parsed) if isinstance(parsed, dict) else {}
-        if _skip_session_key(str(session_key)) or bool(extra.get("proactive")) or bool(extra.get("skip_post_memory")):
+        if (
+            _skip_session_key(str(session_key))
+            or bool(extra.get("proactive"))
+            or bool(extra.get("skip_post_memory"))
+        ):
             result.add(str(message_id))
     return result
 
@@ -184,7 +192,9 @@ def _load_reinforce_boosts(sessions_db: Path) -> dict[str, float]:
     """
     boosts: dict[str, float] = {}
     with closing(sqlite3.connect(str(sessions_db))) as db:
-        rows = db.execute("SELECT session_key, seq, role, extra, tool_chain FROM messages").fetchall()
+        rows = db.execute(
+            "SELECT session_key, seq, role, extra, tool_chain FROM messages"
+        ).fetchall()
     for session_key, seq, role, raw_extra, raw_chain in rows:
         boost = reinforce_boost_from_payload(raw_extra, raw_chain)
         if boost <= 1.0:
@@ -192,18 +202,6 @@ def _load_reinforce_boosts(sessions_db: Path) -> dict[str, float]:
         key = turn_key(str(session_key), int(seq), str(role or ""))[2]
         boosts[key] = max(boosts.get(key, 1.0), boost)  # 同轮多标记取最大
     return boosts
-
-
-def _skip_session_key(session_key: str) -> bool:
-    return session_key.startswith("scheduler:")
-
-
-def _skip_message(message: SourceMessage, skip_message_ids: set[str]) -> bool:
-    return (
-        message.id in skip_message_ids
-        or _skip_session_key(message.session_key)
-        or message.content.startswith("[后台任务完成]")
-    )
 
 
 # 备份已有 Akasha sidecar。
@@ -217,57 +215,16 @@ def _backup_existing_db(db_path: Path) -> Path | None:
     return backup_path
 
 
-# 从 cache 读取回放需要的 embedding，缺失时跳过对应消息。
-def _load_embeddings_from_cache(
-    *,
-    store: AkashaStore,
-    model: str,
-    messages: list[SourceMessage],
-) -> tuple[dict[str, list[float]], int, int]:
-    embedding_map: dict[str, list[float]] = {}
-    cache_hits = 0
-    cache_misses = 0
-    for message in messages:
-        embedding = store.get_cached_embedding(message=message, model=model)
-        if embedding is None:
-            cache_misses += 1
-        else:
-            cache_hits += 1
-            embedding_map[message.id] = embedding
-    return embedding_map, cache_hits, cache_misses
-
-
-# 按 user turn 聚合回放输入，assistant 归入前一个 user turn。
-def _iter_replay_turns(
-    messages: list[SourceMessage],
-    skip_message_ids: set[str],
-) -> Iterator[list[SourceMessage]]:
-    by_turn = {
-        (message.session_key, message.seq, message.role): message
-        for message in messages
-        if not _skip_message(message, skip_message_ids)
-    }
-    used: set[str] = set()
-    for message in messages:
-        if message.id in used or _skip_message(message, skip_message_ids):
-            continue
-        if message.role != "user":
-            continue
-        turn = [message]
-        used.add(message.id)
-        assistant = by_turn.get((message.session_key, message.seq + 1, "assistant"))
-        if assistant is not None and assistant.id not in used:
-            turn.append(assistant)
-            used.add(assistant.id)
-        yield turn
-
-
 # 执行 Akasha sidecar 重建。
 def _run() -> MigrationStats:
     # 1. 解析路径、配置和目标 sidecar。
     args = _parse_args()
     workspace = Path(str(args.workspace)).expanduser()
-    sessions_db = Path(str(args.sessions_db)).expanduser() if args.sessions_db else workspace / "sessions.db"
+    sessions_db = (
+        Path(str(args.sessions_db)).expanduser()
+        if args.sessions_db
+        else workspace / "sessions.db"
+    )
     akasha_config = _load_script_config(db_path=str(args.db_path or ""))
     db_path = resolve_akasha_db_path(workspace=workspace, akasha_config=akasha_config)
     if not sessions_db.exists():
@@ -291,11 +248,15 @@ def _run() -> MigrationStats:
 
     # 2b. 用内存图重放，末尾一次性落库；AkashaStore 只负责 cache、迁移记录和 dump 连接。
     mem = CapturingMemoryStore()
-    graph_install = cast("Callable[[CapturingMemoryStore], None]", getattr(graph_fast, "install"))
+    graph_install = cast(
+        "Callable[[CapturingMemoryStore], None]", getattr(graph_fast, "install")
+    )
     dense_install = cast("Callable[[], None]", getattr(fast_dense, "install"))
     dump_to_db = cast(
         "Callable[[AkashaStore, CapturingMemoryStore], dict[str, int]]",
-        getattr(importlib.import_module("plugins.akasha.backend.fast.dump"), "dump_to_db"),
+        getattr(
+            importlib.import_module("plugins.akasha.backend.fast.dump"), "dump_to_db"
+        ),
     )
     graph_install(mem)
     dense_install()
@@ -312,10 +273,14 @@ def _run() -> MigrationStats:
         skip_message_ids = _load_skip_message_ids(sessions_db)
         reinforce_boosts = _load_reinforce_boosts(sessions_db)
         skipped_source_messages = [
-            message for message in source_messages if _skip_message(message, skip_message_ids)
+            message
+            for message in source_messages
+            if _skip_message(message, skip_message_ids)
         ]
         if skipped_source_messages:
-            _ = store.delete_cached_embeddings([message.id for message in skipped_source_messages])
+            _ = store.delete_cached_embeddings(
+                [message.id for message in skipped_source_messages]
+            )
         replay_turns = list(_iter_replay_turns(source_messages, skip_message_ids))
         replay_messages = [message for turn in replay_turns for message in turn]
         embedding_map, cache_hits, cache_misses = _load_embeddings_from_cache(
@@ -348,17 +313,22 @@ def _run() -> MigrationStats:
                     embedding = embedding_map.get(raw_message.id)
                     if embedding is None:
                         continue
-                    replay_items.append(ReplayMessage(
-                        message=raw_message,
-                        embedding=embedding,
-                    ))
+                    replay_items.append(
+                        ReplayMessage(
+                            message=raw_message,
+                            embedding=embedding,
+                        )
+                    )
                 if not any(item.message.role == "user" for item in replay_items):
                     continue
                 result = runtime.replay_turn(replay_items)
                 activations += len(result.activation_items)
                 messages += len(replay_items)
                 if next_progress > 0 and messages >= next_progress:
-                    print(f"已处理 messages={messages} activations={activations}", flush=True)
+                    print(
+                        f"已处理 messages={messages} activations={activations}",
+                        flush=True,
+                    )
                     while messages >= next_progress:
                         next_progress += int(args.progress_every)
         # 3b. 内存重放完成后一次性批量落库。

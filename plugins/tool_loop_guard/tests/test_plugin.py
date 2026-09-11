@@ -1,14 +1,19 @@
 import asyncio
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.looping.core import AgentLoop
-from agent.looping.ports import AgentLoopConfig, AgentLoopDeps, LLMConfig, MemoryServices
+from agent.looping.ports import (
+    AgentLoopConfig,
+    AgentLoopDeps,
+    LLMConfig,
+    MemoryServices,
+)
 from agent.plugin_host import HostServices, PluginKernel
 from agent.provider import LLMResponse, ToolCall
 from agent.subagent import SubAgent
@@ -21,9 +26,9 @@ from core.net.http import (
     clear_default_shared_http_resources,
     configure_default_shared_http_resources,
 )
-from tests.backend.memory_fakes import FakeMemoryEngine
+from shiori_plugin_testkit.memory import FakeMemoryEngine
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 class _DummyTool(Tool):
@@ -162,7 +167,9 @@ def _make_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> Age
     return _make_agent_loop_with_tools(tmp_path, provider, [tool])
 
 
-def _make_bare_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -> AgentLoop:
+def _make_bare_agent_loop(
+    tmp_path: Path, provider: _FakeProvider, tool: Tool
+) -> AgentLoop:
     """构造不带默认 tool_loop_guard hook 的 AgentLoop，供测试自行装配指定配置的 hook。
 
     ``_make_agent_loop``/``_make_agent_loop_with_tools`` 会用无配置（默认 repeat_limit=3）
@@ -184,10 +191,12 @@ def _make_bare_agent_loop(tmp_path: Path, provider: _FakeProvider, tool: Tool) -
     )
 
 
-def _tool_loop_guard_hooks(*, plugin_configs: dict[str, dict[str, Any]] | None = None) -> list[ToolHook]:
+def _tool_loop_guard_hooks(
+    *, plugin_configs: dict[str, dict[str, Any]] | None = None
+) -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
-        shutil.copytree(_REPO_ROOT / "plugins" / "tool_loop_guard", plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(
@@ -208,7 +217,9 @@ def test_tool_loop_guard_hook_name_matches_legacy_convention():
     f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
     hooks = _tool_loop_guard_hooks()
 
-    assert [h.name for h in hooks] == ["plugin:tool_loop_guard:detect_repeated_tool_call"]
+    assert [h.name for h in hooks] == [
+        "plugin:tool_loop_guard:detect_repeated_tool_call"
+    ]
 
 
 def test_repeat_limit_config_actually_takes_effect_after_v2_migration(tmp_path):
@@ -227,7 +238,9 @@ def test_repeat_limit_config_actually_takes_effect_after_v2_migration(tmp_path):
             LLMResponse(content="", tool_calls=[ToolCall("c2", "dummy", {"x": 1})]),
             LLMResponse(content="", tool_calls=[ToolCall("c3", "dummy", {"x": 1})]),
             LLMResponse(content="", tool_calls=[ToolCall("c4", "dummy", {"x": 1})]),
-            LLMResponse(content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]),
+            LLMResponse(
+                content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]
+            ),
         ]
     )
     loop = _make_bare_agent_loop(tmp_path, provider, tool)
@@ -253,7 +266,9 @@ def test_repeat_limit_defaults_to_three_when_not_configured(tmp_path):
             LLMResponse(content="", tool_calls=[ToolCall("c1", "dummy", {"x": 1})]),
             LLMResponse(content="", tool_calls=[ToolCall("c2", "dummy", {"x": 1})]),
             LLMResponse(content="", tool_calls=[ToolCall("c3", "dummy", {"x": 1})]),
-            LLMResponse(content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]),
+            LLMResponse(
+                content="已完成阶段A，剩余阶段B，下一步继续补齐", tool_calls=[]
+            ),
         ]
     )
     loop = _make_bare_agent_loop(tmp_path, provider, tool)
@@ -292,7 +307,9 @@ def test_agent_loop_breaks_on_repeated_same_signature_and_returns_summary(tmp_pa
     assert tools_used == ["dummy", "dummy"]
 
 
-def test_agent_loop_breaks_on_repeated_multi_tool_batch_and_keeps_chain_closed(tmp_path):
+def test_agent_loop_breaks_on_repeated_multi_tool_batch_and_keeps_chain_closed(
+    tmp_path,
+):
     tool_a = _DummyTool("a")
     tool_b = _DummyTool("b")
     provider = _StrictProvider(
@@ -337,9 +354,15 @@ def test_agent_loop_breaks_on_repeated_unlocked_tool_request(tmp_path):
     tool = _DummyTool("hidden_tool")
     provider = _StrictProvider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("h1", "hidden_tool", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("h2", "hidden_tool", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("h3", "hidden_tool", {"x": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("h1", "hidden_tool", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("h2", "hidden_tool", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("h3", "hidden_tool", {"x": 1})]
+            ),
             LLMResponse(content="已总结当前进度", tool_calls=[]),
         ]
     )
@@ -491,9 +514,15 @@ def test_subagent_ignores_repeated_task_output_in_loop_guard():
     tool = _DummyTool("task_output")
     provider = _FakeProvider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("s1", "task_output", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("s2", "task_output", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("s3", "task_output", {"x": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("s1", "task_output", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("s2", "task_output", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("s3", "task_output", {"x": 1})]
+            ),
             LLMResponse(content="状态已确认", tool_calls=[]),
         ]
     )
@@ -601,7 +630,9 @@ def test_subagent_keeps_repeated_tool_results_clean():
 def test_subagent_unknown_tool_not_recorded_in_tools_called():
     provider = _FakeProvider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("s1", "ghost_tool", {"x": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("s1", "ghost_tool", {"x": 1})]
+            ),
             LLMResponse(content="done", tool_calls=[]),
         ]
     )
@@ -641,9 +672,15 @@ def test_agent_loop_ignores_repeated_task_output_in_loop_guard(tmp_path):
     tool = _DummyTool("task_output")
     provider = _FakeProvider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("c1", "task_output", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("c2", "task_output", {"x": 1})]),
-            LLMResponse(content="", tool_calls=[ToolCall("c3", "task_output", {"x": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("c1", "task_output", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("c2", "task_output", {"x": 1})]
+            ),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("c3", "task_output", {"x": 1})]
+            ),
             LLMResponse(content="状态已确认", tool_calls=[]),
         ]
     )

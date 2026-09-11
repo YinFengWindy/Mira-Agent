@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 from agent.core.response_parser import ResponseMetadata
 from agent.core.runtime_support import TurnRunResult
@@ -71,17 +71,12 @@ async def _load_kernel(
     *,
     session_manager: object | None = None,
     citation: str = "active",
+    plugin_source: Path = PLUGIN_ROOT,
 ):
     root = tmp_path / "plugins"
-    shutil.copytree(
-        PLUGIN_ROOT, root / "meme", ignore=shutil.ignore_patterns("__pycache__")
-    )
+    stage_plugin_package(plugin_source, root / "meme")
     if citation != "missing":
-        shutil.copytree(
-            PLUGIN_ROOT.parent / "citation",
-            root / "citation",
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
+        stage_plugin_package(plugin_directory("citation"), root / "citation")
         if citation == "disabled":
             (root / "citation" / "plugin.disabled").touch()
         elif citation == "failed":
@@ -89,10 +84,6 @@ async def _load_kernel(
                 'async def setup(ctx):\n    raise RuntimeError("citation failed")\n',
                 encoding="utf-8",
             )
-    # Supply a deterministic user-sendable catalog without depending on checkout assets.
-    emoji_path = tmp_path / "apps/desktop/renderer/src/chat/common_emojis.json"
-    emoji_path.parent.mkdir(parents=True)
-    emoji_path.write_text('[{"name": "heart", "value": "❤️"}]', encoding="utf-8")
     bus = EventBus()
     kernel = PluginKernel(
         [root],
@@ -161,6 +152,36 @@ async def test_meme_discovery_uses_v2_and_declares_citation(
         "MemePromptModule",
     ]
     await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_meme_kernel_staging_excludes_package_virtual_environments(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
+    source = stage_plugin_package(PLUGIN_ROOT, tmp_path / "source" / "meme")
+    for name in (".venv", "custom-python"):
+        environment = source / name
+        environment.mkdir()
+        _ = (environment / "pyvenv.cfg").write_text(
+            "home = local-test\n", encoding="utf-8"
+        )
+        _ = (environment / "environment-only.txt").write_text(
+            "not a plugin asset", encoding="utf-8"
+        )
+    workspace = tmp_path / "workspace"
+    image = _write_meme_workspace(workspace)
+
+    kernel, bus = await load_kernel(workspace, plugin_source=source)
+
+    assert kernel.loaded_count == 2
+    staged = next(
+        record.plugin_dir for record in kernel.discover() if record.name == "meme"
+    )
+    assert not (staged / ".venv").exists()
+    assert not (staged / "custom-python").exists()
+    assert (source / ".venv" / "pyvenv.cfg").is_file()
+    assert (source / "custom-python" / "pyvenv.cfg").is_file()
+    assert (await bus.emit(_reply_ctx())).media == [str(image)]
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,6 +7,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 from agent.core.passive_turn import AgentCore, AgentCoreDeps
 from agent.core.response_parser import parse_response
@@ -19,9 +19,6 @@ from bootstrap.wiring import wire_turn_lifecycle
 from bus.event_bus import EventBus
 from bus.events import InboundMessage
 from bus.events_lifecycle import TurnCommitted
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
-
 
 class _DummySession:
     def __init__(self, key: str) -> None:
@@ -292,11 +289,7 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
     )
     plugin_root = tmp_path / "plugins"
     for plugin_id in ("citation", "meme"):
-        shutil.copytree(
-            REPO_ROOT / "plugins" / plugin_id,
-            plugin_root / plugin_id,
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
+        stage_plugin_package(plugin_directory(plugin_id), plugin_root / plugin_id)
     kernel = PluginKernel(
         [plugin_root],
         services=HostServices(

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from agent.scheduler import JobStore, LatencyTracker, SchedulerService
-from conftest import drain_tasks, make_job
+from tests.support.scheduler import drain_tasks, make_job
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -55,7 +55,10 @@ async def test_instant_push_receives_correct_args(
     await drain_tasks()
 
     mock_push.execute.assert_called_once_with(
-        channel="telegram", chat_id="999", message="喝水了", role_id="mira",
+        channel="telegram",
+        chat_id="999",
+        message="喝水了",
+        role_id="mira",
         push_delivery_key=svc._job_role_metadata(job)["delivery_key"],
     )
 
@@ -173,9 +176,7 @@ async def test_stop_cancels_inflight_job_tasks(
     assert job.id not in svc._active_tasks
 
 
-async def test_cancel_job_stops_active_work(
-    tmp_path, mock_push, mock_loop, fixed_now
-):
+async def test_cancel_job_stops_active_work(tmp_path, mock_push, mock_loop, fixed_now):
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
