@@ -11,9 +11,11 @@ import pytest
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
-from core.roles.store import RolePetPackage, RoleStore
+from core.roles.store import RoleStore
+from plugins.desktop_pet.backend.models import RolePetPackage
+from plugins.desktop_pet.backend.pet_state import RolePetStateStore
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 
 
 def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
@@ -25,18 +27,15 @@ def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "desktop_pet"
-        shutil.copytree(_REPO_ROOT / "plugins" / "desktop_pet", plugin_dir)
+        shutil.copytree(_PLUGIN_ROOT, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel
 
 
 def _services(tmp_path: Path, role_store: RoleStore | None = None) -> HostServices:
-    # `role_store` is handed in rather than built from `workspace`, mirroring
-    # `bootstrap/tools.py`: the plugin must get the host's *one* instance,
-    # because the role write lock is per-instance (see manifest.py's
-    # `role_store` note). A test that let the plugin build its own would pass
-    # while reproducing exactly the bug the capability exists to prevent.
+    # Match bootstrap: the host instance owns active draft participants, while
+    # repositories for the same path also share the canonical persistence lock.
     return HostServices(
         event_bus=EventBus(),
         tool_registry=ToolRegistry(),
@@ -55,7 +54,7 @@ def _bind_pet(
     store = store or RoleStore(workspace)
     role = store.create_role(role_id="mira", name="Mira", system_prompt="test")
     spritesheet = "assets/mira/pets/pet-1/spritesheet.webp"
-    store.replace_pet_packages(
+    RolePetStateStore(store).replace_packages(
         role.id,
         [
             RolePetPackage(
@@ -69,8 +68,8 @@ def _bind_pet(
             )
         ],
     )
-    store.select_pet_package(role.id, "pet-1")
-    store.update_role(role.id, desktop_pet_enabled=enabled)
+    RolePetStateStore(store).select_package(role.id, "pet-1")
+    RolePetStateStore(store).set_enabled(role.id, enabled)
     if with_file:
         target = store.roles_dir / spritesheet
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -113,9 +112,10 @@ def test_binding_get_returns_the_selected_package(tmp_path: Path) -> None:
     assert package["display_name"] == "Pet"
     # Absolute, and named `spritesheet_abs` so the desktop bridge grants it a
     # `shiori-asset://` URL on the way to the renderer.
-    assert Path(package["spritesheet_abs"]) == (
-        store.roles_dir / "assets/mira/pets/pet-1/spritesheet.webp"
-    ).resolve()
+    assert (
+        Path(package["spritesheet_abs"])
+        == (store.roles_dir / "assets/mira/pets/pet-1/spritesheet.webp").resolve()
+    )
 
 
 def test_binding_get_ignores_a_role_whose_pet_is_switched_off(tmp_path: Path) -> None:
@@ -151,6 +151,7 @@ def test_binding_get_reports_nothing_when_no_role_has_a_pet(tmp_path: Path) -> N
 
     assert asyncio.run(resolved[1]({})) == {"binding": None}
 
+
 def _resolve(kernel: PluginKernel, method: str):
     resolved = kernel.rpc.resolve(f"plugin.desktop_pet.{method}")
     assert resolved is not None, method
@@ -158,18 +159,7 @@ def _resolve(kernel: PluginKernel, method: str):
 
 
 def test_a_plugin_write_waits_on_the_host_role_lock(tmp_path: Path) -> None:
-    """The capability's whole reason for existing, asserted behaviourally.
-
-    The role write lock is created per `RoleStore` instance
-    (`RoleManifestRepository.__init__`), so "the plugin shares the host's lock"
-    is only true if it got the host's *instance*. A plugin that built its own
-    from `ctx.workspace` would read and write the same `roles.json` under a
-    different lock, and two read-modify-write cycles would silently overwrite
-    each other — `atomic_save_json` only makes a single write atomic.
-
-    Identity (`granted is store`) would be the cheap assertion, but the lock is
-    what actually protects the data, so that is what this pins.
-    """
+    """Plugin mutations participate in the canonical role persistence lock."""
     store = RoleStore(tmp_path)
     _bind_pet(tmp_path, store=store)
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path, store))
@@ -191,7 +181,9 @@ def test_a_plugin_write_waits_on_the_host_role_lock(tmp_path: Path) -> None:
         )
 
     worker.join(timeout=5)
-    assert finished.is_set(), "the plugin write never completed after the lock was released"
+    assert (
+        finished.is_set()
+    ), "the plugin write never completed after the lock was released"
 
 
 def test_pets_list_returns_the_rows_roles_list_used_to_carry(tmp_path: Path) -> None:
@@ -223,8 +215,7 @@ def test_pets_select_and_remove_go_through_the_shared_store(tmp_path: Path) -> N
 
     assert after_remove == {"selected_package_id": None, "packages": []}
     # Written through the host's own store, so the host sees it without a reload.
-    role = store.get_role("mira")
-    assert role is not None
+    role = RolePetStateStore(store).require_role("mira")
     assert role.pet_packages == []
     # Removing the selected package also switches the pet off — that invariant
     # lives in `pet_state.replace_packages` and must survive the move.
@@ -247,7 +238,9 @@ def test_pet_rpc_requires_the_ids_it_acts_on(tmp_path: Path) -> None:
             asyncio.run(_resolve(kernel, method)(payload))
 
 
-def test_every_pet_method_disappears_when_the_plugin_is_unloaded(tmp_path: Path) -> None:
+def test_every_pet_method_disappears_when_the_plugin_is_unloaded(
+    tmp_path: Path,
+) -> None:
     store = RoleStore(tmp_path)
     _bind_pet(tmp_path, store=store)
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path, store))
@@ -259,3 +252,57 @@ def test_every_pet_method_disappears_when_the_plugin_is_unloaded(tmp_path: Path)
 
     for method in methods:
         assert kernel.rpc.resolve(f"plugin.desktop_pet.{method}") is None, method
+
+
+def test_disabled_upgrade_then_ordinary_save_restores_binding_on_enable(tmp_path):
+    import json
+
+    store = RoleStore(tmp_path)
+    _bind_pet(tmp_path, store=store)
+    # Actual v3 disk shape: the plugin is not loaded during the upgrade/save.
+    payload = json.loads(store.manifest_path.read_text(encoding="utf-8"))
+    payload["version"] = 3
+    legacy_state = payload.pop("plugin_data")["desktop_pet"]["mira"]
+    payload["roles"][0].update(legacy_state)
+    store.manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    store.update_role("mira", name="Edited while disabled")
+    assert "pet_packages" not in store.get_role("mira").to_dict()
+    kernel = _load_desktop_pet_plugin(services=_services(tmp_path, store))
+    binding = asyncio.run(_resolve(kernel, "binding.get")({}))["binding"]
+    assert binding["role_id"] == "mira"
+    assert binding["package"]["id"] == "pet-1"
+    asyncio.run(kernel.unload("desktop_pet"))
+
+
+def test_role_deleted_while_disabled_prunes_pet_data_and_whole_asset_root(tmp_path):
+    store = RoleStore(tmp_path)
+    _bind_pet(tmp_path, store=store)
+    pets = store.assets_dir / "mira" / "pets"
+    (pets / "orphan.tmp").write_text("interrupted import", encoding="utf-8")
+    unrelated = store.assets_dir / "mira" / "avatar.png"
+    unrelated.write_bytes(b"keep")
+    store.delete_role("mira", remove_assets=False)
+    kernel = _load_desktop_pet_plugin(services=_services(tmp_path, store))
+    assert not pets.exists()
+    assert unrelated.read_bytes() == b"keep"
+    assert store.extensions.read("desktop_pet") == {}
+    asyncio.run(kernel.unload("desktop_pet"))
+
+
+def test_live_role_deleted_reconciles_and_unload_removes_draft_participant(tmp_path):
+    from bus.events_lifecycle import RoleDeleted
+
+    store = RoleStore(tmp_path)
+    _bind_pet(tmp_path, store=store)
+    services = _services(tmp_path, store)
+    kernel = _load_desktop_pet_plugin(services=services)
+    assert store.extensions.project("mira")["desktop_pet"] == {
+        "enabled": True,
+        "available": True,
+    }
+    store.delete_role("mira", remove_assets=False)
+    asyncio.run(services.event_bus.observe(RoleDeleted("mira")))
+    assert store.extensions.read("desktop_pet") == {}
+    assert not (store.assets_dir / "mira" / "pets").exists()
+    asyncio.run(kernel.unload("desktop_pet"))
+    assert store.extensions.project("mira") == {}

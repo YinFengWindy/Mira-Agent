@@ -66,12 +66,10 @@ describe("roleFormState", () => {
     }, role), true);
   });
 
-  it("keeps desktop-pet enablement inside the saved role form", () => {
+  it("tracks pending voice asset cleanup in the saved role form", () => {
     const role = createRole();
     const form = createRoleFormFromRole(role);
 
-    assert.equal(form.desktopPetEnabled, false);
-    assert.equal(isRoleFormDirty({ ...form, desktopPetEnabled: true }, role), true);
     assert.equal(isRoleFormDirty({
       ...form,
       pendingVoiceAssetDeletes: [{

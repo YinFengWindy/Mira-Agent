@@ -1,5 +1,6 @@
-import { writePluginRoleSettings } from "../plugins/pluginRoleSettings";
+import { buildPluginRoleDraftUpdates, notifyPluginRoleSaved, writePluginRoleSettings } from "../plugins/pluginRoleSettings";
 import type React from "react";
+import { useRolePluginRefresh } from "./useRolePluginRefresh";
 import { waitForMinimumRoleCardBusy } from "./appState";
 import type { RoleAssetCategory, RoleRecord, RoleFormState, PendingRoleCardAction, SessionPayload } from "../shared/types";
 import type { AppMainView } from "../shared/types";
@@ -80,6 +81,7 @@ export function useRoleManagement({
   rememberIllustration,
   roleAssetSaveRequestIdRef,
 }: UseRoleManagementArgs) {
+  const refreshDetailRoleForPlugins = useRolePluginRefresh({ detailRoleId, detailRole, roleFormRef, loadRolesFromBridge, updateRoleForm, setError });
   async function refreshRolesAndResolveRole(updated: RoleRecord): Promise<{
     resolvedRole: RoleRecord;
     nextRoles: RoleRecord[] | null;
@@ -107,7 +109,6 @@ export function useRoleManagement({
     setError("");
     setWorkspaceFeedback(null);
     const nextRoleForm = roleFormRef.current;
-    const desktopPetEnablementChanged = nextRoleForm.desktopPetEnabled !== Boolean(detailRole?.desktop_pet_enabled);
     const res = await window.miraDesktop.invoke({
       method: "roles.update",
       payload: {
@@ -128,7 +129,7 @@ export function useRoleManagement({
         ),
         channel_bindings: nextRoleForm.channelBindings ?? [],
         proactive: buildRoleProactiveConfig(detailRole, nextRoleForm),
-        desktop_pet_enabled: nextRoleForm.desktopPetEnabled,
+        plugin_drafts: buildPluginRoleDraftUpdates(nextRoleForm.pluginSettings, detailRole?.plugin_state),
         avatar_source: nextRoleForm.avatarSource || undefined,
         illustration_sources: nextRoleForm.illustrationSources,
         removed_illustrations: nextRoleForm.removedIllustrations,
@@ -141,17 +142,7 @@ export function useRoleManagement({
       return;
     }
     const updated = res.payload.role as RoleRecord;
-    if (desktopPetEnablementChanged) {
-      // Deliberately unguarded. Since #181-C `syncPet` hands the request to the
-      // plugin that owns the pet and returns immediately, so it cannot reject
-      // and there is nothing here to catch — the `try/catch` that used to show
-      // "桌宠同步失败" is removed rather than left in place looking like it
-      // still protects something. A sync that fails inside the plugin reaches
-      // the host diagnostic log (`background/backgroundDiagnostics.ts`);
-      // putting it back in front of the user needs #181-D, which turns this
-      // into a plugin RPC this can await again.
-      await window.miraDesktop.syncPet(nextRoleForm.desktopPetEnabled);
-    }
+    await notifyPluginRoleSaved(nextRoleForm.pluginSettings, detailRole?.runtime_config, detailRole?.plugin_state);
     const { resolvedRole } = await refreshRolesAndResolveRole(updated);
     updateRoleForm((current) => ({
       ...current,
@@ -360,31 +351,6 @@ export function useRoleManagement({
     }
     setNotice("角色素材已删除。");
     openRoleWorkspace({ kind: "role-assets", roleId: resolvedRole.id }, { recordHistory: false });
-  }
-
-  /**
-   * Re-reads the open role after a plugin panel changed data the host stores on it.
-   *
-   * `importRolePetPackage` / `removeRolePetPackage` / `selectRolePetPackage` are
-   * gone — since #181-D the desktop pet contributes its own package manager
-   * through the `role.assets` slot and calls its own `plugin.desktop_pet.pets.*`
-   * methods, so the host neither knows what a pet package is nor routes those
-   * actions. What it *does* still own is the role record those actions mutate:
-   * `selected_pet_package_id` gates the capability toggle, and
-   * `desktop_pet_enabled` is cleared by the backend when the selected package is
-   * deleted. Without this reload the toggle stays greyed out after a successful
-   * import, and a role form holding a stale `desktop_pet_enabled: true` makes the
-   * next `roles.update` fail outright.
-   *
-   * This is the same refresh the three deleted functions each did
-   * (`loadRolesFromBridge` + `applyRoleSnapshot`), reduced to one entry point.
-   * It goes when the pet's data leaves `RoleRecord`.
-   */
-  async function refreshDetailRoleForPlugins(): Promise<void> {
-    if (!detailRoleId) return;
-    const nextRoles = await loadRolesFromBridge();
-    const updated = nextRoles?.find((role) => role.id === detailRoleId);
-    if (updated) applyRoleSnapshot(updated);
   }
 
   return {

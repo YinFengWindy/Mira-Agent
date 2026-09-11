@@ -24,7 +24,7 @@ import { noPetPackages, readPetPackages, type PetPackages } from "./petPackages"
  *   plugin's background code (plugin-host window). The host's `desktop:pet-sync`
  *   channel is the only bridge between them today.
  *
- * Both disappear with surface-to-background / plugin-to-plugin messaging (#218).
+ * The picker moves in the next #181 PR; pet sync remains assigned to #218.
  */
 export function RolePetPackagesPanel({ roleId, disabled, client, onRoleDataChanged }: PluginRoleAssetsComponentProps) {
   const [state, setState] = useState<PetPackages>(noPetPackages);
@@ -86,11 +86,7 @@ export function RolePetPackagesPanel({ roleId, disabled, client, onRoleDataChang
 
   const onRemove = useCallback((packageId: string) => void run(async () => {
     setState(parse(await client.call<unknown>("pets.remove", { role_id: roleId, package_id: packageId })));
-    // Two different consumers, both required. `onRoleDataChanged` re-reads the
-    // role the host still stores this on (the capability toggle reads
-    // `selected_pet_package_id`, and the backend clears `desktop_pet_enabled`
-    // when the selected package goes); `syncPet` tells the running pet to
-    // re-resolve what it is rendering.
+    // Refresh the plugin-owned form projection and the running pet separately.
     onRoleDataChanged();
     await window.miraDesktop.syncPet();
   }), [client, onRoleDataChanged, parse, roleId, run]);

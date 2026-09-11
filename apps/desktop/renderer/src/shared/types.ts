@@ -50,8 +50,8 @@ export type RoleRecord = {
   illustrations_abs: string[];
   asset_categories: RoleAssetCategory[];
   asset_category_bindings: Record<string, string>;
-  selected_pet_package_id?: string | null;
-  desktop_pet_enabled?: boolean;
+  /** Active plugins project their independently owned role settings here. */
+  plugin_state?: Record<string, Record<string, unknown>>;
   relationship_snapshot?: RelationshipSnapshot | null;
   loneliness_runtime?: LonelinessRuntime | null;
   created_at: string;
@@ -274,7 +274,6 @@ export type RoleFormState = {
   moodCatalog: string[];
   defaultMood: string;
   moodIllustrationBindings: Record<string, string>;
-  desktopPetEnabled: boolean;
   voiceEnabled: boolean;
   voiceProvider: string;
   voiceOwnership: "external" | "shiori_managed";

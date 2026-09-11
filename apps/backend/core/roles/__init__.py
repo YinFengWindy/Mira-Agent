@@ -18,7 +18,6 @@ from .scene_followup_runtime import SceneFollowupRuntime
 from .models import (
     RoleAssetCategory,
     RoleChannelBindingConfig,
-    RolePetPackage,
     RoleProactiveConfig,
     RoleRecord,
 )
@@ -35,7 +34,6 @@ from .role_prompt_compiler import (
     RolePromptCompiler,
 )
 from .store import RoleStore
-from .pet_packages import RolePetPackageService
 from .role_runtime import RoleExecutionContext, RoleRuntime, RoleRuntimeRegistry
 
 __all__ = [
@@ -48,8 +46,6 @@ __all__ = [
     "RoleChannelBinding",
     "RoleChannelBindingConfig",
     "RoleMemoryService",
-    "RolePetPackage",
-    "RolePetPackageService",
     "RoleRelationshipRuntimeService",
     "RoleRecord",
     "RoleProactiveConfig",

@@ -1,5 +1,5 @@
 import { PluginRoleSettingsSlot } from "../plugins/PluginRoleSettingsSlot";
-import { Brain, Monitor } from "@phosphor-icons/react";
+import { Brain } from "@phosphor-icons/react";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
 import { cx } from "../shared/styles";
 import type { RoleFormState, RoleRecord } from "../shared/types";
@@ -60,7 +60,6 @@ function CapabilityTile({
 
 /** Groups runtime-facing role capabilities away from the core profile fields. */
 export function RoleCapabilitiesPanel({ activeRole, bridgeReady, roleForm, onUpdate }: RoleCapabilitiesPanelProps) {
-  const desktopPetUnavailable = !bridgeReady || (!activeRole?.selected_pet_package_id && !roleForm.desktopPetEnabled);
 
   return (
     <div className="grid gap-7 text-sm text-ink">
@@ -79,19 +78,8 @@ export function RoleCapabilitiesPanel({ activeRole, bridgeReady, roleForm, onUpd
             checked={roleForm.nsfwMemoryEnabled}
             onChange={(checked) => onUpdate((current) => ({ ...current, nsfwMemoryEnabled: checked }))}
           />
-          <PluginRoleSettingsSlot drafts={roleForm.pluginSettings}
+          <PluginRoleSettingsSlot drafts={roleForm.pluginSettings} snapshots={activeRole?.plugin_state} disabled={!bridgeReady}
             onChange={(pluginSettings) => onUpdate((current) => ({ ...current, pluginSettings }))} />
-          <CapabilityTile
-            icon={Monitor}
-            tintClass="bg-[#FBF5EB]"
-            iconClass="text-[var(--warning-600)]"
-            label="桌宠"
-            description="让角色以桌面宠物形式陪伴和互动。"
-            checked={roleForm.desktopPetEnabled}
-            disabled={desktopPetUnavailable}
-            disabledStatus={!bridgeReady ? "桌面服务不可用" : "未配置桌宠"}
-            onChange={(checked) => onUpdate((current) => ({ ...current, desktopPetEnabled: checked }))}
-          />
         </div>
       </section>
       <RoleVoiceSettingsPanel roleForm={roleForm} onUpdate={onUpdate} />

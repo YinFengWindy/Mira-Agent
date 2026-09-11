@@ -1,4 +1,5 @@
 import type { PluginUiModule } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
+import { desktopPetRoleSettings } from "./roleSettings";
 import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
 
 /**
@@ -12,6 +13,7 @@ import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
  */
 const desktopPetUiModule: PluginUiModule = {
   pluginId: "desktop_pet",
+  roleSettings: desktopPetRoleSettings,
   roleAssets: { component: RolePetPackagesPanel },
 };
 
