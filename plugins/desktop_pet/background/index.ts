@@ -1,3 +1,4 @@
+import { reportBackgroundFailure } from "../../../apps/desktop/renderer/src/background/backgroundDiagnostics";
 import type { BackgroundCtx } from "../../../apps/desktop/renderer/src/background/pluginBackgroundRegistry";
 import { readDesktopPetBinding } from "./binding";
 import { DesktopPetController, desktopPetSurfaceId } from "./controller";
@@ -21,8 +22,8 @@ import { normalizeDesktopPetSettings } from "./settings";
  * The host declares the same two strings in
  * `apps/desktop/src/pluginCoupling/desktopPet.ts`. They are duplicated rather
  * than shared because the dependency would have to point from the host into a
- * plugin; `pluginCoupling/desktopPet.test.ts` pins the two copies together so
- * they cannot drift apart silently.
+ * plugin; `hostContract.test.ts` beside this file pins the two copies together
+ * so they cannot drift apart silently.
  */
 export const desktopPetCommandMethod = "desktop.pet.command";
 export const desktopPetObservationMethod = "desktop.pet.observation";
@@ -30,9 +31,10 @@ export const desktopPetObservationMethod = "desktop.pet.observation";
 export const desktopPetActionMethod = "desktop.pet.action";
 
 function reportError(operation: string, error: unknown): void {
-  // The plugin-host window is never shown, so logging is the only surface a
-  // failure here has. Same reasoning as `background/main.ts`'s `onError`.
-  console.error(`[desktop_pet] ${operation} 失败`, error);
+  // Routed to the host's diagnostic log rather than to this window's console,
+  // which nobody can open: `show` failing is exactly what the user is looking
+  // at when they report "点了托盘没反应".
+  reportBackgroundFailure(`desktop_pet ${operation}`, error);
 }
 
 /**
@@ -54,8 +56,8 @@ export default {
       surfaces: ctx.surfaces,
       settings: normalizeDesktopPetSettings(await ctx.store.read()),
       saveSettings: (settings) => ctx.store.write(settings),
-      resolveBinding: async (roleId) => readDesktopPetBinding(
-        await ctx.rpc.call("binding.get", roleId ? { role_id: roleId } : {}),
+      resolveBinding: async () => readDesktopPetBinding(
+        await ctx.rpc.call("binding.get"),
         (path) => ctx.assets.url(path),
       ),
       onError: reportError,

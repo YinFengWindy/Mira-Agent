@@ -2,7 +2,7 @@ import type {
   PluginBackgroundSettled,
   PluginBackgroundSurfaces,
 } from "../../../apps/desktop/renderer/src/background/pluginBackgroundRegistry";
-import { bindDesktopPetSettings } from "./settings";
+import { desktopPetBindingPatch } from "./settings";
 import {
   desktopPetBody,
   type DesktopPetActionPayload,
@@ -44,7 +44,7 @@ export type DesktopPetControllerOptions = {
   /** The settings already read out of `ctx.store`; the controller owns them from here. */
   settings: DesktopPetSettings;
   saveSettings: (settings: DesktopPetSettings) => Promise<void>;
-  resolveBinding: (roleId?: string) => Promise<DesktopPetBinding | null>;
+  resolveBinding: () => Promise<DesktopPetBinding | null>;
   /** Reports a failure from a fire-and-forget path that has no caller to throw at. */
   onError?: (operation: string, error: unknown) => void;
 };
@@ -73,14 +73,35 @@ export class DesktopPetController {
   private latestObservation: unknown = null;
   private running = false;
   /**
+   * Set the moment teardown starts, and never cleared.
+   *
+   * `terminate()` going through the queue is what orders the destroy after any
+   * operation already running; this flag is what stops that operation from
+   * doing pointless work on the way. A `show()` parked on `resolveBinding()` —
+   * a round trip to the Python backend — resumes *after* the plugin was
+   * disabled, and without this it would open a window purely so the queued
+   * destroy could close it again, which the user sees as a flash.
+   *
+   * Checked only where an await inside the queue can straddle teardown, i.e.
+   * right after `resolveBinding` in `show` and `sync`. Adding more checks
+   * further in would be unreachable: the queue already guarantees nothing else
+   * runs between those points and the destroy.
+   */
+  private disposed = false;
+  /**
    * Where the surface last came to rest, and on which display.
    *
    * Cached rather than asked for, because both answers arrive unprompted: the
    * creation result carries them, and every settle refreshes them. The old
    * main-process controller could call `anchorFromWindow` to re-read the
-   * window's real bounds; from a renderer that would be an IPC round trip on a
-   * path (deciding whether a role-requested move runs left or right) where
-   * being one settle out of date changes nothing visible.
+   * window's real bounds; from a renderer that would be an IPC round trip.
+   *
+   * The one place a stale value shows: `handleAgentAction` compares this
+   * against the move target to pick `running-left` vs `running-right`. Two
+   * role-requested moves in quick succession — or one issued mid-glide, before
+   * the settle lands — can read the pre-move anchor and face the sprite the
+   * wrong way for the duration of the move. Cosmetic, and not worth an IPC
+   * round trip per action, but it is not "nothing".
    */
   private anchor: DesktopPetPosition = desktopPetFallbackAnchor;
   private displayId = "";
@@ -126,38 +147,37 @@ export class DesktopPetController {
   show(): Promise<void> {
     return this.enqueue(async () => {
       const binding = await this.options.resolveBinding();
+      // Teardown can land inside the round trip above; from here on there is
+      // nothing left to reclaim what this would build or write.
+      if (this.disposed) return;
       if (!binding) throw new Error("没有已启用且已选择素材的桌宠角色");
-      const nextSettings = bindDesktopPetSettings(this.settings, binding, true);
-      await this.load(binding, nextSettings, "idle");
-      await this.saveSettings(nextSettings);
+      await this.load(binding, "idle");
+      await this.saveSettings(desktopPetBindingPatch(binding, true));
     });
   }
 
   hide(): Promise<void> {
     return this.enqueue(async () => {
       await this.destroySurface();
-      await this.saveSettings({ ...this.settings, visible: false });
+      await this.saveSettings({ visible: false });
     });
   }
 
   sync(forceVisible?: boolean): Promise<void> {
     return this.enqueue(async () => {
       const binding = await this.options.resolveBinding();
+      if (this.disposed) return;
       if (!binding) {
         await this.destroySurface();
-        await this.saveSettings({ ...this.settings, visible: false, roleId: null, packageId: null });
+        await this.saveSettings({ visible: false, roleId: null, packageId: null });
         return;
       }
       const current = this.settings;
       const changedBinding = current.roleId !== binding.roleId || current.packageId !== binding.package.id;
-      const nextSettings = bindDesktopPetSettings(
-        current,
-        binding,
-        forceVisible ?? (changedBinding || current.visible),
-      );
-      if (nextSettings.visible) await this.load(binding, nextSettings, "idle");
+      const visible = forceVisible ?? (changedBinding || current.visible);
+      if (visible) await this.load(binding, "idle");
       else await this.destroySurface();
-      await this.saveSettings(nextSettings);
+      await this.saveSettings(desktopPetBindingPatch(binding, visible));
     });
   }
 
@@ -211,7 +231,10 @@ export class DesktopPetController {
 
   /** Tears the pet's window down when the plugin is disabled or reloaded. */
   async terminate(): Promise<void> {
-    await this.destroySurface();
+    this.disposed = true;
+    // Through the queue, so a `show()` that is mid-flight finishes (and bails
+    // on `disposed`) before the destroy runs, rather than racing it.
+    await this.enqueue(() => this.destroySurface());
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
@@ -220,17 +243,19 @@ export class DesktopPetController {
     return next;
   }
 
-  private async load(
-    binding: DesktopPetBinding,
-    settings: DesktopPetSettings,
-    state: DesktopPetState,
-  ): Promise<void> {
+  private async load(binding: DesktopPetBinding, state: DesktopPetState): Promise<void> {
     if (!this.running) {
       // Created at the fallback corner first: only once the window exists can
       // the host say which display it landed on, and the remembered position is
       // per display. `create` answers with both, so the remembered position is
-      // applied without a second round trip — and therefore before the renderer
-      // has painted anything.
+      // applied without a second round trip.
+      //
+      // Being applied before the surface paints is a practical consequence, not
+      // a guarantee: `create` and `setPosition` are two messages from this
+      // renderer, while the first paint happens in the *surface's* renderer
+      // after it has loaded its HTML — which is far slower than one IPC hop,
+      // but nothing enforces the ordering. Before #181-C this was a real
+      // invariant, because both calls were synchronous inside the main process.
       const placement = await this.surfaces.create(
         desktopPetSurfaceId,
         { body: desktopPetBody },
@@ -239,7 +264,9 @@ export class DesktopPetController {
       this.running = true;
       this.anchor = { x: placement.x, y: placement.y };
       this.displayId = placement.displayId;
-      const remembered = settings.positions[positionKey(binding.roleId, placement.displayId)];
+      // Read from `this.settings` rather than from a caller's snapshot: a
+      // settle can have written a position while `create` was in flight.
+      const remembered = this.settings.positions[positionKey(binding.roleId, placement.displayId)];
       if (remembered) this.surfaces.setPosition(desktopPetSurfaceId, remembered);
     }
     this.activeRoleId = binding.roleId;
@@ -265,20 +292,26 @@ export class DesktopPetController {
     this.surfaces.post(desktopPetSurfaceId, { state, transient });
   }
 
-  private async saveSettings(settings: DesktopPetSettings): Promise<void> {
+  /**
+   * Merges a change into the current settings and persists the result.
+   *
+   * A patch rather than a whole snapshot, because `persistPosition` runs
+   * *outside* the queue — a settle is pushed in from the host whenever the user
+   * lets go of the pet — and can land between a queued operation taking its
+   * snapshot and that operation saving it. Saving a whole snapshot would then
+   * write back the positions as they were before the drag, silently losing it.
+   */
+  private async saveSettings(patch: Partial<DesktopPetSettings>): Promise<void> {
     // In memory first: a failed write must not leave this controller acting on
     // a binding it has already replaced.
-    this.settings = settings;
-    await this.options.saveSettings(settings);
+    this.settings = { ...this.settings, ...patch };
+    await this.options.saveSettings(this.settings);
   }
 
   private persistPosition(roleId: string, position: DesktopPetPosition): void {
-    const settings = {
-      ...this.settings,
+    void this.saveSettings({
       positions: { ...this.settings.positions, [positionKey(roleId, this.displayId)]: position },
-    };
-    this.settings = settings;
-    void this.options.saveSettings(settings).catch((error) => {
+    }).catch((error) => {
       this.options.onError?.("persist-position", error);
     });
   }

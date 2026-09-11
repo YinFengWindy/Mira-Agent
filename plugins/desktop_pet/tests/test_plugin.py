@@ -5,8 +5,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
@@ -81,16 +79,13 @@ def test_plugin_registers_tool_and_rpc_and_both_disappear_on_unload(
     assert kernel.rpc.resolve("plugin.desktop_pet.binding.get") is None
 
 
-@pytest.mark.parametrize("payload", [{}, {"role_id": "mira"}])
-def test_binding_get_returns_the_selected_package(
-    tmp_path: Path, payload: dict[str, object]
-) -> None:
+def test_binding_get_returns_the_selected_package(tmp_path: Path) -> None:
     store = _bind_pet(tmp_path)
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path))
     resolved = kernel.rpc.resolve("plugin.desktop_pet.binding.get")
     assert resolved is not None
 
-    result = asyncio.run(resolved[1](payload))
+    result = asyncio.run(resolved[1]({}))
 
     assert result is not None
     binding = result["binding"]
@@ -107,20 +102,15 @@ def test_binding_get_returns_the_selected_package(
     ).resolve()
 
 
-def test_binding_get_without_role_id_ignores_roles_whose_pet_is_off(
-    tmp_path: Path,
-) -> None:
+def test_binding_get_ignores_a_role_whose_pet_is_switched_off(tmp_path: Path) -> None:
     _bind_pet(tmp_path, enabled=False)
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path))
     resolved = kernel.rpc.resolve("plugin.desktop_pet.binding.get")
     assert resolved is not None
 
+    # A role keeps its package after the user switches the pet off; only
+    # `desktop_pet_enabled` says whether to render it.
     assert asyncio.run(resolved[1]({})) == {"binding": None}
-    # Named explicitly, the role still resolves: the caller is re-resolving a
-    # binding it already decided to show.
-    named = asyncio.run(resolved[1]({"role_id": "mira"}))
-    assert named is not None
-    assert named["binding"] is not None
 
 
 def test_binding_get_reports_nothing_when_the_spritesheet_is_missing(
@@ -134,18 +124,10 @@ def test_binding_get_reports_nothing_when_the_spritesheet_is_missing(
     assert asyncio.run(resolved[1]({})) == {"binding": None}
 
 
-def test_binding_get_reports_nothing_without_a_selected_package(
-    tmp_path: Path,
-) -> None:
-    # Reachable only through the named-role path: `pet_state.set_enabled`
-    # refuses to switch a pet on while no package is selected, so a role can
-    # be pet-less and still be asked about by id (the caller re-resolving a
-    # binding after the user deleted the package it was showing).
-    store = RoleStore(tmp_path)
-    _ = store.create_role(role_id="mira", name="Mira", system_prompt="test")
+def test_binding_get_reports_nothing_when_no_role_has_a_pet(tmp_path: Path) -> None:
+    _ = RoleStore(tmp_path).create_role(role_id="mira", name="Mira", system_prompt="test")
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path))
     resolved = kernel.rpc.resolve("plugin.desktop_pet.binding.get")
     assert resolved is not None
 
-    assert asyncio.run(resolved[1]({"role_id": "mira"})) == {"binding": None}
-    assert asyncio.run(resolved[1]({"role_id": "nobody"})) == {"binding": None}
+    assert asyncio.run(resolved[1]({})) == {"binding": None}

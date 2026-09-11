@@ -262,6 +262,21 @@ export class DesktopSurfaceHost {
     }
   }
 
+  /**
+   * Tears down every surface, whoever owns it.
+   *
+   * For the case where the process that owns *all* of them is gone: since
+   * #181-C every surface is driven by plugin `app.background` code in the
+   * plugin-host renderer, so that renderer crashing leaves each one a
+   * frameless, always-on-top window with nobody left to move, hide or close
+   * it — the user cannot get rid of it without killing the app. Reclaiming
+   * them is the only safe response; the alternative is a window the user
+   * cannot dismiss.
+   */
+  destroyAll(): void {
+    for (const record of [...this.surfaces.values()]) this.destroy(record.key);
+  }
+
   show(key: SurfaceKey): void {
     const record = this.require(key);
     record.visible = true;

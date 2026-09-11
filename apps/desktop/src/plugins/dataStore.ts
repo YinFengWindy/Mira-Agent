@@ -52,11 +52,16 @@ export class PluginDataStore {
    * starting from its own defaults.
    */
   async read(pluginId: string): Promise<unknown> {
-    const path = this.pathFor(pluginId);
-    const value = await this.readJson(pluginId, path);
-    if (value !== null) {
-      this.snapshots.set(pluginId, value);
-      return value;
+    const stored = await this.readJson(pluginId, this.pathFor(pluginId));
+    // `present` and "the value is null" are deliberately different answers.
+    // Migrating whenever the value reads as null would re-run it on a file
+    // that exists but is corrupt — and the pre-store file is still on disk, so
+    // the migration would overwrite the damaged current state with data from
+    // whenever the user last upgraded. A corrupt file must fall back to the
+    // plugin's own defaults instead, which is what `null` means to the plugin.
+    if (stored.present) {
+      this.snapshots.set(pluginId, stored.value);
+      return stored.value;
     }
     const migrated = await this.migrate(pluginId);
     this.snapshots.set(pluginId, migrated);
@@ -105,18 +110,31 @@ export class PluginDataStore {
     return join(this.options.directory, `${pluginId}.json`);
   }
 
-  private async readJson(pluginId: string, path: string): Promise<unknown> {
+  /**
+   * Reads one JSON file, separating "there is no file" from "the file is
+   * unusable" — see `read` for why that distinction has to survive this far.
+   */
+  private async readJson(
+    pluginId: string,
+    path: string,
+  ): Promise<{ present: boolean; value: unknown }> {
     try {
-      return JSON.parse(await readFile(path, "utf-8")) as unknown;
+      return { present: true, value: JSON.parse(await readFile(path, "utf-8")) as unknown };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
-      if (code !== "ENOENT") this.options.onError?.(pluginId, "read", error);
-      return null;
+      if (code === "ENOENT") return { present: false, value: null };
+      this.options.onError?.(pluginId, "read", error);
+      // Present but unreadable: still `present`, so nothing tries to
+      // reconstruct it from a source that is older than what just broke.
+      return { present: true, value: null };
     }
   }
 
   /**
-   * Copies a plugin's pre-store file into the store, once.
+   * Copies a plugin's pre-store file into the store.
+   *
+   * Reached only when the store file does not exist at all, which after the
+   * first successful migration is never again — see `read`.
    *
    * The old file is left where it is rather than deleted: this runs on a user's
    * existing installation, the copy has not been proven good yet at this point,
@@ -126,15 +144,15 @@ export class PluginDataStore {
     const legacyPath = this.options.legacyPathFor?.(pluginId) ?? null;
     if (!legacyPath) return null;
     const legacy = await this.readJson(pluginId, legacyPath);
-    if (legacy === null) return null;
+    if (!legacy.present || legacy.value === null) return null;
     try {
-      await this.write(pluginId, legacy);
+      await this.write(pluginId, legacy.value);
     } catch (error) {
       // Reported, not thrown: the plugin can still run on the migrated value
       // held in memory, and it will be written again the next time the plugin
       // saves anything.
       this.options.onError?.(pluginId, "migrate", error);
     }
-    return legacy;
+    return legacy.value;
   }
 }

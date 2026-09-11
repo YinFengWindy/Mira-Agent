@@ -36,14 +36,20 @@ export function normalizeDesktopPetSettings(value: unknown): DesktopPetSettings 
   };
 }
 
-/** Replaces the single active role/package slot while retaining per-role window positions. */
-export function bindDesktopPetSettings(
-  settings: DesktopPetSettings,
+/**
+ * The change that binding one role/package makes, as a patch.
+ *
+ * A patch rather than a whole settings object on purpose. Its callers compute
+ * it, then cross an `await` (creating the surface) before saving, and a settle
+ * pushed in from the host during that gap writes a new position. Returning a
+ * full object here would carry the pre-drag `positions` along and quietly undo
+ * that write; a patch cannot, because it does not mention `positions` at all.
+ */
+export function desktopPetBindingPatch(
   binding: DesktopPetBinding,
   visible: boolean,
-): DesktopPetSettings {
+): Pick<DesktopPetSettings, "visible" | "roleId" | "packageId"> {
   return {
-    ...settings,
     visible,
     roleId: binding.roleId,
     packageId: binding.package.id,

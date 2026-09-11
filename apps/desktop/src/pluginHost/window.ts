@@ -32,7 +32,19 @@ import {
  * when its script has finished loading; each plugin's `setup(ctx)` runs
  * independently as soon as the bundle executes.
  */
-export function createPluginHostWindow(): BrowserWindow {
+export type CreatePluginHostWindowOptions = {
+  /**
+   * Called when this renderer dies unexpectedly.
+   *
+   * Since #181-C this window owns every plugin's surface, so its death orphans
+   * them all — see `DesktopSurfaceHost.destroyAll`. It is also invisible, which
+   * means a crash here has no other way of being noticed: without this the app
+   * would simply stop having a desktop pet, with nothing logged.
+   */
+  onRenderProcessGone?: (details: { reason: string; exitCode: number }) => void;
+};
+
+export function createPluginHostWindow(options: CreatePluginHostWindowOptions = {}): BrowserWindow {
   const window = new BrowserWindow({
     width: 1,
     height: 1,
@@ -54,6 +66,9 @@ export function createPluginHostWindow(): BrowserWindow {
     // Nothing in the plugin-host window is user-facing, so there is nothing
     // it should ever hand off to the OS shell.
     openLocalAttachment: () => undefined,
+  });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    options.onRenderProcessGone?.({ reason: details.reason, exitCode: details.exitCode ?? 0 });
   });
   const devUrl = validateRendererDevServerUrl(rendererDevServerUrl);
   if (devUrl) {

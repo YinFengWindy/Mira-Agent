@@ -31,6 +31,7 @@ import {
   desktopPetCommandMethod,
   desktopPetObservationMethod,
   desktopPetPluginId,
+  desktopPetPresenceChanged,
   desktopPetSurfaceKey,
   isDesktopPetWindow,
   noDesktopPetPresence,
@@ -250,9 +251,21 @@ function reloadVoiceSettings(): void {
  * surface was created or destroyed, so `isDesktopPetRunning()` is already
  * correct by the time anything here reads it. It also covers changes the host
  * never asked for, which the old `await pet.hide()` path did not.
+ *
+ * The early return is load-bearing, not an optimization. The plugin writes its
+ * settings on *every* remembered position too — once per drag, per release
+ * glide, per role-requested move — and `DesktopObservationController.restore()`
+ * republishes observation state with an empty bubble. Without this guard,
+ * dragging the pet while a reply bubble was up would wipe the bubble, and every
+ * settle would also rebuild the tray menu and re-evaluate voice admission.
+ * `DesktopPetPresence` is exactly the part of the blob the host reacts to, so
+ * comparing it is the same question as "is there anything to do here".
  */
 function handleDesktopPetSettingsChanged(stored: unknown): void {
-  desktopPetPresence = readDesktopPetPresence(stored);
+  const next = readDesktopPetPresence(stored);
+  const changed = desktopPetPresenceChanged(desktopPetPresence, next);
+  desktopPetPresence = next;
+  if (!changed) return;
   syncDesktopPetRuntimeState();
   void desktopObservation?.restore().catch((error) => {
     logDesktopDiagnostic({ scope: "main", event: "desktop-observation.restore.failed", payload: { error } });
@@ -310,11 +323,16 @@ void app.whenReady().then(async () => {
       logDesktopDiagnostic({ scope: "main", event: "plugin-data.failed", payload: { pluginId, operation, error } });
     },
   });
+  registerDesktopPluginDataIpc(activePluginData);
+  // Read first, subscribe second. A first-run migration writes through `read`,
+  // which would otherwise fire `handleDesktopPetSettingsChanged` before the
+  // tray, the hotkey controller and observation exist. They are all null-safe
+  // today, so it is harmless today — and it only happens on the one launch
+  // where a user upgrades, which is the worst possible place for a latent trap.
+  desktopPetPresence = readDesktopPetPresence(await activePluginData.read(desktopPetPluginId));
   activePluginData.onChanged((pluginId, value) => {
     if (pluginId === desktopPetPluginId) handleDesktopPetSettingsChanged(value);
   });
-  registerDesktopPluginDataIpc(activePluginData);
-  desktopPetPresence = readDesktopPetPresence(await activePluginData.read(desktopPetPluginId));
   const activeVoiceRecorder = new BrowserVoiceRecorder(createVoiceCaptureWindow);
   voiceRecorder = activeVoiceRecorder;
   const privateWorkspaceRoot = runtimePaths.workspacePath;
@@ -375,7 +393,20 @@ void app.whenReady().then(async () => {
   // quit the app there. The repo only packages Windows today, so this is
   // deliberately left as-is rather than fixed; if Linux/macOS packaging
   // ever happens, this is the first place to revisit.
-  pluginHostWindow = createPluginHostWindow();
+  pluginHostWindow = createPluginHostWindow({
+    onRenderProcessGone: (details) => {
+      logDesktopDiagnostic({ scope: "main", event: "plugin-host.render-process-gone", payload: details });
+      // Every surface is driven from that renderer (#181-C), so they are all
+      // orphaned now: frameless, always-on-top, and nothing left to close them.
+      // Reclaiming them is the only thing that keeps the app usable. The
+      // plugins themselves stay down until the next launch; recovering them
+      // would mean restarting the window and every `setup(ctx)`, which is a
+      // bigger change than this one should carry.
+      activeDesktopSurfaces.destroyAll();
+      desktopPetPresence = noDesktopPetPresence;
+      syncDesktopPetRuntimeState();
+    },
+  });
   desktopObservation = new DesktopObservationController({
     pet: {
       get isRunning() { return isDesktopPetRunning(); },

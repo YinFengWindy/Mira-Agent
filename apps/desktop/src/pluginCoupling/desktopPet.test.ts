@@ -1,14 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import petBackground, {
-  desktopPetCommandMethod as pluginCommandMethod,
-  desktopPetObservationMethod as pluginObservationMethod,
-} from "../../../../plugins/desktop_pet/background/index.js";
-import { desktopPetSurfaceId } from "../../../../plugins/desktop_pet/background/controller.js";
 import {
-  desktopPetCommandMethod,
-  desktopPetObservationMethod,
-  desktopPetPluginId,
+  desktopPetPresenceChanged,
   desktopPetSurfaceKey,
   isDesktopPetWindow,
   noDesktopPetPresence,
@@ -16,22 +9,11 @@ import {
 } from "./desktopPet.js";
 import type { SurfaceKey } from "../surface/host.js";
 
-/**
- * Pins the host's copy of the pet coupling to the plugin's.
- *
- * The two sides declare these strings separately on purpose — sharing them
- * would mean the host importing from a plugin — which leaves exactly one
- * failure mode: renaming one copy and not the other. Nothing would break at
- * build time; the tray entry and observation bubbles would simply stop working
- * at runtime, with no error anywhere. A test is the only thing that catches
- * it, and a test may import across the boundary a dependency must not.
- */
-test("the host and the plugin agree on the pet's identity and event names", () => {
-  assert.equal(desktopPetPluginId, petBackground.pluginId);
-  assert.equal(desktopPetSurfaceKey.surfaceId, desktopPetSurfaceId);
-  assert.equal(desktopPetCommandMethod, pluginCommandMethod);
-  assert.equal(desktopPetObservationMethod, pluginObservationMethod);
-});
+// The half of this coupling that pins the host's copy of the pet's identity
+// and event names against the plugin's own lives in
+// `plugins/desktop_pet/background/hostContract.test.ts`. It cannot live here:
+// this file is in the *main-process* tsc program (`tsconfig.main.json`), which
+// has no DOM lib and a `rootDir` of `src/`, and the plugin is renderer code.
 
 test("presence reads the three fields the host needs out of the pet's stored blob", () => {
   assert.deepEqual(
@@ -75,4 +57,29 @@ test("only the pet's own surface window is attributed to the pet", () => {
   assert.equal(isDesktopPetWindow(surfaces, { id: 3 }), false);
   assert.equal(isDesktopPetWindow(surfaces, { id: 4 }), false);
   assert.equal(isDesktopPetWindow(surfaces, null), false);
+});
+
+test("a remembered position is not a presence change, so it triggers nothing", () => {
+  // The plugin writes its settings on every drag, glide and role-requested
+  // move. The host's reaction to a write republishes observation state, which
+  // clears the reply bubble — so treating a position write as a change means a
+  // user who drags the pet mid-sentence loses what it was saying.
+  const before = readDesktopPetPresence({ visible: true, roleId: "mira", packageId: "pet-1", positions: {} });
+  const afterDrag = readDesktopPetPresence({
+    visible: true,
+    roleId: "mira",
+    packageId: "pet-1",
+    positions: { "mira:display-1": { x: 10, y: 20 } },
+  });
+
+  assert.equal(desktopPetPresenceChanged(before, afterDrag), false);
+});
+
+test("every field the host reacts to counts as a change", () => {
+  const base = { visible: true, roleId: "mira", available: true };
+
+  assert.equal(desktopPetPresenceChanged(base, { ...base, visible: false }), true);
+  assert.equal(desktopPetPresenceChanged(base, { ...base, roleId: "other" }), true);
+  assert.equal(desktopPetPresenceChanged(base, { ...base, available: false }), true);
+  assert.equal(desktopPetPresenceChanged(base, { ...base }), false);
 });

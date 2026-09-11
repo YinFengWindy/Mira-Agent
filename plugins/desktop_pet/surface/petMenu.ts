@@ -13,11 +13,20 @@ import type { SurfaceHandle } from "../../../apps/desktop/renderer/src/surface/p
 /** What the host asks the plugin to close over when a hide is requested. */
 export type PetMenuHost = {
   /**
-   * TEMPORARY COUPLING: hiding the pet is still a host operation. It persists
-   * `visible: false`, restores the observation surface and refreshes the tray,
-   * none of which the plugin can reach yet — `surfaces.hide` would only make
-   * the window invisible while the host still believed the pet was running.
-   * Becomes plugin-owned when the controller and settings move in 181-C/D.
+   * TEMPORARY COUPLING: hiding the pet detours through the host.
+   *
+   * Since #181-C the host does none of the work — it publishes
+   * `desktop.pet.command` and this plugin's own `background/index.ts` performs
+   * the hide, persists `visible: false`, and the host refreshes its tray from
+   * that write. What is still missing is a *direct* route: a surface renderer
+   * has no way to reach its own plugin's background code, so the request has to
+   * go out through the main process and come back.
+   *
+   * `surfaces.hide` is not a substitute — it would make the window invisible
+   * without recording that the user turned the pet off, so the next launch
+   * would bring it back.
+   *
+   * The detour disappears with surface-to-background messaging (#218).
    */
   syncPet(forceVisible?: boolean): Promise<void>;
 };

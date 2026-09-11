@@ -29,21 +29,21 @@ class DesktopPetRpcHandlers:
     def __init__(self, *, role_store: RoleStore) -> None:
         self._role_store = role_store
 
-    async def binding_get(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def binding_get(self, _payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.desktop_pet.binding.get``: the role/package pair to render.
 
-        ``role_id`` is optional. Without it the pet-enabled role is used — at
-        most one role can have ``desktop_pet_enabled`` set (``pet_state.py``
-        clears the others on write). With it, the named role is returned even
-        when its pet is switched off, matching the caller that passes a role
-        id: it is re-resolving a binding it already decided to show.
+        Takes no arguments: the answer is "whichever role has its pet switched
+        on", and at most one can — ``pet_state.set_enabled`` clears the others
+        on write. (The pre-#181-C main-process version accepted an optional
+        role id, but no caller ever passed one; it is not carried over. If
+        #181-D needs a by-id lookup for the role form, it can add one then,
+        with a caller.)
 
         Returns ``{"binding": None}`` rather than raising when nothing is
         bound: "no role has a pet package selected" is the ordinary state of a
         fresh install, not a failure the caller should surface as an error.
         """
-        role_id = str(payload.get("role_id") or "").strip()
-        role = self._resolve_role(role_id)
+        role = self._resolve_role()
         if role is None:
             return {"binding": None}
         package = self._selected_package(role)
@@ -64,9 +64,7 @@ class DesktopPetRpcHandlers:
             }
         }
 
-    def _resolve_role(self, role_id: str) -> RoleRecord | None:
-        if role_id:
-            return self._role_store.get_role(role_id)
+    def _resolve_role(self) -> RoleRecord | None:
         return next(
             (role for role in self._role_store.list_roles() if role.desktop_pet_enabled),
             None,

@@ -99,6 +99,38 @@ test("a pre-store file is migrated on first read and the original is kept", asyn
   });
 });
 
+test("a corrupt store file is not rebuilt from the pre-store file", async () => {
+  await withRoot(async (root) => {
+    const legacyPath = join(root, "desktop-pet.json");
+    await writeFile(legacyPath, JSON.stringify({ roleId: "old-role" }), "utf-8");
+    const store = storeAt(root, { legacyPathFor: () => legacyPath });
+    await store.read("desktop_pet");
+    await store.write("desktop_pet", { roleId: "current-role" });
+
+    // The store file exists but is damaged. The pre-store file is still on disk
+    // — it is never deleted — so treating "unreadable" the same as "absent"
+    // would silently restore whatever the user had at upgrade time, months of
+    // changes ago. Falling back to the plugin's own defaults is the only answer
+    // that cannot resurrect stale state.
+    await writeFile(dataPath(root, "desktop_pet"), "{ not json", "utf-8");
+
+    assert.equal(await storeAt(root, { legacyPathFor: () => legacyPath }).read("desktop_pet"), null);
+    assert.match(await readFile(dataPath(root, "desktop_pet"), "utf-8"), /not json/,
+      "a failed read must not overwrite the file it failed on");
+  });
+});
+
+test("a stored literal null is not mistaken for a plugin that never wrote", async () => {
+  await withRoot(async (root) => {
+    const legacyPath = join(root, "desktop-pet.json");
+    await writeFile(legacyPath, JSON.stringify({ roleId: "old-role" }), "utf-8");
+    const store = storeAt(root, { legacyPathFor: () => legacyPath });
+    await store.write("desktop_pet", null);
+
+    assert.equal(await storeAt(root, { legacyPathFor: () => legacyPath }).read("desktop_pet"), null);
+  });
+});
+
 test("migration does not undo a value the plugin has already written", async () => {
   await withRoot(async (root) => {
     const legacyPath = join(root, "desktop-pet.json");

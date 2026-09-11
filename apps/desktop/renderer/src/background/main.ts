@@ -1,6 +1,7 @@
 // Registers every plugin's `background/index.ts` before the host reads the registry.
 import "./pluginBackgroundModules";
 import { createPluginBridgeClient } from "../plugins/pluginBridgeClient";
+import { reportBackgroundFailure } from "./backgroundDiagnostics";
 import { createBackgroundCtx } from "./pluginBackgroundCtx";
 import { PluginBackgroundHost } from "./pluginBackgroundHost";
 import { pluginBackgroundRegistry } from "./pluginBackgroundRegistry";
@@ -53,10 +54,8 @@ const host = new PluginBackgroundHost({
     });
   },
   onError(pluginId, phase, error) {
-    // This window is invisible, so a failure here has nowhere on screen to
-    // show up — logging is the only surface it has.
     const what = phase === "roster" ? "读取插件启用名单" : pluginId + " 的 " + (phase === "setup" ? "setup" : "卸载");
-    console.error(`[plugin-host] ${what} 失败`, error);
+    reportBackgroundFailure(what, error);
   },
 });
 

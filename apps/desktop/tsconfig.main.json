@@ -7,8 +7,16 @@
     "types": ["node"]
   },
   "include": [
+    // Every directory with main-process code needs a line here, tests included.
+    // This list is a whitelist, and a line that matches nothing is silently
+    // fine — so a new directory that nobody adds is not a build error, it is
+    // code that ships unchecked. `src/plugins` and `src/pluginCoupling` are
+    // reachable through `src/main.ts` and were therefore type-checked as
+    // *implementation* while their `.test.ts` files were not in any program at
+    // all (the unit runner uses tsx, which strips types without checking them).
     "src/main.ts",
-    "src/pet/**/*.ts",
+    "src/plugins/**/*.ts",
+    "src/pluginCoupling/**/*.ts",
     "src/observation/**/*.ts",
     "src/voice/**/*.ts",
     "src/assets/**/*.ts",

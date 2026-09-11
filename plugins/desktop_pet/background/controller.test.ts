@@ -111,6 +111,9 @@ type Harness = {
    */
   holdWorkArea: () => void;
   releaseWorkArea: () => void;
+  /** Holds the next `binding.get` answer, then delivers it on demand. */
+  holdBinding: () => void;
+  releaseBinding: () => void;
   /** Lets the controller's own promise chain drain, standing in for the IPC hop. */
   flush: () => Promise<void>;
 };
@@ -132,6 +135,8 @@ function harness(initialSettings?: Partial<DesktopPetSettings>, actions?: Record
   let hasBinding = true;
   let holdingWorkArea = false;
   let heldWorkArea: (() => void) | null = null;
+  let holdingBinding = false;
+  let heldBinding: (() => void) | null = null;
   const errors: string[] = [];
   const windows: FakeSurfaceWindow[] = [];
 
@@ -195,13 +200,17 @@ function harness(initialSettings?: Partial<DesktopPetSettings>, actions?: Record
       settings = next;
       return Promise.resolve();
     },
-    resolveBinding: () => Promise.resolve(hasBinding
-      ? {
-        roleId: "role-1",
-        package: { id: packageId, displayName: "Pet", spritesheetUrl: `shiori-asset://local/${packageId}` },
-        actions,
-      }
-      : null),
+    resolveBinding: () => {
+      const value = hasBinding
+        ? {
+          roleId: "role-1",
+          package: { id: packageId, displayName: "Pet", spritesheetUrl: `shiori-asset://local/${packageId}` },
+          actions,
+        }
+        : null;
+      if (!holdingBinding) return Promise.resolve(value);
+      return new Promise((resolve) => { heldBinding = () => resolve(value); });
+    },
     onError: (operation) => { errors.push(operation); },
   });
 
@@ -222,6 +231,8 @@ function harness(initialSettings?: Partial<DesktopPetSettings>, actions?: Record
     errors: () => errors,
     holdWorkArea: () => { holdingWorkArea = true; },
     releaseWorkArea: () => { holdingWorkArea = false; heldWorkArea?.(); heldWorkArea = null; },
+    holdBinding: () => { holdingBinding = true; },
+    releaseBinding: () => { holdingBinding = false; heldBinding?.(); heldBinding = null; },
     flush: async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); },
     advance: (ms) => {
       const target = now + ms;
@@ -422,6 +433,27 @@ test("disabling the plugin reclaims the pet's window", async () => {
 
   assert.equal(pet.controller.isRunning, false);
   assert.equal(pet.window().isDestroyed(), true);
+  assert.equal(pet.surfaces.has(surfaceKey), false);
+});
+
+test("a show still in flight when the plugin is disabled never reaches the screen", async () => {
+  const pet = harness();
+
+  // `resolveBinding` is a round trip to the Python backend, and the user can
+  // disable the plugin inside it. Teardown then runs against a pet that does
+  // not exist yet — and if the parked `show()` later resumes and creates its
+  // surface, nothing is left to reclaim it: the effect scope is already
+  // disposed, so #181's "停用后 surface 全部回收" would be false in exactly the
+  // case nobody watches.
+  pet.holdBinding();
+  const showing = pet.controller.show();
+  const terminating = pet.controller.terminate();
+  pet.releaseBinding();
+  await showing;
+  await terminating;
+
+  assert.equal(pet.windows.length, 0, "a disabled plugin must not open a window");
+  assert.equal(pet.controller.isRunning, false);
   assert.equal(pet.surfaces.has(surfaceKey), false);
 });
 

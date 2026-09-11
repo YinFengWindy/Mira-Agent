@@ -16,9 +16,20 @@ import type { SurfaceKey } from "../surface/host.js";
  * | a way to start/stop the pet | the tray entry, `desktop:pet-sync` | #181-D |
  * | the pet's visible/bound state | tray label, voice admission, close policy | #181-D, #221 |
  *
- * Note what is *not* here: roles, packages, sprite states, positions, window
- * geometry. The host does not know what a pet package is any more, which is
- * the part of #181's "宿主不感知桌宠领域" that #181-C actually delivers.
+ * What the *main process* no longer knows: roles, packages, sprite states,
+ * positions, window geometry. That is the part of #181's "宿主不感知桌宠领域"
+ * that #181-C delivers, and it is the whole of what this file's scope is.
+ *
+ * **It is not the whole of the host's pet knowledge.** The host's *renderer*
+ * still owns the pet package manager on the role detail page —
+ * `roles/RolePetPackagesPanel.tsx`, the pet toggle in `RoleCapabilitiesPanel`,
+ * `pet_packages` in `shared/types.ts`, the `roles.pets.*` calls in
+ * `app/useRoleManagement.ts`, and `pickPetPackage` on the preload API. That UI
+ * knows exactly what a pet package is. It could not move here or into the
+ * plugin in #181-C: #179's slots are `settings.section` and `nav.page`, and
+ * this is neither — it is a section of the role detail page, for which no slot
+ * exists yet. Whoever runs #181-D's final acceptance needs to count it: the
+ * criterion is not met for the renderer, and no issue claims it yet.
  */
 
 export const desktopPetPluginId = "desktop_pet";
@@ -37,8 +48,10 @@ export const desktopPetSurfaceKey: SurfaceKey = { pluginId: desktopPetPluginId, 
  *
  * The plugin declares the same strings in
  * `plugins/desktop_pet/background/index.ts`; they are duplicated because a
- * shared constant would mean the host importing from a plugin. The test beside
- * this file pins the two copies together.
+ * shared constant would mean the host importing from a plugin.
+ * `plugins/desktop_pet/background/hostContract.test.ts` pins the two copies
+ * together — it lives on the plugin side because this file is in the
+ * main-process tsc program, which cannot reach renderer code at all.
  */
 export const desktopPetCommandMethod = "desktop.pet.command";
 export const desktopPetObservationMethod = "desktop.pet.observation";
@@ -88,6 +101,25 @@ export function readDesktopPetPresence(stored: unknown): DesktopPetPresence {
     roleId,
     available,
   };
+}
+
+/**
+ * Whether two presences differ in anything the host reacts to.
+ *
+ * Extracted so it can be tested: the plugin writes its settings on *every*
+ * remembered position — once per drag, per release glide, per role-requested
+ * move — and the host's reaction to a write includes republishing observation
+ * state, which clears any reply bubble currently on screen. Reacting only to a
+ * real change is what keeps dragging the pet from wiping the bubble it is
+ * talking through.
+ */
+export function desktopPetPresenceChanged(
+  before: DesktopPetPresence,
+  after: DesktopPetPresence,
+): boolean {
+  return before.visible !== after.visible
+    || before.roleId !== after.roleId
+    || before.available !== after.available;
 }
 
 /** Whether an IPC sender's window is the pet's surface. */
