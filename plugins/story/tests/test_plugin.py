@@ -10,6 +10,7 @@ import pytest
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
+from desktop_bridge.method_policy import Concurrency
 
 
 @pytest.mark.parametrize("novelai_enabled", [True, False])
@@ -55,6 +56,10 @@ def test_story_requires_active_novelai_and_unloads_before_it(
             assert resolved is not None
             assert await resolved[1]({}) == {"stories": []}
             assert kernel.rpc.resolve("plugin.story.cg.regenerate") is not None
+            for method in ("create", "input", "continue", "cg.retry", "cg.regenerate"):
+                policy = kernel.rpc.policy_for(f"plugin.story.{method}")
+                assert policy is not None
+                assert policy.concurrency is Concurrency.INTEGRATION
             await kernel.unload("novelai")
             assert kernel.rpc.resolve("plugin.story.list") is None
             assert kernel.rpc.resolve("plugin.novelai.generate") is None

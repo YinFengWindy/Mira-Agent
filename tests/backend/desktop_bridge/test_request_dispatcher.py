@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from desktop_bridge.method_policy import Concurrency, MethodPolicy
+from desktop_bridge.method_policy import Concurrency, MethodPolicy, method_policy
 from desktop_bridge.request_dispatcher import BridgeRequestDispatcher
 
 
@@ -104,26 +104,32 @@ async def test_regeneration_uses_the_bounded_integration_lane() -> None:
 
 
 @pytest.mark.asyncio
-async def test_story_submission_uses_the_bounded_integration_lane() -> None:
-    dispatcher = BridgeRequestDispatcher(max_concurrency=2)
+async def test_plugin_submission_uses_its_declared_integration_lane() -> None:
+    def resolver(method: str) -> MethodPolicy:
+        if method == "plugin.demo.continue":
+            return MethodPolicy(concurrency=Concurrency.INTEGRATION)
+        return method_policy(method)
+
+    dispatcher = BridgeRequestDispatcher(max_concurrency=2, policy_resolver=resolver)
     run_started = asyncio.Event()
     release_run = asyncio.Event()
     role_update_completed = asyncio.Event()
 
-    async def _generate_story() -> None:
+    async def _continue_plugin() -> None:
         run_started.set()
         await release_run.wait()
 
     async def _update_role() -> None:
         role_update_completed.set()
 
-    dispatcher.submit({"method": "stories.continue"}, _generate_story)
-    await run_started.wait()
-    dispatcher.submit({"method": "roles.update"}, _update_role)
-
-    await asyncio.wait_for(role_update_completed.wait(), timeout=0.2)
-    release_run.set()
-    await dispatcher.aclose()
+    dispatcher.submit({"method": "plugin.demo.continue"}, _continue_plugin)
+    try:
+        await asyncio.wait_for(run_started.wait(), timeout=0.2)
+        dispatcher.submit({"method": "roles.update"}, _update_role)
+        await asyncio.wait_for(role_update_completed.wait(), timeout=0.2)
+    finally:
+        release_run.set()
+        await dispatcher.aclose()
 
 
 @pytest.mark.asyncio
