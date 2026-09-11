@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PluginUiRegistry, type NavPageEntry, type StandaloneSettingsSectionEntry } from "./pluginUiRegistry.js";
+import { guardedNavPageSelect, PluginUiRegistry, type NavPageEntry, type StandaloneSettingsSectionEntry } from "./pluginUiRegistry.js";
 
 function standaloneSection(id: string, pluginId?: string): StandaloneSettingsSectionEntry {
   return {
@@ -61,5 +61,40 @@ describe("PluginUiRegistry", () => {
     assert.equal(registry.getSettingsSection("section-a"), undefined);
     assert.equal(registry.getNavPage("page-a"), undefined);
     assert.notEqual(registry.getNavPage("page-b"), undefined);
+  });
+});
+
+describe("guardedNavPageSelect (issue #226 gap B)", () => {
+  it("calls onSelect when the entry has no selectBlockedReason guard at all", () => {
+    let selected = false;
+    let blockedReason: string | null = null;
+    const handler = guardedNavPageSelect({}, () => { selected = true; }, (reason) => { blockedReason = reason; });
+    handler();
+    assert.equal(selected, true);
+    assert.equal(blockedReason, null);
+  });
+
+  it("calls onSelect when selectBlockedReason returns null", () => {
+    let selected = false;
+    const handler = guardedNavPageSelect(
+      { selectBlockedReason: () => null },
+      () => { selected = true; },
+      () => { throw new Error("must not be called"); },
+    );
+    handler();
+    assert.equal(selected, true);
+  });
+
+  it("refuses to call onSelect and hands the reason to onBlocked when selectBlockedReason returns a message", () => {
+    let selected = false;
+    let blockedReason: string | null = null;
+    const handler = guardedNavPageSelect(
+      { selectBlockedReason: () => "请先创建至少一个角色，再进入生图。" },
+      () => { selected = true; },
+      (reason) => { blockedReason = reason; },
+    );
+    handler();
+    assert.equal(selected, false);
+    assert.equal(blockedReason, "请先创建至少一个角色，再进入生图。");
   });
 });

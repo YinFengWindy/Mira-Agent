@@ -123,6 +123,55 @@ describe("applyPluginUiModules", () => {
     assert.deepEqual(calls, ["plugin.demo.readSomething", "plugin.demo.doSomething"]);
   });
 
+  it("registers a nav.page's optional Sidebar bound with a client, and passes selectBlockedReason through untouched", () => {
+    const registry = new PluginUiRegistry();
+    function NavPage() { return null; }
+    function Sidebar() { return null; }
+    const selectBlockedReason = () => "not now";
+    const modules: Record<string, { default: PluginUiModule }> = {
+      "/plugins/demo/ui/index.tsx": {
+        default: {
+          pluginId: "demo",
+          navPage: { label: "Demo Page", component: NavPage, sidebar: Sidebar, selectBlockedReason },
+        },
+      },
+    };
+
+    applyPluginUiModules(modules, registry);
+
+    const entry = registry.getNavPage("demo");
+    assert.ok(entry?.Sidebar, "expected a Sidebar on the nav.page entry");
+    assert.notEqual(entry?.Sidebar, Sidebar, "Sidebar must be client-bound, not the bare component");
+    // selectBlockedReason has no client/props to inject, so it is threaded through as-is.
+    assert.equal(entry?.selectBlockedReason, selectBlockedReason);
+
+    const sidebarElement = renderElement(entry!.Sidebar as never, {
+      pageId: "demo",
+      animating: false,
+      collapsed: false,
+      width: 280,
+      onBeginResize: () => undefined,
+    });
+    assert.equal(sidebarElement.type, Sidebar);
+    assert.equal(typeof (sidebarElement.props.client as PluginRpcClient).call, "function");
+  });
+
+  it("leaves Sidebar undefined and selectBlockedReason undefined when a nav.page doesn't declare them", () => {
+    const registry = new PluginUiRegistry();
+    function NavPage() { return null; }
+    const modules: Record<string, { default: PluginUiModule }> = {
+      "/plugins/demo/ui/index.tsx": {
+        default: { pluginId: "demo", navPage: { label: "Demo Page", component: NavPage } },
+      },
+    };
+
+    applyPluginUiModules(modules, registry);
+
+    const entry = registry.getNavPage("demo");
+    assert.equal(entry?.Sidebar, undefined);
+    assert.equal(entry?.selectBlockedReason, undefined);
+  });
+
   it("skips a malformed module instead of throwing", () => {
     const registry = new PluginUiRegistry();
     const modules = { "/plugins/broken/ui/index.tsx": { default: { settingsSection: {} } } } as unknown as Record<

@@ -2,13 +2,20 @@ import type React from "react";
 import type { SettingsSubsection, StandaloneSettingsSectionProps } from "../settings/settingsPageTypes";
 import { createPluginSchemaSettingsSection } from "./PluginSchemaSettingsSection";
 import { createPluginRpcClient, type PluginRpcClient } from "./pluginBridgeClient";
-import { pluginUiRegistry, type PluginNavPageProps } from "./pluginUiRegistry";
+import { pluginUiRegistry, type PluginNavPageProps, type PluginNavPageSidebarProps } from "./pluginUiRegistry";
 
 /**
  * Props a plugin-authored nav.page component receives: the base slot props
  * plus its injected, namespace-scoped RPC client.
  */
 export type PluginNavPageComponentProps = PluginNavPageProps & { client: PluginRpcClient };
+
+/**
+ * Props a plugin-authored nav.page sidebar receives: the base slot props
+ * (see `PluginNavPageSidebarProps`) plus its injected, namespace-scoped RPC
+ * client — same treatment as the page component itself.
+ */
+export type PluginNavPageSidebarComponentProps = PluginNavPageSidebarProps & { client: PluginRpcClient };
 
 /**
  * Props a plugin-authored custom settings.section component receives: the
@@ -30,6 +37,10 @@ export type PluginNavPageContribution = {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
   component: React.ComponentType<PluginNavPageComponentProps>;
+  /** Optional (issue #226 gap A) — see `NavPageEntry.Sidebar`. */
+  sidebar?: React.ComponentType<PluginNavPageSidebarComponentProps>;
+  /** Optional (issue #226 gap B) — see `NavPageEntry.selectBlockedReason`. */
+  selectBlockedReason?: () => string | null;
 };
 
 /**
@@ -107,6 +118,8 @@ export function applyPluginUiModules(
         icon: navPage.icon,
         pluginId,
         Component: bindPluginClient(pluginId, navPage.component),
+        Sidebar: navPage.sidebar ? bindPluginClient(pluginId, navPage.sidebar) : undefined,
+        selectBlockedReason: navPage.selectBlockedReason,
       });
     }
   }

@@ -95,6 +95,14 @@ function App(): React.ReactElement {
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [pendingDeleteRoleId, setPendingDeleteRoleId] = useState("");
   const [workspaceFeedback, setWorkspaceFeedback] = useState<WorkspaceFeedback | null>(null);
+  // Own lifetime, separate from `workspaceFeedback` on purpose (issue #226
+  // follow-up): that one is gated to the role-workspace view and cleared by
+  // that flow's own state transitions, so relaxing its gate would let a
+  // stale role-workspace message follow the user into an unrelated view. A
+  // refused nav.page selection (`guardedNavPageSelect`) can happen from any
+  // view, so it gets its own slot, auto-cleared the same way `notice`/
+  // `workspaceFeedback` already are (see `useDesktopUiEffects`).
+  const [navBlockedMessage, setNavBlockedMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingMessageNavigation, setPendingMessageNavigation] = useState<PendingMessageNavigation | null>(null);
   const [highlightedMessageKey, setHighlightedMessageKey] = useState("");
@@ -540,6 +548,8 @@ function App(): React.ReactElement {
     setNotice,
     workspaceFeedback,
     setWorkspaceFeedback,
+    navBlockedMessage,
+    setNavBlockedMessage,
     highlightedMessageKey,
     previewIllustrations,
     activeIllustration,
@@ -606,6 +616,8 @@ function App(): React.ReactElement {
       onOpenRolesWorkspace={() => openRoleWorkspace({ kind: "roles-list" })}
       onOpenStory={() => openStoryWorkspace()}
       onOpenPluginPage={(pageId) => openPluginPage(pageId)}
+      navBlockedMessage={navBlockedMessage}
+      onNavigationBlocked={(message) => setNavBlockedMessage(message)}
       onOpenRole={(roleId) => void openRole(roleId, null, { recordHistory: true })}
       workspaceFeedback={workspaceFeedback}
       activeRole={activeRole}

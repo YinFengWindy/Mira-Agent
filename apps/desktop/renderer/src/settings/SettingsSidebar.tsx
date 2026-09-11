@@ -1,5 +1,6 @@
 import type React from "react";
 import { pluginUiRegistry } from "../plugins/pluginUiRegistry";
+import { SidebarResizeHandle } from "../shared/SidebarResizeHandle";
 import { cx, secondarySidebarSurfaceClass, sidebarNavItemClass } from "../shared/styles";
 import { registerBuiltinSettingsSections } from "./registerBuiltinSettingsSections";
 
@@ -85,16 +86,7 @@ export function SettingsSidebar({
             </button>)}
         </div>
       </nav>
-      <div
-        className={cx(
-          "sidebar-resize-handle absolute bottom-0 right-0 top-0 cursor-col-resize bg-transparent",
-          collapsed ? "w-0" : "w-2",
-        )}
-        role="separator"
-        aria-label="调整侧边栏宽度"
-        aria-orientation="vertical"
-        onPointerDown={onBeginResize}
-      />
+      <SidebarResizeHandle collapsed={collapsed} onBeginResize={onBeginResize} />
     </aside>
   );
 }

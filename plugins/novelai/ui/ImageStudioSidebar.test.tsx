@@ -9,6 +9,10 @@ describe("ImageStudioSidebar", () => {
     const markup = renderToStaticMarkup(
       <ImageStudioSidebar
         bridgeReady
+        collapsed={false}
+        animating={false}
+        width={280}
+        onBeginResize={() => undefined}
         form={{
           roleId: "",
           prompt: "",
