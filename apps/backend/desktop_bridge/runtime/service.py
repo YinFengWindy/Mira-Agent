@@ -127,12 +127,34 @@ class ReloadableDesktopService:
             return await self._respond_or_apply_error(request_id, method, compute_plugin_config_result)
         if policy.handler is Handler.PLUGIN_MANAGEMENT:
             async def compute_plugin_management_result():
-                return (
-                    self.plugin_management.list(payload) if method == "plugins.list"
-                    else await self.plugin_management.set_enabled(
-                        payload, prepare_service=self._prepare, publish_service=self._publish,
-                    )
+                if method == "plugins.list":
+                    return self.plugin_management.list(payload)
+                result = await self.plugin_management.set_enabled(
+                    payload, prepare_service=self._prepare, publish_service=self._publish,
                 )
+                # `plugins.setEnabled` performs a real settings apply (same
+                # `RuntimeSettingsApplication.apply` as `runtime.apply`, same
+                # `{generation, changed}` result shape) but is dispatched
+                # through this PLUGIN_MANAGEMENT branch rather than SETTINGS,
+                # so it never reached the `method == "runtime.apply"` publish
+                # below. Without this, no window other than the one that
+                # issued the toggle ever learns a plugin's enabled state
+                # changed — in particular the plugin-host window (#226),
+                # which has no `pluginEnabledStateStore` of its own and relies
+                # entirely on `runtime.applied` to know when to re-fetch
+                # `plugins.list`. A disabled plugin's background contribution
+                # would otherwise keep running until an unrelated settings
+                # save happened to fire `runtime.apply`, or the app restarted
+                # — exactly the leak #181's "停用插件后...订阅全部回收"
+                # acceptance criterion exists to rule out. `useDesktopBridgeLifecycle`
+                # and `useOnboardingSnapshot` already treat `runtime.applied`
+                # as "something changed, refetch"; an extra one from a plugin
+                # toggle is a harmless idempotent refresh for both.
+                await self.publish_event({
+                    "id": request_id, "type": "event",
+                    "method": "runtime.applied", "payload": result,
+                })
+                return result
             return await self._respond_or_apply_error(request_id, method, compute_plugin_management_result)
         if policy.handler is Handler.ROLE_TASKS:
             role_id = str(payload.get("role_id") or "")
