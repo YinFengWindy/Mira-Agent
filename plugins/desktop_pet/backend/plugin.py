@@ -13,7 +13,10 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
     """Registers pet-owned data, explicit role-save participation and RPCs."""
     from desktop_bridge.method_policy import Concurrency
     from bus.events_lifecycle import RoleDeleted
-    from .pet_state import PLUGIN_ID, RolePetStateStore
+
+    # Prepared and active runtimes share RoleStore; use the same stateless
+    # callback identities even though plugin.py is imported per generation.
+    from plugins.desktop_pet.backend.pet_state import PLUGIN_ID, RolePetStateStore
     from .reconcile import PetStateReconciler
 
     role_store = ctx.role_store

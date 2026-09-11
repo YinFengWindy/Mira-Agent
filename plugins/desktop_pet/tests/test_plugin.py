@@ -306,3 +306,19 @@ def test_live_role_deleted_reconciles_and_unload_removes_draft_participant(tmp_p
     assert not (store.assets_dir / "mira" / "pets").exists()
     asyncio.run(kernel.unload("desktop_pet"))
     assert store.extensions.project("mira") == {}
+
+
+def test_prepared_plugin_runtime_keeps_role_settings_after_old_runtime_unloads(
+    tmp_path,
+):
+    store = RoleStore(tmp_path)
+    _bind_pet(tmp_path, store=store)
+    old = _load_desktop_pet_plugin(services=_services(tmp_path, store))
+    candidate = _load_desktop_pet_plugin(services=_services(tmp_path, store))
+    # Assert actual candidate setup succeeded rather than only inspecting leases.
+    assert candidate.rpc.resolve("plugin.desktop_pet.binding.get") is not None
+    asyncio.run(old.unload("desktop_pet"))
+    store.update_role("mira", plugin_drafts={"desktop_pet": {"enabled": False}})
+    assert store.extensions.project("mira")["desktop_pet"]["enabled"] is False
+    asyncio.run(candidate.unload("desktop_pet"))
+    assert store.extensions.project("mira") == {}

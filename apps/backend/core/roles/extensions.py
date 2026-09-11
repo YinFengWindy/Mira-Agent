@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import dataclass, field
 from typing import Any
 
 from .manifest import RoleManifestRepository
@@ -18,23 +19,42 @@ DraftWriter = Callable[[str, dict[str, Any], dict[str, Any]], None]
 Projector = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
+@dataclass
+class _Participant:
+    write: DraftWriter
+    project: Projector
+    leases: set[object] = field(default_factory=set)
+
+
 class RoleExtensions:
     """Coordinates active plugin draft participants without interpreting schemas."""
 
     def __init__(self, repository: RoleManifestRepository) -> None:
         self._repository = repository
-        self._participants: dict[str, tuple[DraftWriter, Projector]] = {}
+        self._participants: dict[str, _Participant] = {}
 
     def register(self, plugin_id: str, write: DraftWriter, project: Projector):
-        """Registers a save participant and returns its lifecycle disposer."""
-        if plugin_id in self._participants:
-            raise ValueError(f"角色扩展已注册: {plugin_id}")
-        participant = (write, project)
-        self._participants[plugin_id] = participant
+        """Leases an identical participant across overlapping runtime generations."""
+        with self._repository.lock:
+            participant = self._participants.get(plugin_id)
+            if participant is None:
+                participant = _Participant(write, project)
+                self._participants[plugin_id] = participant
+            elif (participant.write, participant.project) != (write, project):
+                # Runtime preparation may reuse the same stateless owner, but
+                # silently replacing a different schema/owner is never valid.
+                raise ValueError(f"角色扩展已注册: {plugin_id}")
+            lease = object()
+            participant.leases.add(lease)
 
         def dispose() -> None:
-            if self._participants.get(plugin_id) is participant:
-                del self._participants[plugin_id]
+            with self._repository.lock:
+                participant.leases.discard(lease)
+                if (
+                    not participant.leases
+                    and self._participants.get(plugin_id) is participant
+                ):
+                    del self._participants[plugin_id]
 
         return dispose
 
@@ -67,7 +87,7 @@ class RoleExtensions:
                     raise ValueError(f"角色扩展不可用: {plugin_id}")
                 if not isinstance(values, dict):
                     raise ValueError(f"角色扩展草稿必须是对象: {plugin_id}")
-                participant[0](role_id, values, data.setdefault(plugin_id, {}))
+                participant.write(role_id, values, data.setdefault(plugin_id, {}))
             return data
 
     def project(self, role_id: str) -> dict[str, Any]:
@@ -75,6 +95,8 @@ class RoleExtensions:
         with self._repository.lock:
             data = self._repository.load_payload().get("plugin_data", {})
             return {
-                plugin_id: project(role_id, deepcopy(data.get(plugin_id, {})))
-                for plugin_id, (_, project) in self._participants.items()
+                plugin_id: participant.project(
+                    role_id, deepcopy(data.get(plugin_id, {}))
+                )
+                for plugin_id, participant in self._participants.items()
             }
