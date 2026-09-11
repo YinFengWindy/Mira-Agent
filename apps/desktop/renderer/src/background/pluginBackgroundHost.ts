@@ -11,7 +11,8 @@ export type PluginBackgroundHostDeps = {
   /** Subscribes to whatever signals "the enabled roster may have changed"; returns an unsubscribe. */
   subscribeRosterChanged(listener: () => void): () => void;
   createCtx(pluginId: string, scope: BackgroundEffectScope): BackgroundCtx;
-  onError?(pluginId: string, phase: "setup" | "dispose", error: unknown): void;
+  /** Reports a failure. `pluginId` is empty for `"roster"`, which is not attributable to one plugin. */
+  onError?(pluginId: string, phase: "setup" | "dispose" | "roster", error: unknown): void;
 };
 
 /**
@@ -30,10 +31,11 @@ export type PluginBackgroundHostDeps = {
  * entirely). Instead of duplicating that store, this host asks the backend
  * directly (`listEnabledPluginIds`, backed by `plugins.list`) at startup and
  * again whenever `subscribeRosterChanged` fires. In `main.ts` that signal is
- * the existing `runtime.applied` bridge event, which already fires for a
- * plugin enable/disable toggle (`RuntimePluginManagement.set_enabled` routes
- * through the same `RuntimeSettingsApplication.apply` that publishes it) —
- * no new backend event was needed for this PR.
+ * the `runtime.applied` bridge event — which, note, did *not* previously fire
+ * for a plugin toggle: it is published explicitly per request branch in
+ * `desktop_bridge/runtime/service.py`, and `plugins.setEnabled` reached no
+ * publish at all until #226 added one. See `main.ts`'s `subscribeRosterChanged`
+ * for why that publish must not be "cleaned up" as redundant.
  */
 export class PluginBackgroundHost {
   private readonly running = new Map<string, BackgroundEffectScope>();
@@ -68,12 +70,28 @@ export class PluginBackgroundHost {
   }
 
   private enqueue(task: () => Promise<void>): Promise<void> {
-    this.queue = this.queue.then(task, task);
-    return this.queue;
+    // The stored chain and the returned promise are deliberately *different*
+    // promises, matching `DesktopPetController.enqueue`. Storing the same one
+    // would leave `this.queue` rejected and unobserved whenever a task throws
+    // — an unhandled rejection — because the roster-changed subscriber below
+    // fires and forgets. The stored chain is therefore always-resolved, while
+    // the caller still gets a promise it can await and observe.
+    const next = this.queue.then(task, task);
+    this.queue = next.catch(() => undefined);
+    return next;
   }
 
   private async reconcile(): Promise<void> {
-    const enabled = await this.deps.listEnabledPluginIds();
+    // Reported rather than allowed to escape: `subscribeRosterChanged`'s
+    // listener cannot await this, so a roster fetch that throws would
+    // otherwise fail silently and leave the running set stale.
+    let enabled: Set<string>;
+    try {
+      enabled = await this.deps.listEnabledPluginIds();
+    } catch (error) {
+      this.deps.onError?.("", "roster", error);
+      return;
+    }
     for (const entry of this.deps.registry.list()) {
       const shouldRun = enabled.has(entry.pluginId);
       const isRunning = this.running.has(entry.pluginId);
@@ -91,8 +109,18 @@ export class PluginBackgroundHost {
     try {
       await entry.setup(this.deps.createCtx(entry.pluginId, scope));
     } catch (error) {
+      // A half-finished `setup` still registered whatever it got through
+      // before throwing, so the scope has to be disposed rather than merely
+      // dropped: forgetting it here would strand those subscriptions with no
+      // reference left to clean them up, and a later disable could not reach
+      // them either. Mirrors the backend kernel's `_rollback_failed_load`,
+      // which disposes the handle's effects on the same failure.
       this.running.delete(entry.pluginId);
+      const disposeErrors = await scope.disposeAll();
       this.deps.onError?.(entry.pluginId, "setup", error);
+      for (const disposeError of disposeErrors) {
+        this.deps.onError?.(entry.pluginId, "dispose", disposeError);
+      }
     }
   }
 

@@ -1,3 +1,4 @@
+import { PluginContributionRegistry } from "../plugins/pluginContributionRegistry";
 import type { BackgroundEffectDispose } from "./backgroundEffectScope";
 import type { SurfacePlacementPayload, SurfaceSpecPayload } from "../../../src/bridge/shared";
 import type { PluginRpcClient } from "../plugins/pluginBridgeClient";
@@ -84,32 +85,11 @@ export type PluginBackgroundEntry = {
  * UI (`pluginUiRegistry`) or any surface component (`pluginSurfaceRegistry`) —
  * it has no DOM to render either of those into.
  */
-class PluginBackgroundRegistry {
-  private readonly entries = new Map<string, PluginBackgroundEntry>();
-
-  register(entry: PluginBackgroundEntry): void {
-    if (this.entries.has(entry.pluginId)) {
-      console.warn(`[pluginBackgroundRegistry] app.background 重复注册，已跳过: ${entry.pluginId}`);
-      return;
-    }
-    this.entries.set(entry.pluginId, entry);
-  }
-
-  get(pluginId: string): PluginBackgroundEntry | undefined {
-    return this.entries.get(pluginId);
-  }
-
-  unregister(pluginId: string): void {
-    this.entries.delete(pluginId);
-  }
-
-  list(): PluginBackgroundEntry[] {
-    return [...this.entries.values()];
+export class PluginBackgroundRegistry extends PluginContributionRegistry<PluginBackgroundEntry> {
+  constructor() {
+    super("pluginBackgroundRegistry", "app.background");
   }
 }
 
 /** Process-wide background registry; populated at module load by `pluginBackgroundModules.ts`. */
 export const pluginBackgroundRegistry = new PluginBackgroundRegistry();
-
-/** Exposed for tests that need an isolated registry instead of the shared singleton. */
-export { PluginBackgroundRegistry };

@@ -155,3 +155,52 @@ test("a plugin whose setup() throws is reported and never counted as running", a
 function flushMicrotasks(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+test("a setup that throws part-way still disposes whatever it managed to register", async () => {
+  const log: string[] = [];
+  const errors: [string, string][] = [];
+  // Registers a real effect, then fails. Before #226's review this stranded
+  // the effect: the scope was dropped from `running` without being disposed,
+  // so nothing — not even a later disable — could ever reclaim it.
+  const halfway: PluginBackgroundEntry = {
+    slot: "app.background",
+    pluginId: "halfway",
+    setup(ctx) {
+      ctx.effect("subscription", () => {});
+      throw new Error("boom");
+    },
+  };
+  const registry = { list: () => [halfway] };
+  const roster = fakeRoster(["halfway"]);
+  const host = new PluginBackgroundHost({
+    ...makeDeps({ registry, ...roster.deps }, log),
+    onError: (pluginId, phase) => errors.push([pluginId, phase]),
+  });
+
+  await host.start();
+
+  assert.deepEqual(host.runningPluginIds(), [], "a failed setup must not count as running");
+  assert.ok(
+    log.includes("halfway:dispose:subscription"),
+    `the partially registered effect must be disposed, got ${JSON.stringify(log)}`,
+  );
+  assert.deepEqual(errors, [["halfway", "setup"]], "the setup failure is reported once");
+});
+
+test("a roster fetch that throws is reported rather than escaping as an unhandled rejection", async () => {
+  const log: string[] = [];
+  const errors: [string, string][] = [];
+  const registry = { list: () => [entry("quiet", log)] };
+  const host = new PluginBackgroundHost({
+    ...makeDeps({ registry }, log),
+    listEnabledPluginIds: () => Promise.reject(new Error("bridge down")),
+    onError: (pluginId, phase) => errors.push([pluginId, phase]),
+  });
+
+  // Must not reject: the roster-changed subscriber fires and forgets, so an
+  // escaping rejection here would be unobserved.
+  await host.start();
+
+  assert.deepEqual(errors, [["", "roster"]]);
+  assert.deepEqual(host.runningPluginIds(), [], "nothing starts when the roster is unknown");
+});

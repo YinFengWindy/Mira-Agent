@@ -1,5 +1,6 @@
 import type React from "react";
 import type { PluginRpcClient } from "../plugins/pluginBridgeClient";
+import { PluginContributionRegistry } from "../plugins/pluginContributionRegistry";
 
 /**
  * Placement the host pushes after a surface settles: where the body ended up,
@@ -76,27 +77,9 @@ export type PluginSurfaceEntry = {
  * only what it draws. Sharing one registry would drag the entire main-window
  * UI into every surface window's bundle.
  */
-class PluginSurfaceRegistry {
-  private readonly entries = new Map<string, PluginSurfaceEntry>();
-
-  register(entry: PluginSurfaceEntry): void {
-    if (this.entries.has(entry.pluginId)) {
-      console.warn(`[pluginSurfaceRegistry] desktop.surface 重复注册，已跳过: ${entry.pluginId}`);
-      return;
-    }
-    this.entries.set(entry.pluginId, entry);
-  }
-
-  get(pluginId: string): PluginSurfaceEntry | undefined {
-    return this.entries.get(pluginId);
-  }
-
-  unregister(pluginId: string): void {
-    this.entries.delete(pluginId);
-  }
-
-  list(): PluginSurfaceEntry[] {
-    return [...this.entries.values()];
+class PluginSurfaceRegistry extends PluginContributionRegistry<PluginSurfaceEntry> {
+  constructor() {
+    super("pluginSurfaceRegistry", "desktop.surface");
   }
 }
 

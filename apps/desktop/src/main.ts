@@ -458,6 +458,13 @@ void app.whenReady().then(() => {
   app.exit(1);
 });
 
+// Since #226 this fires far less than it reads: the plugin-host window is
+// created at startup and lives until quit, so "all windows closed" is no
+// longer true merely because the user closed the main window. On Windows that
+// is invisible — `trayLifecycleEnabled` is true, so this handler already
+// returned early there. On Linux, where the tray lifecycle is off, closing the
+// main window would previously have quit the app through here and now will not.
+// Nothing packages Linux today; see `createPluginHostWindow`'s call site.
 app.on("window-all-closed", () => {
   if (!isQuitting && trayLifecycleEnabled) {
     return;

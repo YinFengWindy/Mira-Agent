@@ -26,12 +26,16 @@ const host = new PluginBackgroundHost({
     return new Set(plugins.filter((plugin) => plugin.enabled).map((plugin) => plugin.id));
   },
   subscribeRosterChanged(listener) {
-    // `runtime.applied` already fires for a plugin enable/disable toggle,
-    // since `plugins.setEnabled` routes through the same
-    // `RuntimeSettingsApplication.apply` that publishes it (see
-    // `apps/backend/desktop_bridge/runtime/plugin_management.py`). Reusing it
-    // means this window needs no new backend event to learn its roster
-    // changed — it just re-fetches `plugins.list` whenever settings apply.
+    // `runtime.applied` is the roster-changed signal — but note *where* it is
+    // published from. The backend emits it explicitly, per request branch, in
+    // `desktop_bridge/runtime/service.py`. `RuntimeSettingsApplication.apply()`
+    // itself publishes nothing; its `publish_service(service)` call only swaps
+    // the service generation. `plugins.setEnabled` reached no publish at all
+    // until #226 added one to the PLUGIN_MANAGEMENT branch — before that, this
+    // window never learned a plugin had been disabled and kept its background
+    // contribution running. **Do not delete that publish as redundant**: it is
+    // the only thing making disable-means-disable true here, and
+    // `test_set_enabled_publishes_runtime_applied` pins it.
     return onEvent((event) => {
       if (event.method === "runtime.applied") listener();
     });
@@ -48,7 +52,8 @@ const host = new PluginBackgroundHost({
   onError(pluginId, phase, error) {
     // This window is invisible, so a failure here has nowhere on screen to
     // show up — logging is the only surface it has.
-    console.error(`[plugin-host] ${pluginId} 的 ${phase === "setup" ? "setup" : "卸载"} 失败`, error);
+    const what = phase === "roster" ? "读取插件启用名单" : pluginId + " 的 " + (phase === "setup" ? "setup" : "卸载");
+    console.error(`[plugin-host] ${what} 失败`, error);
   },
 });
 
