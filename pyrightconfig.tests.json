@@ -4,16 +4,21 @@
   "venvPath": ".",
   "venv": ".venv",
   "extraPaths": [
-    "apps/backend"
+    "apps/backend",
+    "packages/plugin-testkit/src"
   ],
   "include": [
     "tests/backend",
-    "plugins"
+    "plugins",
+    "tests/support",
+    "packages/plugin-testkit/tests"
   ],
   "exclude": [
     ".venv",
     ".venv-test",
-    "benchmarks"
+    "benchmarks",
+    "**/build",
+    "**/*.egg-info"
   ],
   "reportMissingTypeArgument": "warning",
   "reportPrivateUsage": "warning",

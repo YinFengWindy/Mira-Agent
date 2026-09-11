@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 
 from agent.scheduler import JobStore, ScheduledJob
-from conftest import make_job
+from tests.support.scheduler import make_job
 
 
 class TestJobStoreLoadSave:

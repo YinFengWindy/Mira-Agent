@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 from pathlib import Path
 from typing import Any
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
+from shiori_plugin_testkit.packages import stage_plugin_package
 
-PLUGIN_DIR = Path(__file__).resolve().parents[3] / "plugins" / "shell_safety"
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 async def _invoke(tool_name: str, arguments: dict[str, Any]) -> Any:
@@ -24,7 +24,7 @@ def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
     # 复制整个插件包（含 manifest 与 backend/），内核按 plugins/<id>/backend/plugin.py 发现
-    shutil.copytree(PLUGIN_DIR, root / "shell_safety")
+    stage_plugin_package(PLUGIN_DIR, root / "shell_safety")
     return root
 
 
@@ -49,10 +49,14 @@ def test_shell_safety_hook_name_matches_legacy_convention(tmp_path: Path) -> Non
     """hook 名由 ToolHooksCapability 统一生成，须与旧系统
     f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
     bus = EventBus()
-    kernel = PluginKernel([_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus))
+    kernel = PluginKernel(
+        [_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus)
+    )
     _run(kernel.load_all())
 
-    assert [h.name for h in kernel.tool_hooks] == ["plugin:shell_safety:block_interactive_shell"]
+    assert [h.name for h in kernel.tool_hooks] == [
+        "plugin:shell_safety:block_interactive_shell"
+    ]
 
 
 def test_shell_safety_blocks_sudo_without_non_interactive(tmp_path: Path) -> None:

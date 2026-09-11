@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import importlib.util
-import shutil
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 from agent.core.passive_turn import ContextStore
 from agent.lifecycle.phases.before_turn import (
@@ -45,21 +45,21 @@ def backend():
 @pytest.fixture
 def kernel_factory(tmp_path: Path):
     @asynccontextmanager
-    async def start(*, observe: str = "missing"):
+    async def start(
+        *,
+        observe: str = "missing",
+        plugin_source: Path = PLUGIN_ROOT,
+        observe_source: Path | None = None,
+    ):
         root = tmp_path / "plugins"
-        shutil.copytree(
-            PLUGIN_ROOT,
-            root / "status_commands",
-            ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".venv"),
-        )
+        stage_plugin_package(plugin_source, root / "status_commands")
         if observe != "missing":
-            # The declared test dependency works both in a checkout and as an installed wheel.
-            spec = importlib.util.find_spec("plugins.observe")
-            assert spec is not None and spec.submodule_search_locations
-            provider = Path(next(iter(spec.submodule_search_locations)))
-            shutil.copytree(
-                provider, root / "observe", ignore=shutil.ignore_patterns("__pycache__")
+            provider = (
+                observe_source
+                if observe_source is not None
+                else plugin_directory("observe")
             )
+            stage_plugin_package(provider, root / "observe")
             if observe in {"failed", "unexported"}:
                 body = (
                     "raise RuntimeError('observe setup failed')"

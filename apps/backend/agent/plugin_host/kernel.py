@@ -33,7 +33,6 @@ from agent.plugin_host.dependencies import PluginDependencies, PluginDependencyE
 from agent.plugin_host.runtime_lifecycle import PluginRuntimeLifecycle
 from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle, PluginRecord, PluginState
-from agent.plugin_host.legacy import LegacyPluginError, load_legacy_plugin
 from agent.plugin_host.manifest import (
     DEFAULT_ENTRY,
     ManifestError,
@@ -260,6 +259,10 @@ class PluginKernel:
             if record.manifest.is_v2:
                 await self._setup_v2(handle)
             else:
+                # Load the compatibility adapter only when needed: it consumes the
+                # old manager, which also imports this package’s public contracts.
+                from agent.plugin_host.legacy import load_legacy_plugin
+
                 scoped_bus = ScopedEventBus(self._services.event_bus, handle.effects)
                 handle.instance = await load_legacy_plugin(
                     handle, scoped_bus=scoped_bus, deps=self._services
@@ -297,6 +300,7 @@ class PluginKernel:
         except Exception as e:
             # 导入可能已部分触发 __init_subclass__ 注册，回滚 registry
             from agent.plugins.registry import plugin_registry
+            from agent.plugin_host.legacy import LegacyPluginError
 
             plugin_registry.remove_plugin(record.import_path)
             raise LegacyPluginError(f"插件 {record.name} 导入失败: {e}") from e

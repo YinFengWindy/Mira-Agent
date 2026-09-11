@@ -4,13 +4,60 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+from pathlib import Path
 
 import pytest
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 from agent.plugin_host.capabilities import BotCommandsCapability
 from bus.events_lifecycle import TurnCommitted
 
 _COMMANDS = [("memorystatus", "查看记忆整理状态"), ("kvcache", "查看 KVCache 状态")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("plugin_id", ["status_commands", "observe"])
+async def test_kernel_staging_excludes_package_virtual_environments(
+    tmp_path: Path, kernel_factory, run_command, plugin_id: str
+):
+    original = (
+        Path(__file__).resolve().parents[1]
+        if plugin_id == "status_commands"
+        else plugin_directory("observe")
+    )
+    source = stage_plugin_package(original, tmp_path / "source" / plugin_id)
+    for name in (".venv", "custom-python"):
+        environment = source / name
+        environment.mkdir()
+        _ = (environment / "pyvenv.cfg").write_text(
+            "home = local-test\n", encoding="utf-8"
+        )
+        _ = (environment / "environment-only.txt").write_text(
+            "not a plugin asset", encoding="utf-8"
+        )
+    options = (
+        {"plugin_source": source}
+        if plugin_id == "status_commands"
+        else {"observe": "active", "observe_source": source}
+    )
+
+    async with kernel_factory(**options) as (kernel, bus):
+        staged = next(
+            record.plugin_dir
+            for record in kernel.discover()
+            if record.name == plugin_id
+        )
+        assert not (staged / ".venv").exists()
+        assert not (staged / "custom-python").exists()
+        assert (source / ".venv" / "pyvenv.cfg").is_file()
+        assert (source / "custom-python" / "pyvenv.cfg").is_file()
+        assert kernel.telegram_bot_commands == _COMMANDS
+        assert "还没有完成过记忆整理" in await run_command(kernel, bus, "/memorystatus")
+        cache_reply = await run_command(kernel, bus, "/kvcache")
+        if plugin_id == "observe":
+            assert cache_reply == "暂无 KVCache 数据。"
+        else:
+            assert "KVCache 不可用" in cache_reply
 
 
 @pytest.mark.asyncio
