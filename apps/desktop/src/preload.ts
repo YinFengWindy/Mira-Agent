@@ -139,9 +139,8 @@ const api: DesktopApi = {
   openExternal(url) {
     return ipcRenderer.invoke("desktop:open-external", { url }) as Promise<import("./bridge/shared.js").ExternalLinkOpenResult>;
   },
-  pickPetPackage() {
-    return (ipcRenderer.invoke("desktop:pick-pet-package") as Promise<LocalAssetTransport<string[]>>)
-      .then((transport) => localAssets.consume(transport)[0] ?? null);
+  pickFiles(options) {
+    return ipcRenderer.invoke("desktop:pick-files", options) as Promise<string[]>;
   },
   localAssetUrl(path) {
     return localAssets.resolve(path);

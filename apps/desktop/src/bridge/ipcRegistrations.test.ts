@@ -25,6 +25,7 @@ class FakeWindow {
 function setup(overrides: {
   petWindowLabel?: string;
   invoke?: RegisterDesktopIpcOptions["bridge"]["invoke"];
+  showOpenDialog?: DesktopIpcHost["showOpenDialog"];
 } = {}) {
   const windowCalls: WindowCall[] = [];
   const petCalls: Array<{ method: string; args: unknown[] }> = [];
@@ -51,7 +52,7 @@ function setup(overrides: {
       listeners.set(channel, listener as (event: never, ...args: never[]) => void);
     },
     windowFromWebContents: (sender: WebContents) => bySender.get(sender)?.asBrowserWindow() ?? null,
-    showOpenDialog: async () => ({ canceled: true, filePaths: [] }),
+    showOpenDialog: overrides.showOpenDialog ?? (async () => ({ canceled: true, filePaths: [] })),
     openExternal: async (url: string) => { externalOpened.push(url); },
     logDiagnostic: () => undefined,
     dragFileIcon: "drag-icon.png",
@@ -243,4 +244,27 @@ describe("desktop ipc permission boundaries", () => {
     assert.deepEqual(allowed, { ok: true, error: null });
     assert.deepEqual(ipc.externalOpened, ["https://example.com/docs"]);
   });
+});
+
+
+describe("generic native file picker boundary", () => {
+  it("exposes one generic picker and removes the pet-specific endpoint", () => {
+    const ipc = setup();
+    assert.ok(ipc.channels.handled.includes("desktop:pick-files"));
+    assert.ok(!ipc.channels.handled.includes("desktop:pick-pet-package"));
+  });
+});
+
+
+it("generic picker IPC forwards validated dialog options and returns cancellation without a media transport", async () => {
+  const dialogs: unknown[] = [];
+  const ipc = setup({ showOpenDialog: async (options) => {
+    dialogs.push(options); return { canceled: true, filePaths: ["/ignored.zip"] };
+  } });
+  const options = { namespace: "sample", maxFileBytes: 32, multiple: true,
+    filters: [{ name: "Archives", extensions: ["zip"] }] };
+  assert.deepEqual(await ipc.invokeHandler("desktop:pick-files", ipc.windows.main.webContents, options), []);
+  assert.deepEqual(dialogs, [{ properties: ["openFile", "multiSelections"], filters: options.filters }]);
+  await assert.rejects(ipc.invokeHandler("desktop:pick-files", ipc.windows.main.webContents, { ...options, source: "/secret.zip" }), /不支持/);
+  assert.equal(dialogs.length, 1);
 });

@@ -330,8 +330,8 @@ export type DesktopApi = {
   pickChatAttachments(options?: { multiple?: boolean }): Promise<string[]>;
   /** Opens an http, https, or mailto link through the operating system. */
   openExternal(url: string): Promise<ExternalLinkOpenResult>;
-  /** Opens a picker for a self-contained Codex-compatible desktop-pet package. */
-  pickPetPackage(): Promise<string | null>;
+  /** Stages a native file selection without treating arbitrary formats as media. */
+  pickFiles(options: import("../assets/filePickerContract.js").NativeFilePickerOptions): Promise<string[]>;
   /** Resolves a previously transported local path to its opaque asset URL. */
   localAssetUrl(path: string): string;
   startAttachmentDrag(request: StartAttachmentDragRequest): void;

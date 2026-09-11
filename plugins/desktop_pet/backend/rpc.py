@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .import_source import resolve_package_import_source
 from .models import RolePetPackage, RolePetState
 from .pet_packages import RolePetPackageService
 from .pet_state import RolePetStateStore
@@ -38,7 +39,10 @@ class DesktopPetRpcHandlers:
         source = str(payload.get("source") or "").strip()
         if not source:
             raise ValueError("缺少桌宠包路径")
-        package = self._packages.import_package(role_id, source)
+        staged_source = resolve_package_import_source(
+            self._role_store.workspace, source
+        )
+        package = self._packages.import_package(role_id, staged_source)
         return {"package": self._serialize(package), **await self.pets_list(payload)}
 
     async def pets_remove(self, payload: dict[str, Any]) -> dict[str, Any]:

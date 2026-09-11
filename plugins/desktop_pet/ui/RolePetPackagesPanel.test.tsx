@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { act } from "react";
+import { PluginHostServicesProvider } from "../../../apps/desktop/renderer/src/plugins/PluginHostServicesProvider";
+import { desktopPluginHostServices, type PluginHostServices } from "../../../apps/desktop/renderer/src/plugins/pluginHostServices";
+import { RolePetPackagesPanel as PetPackagesPanel } from "./RolePetPackagesPanel";
+import type { PluginRoleAssetsComponentProps } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
 import { mountTestComponent } from "../../../apps/desktop/renderer/src/shared/testing/domTestHarness";
 import type { PluginRpcClient } from "../../../apps/desktop/renderer/src/plugins/pluginBridgeClient";
+
+function RolePetPackagesPanel({ pickFiles = async () => [], ...props }: PluginRoleAssetsComponentProps & { pickFiles?: PluginHostServices["pickFiles"] }) {
+  return <PluginHostServicesProvider services={{ ...desktopPluginHostServices, pickFiles }}>
+    <PetPackagesPanel {...props} />
+  </PluginHostServicesProvider>;
+}
 
 /**
  * Ports the coverage `apps/desktop/renderer/src/roles/RolePetPackagesPanel.test.tsx`
@@ -47,7 +57,7 @@ function stubDesktopApi(overrides: Partial<Record<string, unknown>> = {}) {
   const host = globalThis as { window?: { miraDesktop?: unknown } };
   const miraDesktop = {
     localAssetUrl: (path: string) => `shiori-asset://local/${path}`,
-    pickPetPackage: () => Promise.resolve(""),
+
     syncPet: () => Promise.resolve(),
     ...overrides,
   };
@@ -59,7 +69,6 @@ function stubDesktopApi(overrides: Partial<Record<string, unknown>> = {}) {
 it("renders each package as a selectable preview card, with no hardcoded colours", async () => {
   const view = await mountTestComponent(null);
   stubDesktopApi();
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   try {
     await view.render(<RolePetPackagesPanel
       roleId="mira" disabled={false} client={fakeClient({}, [])} onRoleDataChanged={() => undefined}
@@ -81,7 +90,6 @@ it("asks for the open role's packages, and for no role asks for nothing", async 
   const calls: Call[] = [];
   const view = await mountTestComponent(null);
   stubDesktopApi();
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   try {
     await view.render(<RolePetPackagesPanel
       roleId="mira" disabled={false} client={fakeClient({}, calls)} onRoleDataChanged={() => undefined}
@@ -105,7 +113,6 @@ it("selecting a package tells the host to re-read the role and the pet to re-res
   let roleDataChanged = 0;
   const view = await mountTestComponent(null);
   stubDesktopApi({ syncPet: () => { synced += 1; return Promise.resolve(); } });
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   try {
     await view.render(<RolePetPackagesPanel
       roleId="mira" disabled={false}
@@ -134,7 +141,6 @@ it("selecting a package tells the host to re-read the role and the pet to re-res
 it("a failed refresh shows the reason and keeps the rows it already had", async () => {
   const view = await mountTestComponent(null);
   stubDesktopApi();
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   try {
     await view.render(<RolePetPackagesPanel
       roleId="mira" disabled={false} client={fakeClient({}, [])} onRoleDataChanged={() => undefined}
@@ -164,7 +170,6 @@ it("removing a package also tells the host to re-read the role", async () => {
   let roleDataChanged = 0;
   const view = await mountTestComponent(null);
   stubDesktopApi({ syncPet: () => { synced += 1; return Promise.resolve(); } });
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   try {
     await view.render(<RolePetPackagesPanel
       roleId="mira" disabled={false}
@@ -193,7 +198,6 @@ it("removing a package also tells the host to re-read the role", async () => {
 it("a response for the previous role is discarded rather than shown under the new one", async () => {
   const view = await mountTestComponent(null);
   stubDesktopApi();
-  const { RolePetPackagesPanel } = await import("./RolePetPackagesPanel");
   let releaseFirst: (() => void) | null = null;
   const slowClient: PluginRpcClient = {
     call: <T,>() => new Promise<T>((resolve) => {
@@ -222,5 +226,71 @@ it("a response for the previous role is discarded rather than shown under the ne
 
     assert.doesNotMatch(view.container.innerHTML, /旧角色的包/);
     assert.match(view.container.innerHTML, /Mira Pet/);
+  } finally { await view.cleanup(); }
+});
+
+
+it("imports through the injected picker and retains the pets.import role/source contract", async () => {
+  const calls: Call[] = [];
+  const selected: unknown[] = [];
+  let refreshed = 0;
+  const view = await mountTestComponent(null);
+  stubDesktopApi({ pickFiles: () => { throw new Error("must use injected services"); } });
+  try {
+    await view.render(<RolePetPackagesPanel roleId="mira" disabled={false} client={fakeClient({}, calls)}
+      onRoleDataChanged={() => { refreshed += 1; }}
+      pickFiles={async (options) => { selected.push(options); return ["/private/imports/desktop_pet-pets/selected.zip"]; }} />);
+    const button = view.container.querySelector<HTMLButtonElement>('[aria-label="导入桌宠素材包"]');
+    assert.ok(button);
+    await act(async () => { button.click(); });
+    assert.equal(selected.length, 1);
+    assert.deepEqual(calls.at(-1), { method: "pets.import", payload: {
+      role_id: "mira", source: "/private/imports/desktop_pet-pets/selected.zip",
+    } });
+    assert.equal(refreshed, 1);
+  } finally { await view.cleanup(); }
+});
+
+it("cancelled import preserves packages and failed staging reports its error without calling pets.import", async () => {
+  const calls: Call[] = [];
+  let refreshed = 0;
+  const view = await mountTestComponent(null);
+  stubDesktopApi();
+  try {
+    const props = { roleId: "mira", disabled: false, client: fakeClient({}, calls), onRoleDataChanged: () => { refreshed += 1; } };
+    await view.render(<RolePetPackagesPanel {...props} pickFiles={async () => []} />);
+    const button = view.container.querySelector<HTMLButtonElement>('[aria-label="导入桌宠素材包"]');
+    assert.ok(button);
+    await act(async () => { button.click(); });
+    assert.equal(calls.filter((call) => call.method === "pets.import").length, 0);
+    assert.equal(refreshed, 0);
+    assert.match(view.container.textContent ?? "", /Mira Pet/);
+    await view.render(<RolePetPackagesPanel {...props} pickFiles={async () => { throw new Error("选择的文件超过大小限制"); }} />);
+    const failedButton = view.container.querySelector<HTMLButtonElement>('[aria-label="导入桌宠素材包"]');
+    assert.ok(failedButton);
+    await act(async () => { failedButton.click(); });
+    assert.match(view.container.textContent ?? "", /选择的文件超过大小限制/);
+    assert.equal(calls.filter((call) => call.method === "pets.import").length, 0);
+    assert.equal(failedButton.disabled, false);
+  } finally { await view.cleanup(); }
+});
+
+
+it("a backend import failure retains the visible packages and does not refresh saved role data", async () => {
+  const calls: Call[] = [];
+  let refreshed = false;
+  const view = await mountTestComponent(null);
+  stubDesktopApi();
+  try {
+    await view.render(<RolePetPackagesPanel roleId="mira" disabled={false}
+      client={fakeClient({ "pets.import": new Error("桌宠包缺少 spritesheet") }, calls)}
+      onRoleDataChanged={() => { refreshed = true; }} pickFiles={async () => ["/private/package.zip"]} />);
+    const button = view.container.querySelector<HTMLButtonElement>('[aria-label="导入桌宠素材包"]');
+    assert.ok(button);
+    await act(async () => { button.click(); });
+    assert.match(view.container.textContent ?? "", /桌宠包缺少 spritesheet/);
+    assert.match(view.container.textContent ?? "", /Mira Pet/);
+    assert.equal(refreshed, false);
+    assert.equal(button.disabled, false);
   } finally { await view.cleanup(); }
 });

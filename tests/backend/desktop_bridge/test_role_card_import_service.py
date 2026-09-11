@@ -500,3 +500,21 @@ async def test_commit_keeps_png_card_as_avatar_and_imported_asset(tmp_path) -> N
     assert category["name"] == "导入角色卡"
     assert role["asset_category_bindings"][role["illustrations"][0]] == category["id"]
     await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_native_staged_flat_source_survives_service_reinitialization(tmp_path):
+    _service(tmp_path)
+    staging = tmp_path / "private_runtime" / "imports" / "role-cards"
+    # Native staging preserves the historical flat UUID-basename contract;
+    # directories here belong to disposable preview assets, not selected files.
+    source = staging / "00000000-0000-4000-8000-000000000000-character.json"
+    source.write_text(json.dumps(_card(name="Persistent card")), encoding="utf-8")
+    preview_assets = staging / "old-preview"
+    preview_assets.mkdir()
+    (preview_assets / "thumbnail.png").write_bytes(b"obsolete")
+    restored, _store = _service(tmp_path)
+    assert source.is_file()
+    assert not preview_assets.exists()
+    preview = await restored.preview({"source": str(source)})
+    assert preview["name"] == "Persistent card"

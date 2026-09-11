@@ -1,101 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
 import { CheckCircleIcon, TrashIcon } from "@phosphor-icons/react";
 import { UploadIcon } from "../../../apps/desktop/renderer/src/shared/icons";
 import { cx } from "../../../apps/desktop/renderer/src/shared/styles";
 import type { PluginRoleAssetsComponentProps } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
-import { noPetPackages, readPetPackages, type PetPackages } from "./petPackages";
+import { usePetPackages } from "./usePetPackages";
 
-/**
- * Manages this plugin's packages inside the role asset library.
- *
- * Until #181-D this was `apps/desktop/renderer/src/roles/RolePetPackagesPanel.tsx`,
- * rendered by name from `RoleAssetsPage` and fed from `RoleRecord.pet_packages`
- * — which is why the host's role model, its bridge and four props on that page
- * all had to know what a pet package is. It now contributes itself through the
- * `role.assets` slot and fetches its own rows over its own RPC namespace.
- *
- * TEMPORARY COUPLING: two `window.miraDesktop` calls remain, the same kind
- * `surface/petMenu.ts` documents and for the same missing piece —
- *
- * - `pickPetPackage()`: a native file dialog is main-process only, and no
- *   capability hands one to plugin UI yet.
- * - `syncPet()`: after a package is removed or selected the on-screen pet has
- *   to re-resolve, and this panel (main window) has no route to its own
- *   plugin's background code (plugin-host window). The host's `desktop:pet-sync`
- *   channel is the only bridge between them today.
- *
- * The picker moves in the next #181 PR; pet sync remains assigned to #218.
- */
+/** The plugin's package library, mounted through the role.assets contribution. */
 export function RolePetPackagesPanel({ roleId, disabled, client, onRoleDataChanged }: PluginRoleAssetsComponentProps) {
-  const [state, setState] = useState<PetPackages>(noPetPackages);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const parse = useCallback(
-    (payload: unknown) => readPetPackages(payload, (path) => window.miraDesktop.localAssetUrl(path)),
-    [],
-  );
-
-  // `disabled` is a dependency on purpose: it falls when the bridge comes up
-  // or a host save finishes, and a list that failed during either needs a
-  // second chance. Without it one transient refusal — `pets.list` is not
-  // admission-exempt, so a channel-config reload answers `runtime_reloading` —
-  // leaves the panel blank with a red line until the user navigates away.
-  useEffect(() => {
-    if (!roleId) {
-      setState(noPetPackages);
-      return;
-    }
-    let alive = true;
-    void (async () => {
-      try {
-        const next = parse(await client.call<unknown>("pets.list", { role_id: roleId }));
-        if (!alive) return;
-        setState(next);
-        setError("");
-      } catch (reason) {
-        if (!alive) return;
-        // The previous rows are kept: a failed refresh is not evidence that the
-        // packages are gone, and blanking the list would make a momentary
-        // bridge hiccup look like data loss.
-        setError(reason instanceof Error ? reason.message : String(reason));
-      }
-    })();
-    return () => { alive = false; };
-  }, [client, disabled, parse, roleId]);
-
-  /** Runs one mutation, surfacing its failure instead of leaving the panel silent. */
-  const run = useCallback(async (action: () => Promise<void>) => {
-    setBusy(true);
-    try {
-      await action();
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  const onImport = useCallback(() => void run(async () => {
-    const source = await window.miraDesktop.pickPetPackage();
-    if (!source) return;
-    setState(parse(await client.call<unknown>("pets.import", { role_id: roleId, source })));
-    onRoleDataChanged();
-  }), [client, onRoleDataChanged, parse, roleId, run]);
-
-  const onRemove = useCallback((packageId: string) => void run(async () => {
-    setState(parse(await client.call<unknown>("pets.remove", { role_id: roleId, package_id: packageId })));
-    // Refresh the plugin-owned form projection and the running pet separately.
-    onRoleDataChanged();
-    await window.miraDesktop.syncPet();
-  }), [client, onRoleDataChanged, parse, roleId, run]);
-
-  const onSelect = useCallback((packageId: string) => void run(async () => {
-    setState(parse(await client.call<unknown>("pets.select", { role_id: roleId, package_id: packageId })));
-    onRoleDataChanged();
-    await window.miraDesktop.syncPet();
-  }), [client, onRoleDataChanged, parse, roleId, run]);
+  const { state, busy, error, onImport, onRemove, onSelect } = usePetPackages({ roleId, disabled, client, onRoleDataChanged });
 
   // No role open: guessing one would let a click act on somebody else's packages.
   if (!roleId) return null;

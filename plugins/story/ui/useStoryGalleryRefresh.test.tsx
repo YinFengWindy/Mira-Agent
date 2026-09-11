@@ -10,7 +10,7 @@ test("Story gallery refresh follows plugin events and releases its subscription 
   type Listener = Parameters<PluginHostServices["onEvent"]>[0];
   const listeners = new Set<Listener>();
   const host: PluginHostServices = {
-    listRoles: async () => [], pickImages: async () => [],
+    listRoles: async () => [], pickImages: async () => [], pickFiles: async () => [],
     onEvent: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
   };
   let refreshes = 0;

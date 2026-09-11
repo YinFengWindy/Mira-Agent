@@ -6,6 +6,8 @@ export type PluginHostServices = {
   onEvent: typeof window.miraDesktop.onEvent;
   listRoles: () => Promise<RoleRecord[]>;
   pickImages: (options: { multiple: boolean }) => Promise<string[]>;
+  /** Native user selection plus bounded private staging, without a media grant. */
+  pickFiles: typeof window.miraDesktop.pickFiles;
 };
 
 /** Stable adapter supplied by the desktop composition boundary. */
@@ -16,4 +18,5 @@ export const desktopPluginHostServices: PluginHostServices = {
     return payload.roles;
   },
   pickImages: (options) => window.miraDesktop.pickImages(options),
+  pickFiles: (options) => window.miraDesktop.pickFiles(options),
 };
