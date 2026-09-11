@@ -3,6 +3,7 @@ import { ChatImageLightbox } from "../chat/ChatImageLightbox";
 import { ChatSurface } from "../chat/ChatSurface";
 import type { ChatMessageNavigationScroller } from "../chat/useChatScrollController";
 import { guardedNavPageSelect } from "../plugins/pluginUiRegistry";
+import { FeedbackChip } from "./FeedbackChip";
 import { ConfirmDialog } from "../roles/ConfirmDialog";
 import { RoleAssetsPage } from "../roles/RoleAssetsPage";
 import { RoleCreatePage } from "../roles/RoleCreatePage";
@@ -69,6 +70,9 @@ type DesktopAppFrameProps = {
   onOpenPluginPage: (pageId: string) => void;
   onOpenRole: (roleId: string) => void;
   workspaceFeedback: WorkspaceFeedback | null;
+  /** A refused nav.page selection's reason (issue #226 gap B, owner decision: 拦住 + 给提示); empty when none is showing. Its own lifetime — see `navBlockedMessage` in `main.tsx`/`useDesktopUiEffects`, deliberately not merged into `workspaceFeedback`. */
+  navBlockedMessage: string;
+  onNavigationBlocked: (message: string) => void;
   activeRole: RoleRecord | null;
   activeSession: SessionPayload | null;
   chatLatestImagePath: string;
@@ -199,6 +203,8 @@ export function DesktopAppFrame({
   onOpenPluginPage,
   onOpenRole,
   workspaceFeedback,
+  navBlockedMessage,
+  onNavigationBlocked,
   activeRole,
   activeSession,
   chatLatestImagePath,
@@ -344,7 +350,7 @@ export function DesktopAppFrame({
             pageId: page.id,
             label: page.label,
             icon: page.icon,
-            onSelect: guardedNavPageSelect(page, () => onOpenPluginPage(page.id)),
+            onSelect: guardedNavPageSelect(page, () => onOpenPluginPage(page.id), onNavigationBlocked),
           }))}
           onOpenSearch={onOpenSearch}
           onBackToChat={onBackToChat}
@@ -387,17 +393,10 @@ export function DesktopAppFrame({
             />
           ) : null}
           {roleWorkspaceViewActive && workspaceFeedback ? (
-            <div
-              className={cx(
-                "absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-md border px-4 py-2.5 text-body-sm shadow-soft",
-                workspaceFeedback.tone === "success"
-                  ? "border-[var(--success-300)] bg-success-soft text-success-text"
-                  : "border-[var(--danger-300)] bg-danger-soft text-danger-text",
-              )}
-              aria-live="polite"
-            >
-              {workspaceFeedback.message}
-            </div>
+            <FeedbackChip tone={workspaceFeedback.tone} message={workspaceFeedback.message} />
+          ) : null}
+          {navBlockedMessage ? (
+            <FeedbackChip tone="error" message={navBlockedMessage} slot="secondary" />
           ) : null}
           {mainView.kind === "chat" ? (
             <ChatSurface

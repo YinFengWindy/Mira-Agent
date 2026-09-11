@@ -28,7 +28,7 @@ type NovelAiPageState = {
 // between), so state either of them can both read and write — which role's
 // generation history is showing, which prompt-tag section is open, the
 // roster of roles used for both the role picker and the nav-rail
-// `canSelect` guard — has to live outside either component. A module-level
+// `selectBlockedReason` guard — has to live outside either component. A module-level
 // store notified via `useSyncExternalStore` is the smallest thing that
 // works for two components the host may mount/unmount independently,
 // without asking the host to plumb cross-slot state (issue #226 explicitly
@@ -137,19 +137,28 @@ export async function refreshRoles(): Promise<void> {
 }
 
 /**
+ * The exact string the pre-migration `useNavigationHistory.openImageStudio`
+ * passed to `setError` for this same check — kept verbatim now that a
+ * refusal is shown again (owner decision: 拦住 + 给提示, not silent).
+ */
+const ZERO_ROLES_BLOCKED_REASON = "请先创建至少一个角色，再进入生图。";
+
+/**
  * Synchronous nav-rail guard (issue #226 gap B): refuses to navigate into
  * this page while zero roles exist, matching the pre-migration
- * `useNavigationHistory.openImageStudio` check. `canSelect` must return
- * synchronously, so a role fetch already in flight or just kicked off here
- * cannot be awaited; before the roster has ever loaded this fails *open*
- * (permits navigation) rather than closed, because the in-page empty state
- * (`NovelAIPage`) is kept as a safety net for exactly this race — silently
- * blocking a real user with roles on a cold first click would be worse than
- * a harmless one-time flash of that empty state.
+ * `useNavigationHistory.openImageStudio` check and its message.
+ * `selectBlockedReason` must return synchronously, so a role fetch already
+ * in flight or just kicked off here cannot be awaited; before the roster
+ * has ever loaded this fails *open* (returns `null`, permits navigation)
+ * rather than closed, because the in-page empty state (`NovelAIPage`) is
+ * kept as a safety net for exactly this race — silently letting a
+ * zero-role user in once on a cold first click is a harmless one-time
+ * flash of that empty state, not a real regression.
  */
-export function canSelectNovelAiPage(): boolean {
+export function selectBlockedReasonForNovelAiPage(): string | null {
   void refreshRoles();
-  return !state.rolesLoaded || state.roles.length > 0;
+  if (!state.rolesLoaded || state.roles.length > 0) return null;
+  return ZERO_ROLES_BLOCKED_REASON;
 }
 
 export async function loadHistory(client: PluginRpcClient, roleId: string): Promise<void> {

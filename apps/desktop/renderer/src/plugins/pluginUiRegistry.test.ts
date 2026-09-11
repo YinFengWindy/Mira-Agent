@@ -65,24 +65,36 @@ describe("PluginUiRegistry", () => {
 });
 
 describe("guardedNavPageSelect (issue #226 gap B)", () => {
-  it("calls onSelect when the entry has no canSelect guard at all", () => {
+  it("calls onSelect when the entry has no selectBlockedReason guard at all", () => {
     let selected = false;
-    const handler = guardedNavPageSelect({}, () => { selected = true; });
+    let blockedReason: string | null = null;
+    const handler = guardedNavPageSelect({}, () => { selected = true; }, (reason) => { blockedReason = reason; });
+    handler();
+    assert.equal(selected, true);
+    assert.equal(blockedReason, null);
+  });
+
+  it("calls onSelect when selectBlockedReason returns null", () => {
+    let selected = false;
+    const handler = guardedNavPageSelect(
+      { selectBlockedReason: () => null },
+      () => { selected = true; },
+      () => { throw new Error("must not be called"); },
+    );
     handler();
     assert.equal(selected, true);
   });
 
-  it("calls onSelect when canSelect returns true", () => {
+  it("refuses to call onSelect and hands the reason to onBlocked when selectBlockedReason returns a message", () => {
     let selected = false;
-    const handler = guardedNavPageSelect({ canSelect: () => true }, () => { selected = true; });
-    handler();
-    assert.equal(selected, true);
-  });
-
-  it("silently refuses to call onSelect when canSelect returns false", () => {
-    let selected = false;
-    const handler = guardedNavPageSelect({ canSelect: () => false }, () => { selected = true; });
+    let blockedReason: string | null = null;
+    const handler = guardedNavPageSelect(
+      { selectBlockedReason: () => "请先创建至少一个角色，再进入生图。" },
+      () => { selected = true; },
+      (reason) => { blockedReason = reason; },
+    );
     handler();
     assert.equal(selected, false);
+    assert.equal(blockedReason, "请先创建至少一个角色，再进入生图。");
   });
 });

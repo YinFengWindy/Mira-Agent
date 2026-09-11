@@ -30,9 +30,10 @@ type NovelAIPageProps = {
  * lists like this as a prop, and building one is out of scope here.
  *
  * Zero-role guard: the nav rail now refuses to navigate here at all while
- * no role exists (`canSelectNovelAiPage`, issue #226 gap B), restoring the
- * pre-migration `useNavigationHistory.openImageStudio` behaviour. That
- * check is necessarily best-effort — it answers synchronously from a
+ * no role exists, and shows why (`selectBlockedReasonForNovelAiPage`, issue
+ * #226 gap B, owner decision: 拦住 + 给提示), restoring the pre-migration
+ * `useNavigationHistory.openImageStudio` behaviour and its exact message.
+ * That check is necessarily best-effort — it answers synchronously from a
  * locally cached role count that may not have loaded yet on a cold first
  * click, and it is bypassed entirely by history back/forward navigation
  * (`useNavigationHistory.navigateHistory` calls `openPluginPage` directly).

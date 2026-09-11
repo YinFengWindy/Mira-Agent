@@ -1,7 +1,7 @@
 import type { PluginUiModule } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
 import { NovelAIPage } from "./NovelAIPage";
 import { NovelAIPageSidebar } from "./NovelAIPageSidebar";
-import { canSelectNovelAiPage } from "./novelAiPageStore";
+import { selectBlockedReasonForNovelAiPage } from "./novelAiPageStore";
 
 const novelAiLogoDark = new URL(
   "../../../apps/desktop/renderer/src/assets/novelai-logo-dark.svg",
@@ -20,11 +20,12 @@ function NovelAIIcon({ className }: { className?: string }) {
  * plugin's own `NovelAIConfig` JSON Schema — the core settings page no
  * longer has any novelai-specific code.
  *
- * `sidebar` and `canSelect` (issue #226 gaps A/B) restore two behaviours
- * the nav.page slot from #179 couldn't express when Image Studio moved off
- * the desktop shell in #180: a drag-resizable sidebar owned by the host's
- * track, and a nav-rail entry that refuses to navigate while no role
- * exists yet. See `novelAiPageStore.ts` and `NovelAIPage.tsx`'s docstrings.
+ * `sidebar` and `selectBlockedReason` (issue #226 gaps A/B) restore two
+ * behaviours the nav.page slot from #179 couldn't express when Image Studio
+ * moved off the desktop shell in #180: a drag-resizable sidebar owned by
+ * the host's track, and a nav-rail entry that refuses to navigate (with a
+ * visible reason — owner decision: 拦住 + 给提示) while no role exists yet.
+ * See `novelAiPageStore.ts` and `NovelAIPage.tsx`'s docstrings.
  */
 const novelAiUiModule: PluginUiModule = {
   pluginId: "novelai",
@@ -33,7 +34,7 @@ const novelAiUiModule: PluginUiModule = {
     icon: NovelAIIcon,
     component: NovelAIPage,
     sidebar: NovelAIPageSidebar,
-    canSelect: canSelectNovelAiPage,
+    selectBlockedReason: selectBlockedReasonForNovelAiPage,
   },
   settingsSection: {
     kind: "schema",

@@ -39,8 +39,8 @@ export type PluginNavPageContribution = {
   component: React.ComponentType<PluginNavPageComponentProps>;
   /** Optional (issue #226 gap A) — see `NavPageEntry.Sidebar`. */
   sidebar?: React.ComponentType<PluginNavPageSidebarComponentProps>;
-  /** Optional (issue #226 gap B) — see `NavPageEntry.canSelect`. */
-  canSelect?: () => boolean;
+  /** Optional (issue #226 gap B) — see `NavPageEntry.selectBlockedReason`. */
+  selectBlockedReason?: () => string | null;
 };
 
 /**
@@ -119,7 +119,7 @@ export function applyPluginUiModules(
         pluginId,
         Component: bindPluginClient(pluginId, navPage.component),
         Sidebar: navPage.sidebar ? bindPluginClient(pluginId, navPage.sidebar) : undefined,
-        canSelect: navPage.canSelect,
+        selectBlockedReason: navPage.selectBlockedReason,
       });
     }
   }

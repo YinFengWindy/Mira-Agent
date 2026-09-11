@@ -97,25 +97,34 @@ export type NavPageEntry = {
   Sidebar?: React.ComponentType<PluginNavPageSidebarProps>;
   /**
    * Optional (issue #226 gap B): called synchronously when the nav rail
-   * entry is clicked; returning `false` silently blocks the navigation
-   * (no host-owned feedback UI — see novelai's `canSelectNovelAiPage` for
-   * why this stays silent). Absent means always selectable, today's
-   * behaviour.
+   * entry is clicked. A non-empty string refuses the navigation and is the
+   * reason shown to the user (owner decision: 拦住 + 给提示, not a silent
+   * refusal); `null`/absent means selectable, today's behaviour. One field
+   * with one meaning, rather than a boolean plus a parallel message field
+   * that could disagree with it.
    */
-  canSelect?: () => boolean;
+  selectBlockedReason?: () => string | null;
 };
 
 /**
- * Builds a nav-rail entry's click handler around its optional `canSelect`
- * guard (issue #226 gap B): if `canSelect` is present and currently returns
- * `false`, the click is silently absorbed instead of calling `onSelect` —
- * no host-owned feedback UI, matching the pre-migration behaviour this
- * restores (see novelai's `canSelectNovelAiPage`). An entry with no
- * `canSelect` is always selectable, today's behaviour.
+ * Builds a nav-rail entry's click handler around its optional
+ * `selectBlockedReason` guard (issue #226 gap B): when it currently returns
+ * a reason, the click is refused and `onBlocked` is called with that reason
+ * instead of `onSelect` — the host surfaces it (see `DesktopAppFrame`'s
+ * `navBlockedMessage`), it does not invent the message itself. An entry
+ * with no `selectBlockedReason` is always selectable, today's behaviour.
  */
-export function guardedNavPageSelect(entry: Pick<NavPageEntry, "canSelect">, onSelect: () => void): () => void {
+export function guardedNavPageSelect(
+  entry: Pick<NavPageEntry, "selectBlockedReason">,
+  onSelect: () => void,
+  onBlocked: (reason: string) => void,
+): () => void {
   return () => {
-    if (entry.canSelect && !entry.canSelect()) return;
+    const reason = entry.selectBlockedReason?.();
+    if (reason) {
+      onBlocked(reason);
+      return;
+    }
     onSelect();
   };
 }
