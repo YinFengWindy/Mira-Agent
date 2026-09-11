@@ -10,6 +10,37 @@ type UseLeftSidebarStateArgs = {
   collapseThreshold: number;
 };
 
+/**
+ * Resolves one left-sidebar drag sample from the grab offset.
+ *
+ * Deliberately expressed as "the width it had when you grabbed it, plus how
+ * far the pointer has travelled since" rather than as the pointer's absolute
+ * `clientX`. The sidebar does not start at the viewport's left edge — the nav
+ * rail occupies the shell grid's first column — so treating `clientX` as the
+ * width made the sidebar jump right by the rail's width the moment a drag
+ * began. Measuring the delta keeps this correct no matter what sits to the
+ * left of the track, how wide the grab handle is, or where inside it the
+ * pointer landed.
+ *
+ * `startWidth` is the *rendered* width, so it is 0 while collapsed: dragging
+ * the collapsed sidebar open then grows from nothing under the pointer
+ * instead of snapping back to the width it had before it was collapsed.
+ */
+export function resolveLeftSidebarDragUpdate(
+  startWidth: number,
+  startX: number,
+  clientX: number,
+  minWidth: number,
+  maxWidth: number,
+  collapseThreshold: number,
+) {
+  const requestedWidth = startWidth + (clientX - startX);
+  if (requestedWidth <= collapseThreshold) {
+    return { collapsed: true, width: null };
+  }
+  return { collapsed: false, width: clampSidebarWidth(requestedWidth, minWidth, maxWidth) };
+}
+
 /** Manages the desktop shell's collapsible and resizable left sidebar. */
 export function useLeftSidebarState({
   minWidth,
@@ -39,6 +70,9 @@ export function useLeftSidebarState({
       setResizing(true);
     });
     let dragCollapsed = collapsed;
+    // Captured once, at the grab: everything below is relative to these.
+    const startX = event.clientX;
+    const startWidth = collapsed ? 0 : width;
 
     function stopResize(): void {
       setResizing(false);
@@ -48,20 +82,20 @@ export function useLeftSidebarState({
     }
 
     function resize(moveEvent: PointerEvent): void {
-      if (moveEvent.clientX <= collapseThreshold) {
-        if (hasSidebarCollapseChanged(dragCollapsed, true)) {
-          setAnimating(true);
-          dragCollapsed = true;
-        }
-        setCollapsed(true);
-        return;
-      }
-      if (hasSidebarCollapseChanged(dragCollapsed, false)) {
+      const update = resolveLeftSidebarDragUpdate(
+        startWidth,
+        startX,
+        moveEvent.clientX,
+        minWidth,
+        maxWidth,
+        collapseThreshold,
+      );
+      if (hasSidebarCollapseChanged(dragCollapsed, update.collapsed)) {
         setAnimating(true);
-        dragCollapsed = false;
+        dragCollapsed = update.collapsed;
       }
-      setCollapsed(false);
-      setWidth(clampSidebarWidth(moveEvent.clientX, minWidth, maxWidth));
+      setCollapsed(update.collapsed);
+      if (update.width !== null) setWidth(update.width);
     }
 
     window.addEventListener("pointermove", resize);
