@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -23,7 +23,12 @@ async def test_generation_events_use_only_local_plugins_and_one_shared_outlet():
     await old.drain()
     await old.aclose()
     await new.observe("second")
-    assert calls == [("old", "first"), ("bridge", "first"), ("new", "second"), ("bridge", "second")]
+    assert calls == [
+        ("old", "first"),
+        ("bridge", "first"),
+        ("new", "second"),
+        ("bridge", "second"),
+    ]
     await new.aclose()
     await outlet.aclose()
 
@@ -32,7 +37,11 @@ async def test_generation_events_use_only_local_plugins_and_one_shared_outlet():
 async def test_queued_events_keep_each_turn_model_snapshot_and_lease():
     outlet = EventBus()
     bus = RuntimeEventBus(outlet)
-    core = SimpleNamespace(stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    core = SimpleNamespace(
+        stop=AsyncMock(),
+        assert_hot_unloadable=Mock(),
+        memory_runtime=SimpleNamespace(aclose=AsyncMock()),
+    )
     version = RuntimeCandidate(1, core, SimpleNamespace(), published=True)
     first = version.acquire()
     second = version.acquire()
@@ -43,7 +52,9 @@ async def test_queued_events_keep_each_turn_model_snapshot_and_lease():
 
     bus.on(str, observe)
     for lease, model in [(first, "original"), (second, "updated")]:
-        token = _current_snapshot.set(RoleModelSnapshot("id", None, model, "none", role_id="mira"))
+        token = _current_snapshot.set(
+            RoleModelSnapshot("id", None, model, "none", role_id="mira")
+        )
         try:
             with bind_runtime(lease):
                 bus.enqueue(model)

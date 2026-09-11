@@ -66,6 +66,7 @@ describe("desktop settings config path", () => {
         applyCalls += 1;
         assert.match(request.config_toml, /model = "test-model"/);
         assert.equal(request.expected_generation, 3);
+        assert.equal(request.preserve_plugins, true);
         assert.equal(request.operation_id, "retry-operation");
         assert.deepEqual(request.role_model_updates, [{ role_id: "role-1", runtime_config: { dialogue_model_registration_id: "" } }]);
         return { ok: false, error: { code: "runtime_apply_failed", message: "candidate failed" } };
@@ -107,7 +108,7 @@ describe("core proactive strategy settings round-trip", () => {
       name: "keeps explicit core enablement above an old disabled plugin preference",
       source: "[plugins.relationship_proactive]\nenabled = false\n[agent.proactive_strategies]\nscene_followup = true\nrelationship = true\n",
       preferences: { sceneFollowup: true, relationship: true },
-      expectedLines: ["scene_followup = true", "relationship = true", "[plugins.relationship_proactive]\nenabled = false"],
+      expectedLines: ["scene_followup = true", "relationship = true"],
       absentLines: [],
     },
     {
@@ -121,14 +122,14 @@ describe("core proactive strategy settings round-trip", () => {
       name: "preserves unmigrated plugin disablement without forcing core defaults",
       source: "[plugins.relationship_proactive]\nenabled = false\n",
       preferences: {},
-      expectedLines: ["[plugins.relationship_proactive]\nenabled = false"],
+      expectedLines: [],
       absentLines: ["[agent.proactive_strategies]", "scene_followup =", "relationship ="],
     },
     {
       name: "keeps per-key core precedence and legacy fallback for a missing key",
       source: "[plugins.relationship_proactive]\nenabled = false\n[agent.proactive_strategies]\nscene_followup = true\n",
       preferences: { sceneFollowup: true },
-      expectedLines: ["scene_followup = true", "[plugins.relationship_proactive]\nenabled = false"],
+      expectedLines: ["scene_followup = true"],
       absentLines: ["relationship ="],
     },
   ];
@@ -178,8 +179,6 @@ path = "C:\\" # escaped slash before closing quote
     assert.deepEqual(draft.proactiveStrategies, { sceneFollowup: false, relationship: true });
     assert.equal(draft.channels.telegramToken, 'token"#inside');
     assert.equal(draft.channels.qqBotUin, "literal#inside");
-    assert.match(draft.advanced.pluginsRawToml, /tags = \["item#one", "item#two"\]/);
-    assert.ok(draft.advanced.pluginsRawToml.includes(String.raw`path = "C:\\"`));
     let applyCalls = 0;
     const result = await saveSettings(draft, async (request) => {
       applyCalls += 1;
@@ -188,7 +187,6 @@ path = "C:\\" # escaped slash before closing quote
       const saved = loadSettingsData(request.config_toml).formData;
       assert.deepEqual(saved.proactiveStrategies, draft.proactiveStrategies);
       assert.deepEqual(saved.channels, draft.channels);
-      assert.equal(saved.advanced.pluginsRawToml, draft.advanced.pluginsRawToml);
       return { ok: true, generation: 2, changed: true };
     });
     assert.equal(result.ok, true);
@@ -236,7 +234,8 @@ for (const legacy of ["", "[plugins.scene_awareness]\nenabled = false\n"]) {
       assert.equal(form.advanced.sceneObservationEnabled, undefined);
       await saveSettings(form, async (request) => {
         assert.doesNotMatch(request.config_toml, /\[agent\.scene_observation\]/);
-        if (legacy) assert.match(request.config_toml, /\[plugins\.scene_awareness\]\nenabled = false/);
+        assert.equal(request.preserve_plugins, true);
+        assert.doesNotMatch(request.config_toml, /\[plugins/);
         return { success: true };
       });
     } finally {
@@ -257,6 +256,43 @@ it("preserves a core scene opt-in over an old plugin disable", async () => {
     await saveSettings(form, async (request) => {
       assert.match(request.config_toml, /\[agent\.scene_observation\]\nenabled = true/);
       return { success: true };
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+it("reads ordinary settings alongside complex plugin TOML and delegates preservation", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "shiori-complex-plugin-settings-"));
+  try {
+    const path = join(directory, "config.toml");
+    writeFileSync(path, `
+[agent]
+max_tokens = 4096
+[plugins.qqbot]
+app_id = "app"
+client_secret = "secret"
+[plugins."unknown.id"]
+id = 9223372036854775807
+items = [{ name = "a", ports = [1, 2] }]
+body = """line one
+[looks.like.header]
+line three"""
+[[plugins."unknown.id".routes]]
+name = "route"
+[plugins."unknown.id".routes.options]
+active = true
+`, "utf-8");
+    configureSettingsConfigPath(path);
+    const form = loadSettingsData().formData;
+    assert.equal(form.advanced.maxTokens, 4096);
+    assert.ok(!Object.keys(form.advanced).some((key) => key.startsWith("plugins")));
+    form.advanced.maxTokens = 8192;
+    await saveSettings(form, async (request) => {
+      assert.equal(request.preserve_plugins, true);
+      assert.doesNotMatch(request.config_toml, /\[plugins/);
+      assert.match(request.config_toml, /max_tokens = 8192/);
+      return { ok: true, generation: 2, changed: true };
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });

@@ -77,9 +77,7 @@ async def _load_kernel(
     stage_plugin_package(plugin_source, root / "meme")
     if citation != "missing":
         stage_plugin_package(plugin_directory("citation"), root / "citation")
-        if citation == "disabled":
-            (root / "citation" / "plugin.disabled").touch()
-        elif citation == "failed":
+        if citation == "failed":
             (root / "citation" / "backend" / "plugin.py").write_text(
                 'async def setup(ctx):\n    raise RuntimeError("citation failed")\n',
                 encoding="utf-8",
@@ -89,6 +87,7 @@ async def _load_kernel(
         [root],
         services=HostServices(
             event_bus=bus,
+            plugin_configs={"citation": {"enabled": citation != "disabled"}},
             workspace=tmp_path,
             session_manager=session_manager,
         ),

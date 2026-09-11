@@ -47,7 +47,6 @@ def _stage_plugin_dirs(
 ) -> None:
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    # 夹具是旧扁平布局，内核要求 backend/；不重整就根本不会被加载
     _ = stage_plugin_package(_HELLO_FIXTURE_DIR, root / "hello")
     if with_rpc_demo:
         rpc_demo_dir = root / "rpc_demo"

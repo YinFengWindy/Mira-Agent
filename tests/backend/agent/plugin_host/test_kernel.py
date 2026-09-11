@@ -603,3 +603,129 @@ async def test_optional_unavailable_exports_return_none_but_require_stays_strict
             kernel._dependency_api("provider")
     finally:
         await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_unsafe_strong_dependency_closure_is_rejected_before_any_effect(tmp_path):
+    from agent.plugin_host import PluginRestartRequired
+
+    for name, dependencies, safe in [
+        ("provider", [], True),
+        ("safe", ["provider"], True),
+        ("unsafe", ["provider"], False),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\ndependencies: {dependencies}\nsupports_hot_unload: {str(safe).lower()}\n",
+            encoding="utf-8",
+        )
+        (package / "backend/plugin.py").write_text(
+            'async def setup(ctx):\n    state = []\n    ctx.expose(state)\n    ctx.effect("close", lambda: state.append("closed"))\n',
+            encoding="utf-8",
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    states = {
+        name: kernel._dependency_api(name) for name in ("provider", "safe", "unsafe")
+    }
+    try:
+        for operation in (lambda: kernel.unload("provider"), kernel.terminate_all):
+            with pytest.raises(PluginRestartRequired) as caught:
+                await operation()
+            assert caught.value.plugin_ids == ("unsafe",)
+            assert kernel.loaded_count == 3
+            assert all(value == [] for value in states.values())
+        await kernel.unload("safe")
+        assert states["safe"] == ["closed"]
+        assert states["unsafe"] == []
+    finally:
+        await kernel.terminate_all(force=True)
+    assert all(value == ["closed"] for value in states.values())
+
+
+@pytest.mark.asyncio
+async def test_force_cleanup_continues_after_an_unsafe_plugin_effect_fails(tmp_path):
+    for name, fail in [("one", True), ("two", False)]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\nsupports_hot_unload: false\n",
+            encoding="utf-8",
+        )
+        body = "raise OSError('close failed')" if fail else "pass"
+        (package / "backend/plugin.py").write_text(
+            f'async def setup(ctx):\n    state = []\n    ctx.expose(state)\n    def close():\n        state.append("closed")\n        {body}\n    ctx.effect("close", close)\n',
+            encoding="utf-8",
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    state = {name: kernel._dependency_api(name) for name in ("one", "two")}
+    with pytest.raises(ExceptionGroup, match="Plugin cleanup failed"):
+        await kernel.terminate_all(force=True)
+    assert state == {"one": ["closed"], "two": ["closed"]}
+    assert kernel.states() == []
+
+
+@pytest.mark.asyncio
+async def test_unsafe_declaration_never_blocks_setup_failure_rollback(tmp_path):
+    package = tmp_path / "broken"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        "api: 2\nid: broken\ncapabilities: [events]\nsupports_hot_unload: false\n",
+        encoding="utf-8",
+    )
+    (package / "backend/plugin.py").write_text(
+        'async def setup(ctx):\n    async def on_event(event):\n        event.append("leaked")\n        return event\n    ctx.events.on(list, on_event)\n    raise RuntimeError("setup failed")\n',
+        encoding="utf-8",
+    )
+    bus = EventBus()
+    kernel = make_kernel([tmp_path], event_bus=bus)
+    await kernel.load_all()
+    assert kernel.states()[0]["state"] == "FAILED"
+    assert await bus.emit([]) == []
+    await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_only_manifested_v2_entries_are_loaded(tmp_path):
+    for name, manifest in [
+        ("missing", None),
+        ("old", "api: 1\ncapabilities: []\n"),
+        ("missing_setup", "api: 2\ncapabilities: []\n"),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "backend/plugin.py").write_text("value = 1\n", encoding="utf-8")
+        if manifest is not None:
+            (package / "manifest.yaml").write_text(manifest, encoding="utf-8")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    assert [record.name for record in kernel.discover()] == ["missing_setup"]
+    await kernel.load_all()
+    assert kernel.loaded_count == 0
+    assert kernel.states()[0]["state"] == "FAILED"
+    assert "setup(ctx)" in kernel.states()[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_optional_unsafe_consumer_does_not_block_provider_unload(tmp_path):
+    for name, body in [
+        ("consumer", "supports_hot_unload: false\noptional_dependencies: [provider]\n"),
+        ("provider", ""),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "backend/plugin.py").write_text(
+            "async def setup(ctx):\n    pass\n", encoding="utf-8"
+        )
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\n" + body, encoding="utf-8"
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    try:
+        assert await kernel.unload("provider") == []
+        assert kernel.loaded_count == 1
+        assert kernel.states()[0]["id"] == "consumer"
+    finally:
+        await kernel.terminate_all(force=True)

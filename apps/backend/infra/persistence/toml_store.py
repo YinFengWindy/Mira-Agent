@@ -4,12 +4,12 @@ from math import isnan
 import tomllib
 from typing import Any
 
-import toml
+import tomli_w
 
 
 def render_toml(values: dict[str, Any]) -> str:
     """Serializes values, refusing any encoder change to their structure or types."""
-    text = toml.dumps(values)
+    text = tomli_w.dumps(values)
     if not _equivalent(tomllib.loads(text), values):
         raise ValueError("TOML serialization changed configuration values")
     return text

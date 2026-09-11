@@ -42,6 +42,7 @@ from agent.plugin_host.plugin_data import (
 )
 from agent.plugin_host.rpc import PluginRpcRegistry
 from agent.plugin_host.runtime_context import PluginRuntimeContext
+from agent.plugin_host.unload import PluginRestartRequired
 from bus.event_bus import EventBus
 from core.scene.demand import SceneObservationDemand
 from agent.plugin_host.scene_observations import SceneObservationsCapability
@@ -72,7 +73,7 @@ class HostServices:
     plugin_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     relationship_runtime: Any = None
     # 插件包上移到仓库顶层之前的位置（apps/backend/plugins）。gitignore 覆盖的
-    # 本地状态（.kv.json / plugin_config.json）不会随目录重命名搬走，需要从这里
+    # 本地状态（.kv.json）不会随目录重命名搬走，需要从这里
     # 一次性迁移；打包形态下该目录不存在，字段为 None 即可。
     legacy_plugin_root: Path | None = None
     role_runtime_registry: Any = None
@@ -363,31 +364,61 @@ class PluginKernel:
 
     # ── 卸载 ──────────────────────────────────────────────────────────────
 
-    async def unload(self, name: str) -> list[Exception]:
-        """先卸载依赖此插件的使用方，再逆序处置提供方的 effect。"""
+    def assert_hot_unloadable(self, name: str | None = None) -> None:
+        """Preflights the whole strong-dependent closure before any disposal."""
+        handles = (
+            self._unload_closure(name) if name is not None else self._active_handles()
+        )
+        unsafe = [
+            handle.plugin_id
+            for handle in handles
+            if not handle.record.manifest.supports_hot_unload
+        ]
+        if unsafe:
+            raise PluginRestartRequired(unsafe)
+
+    def _unload_closure(self, name: str) -> list[PluginHandle]:
         handle = self._handles.get(name)
         if handle is None or handle.state is not PluginState.ACTIVE:
             return []
+        closure: list[PluginHandle] = []
+        seen: set[str] = set()
+
+        def visit(target: PluginHandle) -> None:
+            if target.plugin_id in seen:
+                return
+            seen.add(target.plugin_id)
+            for dependent in reversed(self._active_handles()):
+                if target.plugin_id in dependent.record.manifest.dependencies:
+                    visit(dependent)
+            closure.append(target)
+
+        visit(handle)
+        return closure
+
+    async def unload(self, name: str, *, force: bool = False) -> list[Exception]:
+        """Disposes a dependency closure; force is reserved for final resource cleanup."""
+        closure = self._unload_closure(name)
+        if not force:
+            self.assert_hot_unloadable(name)
         errors: list[Exception] = []
-        for dependent in reversed(self._active_handles()):
-            if handle.plugin_id in dependent.record.manifest.dependencies:
-                errors.extend(await self.unload(dependent.record.name))
-        handle.state = PluginState.UNLOADING
-        errors.extend(await handle.effects.dispose_all())
-        handle.contributions = type(handle.contributions)()
-        handle.instance = None
-        handle.state = PluginState.DISPOSED
-        if name in self._active_order:
-            self._active_order.remove(name)
-        # 允许再次 load：丢弃已处置句柄
-        self._handles.pop(name, None)
+        for handle in closure:
+            handle.state = PluginState.UNLOADING
+            errors.extend(await handle.effects.dispose_all())
+            handle.contributions = type(handle.contributions)()
+            handle.instance = None
+            handle.state = PluginState.DISPOSED
+            self._active_order.remove(handle.record.name)
+            self._handles.pop(handle.record.name, None)
         return errors
 
-    async def terminate_all(self) -> None:
-        """Releases only this kernel's subscriptions, plugins and import namespace."""
+    async def terminate_all(self, *, force: bool = False) -> None:
+        """Preflights all active plugins, or forcibly releases them on process exit."""
+        if not force:
+            self.assert_hot_unloadable()
         errors: list[Exception] = []
         for name in list(self._active_order):
-            errors.extend(await self.unload(name))
+            errors.extend(await self.unload(name, force=True))
         self._handles.clear()
         if errors:
             raise ExceptionGroup("Plugin cleanup failed", errors)

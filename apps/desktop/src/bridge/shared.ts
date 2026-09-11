@@ -219,7 +219,6 @@ export type SettingsFormData = {
     sceneObservationEnabled?: boolean;
     memoryOptimizerEnabled: boolean;
     memoryOptimizerIntervalSeconds: number;
-    pluginsRawToml: string;
   };
   pendingRoleModelUpdates?: PendingRoleModelUpdate[];
 };
@@ -245,6 +244,8 @@ export type SettingsSaveOptions = {
 
 /** Configuration and role-binding transaction accepted by runtime.apply. */
 export type RuntimeApplyRequest = {
+  /** Ordinary settings drafts preserve current plugin configuration inside the host transaction. */
+  preserve_plugins?: boolean;
   config_toml: string;
   expected_generation?: number;
   operation_id: string;

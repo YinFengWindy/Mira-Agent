@@ -1,8 +1,4 @@
-"""共享工具 hook 适配器：把插件的函数式 pre-hook 适配为 ToolExecutor.ToolHook。
-
-legacy 适配器与 v2 插件都需要这份逻辑（旧 ``@on_tool_pre`` 装饰器、v2 ``setup(ctx)``
-里手写注册的 hook），提升到这里避免每个插件各写一份 matches/run。
-"""
+"""将插件函数式 pre-hook 适配为 ToolExecutor.ToolHook。"""
 
 from __future__ import annotations
 
@@ -15,12 +11,7 @@ from agent.tool_hooks.types import HookContext, HookOutcome
 
 
 def build_hook_name(plugin_id: str, handler_name: str) -> str:
-    """生成插件 tool hook 的注册名：``plugin:{plugin_id}:{handler_name}``。
-
-    与旧系统 ``f"plugin:{instance.name}:{md.handler_name}"`` 逐字一致；
-    v2 插件经 ``ToolHooksCapability.add_handler``、legacy 适配器都复用这一份，
-    避免各处各拼一份同形式的字符串（#182 评审）。
-    """
+    """生成稳定的插件 tool hook 注册名。"""
     return f"plugin:{plugin_id}:{handler_name}"
 
 

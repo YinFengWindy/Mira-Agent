@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -30,6 +30,7 @@ def candidate(number):
         provider=None,
         role_runtime_registry=None,
         stop=AsyncMock(),
+        assert_hot_unloadable=Mock(),
         memory_runtime=SimpleNamespace(
             markdown=SimpleNamespace(store=None), aclose=AsyncMock()
         ),

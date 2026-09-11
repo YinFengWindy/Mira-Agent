@@ -72,3 +72,31 @@ describe("PluginManagementSection", () => {
     }
   });
 });
+
+
+it("keeps the active switch and shows restart guidance after a refused hot toggle", async () => {
+  const view = await mountTestComponent(null);
+  const calls: string[] = [];
+  Object.defineProperty(window, "miraDesktop", {
+    configurable: true,
+    value: { invoke: async ({ method }: { method: string }) => {
+      calls.push(method);
+      if (method === "plugins.list") return { id: "1", type: "response", method, error: null, payload: { plugins: [
+        { id: "unsafe", name: "unsafe", version: "0.1", description: "", enabled: true, state: "ACTIVE", error: "", has_config_schema: false, supports_hot_unload: false },
+      ] } };
+      return { id: "2", type: "response", method, payload: {}, error: { code: "plugin_restart_required", message: "本次更改未保存；请退出应用后修改配置，再重新启动。", details: { plugin_ids: ["unsafe"], restart_required: true } } };
+    } },
+  });
+  try {
+    await view.render(<PluginManagementSection />);
+    assert.match(view.container.textContent ?? "", /更改需重启/);
+    const toggle = view.container.querySelector('button[role="switch"]') as HTMLButtonElement;
+    await act(async () => { toggle.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    assert.match(view.container.querySelector('[role="alert"]')?.textContent ?? "", /未保存.*重新启动/);
+    assert.equal(toggle.getAttribute("aria-checked"), "true");
+    assert.equal(toggle.disabled, false);
+    assert.equal(calls.filter((method) => method === "plugins.list").length, 1);
+  } finally {
+    await view.cleanup();
+  }
+});

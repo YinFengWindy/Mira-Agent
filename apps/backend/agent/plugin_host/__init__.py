@@ -23,6 +23,7 @@ from agent.plugin_host.runtime_context import (
     PluginRuntimeContext,
 )
 from agent.plugin_host.tool_hooks import PluginToolHook
+from agent.plugin_host.unload import PluginRestartRequired
 
 __all__ = [
     "CapabilityNotGranted",
@@ -39,6 +40,7 @@ __all__ = [
     "PluginKernel",
     "PluginManifest",
     "PluginRecord",
+    "PluginRestartRequired",
     "PluginRpcRegistry",
     "PluginRuntimeContext",
     "PluginState",

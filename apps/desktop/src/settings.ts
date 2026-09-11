@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { parse as parseToml } from "smol-toml";
 
 import type {
   ModelRegistrationFormData,
@@ -34,122 +35,8 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function stripTomlLineComment(line: string): string {
-  let quote: '"' | "'" | null = null;
-  let escaped = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (quote !== null) {
-      if (escaped) escaped = false;
-      else if (quote === '"' && character === "\\") escaped = true;
-      else if (character === quote) quote = null;
-    } else if (character === '"' || character === "'") {
-      quote = character;
-    } else if (character === "#") {
-      return line.slice(0, index);
-    }
-  }
-  return line;
-}
-
-function parseTomlValue(raw: string): unknown {
-  const value = raw.trim();
-  if (value.startsWith("\"") && value.endsWith("\"")) {
-    return JSON.parse(value);
-  }
-  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
-  if (value === "true") return true;
-  if (value === "false") return false;
-  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
-  if (value.startsWith("[") && value.endsWith("]")) {
-    return JSON.parse(value);
-  }
-  return value;
-}
-
-function parseToml(content: string): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  let current = root;
-
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = stripTomlLineComment(rawLine).trim();
-    if (!line || line.startsWith("#")) continue;
-
-    if (line.startsWith("[[") && line.endsWith("]]")) {
-      const path = line.slice(2, -2).trim().split(".");
-      let cursor: Record<string, unknown> = root;
-      for (let index = 0; index < path.length - 1; index += 1) {
-        const segment = path[index]!;
-        const next = asRecord(cursor[segment]);
-        cursor[segment] = next;
-        cursor = next;
-      }
-      const key = path[path.length - 1]!;
-      const list = Array.isArray(cursor[key])
-        ? (cursor[key] as Record<string, unknown>[])
-        : [];
-      const entry: Record<string, unknown> = {};
-      list.push(entry);
-      cursor[key] = list;
-      current = entry;
-      continue;
-    }
-
-    if (line.startsWith("[") && line.endsWith("]")) {
-      const path = line.slice(1, -1).trim().split(".");
-      let cursor: Record<string, unknown> = root;
-      for (const segment of path) {
-        const next = asRecord(cursor[segment]);
-        cursor[segment] = next;
-        cursor = next;
-      }
-      current = cursor;
-      continue;
-    }
-
-    const separatorIndex = line.indexOf("=");
-    if (separatorIndex < 0) continue;
-    const key = line.slice(0, separatorIndex).trim();
-    const rawValue = line.slice(separatorIndex + 1).trim();
-    current[key] = parseTomlValue(rawValue);
-  }
-
-  return root;
-}
-
 function quote(value: string): string {
   return JSON.stringify(value ?? "");
-}
-
-function renderStringArray(values: string[]): string {
-  return `[${values.map((item) => quote(item)).join(", ")}]`;
-}
-
-function renderPluginBlocks(rawToml: string): string {
-  const trimmed = rawToml.trim();
-  return trimmed ? `${trimmed}\n` : "";
-}
-
-function renderPluginSection(name: string, value: Record<string, unknown>): string {
-  const lines = [`[plugins.${name}]`];
-  for (const [key, rawValue] of Object.entries(value)) {
-    if (Array.isArray(rawValue)) {
-      lines.push(
-        `${key} = ${renderStringArray(rawValue.map((item) => String(item ?? "")))}`,
-      );
-      continue;
-    }
-    if (typeof rawValue === "boolean") {
-      lines.push(`${key} = ${rawValue ? "true" : "false"}`);
-      continue;
-    }
-    if (typeof rawValue === "number") {
-      lines.push(`${key} = ${rawValue}`);
-      continue;
-    }
-    lines.push(`${key} = ${quote(String(rawValue ?? ""))}`);
-  }
-  return lines.join("\n");
 }
 
 function optionalBoolean(value: unknown, field: string): boolean | undefined {
@@ -193,7 +80,7 @@ function loadModelRegistrations(llm: Record<string, unknown>): ModelRegistration
 export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const configuredPath = requireConfigPath();
   const content = contentOverride ?? (existsSync(configuredPath) ? readFileSync(configuredPath, "utf-8") : "");
-  const parsed = parseToml(content);
+  const parsed = parseToml(content, { integersAsBigInt: "asNeeded" });
   const llm = asRecord(parsed.llm);
   const channels = asRecord(parsed.channels);
   const telegram = asRecord(channels.telegram);
@@ -208,7 +95,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const voice = asRecord(parsed.voice);
   const voiceAsr = asRecord(voice.asr);
   const voiceTts = asRecord(voice.tts);
-  const plugins = asRecord(parsed.plugins);
   return {
     configPath: configuredPath,
     formData: {
@@ -264,21 +150,6 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
         memoryOptimizerIntervalSeconds: Number(
           agentMaintenance.memory_optimizer_interval_seconds ?? 64800,
         ),
-        // feishu is excluded because that surface was retired from the runtime
-        // (the backend rejects [plugins.feishu] outright). qqbot used to be
-        // excluded too, back when its app_id/client_secret had a bespoke
-        // round-trip through channels.qqBot*; now that it owns a schema-driven
-        // settings.section (plugins/qqbot/ui/index.tsx) instead, it flows
-        // through this generic catch-all like any other plugin without
-        // dedicated UI (#183) — dropping it here would silently lose
-        // [plugins.qqbot] on the next unrelated settings save, since this
-        // whole document is rebuilt from formData on every save.
-        pluginsRawToml: renderPluginBlocks(
-          Object.entries(plugins)
-            .filter(([name]) => name !== "feishu")
-            .map(([name, value]) => renderPluginSection(name, asRecord(value)))
-            .join("\n"),
-        ).trimEnd(),
       },
     },
   };
@@ -373,7 +244,6 @@ function renderSettingsToml(formData: SettingsFormData): string {
     `api_key = ${quote(formData.voice.ttsApiKey)}`,
     `volume = ${formData.voice.ttsVolume}`,
     "",
-    formData.advanced.pluginsRawToml.trim(),
     "",
   ]
     .filter((line, index, array) => {
@@ -438,6 +308,7 @@ export async function saveSettings(
   }
   return applySettings({
     config_toml: renderSettingsToml(formData),
+    preserve_plugins: true,
     expected_generation: options.expectedGeneration,
     operation_id: options.operationId ?? randomUUID(),
     role_model_updates: (formData.pendingRoleModelUpdates ?? []).map((update) => ({

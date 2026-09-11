@@ -20,18 +20,28 @@ _REGISTRATION = "00000000-0000-4000-a000-000000000001"
 async def test_reloading_rejects_new_work_without_queuing_a_late_chat():
     service = object.__new__(ReloadableDesktopService)
     service.app = SimpleNamespace(accepting_work=False)
-    service._owner = lambda *args: pytest.fail("rejected request must never reach a handler")
-    response = await asyncio.wait_for(service.handle(
-        {"method": "chat.send", "payload": {"role_id": "role", "content": "message"}},
-        emit_event=lambda event: None,
-    ), 0.1)
+    service._owner = lambda *args: pytest.fail(
+        "rejected request must never reach a handler"
+    )
+    response = await asyncio.wait_for(
+        service.handle(
+            {
+                "method": "chat.send",
+                "payload": {"role_id": "role", "content": "message"},
+            },
+            emit_event=lambda event: None,
+        ),
+        0.1,
+    )
     assert response.error.code == "runtime_reloading"
 
 
 @pytest.mark.asyncio
 async def test_retirement_releases_generation_even_if_handler_cleanup_fails():
-    handler = SimpleNamespace(chat_service=SimpleNamespace(drain=AsyncMock()),
-                              aclose=AsyncMock(side_effect=OSError("close failed")))
+    handler = SimpleNamespace(
+        chat_service=SimpleNamespace(drain=AsyncMock()),
+        aclose=AsyncMock(side_effect=OSError("close failed")),
+    )
     lease = SimpleNamespace(
         release=AsyncMock(), core=SimpleNamespace(plugin_manager=None)
     )
@@ -48,13 +58,19 @@ def _config(model=""):
     registration = (
         f'[[llm.registrations]]\nid = "{_REGISTRATION}"\nprovider = "openai"\n'
         f'model = "{model}"\napi_key = "fake-key"\n'
-        if model else "[llm]\nregistrations = []\n"
+        if model
+        else "[llm]\nregistrations = []\n"
     )
-    return registration + '\n[agent.maintenance]\nmemory_optimizer_enabled = false\n[proactive]\nenabled = false\nprofile = "quiet"\n'
+    return (
+        registration
+        + '\n[agent.maintenance]\nmemory_optimizer_enabled = false\n[proactive]\nenabled = false\nprofile = "quiet"\n'
+    )
 
 
 @pytest.mark.asyncio
-async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_path, monkeypatch):
+async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
     calls = []
     seed_calls = []
@@ -75,58 +91,105 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
     monkeypatch.setattr(LLMProvider, "chat", fake_chat)
     path = tmp_path / "config.toml"
     path.write_text(_config(), encoding="utf-8")
-    app = AppRuntime(load_config_text(_config()), tmp_path,
-                     features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    app = AppRuntime(
+        load_config_text(_config()),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     service = ReloadableDesktopService(app, path, RoleStore(tmp_path))
     events = []
 
     async def request(method, payload=None):
-        response = await service.handle({"id": method, "method": method, "payload": payload or {}},
-                                        emit_event=events.append)
+        response = await service.handle(
+            {"id": method, "method": method, "payload": payload or {}},
+            emit_event=events.append,
+        )
         assert response.error is None, response.error
         return response.payload
 
     try:
         assert (await request("health"))["ok"]
-        created = await request("roles.create", {"name": "Role", "system_prompt": "Role prompt"})
+        created = await request(
+            "roles.create", {"name": "Role", "system_prompt": "Role prompt"}
+        )
         role_id = created["role"]["id"]
         await request("session.openByRole", {"role_id": role_id})
         assert calls == []
-        unbound = await service.handle({"method": "chat.send", "payload": {"role_id": role_id, "content": "hi"}},
-                                       emit_event=events.append)
+        unbound = await service.handle(
+            {"method": "chat.send", "payload": {"role_id": role_id, "content": "hi"}},
+            emit_event=events.append,
+        )
         assert unbound.error.code == "model_configuration_required"
         assert not app.session_manager.get_or_create(f"role:{role_id}").messages
-        await request("runtime.apply", {"config_toml": _config("first"), "operation_id": "first",
-                                        "expected_generation": 1})
-        assert not service.roles.get_role(role_id).runtime_config["dialogue_model_registration_id"]
-        await request("roles.update", {"role_id": role_id, "runtime_config": {
-            "dialogue_model_registration_id": _REGISTRATION,
-        }})
+        await request(
+            "runtime.apply",
+            {
+                "config_toml": _config("first"),
+                "operation_id": "first",
+                "expected_generation": 1,
+            },
+        )
+        assert not service.roles.get_role(role_id).runtime_config[
+            "dialogue_model_registration_id"
+        ]
+        await request(
+            "roles.update",
+            {
+                "role_id": role_id,
+                "runtime_config": {
+                    "dialogue_model_registration_id": _REGISTRATION,
+                },
+            },
+        )
         assert calls == []
         hold = True
-        await request("chat.send", {"role_id": role_id, "content": "old task", "turn_id": "old"})
+        await request(
+            "chat.send", {"role_id": role_id, "content": "old task", "turn_id": "old"}
+        )
         await asyncio.wait_for(entered.wait(), 5)
         old_service = service._current.service
-        await request("runtime.apply", {"config_toml": _config("second"), "operation_id": "second",
-                                        "expected_generation": 2})
+        await request(
+            "runtime.apply",
+            {
+                "config_toml": _config("second"),
+                "operation_id": "second",
+                "expected_generation": 2,
+            },
+        )
         assert old_service.chat_service.is_busy(f"role:{role_id}")
         assert not finish.is_set()
         assert app.generation == 3
         assert (await request("runtime.status"))["config_toml"] == _config("second")
         finish.set()
         await asyncio.wait_for(old_service.chat_service.drain(), 5)
-        await request("chat.send", {"role_id": role_id, "content": "new task", "turn_id": "new"})
+        await request(
+            "chat.send", {"role_id": role_id, "content": "new task", "turn_id": "new"}
+        )
         await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
         assert calls[-1] == "second"
         assert seed_calls == ["first"]
-        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["status"] == "generated"
+        assert (
+            service.roles.get_role(role_id).memory_init_state["self_seed"]["status"]
+            == "generated"
+        )
         assert any(item["method"] == "chat.done" for item in events)
-        await request("runtime.apply", {"config_toml": _config(), "operation_id": "empty",
-                                        "expected_generation": 3,
-                                        "role_model_updates": [{"role_id": role_id, "runtime_config": {
-                                            "dialogue_model_registration_id": "",
-                                        }}]})
+        await request(
+            "runtime.apply",
+            {
+                "config_toml": _config(),
+                "operation_id": "empty",
+                "expected_generation": 3,
+                "role_model_updates": [
+                    {
+                        "role_id": role_id,
+                        "runtime_config": {
+                            "dialogue_model_registration_id": "",
+                        },
+                    }
+                ],
+            },
+        )
         assert not service.status()["models_registered"]
         assert (await request("health"))["ok"]
         assert app.session_manager.get_or_create(f"role:{role_id}").messages
@@ -137,20 +200,35 @@ async def test_empty_boot_register_bind_and_chat_preserves_existing_turn(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_invalid_apply_and_generation_conflict_preserve_active_files(tmp_path, monkeypatch):
+async def test_invalid_apply_and_generation_conflict_preserve_active_files(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
     path = tmp_path / "config.toml"
     path.write_text(_config(), encoding="utf-8")
-    app = AppRuntime(load_config_text(_config()), tmp_path,
-                     features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    app = AppRuntime(
+        load_config_text(_config()),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     service = ReloadableDesktopService(app, path, RoleStore(tmp_path))
     try:
-        for text, expected, code in [("invalid TOML", 1, "runtime_config_invalid"),
-                                      (_config("model"), 9, "runtime_generation_conflict")]:
-            response = await service.handle({"method": "runtime.apply", "payload": {
-                "config_toml": text, "operation_id": code, "expected_generation": expected,
-            }}, emit_event=lambda event: None)
+        for text, expected, code in [
+            ("invalid TOML", 1, "runtime_config_invalid"),
+            (_config("model"), 9, "runtime_generation_conflict"),
+        ]:
+            response = await service.handle(
+                {
+                    "method": "runtime.apply",
+                    "payload": {
+                        "config_toml": text,
+                        "operation_id": code,
+                        "expected_generation": expected,
+                    },
+                },
+                emit_event=lambda event: None,
+            )
             assert response.error.code == code
             assert path.read_text(encoding="utf-8") == _config()
             assert app.generation == 1
@@ -160,7 +238,9 @@ async def test_invalid_apply_and_generation_conflict_preserve_active_files(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_first_chat_seed_failure_reports_error_and_next_chat_retries(tmp_path, monkeypatch):
+async def test_first_chat_seed_failure_reports_error_and_next_chat_retries(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
     seeds, replies = [], []
     fail_seed = True
@@ -177,40 +257,244 @@ async def test_first_chat_seed_failure_reports_error_and_next_chat_retries(tmp_p
     monkeypatch.setattr(LLMProvider, "chat", fake_chat)
     path = tmp_path / "config.toml"
     path.write_text(_config("selected"), encoding="utf-8")
-    app = AppRuntime(load_config_text(_config("selected")), tmp_path,
-        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    app = AppRuntime(
+        load_config_text(_config("selected")),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     service = ReloadableDesktopService(app, path, RoleStore(tmp_path))
     events = []
 
     async def request(method, payload):
-        response = await service.handle({"id": method, "method": method, "payload": payload}, emit_event=events.append)
+        response = await service.handle(
+            {"id": method, "method": method, "payload": payload},
+            emit_event=events.append,
+        )
         assert response.error is None, response.error
         return response.payload
 
     try:
-        created = await request("roles.create", {"name": "Mira", "system_prompt": "Be Mira"})
+        created = await request(
+            "roles.create", {"name": "Mira", "system_prompt": "Be Mira"}
+        )
         role_id = created["role"]["id"]
         assert created["role"]["runtime_config"]["dialogue_model_registration_id"] == ""
-        await request("roles.update", {"role_id": role_id, "runtime_config": {"dialogue_model_registration_id": _REGISTRATION}})
+        await request(
+            "roles.update",
+            {
+                "role_id": role_id,
+                "runtime_config": {"dialogue_model_registration_id": _REGISTRATION},
+            },
+        )
         await request("session.openByRole", {"role_id": role_id})
         assert seeds == replies == []
         self_path = tmp_path / "roles" / role_id / "memory/SELF.md"
         default = self_path.read_text(encoding="utf-8")
-        await request("chat.send", {"role_id": role_id, "content": "你好", "turn_id": "first"})
+        await request(
+            "chat.send", {"role_id": role_id, "content": "你好", "turn_id": "first"}
+        )
         await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
         assert seeds == ["selected"] and replies == []
         assert any(event["method"] == "chat.error" for event in events)
         assert self_path.read_text(encoding="utf-8") == default
-        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["last_error"] == "seed provider unavailable"
+        assert (
+            service.roles.get_role(role_id).memory_init_state["self_seed"]["last_error"]
+            == "seed provider unavailable"
+        )
         fail_seed = False
         for turn_id in ("retry", "subsequent"):
-            await request("chat.send", {"role_id": role_id, "content": "你好", "turn_id": turn_id})
+            await request(
+                "chat.send", {"role_id": role_id, "content": "你好", "turn_id": turn_id}
+            )
             await asyncio.wait_for(service._current.service.chat_service.drain(), 5)
         assert seeds == ["selected", "selected"]
         assert len(replies) >= 2
-        assert service.roles.get_role(role_id).memory_init_state["self_seed"]["status"] == "generated"
+        assert (
+            service.roles.get_role(role_id).memory_init_state["self_seed"]["status"]
+            == "generated"
+        )
         assert any(event["method"] == "chat.done" for event in events)
     finally:
         await service.aclose()
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_settings_form_route_preserves_latest_plugins_but_raw_apply_can_remove_them(
+    tmp_path, monkeypatch
+):
+    import tomllib
+
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
+    initial = (
+        _config() + '\n[plugins.qqbot]\napp_id = "old"\nclient_secret = "secret"\n'
+    )
+    path = tmp_path / "config.toml"
+    path.write_text(initial, encoding="utf-8")
+    app = AppRuntime(
+        load_config_text(initial),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    service = ReloadableDesktopService(app, path, RoleStore(tmp_path))
+
+    async def request(payload):
+        return await service.handle(
+            {"method": "runtime.apply", "payload": payload},
+            emit_event=lambda event: None,
+        )
+
+    try:
+        current = (
+            _config()
+            + '\n[plugins.qqbot]\napp_id = "new"\nclient_secret = "new-secret"\n[plugins."unknown.id"]\nitems = [{ label = "keep", numbers = [1, 2] }]\n'
+        )
+        response = await request(
+            {"config_toml": current, "operation_id": "plugin-write"}
+        )
+        assert response.error is None
+        draft = {
+            "config_toml": _config() + "\n[agent]\nmax_tokens = 4096\n",
+            "preserve_plugins": True,
+            "operation_id": "form-save",
+        }
+        response = await request(draft)
+        assert response.error is None, response.error
+        assert (
+            tomllib.loads(path.read_text(encoding="utf-8"))["plugins"]
+            == tomllib.loads(current)["plugins"]
+        )
+        after_form = path.read_bytes()
+        assert (await request(draft)).payload == response.payload
+        assert path.read_bytes() == after_form
+        assert (
+            await request({"config_toml": _config(), "operation_id": "raw-remove"})
+        ).error is None
+        assert "plugins" not in tomllib.loads(path.read_text(encoding="utf-8"))
+        # Retrying the form after another write must not resurrect stale plugins.
+        assert (await request(draft)).payload == response.payload
+        assert "plugins" not in tomllib.loads(path.read_text(encoding="utf-8"))
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_restart_required_refuses_all_hot_write_routes_before_candidate_or_persistence(
+    tmp_path, monkeypatch
+):
+    from pathlib import Path
+    from shiori_plugin_testkit.packages import stage_plugin_package
+
+    root = tmp_path / "packages"
+    stage_plugin_package(
+        Path(__file__).resolve().parents[3] / "fixtures/plugins/restart_required",
+        root / "restart_required",
+    )
+    monkeypatch.setattr(
+        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
+    )
+    text = (
+        _config("model")
+        + '\n[plugins.restart_required]\nvalue = "first"\nenabled = true\n'
+    )
+    path = tmp_path / "config.toml"
+    path.write_text(text, encoding="utf-8")
+    app = AppRuntime(
+        load_config_text(text),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    roles = RoleStore(tmp_path)
+    role = roles.create_role(name="Role", system_prompt="Role", role_id="role")
+    service = ReloadableDesktopService(app, path, roles)
+    state = app.core.plugin_manager._dependency_api("restart_required")
+    build = AsyncMock(side_effect=AssertionError("candidate must not start"))
+    monkeypatch.setattr("bootstrap.runtime.reload.prepare_core_runtime", build)
+
+    async def request(method, payload):
+        return await service.handle(
+            {"method": method, "payload": payload}, emit_event=lambda event: None
+        )
+
+    try:
+        listed = await request("plugins.list", {})
+        assert listed.payload["plugins"][0]["supports_hot_unload"] is False
+        no_op = await request(
+            "runtime.apply", {"config_toml": text, "operation_id": "noop"}
+        )
+        assert no_op.error is None
+        role_only = await request(
+            "runtime.apply",
+            {
+                "config_toml": text,
+                "operation_id": "role-only",
+                "role_model_updates": [
+                    {
+                        "role_id": role.id,
+                        "runtime_config": {
+                            "dialogue_model_registration_id": _REGISTRATION
+                        },
+                    }
+                ],
+            },
+        )
+        assert role_only.error is None, role_only.error
+        assert (
+            roles.get_role(role.id).runtime_config["dialogue_model_registration_id"]
+            == _REGISTRATION
+        )
+        before = path.read_bytes()
+        for index, (method, payload) in enumerate(
+            [
+                (
+                    "runtime.apply",
+                    {
+                        "config_toml": text.replace(
+                            'model = "model"', 'model = "changed"'
+                        ),
+                        "role_model_updates": [
+                            {
+                                "role_id": role.id,
+                                "runtime_config": {
+                                    "dialogue_model_registration_id": ""
+                                },
+                            }
+                        ],
+                    },
+                ),
+                (
+                    "runtime.apply",
+                    {"config_toml": _config("changed"), "preserve_plugins": True},
+                ),
+                (
+                    "plugins.setEnabled",
+                    {"plugin_id": "restart_required", "enabled": False},
+                ),
+                (
+                    "plugin.config.set",
+                    {"plugin_id": "restart_required", "values": {"value": "changed"}},
+                ),
+            ]
+        ):
+            response = await request(
+                method, {**payload, "operation_id": f"blocked-{index}"}
+            )
+            assert response.error.code == "plugin_restart_required", response.error
+            assert response.error.details["plugin_ids"] == ["restart_required"]
+            assert "未保存" in response.error.message
+            assert path.read_bytes() == before
+            assert (
+                roles.get_role(role.id).runtime_config["dialogue_model_registration_id"]
+                == _REGISTRATION
+            )
+            assert app.generation == 1
+            assert state == ["started"]
+        build.assert_not_awaited()
+    finally:
+        await service.aclose()
+        await app.shutdown()
+    assert state == ["started", "closed"]

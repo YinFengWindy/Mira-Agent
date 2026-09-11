@@ -35,11 +35,6 @@ KNOWN_CAPABILITIES = frozenset(
         # RoleStore(ctx.workspace)：后者每次都新建一个 RoleManifestRepository，
         # 而写锁是 **按实例的** threading.RLock。两个实例写同一份 roles.json 时
         # atomic_save_json 只保证单次写原子、不防丢更新。
-        #
-        # 它买到的是「插件的写与宿主的写不再互相覆盖」——注意不是「插件自己的并发
-        # 写安全了」：RolePetPackageService.import_package 在任何锁之外读
-        # role.pet_packages，再把整份列表交给 replace_pet_packages，所以两次并发
-        # 导入仍会丢一个包（磁盘上留下孤儿目录）。那是既有性质，共享锁修不了它。
         "role_store",
         "memory_engine",
         "session_manager",
@@ -74,6 +69,8 @@ class PluginManifest:
     # Optional APIs never cause provider activation or dependent teardown.
     optional_dependencies: tuple[str, ...] = ()
     api: int = 2
+    # False forbids replacing a live instance without restarting the process.
+    supports_hot_unload: bool = True
     metadata: dict[str, object] = field(default_factory=dict)
 
 
@@ -95,6 +92,9 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
         raise ManifestError(f"插件必须显式声明 api: 2: {manifest_path}")
     api = 2
     plugin_id = str(raw.get("id") or raw.get("name") or plugin_dir.name)
+    supports_hot_unload = raw.get("supports_hot_unload", True)
+    if not isinstance(supports_hot_unload, bool):
+        raise ManifestError("supports_hot_unload 必须是布尔值")
     capabilities = _parse_capabilities(raw, manifest_path)
     dependencies = _parse_dependencies(raw, "dependencies")
     optional_dependencies = _parse_dependencies(raw, "optional_dependencies")
@@ -113,6 +113,7 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
         dependencies=dependencies,
         optional_dependencies=optional_dependencies,
         api=api,
+        supports_hot_unload=supports_hot_unload,
         metadata={k: v for k, v in raw.items() if isinstance(k, str)},
     )
 

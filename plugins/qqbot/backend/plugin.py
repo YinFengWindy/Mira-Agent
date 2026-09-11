@@ -56,12 +56,7 @@ class QQBotConfigModel(BaseModel):
 
 
 async def setup(ctx: "PluginRuntimeContext") -> None:
-    """装配 qqbot：校验插件配置，凭据齐备时贡献官方 QQBot 渠道。
-
-    行为对齐 legacy：QQBotConfigModel 校验失败时 setup() 直接抛出，交由内核的
-    通用失败回滚处理，与旧 ``_load_plugin_config`` 在校验失败时跳过插件加载
-    的语义一致；凭据缺失（非校验失败）则不贡献渠道，同样与旧 channels() 一致。
-    """
+    """校验配置，凭据齐备时贡献 QQBot 渠道；校验失败由内核回滚。"""
     config = QQBotConfigModel.model_validate(ctx.config.as_dict())
     if not config.app_id or not config.client_secret:
         return

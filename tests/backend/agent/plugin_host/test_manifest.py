@@ -85,3 +85,27 @@ def test_dependency_cannot_be_both_strong_and_optional(tmp_path: Path):
     )
     with pytest.raises(ManifestError, match="同时声明"):
         load_manifest(tmp_path)
+
+
+@pytest.mark.parametrize("value", ["false", "true"])
+def test_manifest_declares_hot_unload_support(tmp_path, value):
+    (tmp_path / "manifest.yaml").write_text(
+        f"api: 2\ncapabilities: []\nsupports_hot_unload: {value}\n", encoding="utf-8"
+    )
+    assert load_manifest(tmp_path).supports_hot_unload is (value == "true")
+
+
+@pytest.mark.parametrize("value", ["'false'", "0", "[]", "null"])
+def test_manifest_rejects_non_boolean_hot_unload_declaration(tmp_path, value):
+    (tmp_path / "manifest.yaml").write_text(
+        f"api: 2\ncapabilities: []\nsupports_hot_unload: {value}\n", encoding="utf-8"
+    )
+    with pytest.raises(ManifestError, match="supports_hot_unload"):
+        load_manifest(tmp_path)
+
+
+def test_existing_manifest_defaults_to_hot_unloadable(tmp_path):
+    (tmp_path / "manifest.yaml").write_text(
+        "api: 2\ncapabilities: []\n", encoding="utf-8"
+    )
+    assert load_manifest(tmp_path).supports_hot_unload is True

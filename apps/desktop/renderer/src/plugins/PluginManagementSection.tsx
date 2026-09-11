@@ -20,7 +20,7 @@ function PluginRow({
     <SettingsField label={plugin.name} hint={hint || undefined}>
       <div className="flex items-center justify-end gap-3">
         <span className={cx("text-caption", plugin.error ? "text-danger-text" : "text-ink-faint")}>
-          {plugin.error || plugin.state}
+          {plugin.error || (plugin.supportsHotUnload === false ? "更改需重启" : plugin.state)}
         </span>
         <SettingsToggleCard
           checked={plugin.enabled}
@@ -37,7 +37,7 @@ function PluginRow({
 export function PluginManagementSection() {
   const { plugins, error, pendingIds, setEnabled, reload } = usePluginManagementController();
 
-  if (error) {
+  if (error && !plugins) {
     return (
       <div className={cx(cardClass, "p-6 text-sm leading-6 text-danger-text")}>
         插件列表加载失败：{error}
@@ -50,6 +50,7 @@ export function PluginManagementSection() {
   }
   return (
     <SettingsSectionCard>
+      {error ? <div role="alert" className="text-sm text-danger-text">{error}</div> : null}
       {plugins.map((plugin) => (
         <PluginRow
           key={plugin.id}

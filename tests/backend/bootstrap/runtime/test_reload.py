@@ -211,3 +211,115 @@ async def test_core_motives_follow_generation_publication_and_rollback(
     finally:
         await lease.release()
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_publish_rechecks_hot_unload_before_handover_or_commit(
+    tmp_path, monkeypatch
+):
+    from pathlib import Path
+    from shiori_plugin_testkit.packages import stage_plugin_package
+    from agent.plugin_host import PluginRestartRequired
+
+    root = tmp_path / "plugins"
+    stage_plugin_package(
+        Path(__file__).resolve().parents[3] / "fixtures/plugins/restart_required",
+        root / "restart_required",
+    )
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [root])
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+        plugins={"restart_required": {"enabled": False}},
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    prepared = await app.prepare(replace(config, max_tokens=2048))
+    original = app.core
+    committed = []
+    try:
+        # An active unsafe instance can appear after preparation; publication
+        # must recheck the live owner, not rely solely on the initial check.
+        original.plugin_manager._services.plugin_configs = {
+            "restart_required": {"enabled": True}
+        }
+        original.plugin_manager._handles.pop("restart_required", None)
+        assert await original.plugin_manager.load("restart_required")
+        with pytest.raises(PluginRestartRequired):
+            await app.publish(prepared, commit=lambda: committed.append(True))
+        assert committed == []
+        assert app.core is original
+        assert app.generation == 1
+        assert app.accepting_work
+        assert not app._generation_manager.current.retired
+    finally:
+        await app.discard(prepared)
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_unpublished_unsafe_candidate_is_forcibly_reclaimed_on_failure(
+    tmp_path, monkeypatch, cancel
+):
+    import asyncio
+    from pathlib import Path
+    from shiori_plugin_testkit.packages import stage_plugin_package
+    import bootstrap.runtime.reload as reload_module
+
+    root = tmp_path / "plugins"
+    stage_plugin_package(
+        Path(__file__).resolve().parents[3] / "fixtures/plugins/restart_required",
+        root / "restart_required",
+    )
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [root])
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+        plugins={"restart_required": {"enabled": False}},
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    captured = []
+
+    async def fail_channels(*args, **kwargs):
+        # setup completed before channel construction, so the declaration is live.
+        if cancel:
+            raise asyncio.CancelledError()
+        raise RuntimeError("candidate channels failed")
+
+    build = reload_module.prepare_core_runtime
+
+    async def capture_core(*args, **kwargs):
+        core = await build(*args, **kwargs)
+        captured.append(core)
+        return core
+
+    monkeypatch.setattr(reload_module, "prepare_core_runtime", capture_core)
+    monkeypatch.setattr(reload_module, "start_channels", fail_channels)
+    try:
+        with pytest.raises(asyncio.CancelledError if cancel else RuntimeError):
+            await app.prepare(
+                replace(config, plugins={"restart_required": {"enabled": True}})
+            )
+        assert len(captured) == 1
+        assert captured[0].plugin_manager.states() == []
+        assert captured[0].event_bus._closed
+        assert not app.core.event_bus._closed
+        assert app.generation == 1
+    finally:
+        await app.shutdown()

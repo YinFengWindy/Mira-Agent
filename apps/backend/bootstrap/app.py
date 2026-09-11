@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from proactive_v2.presence import PresenceStore
     from session.manager import SessionManager
 
+
 def configure_logging_stream(stream) -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -180,9 +181,7 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
                 http_resources=self.http_resources,
                 event_bus=event_bus,
                 bot_commands=(
-                    plugin_manager.telegram_bot_commands
-                    if plugin_manager
-                    else None
+                    plugin_manager.telegram_bot_commands if plugin_manager else None
                 ),
                 interrupt_controller=self._dispatcher,
                 plugin_channels=plugin_manager.channels if plugin_manager else None,
@@ -214,7 +213,7 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
                     ]
                 )
             self._started = True
-        except Exception:
+        except BaseException:
             await self.shutdown()
             raise
 
@@ -225,7 +224,6 @@ class AppRuntime(RuntimeReloadMixin, RuntimeBackgroundMixin, RuntimeShutdownMixi
                 await asyncio.gather(*self._background_tasks)
         finally:
             await self.shutdown()
-
 
 
 def build_app_runtime(

@@ -28,7 +28,9 @@ def _config(*, optimizer: bool) -> str:
 
 
 @pytest.mark.asyncio
-async def test_build_config_toml_sees_the_text_committed_by_a_queued_apply(tmp_path: Path):
+async def test_build_config_toml_sees_the_text_committed_by_a_queued_apply(
+    tmp_path: Path,
+):
     """并发的 runtime.apply 先提交时，派生回调必须看到它提交后的文本。
 
     插件配置写入只改一张表、其余文本沿用当前已提交的配置。如果基准文本在事务锁
@@ -40,7 +42,8 @@ async def test_build_config_toml_sees_the_text_committed_by_a_queued_apply(tmp_p
     path = tmp_path / "config.toml"
     path.write_text(original, encoding="utf-8")
     app = AppRuntime(
-        load_config_text(original), tmp_path,
+        load_config_text(original),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -115,7 +118,8 @@ async def test_a_derived_write_retry_never_reruns_the_deriver(tmp_path: Path):
     path = tmp_path / "config.toml"
     path.write_text(config, encoding="utf-8")
     app = AppRuntime(
-        load_config_text(config), tmp_path,
+        load_config_text(config),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -134,17 +138,22 @@ async def test_a_derived_write_retry_never_reruns_the_deriver(tmp_path: Path):
             return current
 
         derive = DerivedWrite(
-            build_config_toml=_derive, fingerprint_payload={"op": "x"},
+            build_config_toml=_derive,
+            fingerprint_payload={"op": "x"},
         )
         payload = {"operation_id": "op-retry"}
 
         first = await settings.apply(
-            payload, prepare_service=lambda core: None,
-            publish_service=lambda service: None, derive=derive,
+            payload,
+            prepare_service=lambda core: None,
+            publish_service=lambda service: None,
+            derive=derive,
         )
         retry = await settings.apply(
-            dict(payload), prepare_service=lambda core: None,
-            publish_service=lambda service: None, derive=derive,
+            dict(payload),
+            prepare_service=lambda core: None,
+            publish_service=lambda service: None,
+            derive=derive,
         )
 
         assert retry == first
@@ -167,7 +176,8 @@ async def test_a_fingerprint_payload_that_cannot_be_json_encoded_is_rejected_cle
     path = tmp_path / "config.toml"
     path.write_text(config, encoding="utf-8")
     app = AppRuntime(
-        load_config_text(config), tmp_path,
+        load_config_text(config),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -188,4 +198,71 @@ async def test_a_fingerprint_payload_that_cannot_be_json_encoded_is_rejected_cle
 
         assert excinfo.value.code == "runtime_invalid_request"
     finally:
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_form_write_derives_after_queued_plugin_change_commits(
+    tmp_path, monkeypatch
+):
+    import tomllib
+    from desktop_bridge.runtime.settings_form import settings_form_write
+
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [])
+    original = _config(optimizer=False) + '\n[plugins.qqbot]\napp_id = "old"\n'
+    path = tmp_path / "config.toml"
+    path.write_text(original, encoding="utf-8")
+    app = AppRuntime(
+        load_config_text(original),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    settings = RuntimeSettingsApplication(app, path, RoleStore(tmp_path))
+    entered, release = asyncio.Event(), asyncio.Event()
+    prepare = app.prepare
+
+    async def gated(config):
+        entered.set()
+        await release.wait()
+        return await prepare(config)
+
+    monkeypatch.setattr(app, "prepare", gated)
+    first = second = None
+    try:
+        latest = _config(optimizer=False) + '\n[plugins.qqbot]\napp_id = "new"\n'
+        first = asyncio.create_task(
+            settings.apply(
+                {"config_toml": latest, "operation_id": "plugin"},
+                prepare_service=lambda core: None,
+                publish_service=lambda service: None,
+            )
+        )
+        await asyncio.wait_for(entered.wait(), 5)
+        payload = {
+            "config_toml": _config(optimizer=True),
+            "preserve_plugins": True,
+            "operation_id": "form",
+        }
+        second = asyncio.create_task(
+            settings.apply(
+                payload,
+                prepare_service=lambda core: None,
+                publish_service=lambda service: None,
+                derive=settings_form_write(payload),
+            )
+        )
+        await asyncio.sleep(0)
+        assert not second.done()
+        release.set()
+        await asyncio.gather(first, second)
+        assert tomllib.loads(path.read_text(encoding="utf-8"))["plugins"] == {
+            "qqbot": {"app_id": "new"}
+        }
+    finally:
+        release.set()
+        if first is not None:
+            await first
+        if second is not None:
+            await second
         await app.shutdown()
