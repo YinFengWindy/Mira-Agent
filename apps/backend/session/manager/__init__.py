@@ -24,12 +24,14 @@ from .models import Session
 from .persistence import _PersistenceMixin
 from .projection import _ProjectionMixin
 from .role_sessions import _RoleSessionsMixin
+from .undo_result import UndoSessionResult
+from .undo import _UndoMixin
 
 Session.__module__ = __name__
 
 
 class SessionManager(
-    _ManagerCoreMixin,
+    _UndoMixin,
     _RoleSessionsMixin,
     _PersistenceMixin,
     _ProjectionMixin,

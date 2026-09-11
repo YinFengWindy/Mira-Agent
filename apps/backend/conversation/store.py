@@ -19,8 +19,7 @@ def ensure_conversation_schema(connection: sqlite3.Connection) -> None:
 
 
 def _ensure_base_legacy_tables(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             key               TEXT PRIMARY KEY,
             created_at        TEXT NOT NULL,
@@ -28,10 +27,8 @@ def _ensure_base_legacy_tables(connection: sqlite3.Connection) -> None:
             last_consolidated INTEGER NOT NULL DEFAULT 0,
             metadata          TEXT
         )
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id          TEXT PRIMARY KEY,
             session_key TEXT NOT NULL,
@@ -43,13 +40,11 @@ def _ensure_base_legacy_tables(connection: sqlite3.Connection) -> None:
             ts          TEXT NOT NULL,
             UNIQUE (session_key, seq)
         )
-        """
-    )
+        """)
 
 
 def _ensure_conversation_tables(connection: sqlite3.Connection) -> None:
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS contacts (
             id          TEXT PRIMARY KEY,
             role_id     TEXT NOT NULL,
@@ -61,10 +56,8 @@ def _ensure_conversation_tables(connection: sqlite3.Connection) -> None:
             created_at  TEXT NOT NULL,
             updated_at  TEXT NOT NULL
         )
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             id                 TEXT PRIMARY KEY,
             role_id            TEXT NOT NULL,
@@ -78,38 +71,31 @@ def _ensure_conversation_tables(connection: sqlite3.Connection) -> None:
             created_at         TEXT NOT NULL,
             updated_at         TEXT NOT NULL
         )
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS thread_state (
             thread_id   TEXT PRIMARY KEY,
             summary     TEXT NOT NULL DEFAULT '',
             metadata    TEXT NOT NULL DEFAULT '{}',
             updated_at  TEXT NOT NULL
         )
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS contact_state (
             contact_id  TEXT PRIMARY KEY,
             summary     TEXT NOT NULL DEFAULT '',
             metadata    TEXT NOT NULL DEFAULT '{}',
             updated_at  TEXT NOT NULL
         )
-        """
-    )
-    connection.execute(
-        """
+        """)
+    connection.execute("""
         CREATE TABLE IF NOT EXISTS role_state (
             role_id     TEXT PRIMARY KEY,
             summary     TEXT NOT NULL DEFAULT '',
             metadata    TEXT NOT NULL DEFAULT '{}',
             updated_at  TEXT NOT NULL
         )
-        """
-    )
+        """)
 
 
 def _ensure_message_columns(connection: sqlite3.Connection) -> None:
@@ -153,10 +139,12 @@ class ConversationStore:
         db_path: str | Path,
         *,
         connection: sqlite3.Connection | None = None,
-        lock: threading.Lock | None = None,
+        lock: threading.Lock | threading.RLock | None = None,
     ) -> None:
         self.db_path = str(db_path)
-        self._conn = connection or sqlite3.connect(self.db_path, check_same_thread=False)
+        self._conn = connection or sqlite3.connect(
+            self.db_path, check_same_thread=False
+        )
         self._conn.row_factory = sqlite3.Row
         self._lock = lock or threading.Lock()
         self._owns_connection = connection is None
@@ -179,25 +167,21 @@ class ConversationStore:
 
     def list_contacts(self) -> list[ContactRecord]:
         with self._lock:
-            rows = self._conn.execute(
-                """
+            rows = self._conn.execute("""
                 SELECT id, role_id, kind, channel, external_id, display_name, metadata, created_at, updated_at
                 FROM contacts
                 ORDER BY role_id ASC, channel ASC, external_id ASC, id ASC
-                """
-            ).fetchall()
+                """).fetchall()
         return [self._row_to_contact(row) for row in rows]
 
     def list_threads(self) -> list[ThreadRecord]:
         with self._lock:
-            rows = self._conn.execute(
-                """
+            rows = self._conn.execute("""
                 SELECT id, role_id, contact_id, channel, thread_kind, external_thread_id,
                        legacy_session_key, archived, metadata, created_at, updated_at
                 FROM threads
                 ORDER BY role_id ASC, channel ASC, created_at ASC, id ASC
-                """
-            ).fetchall()
+                """).fetchall()
         return [self._row_to_thread(row) for row in rows]
 
     def get_thread_by_legacy_session_key(self, session_key: str) -> ThreadRecord | None:
@@ -517,7 +501,10 @@ class ConversationStore:
                 """,
                 (session_key,),
             ).fetchall()
-        return [cast_value if cast_value else None for cast_value in (row["thread_id"] for row in rows)]
+        return [
+            cast_value if cast_value else None
+            for cast_value in (row["thread_id"] for row in rows)
+        ]
 
     def list_thread_messages(self, thread_id: str) -> list[dict[str, Any]]:
         """Returns persisted message facts belonging to one formal thread."""
@@ -572,6 +559,8 @@ class ConversationStore:
     ) -> StateRecord:
         now = datetime.now().astimezone().isoformat()
         with self._lock:
+            # Session undo owns the surrounding transaction for facts and projections.
+            owns_transaction = not self._conn.in_transaction
             self._conn.execute(
                 f"""
                 INSERT INTO {table} ({owner_column}, summary, metadata, updated_at)
@@ -592,7 +581,8 @@ class ConversationStore:
                 f"SELECT {owner_column}, summary, metadata, updated_at FROM {table} WHERE {owner_column} = ?",
                 (owner_id,),
             ).fetchone()
-            self._conn.commit()
+            if owns_transaction:
+                self._conn.commit()
         if row is None:
             raise ValueError(f"state upsert failed: {table}:{owner_id}")
         return StateRecord(

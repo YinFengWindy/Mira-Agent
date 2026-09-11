@@ -9,6 +9,29 @@ from session.manager import SessionManager
 from session.store import SessionStore
 
 
+def test_standalone_state_upsert_commits_for_reopened_store(tmp_path: Path):
+    path = tmp_path / "conversation.db"
+    store = ConversationStore(path)
+    store.upsert_thread_state("thread", summary="thread", metadata={"message_count": 1})
+    store.upsert_contact_state(
+        "contact", summary="contact", metadata={"last_message_at": "now"}
+    )
+    store.upsert_role_state(
+        "role", summary="role", metadata={"last_thread_id": "thread"}
+    )
+    store.close()
+
+    reopened = ConversationStore(path)
+    try:
+        assert reopened.get_thread_state("thread").metadata == {"message_count": 1}
+        assert reopened.get_contact_state("contact").metadata == {
+            "last_message_at": "now"
+        }
+        assert reopened.get_role_state("role").metadata == {"last_thread_id": "thread"}
+    finally:
+        reopened.close()
+
+
 def test_conversation_store_ensures_schema_and_message_columns(tmp_path: Path) -> None:
     db_path = tmp_path / "sessions.db"
     store = ConversationStore(db_path)

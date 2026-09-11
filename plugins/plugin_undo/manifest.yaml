@@ -1,0 +1,9 @@
+api: 2
+id: plugin_undo
+version: '0.1.0'
+desc: 撤销最近被动回合并清理关联记忆来源
+capabilities:
+  - lifecycle
+  - bot_commands
+  - session_manager
+  - memory_engine
