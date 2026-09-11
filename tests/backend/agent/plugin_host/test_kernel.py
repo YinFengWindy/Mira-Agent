@@ -30,7 +30,6 @@ _EXPECTED_TOP_LEVEL_PLUGINS = {
     "observe",
     "plugin_undo",
     "qqbot",
-    "scene_awareness",
     "setup_helper",
     "shell_restore",
     "shell_safety",
@@ -40,7 +39,7 @@ _EXPECTED_TOP_LEVEL_PLUGINS = {
 
 
 def test_discover_finds_all_top_level_plugins():
-    """插件目录迁至仓库顶层 `plugins/` 后，内核发现路径必须能找到全部 17 个插件（#178）。"""
+    """插件目录迁至仓库顶层 `plugins/` 后，内核发现路径必须能找到当前插件，且两项核心能力不再被发现。"""
     plugins_dir = REPOSITORY_ROOT / "plugins"
     kernel = make_kernel([plugins_dir], event_bus=EventBus())
 
@@ -51,9 +50,9 @@ def test_discover_finds_all_top_level_plugins():
     # discover() 只报出名字证明不了入口真的存在；record.entry_file 必须是磁盘上
     # 真实存在的文件，否则装配阶段 import 会直接失败（#178 复审 #11）。
     for record in records:
-        assert record.entry_file.is_file(), (
-            f"{record.name} 的 entry_file 不存在: {record.entry_file}"
-        )
+        assert (
+            record.entry_file.is_file()
+        ), f"{record.name} 的 entry_file 不存在: {record.entry_file}"
 
 
 _V2_PLUGIN = """
@@ -159,7 +158,8 @@ async def test_v2_plugin_setup_and_unload(
     import sys
 
     module = next(
-        m for k, m in sys.modules.items()
+        m
+        for k, m in sys.modules.items()
         if k.startswith("akasic_plugin_") and k.endswith("_v2demo")
     )
     _ = await bus.emit(before_turn_ctx(session_key="test:v2"))
@@ -199,7 +199,8 @@ async def setup(ctx):
     import sys
 
     module = next(
-        m for k, m in sys.modules.items()
+        m
+        for k, m in sys.modules.items()
         if k.startswith("akasic_plugin_") and k.endswith("_gated")
     )
     assert module.captured["granted"] == ("events",)
@@ -255,7 +256,9 @@ async def test_config_enabled_false_skips_plugin(tmp_path: Path):
     """启停(issue #174)的来源是配置状态，不是 plugin.disabled 文件。"""
     stage_plugin_fixture("hello", tmp_path)
     kernel = make_kernel(
-        [tmp_path], event_bus=EventBus(), plugin_configs={"hello": {"enabled": False}},
+        [tmp_path],
+        event_bus=EventBus(),
+        plugin_configs={"hello": {"enabled": False}},
     )
     await kernel.load_all()
 
@@ -341,9 +344,7 @@ async def setup(ctx):
     ctx.bot_commands.add("chatid", "查看我的 chat_id")
 """.strip()
 
-_V2_BOT_COMMANDS_MANIFEST = (
-    "api: 2\nid: v2cmds\ncapabilities:\n  - bot_commands\n"
-)
+_V2_BOT_COMMANDS_MANIFEST = "api: 2\nid: v2cmds\ncapabilities:\n  - bot_commands\n"
 
 
 @pytest.mark.asyncio
@@ -365,7 +366,9 @@ async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unlo
     v2_dir = tmp_path / "v2cmds"
     v2_dir.mkdir()
     (v2_dir / "backend").mkdir()
-    (v2_dir / "backend" / "plugin.py").write_text(_V2_BOT_COMMANDS_PLUGIN, encoding="utf-8")
+    (v2_dir / "backend" / "plugin.py").write_text(
+        _V2_BOT_COMMANDS_PLUGIN, encoding="utf-8"
+    )
     (v2_dir / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
 
     kernel = make_kernel([tmp_path], event_bus=EventBus())
@@ -378,6 +381,8 @@ async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unlo
     # 卸载 v2 插件后，其 bot 命令必须随 effect 一并摘除，legacy 一侧不受影响
     _ = await kernel.unload("v2cmds")
     assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
+
+
 _RPC_PLUGIN = """
 async def _ping(payload):
     return {"pong": payload.get("value")}
@@ -438,9 +443,7 @@ async def test_v2_plugin_reads_host_service_references(tmp_path: Path):
     (plugin_dir / "backend" / "plugin.py").write_text(
         _HOST_SERVICES_PLUGIN, encoding="utf-8"
     )
-    (plugin_dir / "manifest.yaml").write_text(
-        _HOST_SERVICES_MANIFEST, encoding="utf-8"
-    )
+    (plugin_dir / "manifest.yaml").write_text(_HOST_SERVICES_MANIFEST, encoding="utf-8")
     workspace = tmp_path / "workspace-for-hostrefs"
     workspace.mkdir()
     memory_engine = object()
@@ -462,7 +465,8 @@ async def test_v2_plugin_reads_host_service_references(tmp_path: Path):
     import sys
 
     module = next(
-        m for k, m in sys.modules.items()
+        m
+        for k, m in sys.modules.items()
         if k.startswith("akasic_plugin_") and k.endswith("_hostrefs")
     )
     assert module.captured == {
@@ -503,7 +507,8 @@ async def setup(ctx):
     import sys
 
     module = next(
-        m for k, m in sys.modules.items()
+        m
+        for k, m in sys.modules.items()
         if k.startswith("akasic_plugin_") and k.endswith("_hostrefs_gated")
     )
     assert "未声明 capability" in module.captured["denied"]

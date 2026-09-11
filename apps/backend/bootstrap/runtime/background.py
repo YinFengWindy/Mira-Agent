@@ -22,6 +22,7 @@ class RuntimeBackground:
         core = candidate.core
         config = candidate.config
         self.candidate = candidate
+        self._scene = getattr(core, "scene_service", None)
         self._loops: list[_Stoppable] = []
         self._coroutines: list[Coroutine[Any, Any, None]] = []
         self._tasks: list[asyncio.Task[None]] = []
@@ -60,6 +61,8 @@ class RuntimeBackground:
 
     def start(self, previous: RuntimeBackground | None = None) -> None:
         """Transfers scheduling only after the previous accepted work finishes."""
+        if self._scene is not None:
+            self._scene.activate()
         if not self._coroutines:
             return
         lease = self.candidate.acquire()
@@ -73,7 +76,10 @@ class RuntimeBackground:
                     return
                 with bind_runtime(lease):
                     self._tasks = [
-                        asyncio.create_task(task, name=f"runtime:{self.candidate.generation}:background:{index}")
+                        asyncio.create_task(
+                            task,
+                            name=f"runtime:{self.candidate.generation}:background:{index}",
+                        )
                         for index, task in enumerate(self._coroutines)
                     ]
                     self._coroutines = []
@@ -83,7 +89,9 @@ class RuntimeBackground:
                 self.discard()
                 await lease.release()
 
-        self._runner = asyncio.create_task(run(), name=f"runtime:{self.candidate.generation}:background")
+        self._runner = asyncio.create_task(
+            run(), name=f"runtime:{self.candidate.generation}:background"
+        )
 
     def stop(self) -> None:
         """Closes admission and wakes sleepers without cancelling accepted work."""
@@ -132,7 +140,9 @@ class RuntimeBackgroundMixin:
         groups = list(self._background_groups.values())
         for group in groups:
             group.stop()
-        results = await asyncio.gather(*(group.drain() for group in groups), return_exceptions=True)
+        results = await asyncio.gather(
+            *(group.drain() for group in groups), return_exceptions=True
+        )
         errors = [result for result in results if isinstance(result, Exception)]
         if errors:
             raise ExceptionGroup("Background runtime shutdown failed", errors)

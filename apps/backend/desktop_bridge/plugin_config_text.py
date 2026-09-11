@@ -184,9 +184,14 @@ def _locate_owned_spans(
     in_multiline_basic = False
     in_multiline_literal = False
     for index, raw_line in enumerate(lines):
-        is_statement_start = depth == 0 and not in_multiline_basic and not in_multiline_literal
+        is_statement_start = (
+            depth == 0 and not in_multiline_basic and not in_multiline_literal
+        )
         depth, in_multiline_basic, in_multiline_literal, comment_start = _scan_line(
-            raw_line, depth, in_multiline_basic, in_multiline_literal,
+            raw_line,
+            depth,
+            in_multiline_basic,
+            in_multiline_literal,
         )
         if not is_statement_start:
             continue
@@ -207,7 +212,10 @@ def _locate_owned_spans(
 
 
 def _scan_line(
-    line: str, depth: int, in_multiline_basic: bool, in_multiline_literal: bool,
+    line: str,
+    depth: int,
+    in_multiline_basic: bool,
+    in_multiline_literal: bool,
 ) -> tuple[int, bool, bool, int | None]:
     """Advances TOML lexer state across one physical line.
 

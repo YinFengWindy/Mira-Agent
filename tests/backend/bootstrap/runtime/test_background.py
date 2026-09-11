@@ -27,10 +27,16 @@ class WorkLoop:
 
 def candidate(number):
     core = SimpleNamespace(
-        provider=None, role_runtime_registry=None, stop=AsyncMock(),
-        memory_runtime=SimpleNamespace(markdown=SimpleNamespace(store=None), aclose=AsyncMock()),
+        provider=None,
+        role_runtime_registry=None,
+        stop=AsyncMock(),
+        memory_runtime=SimpleNamespace(
+            markdown=SimpleNamespace(store=None), aclose=AsyncMock()
+        ),
     )
-    return RuntimeCandidate(number, core, SimpleNamespace(model_registrations=[]), published=True)
+    return RuntimeCandidate(
+        number, core, SimpleNamespace(model_registrations=[]), published=True
+    )
 
 
 @pytest.mark.asyncio
@@ -43,10 +49,14 @@ async def test_new_background_scheduling_waits_for_accepted_old_work(monkeypatch
         loop_consumer(loop)
         return [loop.run()], None
 
-    monkeypatch.setattr("bootstrap.runtime.background.build_memory_optimizer_task", build)
+    monkeypatch.setattr(
+        "bootstrap.runtime.background.build_memory_optimizer_task", build
+    )
     app = SimpleNamespace(features=SimpleNamespace(enable_proactive=False))
     old_version, new_version = candidate(1), candidate(2)
-    old_group, new_group = RuntimeBackground(app, old_version), RuntimeBackground(app, new_version)
+    old_group, new_group = RuntimeBackground(app, old_version), RuntimeBackground(
+        app, new_version
+    )
     old_group.start()
     await old_loop.started.wait()
     old_group.stop()
@@ -64,3 +74,24 @@ async def test_new_background_scheduling_waits_for_accepted_old_work(monkeypatch
     new_loop.finish.set()
     await new_group.drain()
     await new_version.retire()
+
+
+def test_scene_intake_activates_at_publication_even_without_polling_loops(monkeypatch):
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(
+        "bootstrap.runtime.background.build_memory_optimizer_task",
+        lambda *args, **kwargs: ([], None),
+    )
+    version = candidate(1)
+    scene = SimpleNamespace(activate=Mock(), deactivate=Mock())
+    version.core.scene_service = scene
+    group = RuntimeBackground(
+        SimpleNamespace(features=SimpleNamespace(enable_proactive=False)), version
+    )
+    scene.activate.assert_not_called()
+    group.start()
+    scene.activate.assert_called_once()
+    group.stop()
+    # Accepted old turns still emit their AfterTurn on this generation-local bus.
+    scene.deactivate.assert_not_called()

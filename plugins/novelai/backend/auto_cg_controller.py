@@ -9,6 +9,7 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
+from plugins.novelai.backend.scene_prompt import prepare_scene_prompt
 from plugins.novelai.backend.tool import GenerateImageTool
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,15 @@ class AutoCgController:
         session_manager: Any,
         generate_tool: GenerateImageTool,
         tool_registry: _ToolLookup,
+        light_provider: Any = None,
+        light_model: str = "",
+        prompt_provider: Any = prepare_scene_prompt,
     ) -> None:
+        self._light_provider = light_provider
+        self._light_model = light_model
+        self._prompt_provider = prompt_provider
+        self._closed = False
+        self._all_tasks: set[asyncio.Task[None]] = set()
         self._role_store = role_store
         self._policy = policy
         self._session_manager = session_manager
@@ -56,11 +65,13 @@ class AutoCgController:
     def schedule(self, event: SceneObservationCommitted) -> None:
         """Schedule non-blocking CG generation from one scene observation."""
 
+        if self._closed:
+            return
         self._cancel_pending_task(event.session_key)
         if event.source == "passive":
             self._policy.advance_turn(event.session_key)
-        # 宿主负责启停订阅；这里只判断本次场景观察是否要求生成。
-        if not event.should_generate:
+        # The consumer owns visual selection; closed/nonvisual observations never generate.
+        if event.transition in {"closed", "none"} or not event.visual_description:
             return
         session = self._session_manager.get_or_create(event.session_key)
         role_id = str(event.role_id or session.metadata.get("role_id") or "").strip()
@@ -77,6 +88,7 @@ class AutoCgController:
             name=f"novelai_auto_cg:{event.session_key}",
         )
         self._tasks[event.session_key] = task
+        self._all_tasks.add(task)
         task.add_done_callback(
             lambda completed, session_key=event.session_key: self._finish_task(
                 session_key,
@@ -87,7 +99,8 @@ class AutoCgController:
     async def terminate(self) -> None:
         """Cancel and await all in-flight automatic CG tasks."""
 
-        tasks = list(self._tasks.values())
+        self._closed = True
+        tasks = list(self._all_tasks)
         for task in tasks:
             _ = task.cancel()
         if tasks:
@@ -104,10 +117,7 @@ class AutoCgController:
         prepared = self._policy.guard(
             event.session_key,
             {
-                "prompt": event.prompt,
-                "negative_prompt": event.negative_prompt,
                 "mode": "txt2img",
-                "size_preset": event.size_preset,
                 "intent": "scene_cg",
                 "scene_key": event.scene_key,
                 "visual_key": event.visual_key,
@@ -122,6 +132,18 @@ class AutoCgController:
                 event.session_key,
                 getattr(prepared, "reason", "policy_denied"),
             )
+            return
+        prompt = await self._prompt_provider(
+            self._light_provider,
+            model=self._light_model,
+            event=event,
+        )
+        prepared = self._policy.guard(
+            event.session_key,
+            {**prepared, **prompt},
+            bypass_cooldown=bypass_cooldown,
+        )
+        if not isinstance(prepared, dict):
             return
         media = await self._generate_media_with_retry(
             prepared,
@@ -183,6 +205,7 @@ class AutoCgController:
             task.cancel()
 
     def _finish_task(self, session_key: str, task: asyncio.Task[None]) -> None:
+        self._all_tasks.discard(task)
         if self._tasks.get(session_key) is task:
             self._tasks.pop(session_key, None)
         if task.cancelled():

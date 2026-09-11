@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from agent.provider import LLMResponse, ToolCall
 from agent.lifecycle.types import AfterReasoningCtx, AfterToolResultCtx
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.message_push import MessagePushTool
@@ -54,6 +55,25 @@ def _services(
     plugin_configs: dict[str, dict[str, Any]] | None = None,
 ) -> HostServices:
     return HostServices(
+        light_provider=SimpleNamespace(
+            chat=AsyncMock(
+                return_value=LLMResponse(
+                    content="",
+                    tool_calls=[
+                        ToolCall(
+                            "cg",
+                            "submit_scene_image_prompt",
+                            {
+                                "prompt": "1girl, pink hair, rain",
+                                "negative_prompt": "blurry",
+                                "size_preset": "portrait",
+                            },
+                        )
+                    ],
+                )
+            )
+        ),
+        light_model="light-model",
         event_bus=event_bus or EventBus(),
         tool_registry=tool_registry or ToolRegistry(),
         workspace=tmp_path,
@@ -263,10 +283,7 @@ def test_plugin_wires_scene_observations_to_automatic_cg(tmp_path: Path) -> None
                 transition="started",
                 scene_key="rain-confession",
                 visual_key="rain-confession-standing",
-                should_generate=True,
-                prompt="1girl, pink hair, standing in rain, emotional, night",
-                negative_prompt="blurry, text",
-                size_preset="portrait",
+                visual_description="粉发少女站在雨里",
             )
         )
         await asyncio.wait_for(pushed.wait(), timeout=2)
@@ -363,10 +380,7 @@ def test_unload_unsubscribes_scene_observation_before_terminating_auto_cg(
             transition="started",
             scene_key="rain-confession",
             visual_key="rain-confession-standing",
-            should_generate=True,
-            prompt="1girl, pink hair, standing in rain",
-            negative_prompt="blurry",
-            size_preset="portrait",
+            visual_description="粉发少女站在雨里",
         )
         defaults.update(overrides)
         return SceneObservationCommitted(**defaults)

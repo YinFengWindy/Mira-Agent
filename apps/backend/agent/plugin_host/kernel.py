@@ -49,6 +49,8 @@ from agent.plugin_host.plugin_data import (
 from agent.plugin_host.rpc import PluginRpcRegistry
 from agent.plugin_host.runtime_context import PluginRuntimeContext
 from bus.event_bus import EventBus
+from core.scene.demand import SceneObservationDemand
+from agent.plugin_host.scene_observations import SceneObservationsCapability
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,9 @@ class HostServices:
     # 一次性迁移；打包形态下该目录不存在，字段为 None 即可。
     legacy_plugin_root: Path | None = None
     role_runtime_registry: Any = None
+    scene_observations: SceneObservationDemand = field(
+        default_factory=SceneObservationDemand
+    )
     is_reload: bool = False
     previously_active_plugins: frozenset[str] = frozenset()
 
@@ -319,9 +324,7 @@ class PluginKernel:
             raise ManifestError(
                 f"v2 插件 {handle.record.name} 的入口缺少 setup(ctx) 函数"
             )
-        setup_fn = cast(
-            "Callable[[PluginRuntimeContext], Awaitable[None]]", setup
-        )
+        setup_fn = cast("Callable[[PluginRuntimeContext], Awaitable[None]]", setup)
         context = PluginRuntimeContext(
             plugin_id=handle.plugin_id,
             plugin_dir=handle.record.plugin_dir,
@@ -337,6 +340,9 @@ class PluginKernel:
 
         services = self._services
         builders: dict[str, Any] = {
+            "scene_observations": lambda: SceneObservationsCapability(
+                services.scene_observations, handle.effects
+            ),
             "events": lambda: ScopedEventBus(services.event_bus, handle.effects),
             "kv": lambda: open_plugin_kv(
                 workspace=services.workspace,
@@ -464,7 +470,9 @@ class PluginKernel:
         return [handle.describe() for handle in self._handles.values()]
 
     def _active_handles(self) -> list[PluginHandle]:
-        return [self._handles[name] for name in self._active_order if name in self._handles]
+        return [
+            self._handles[name] for name in self._active_order if name in self._handles
+        ]
 
     def _collect_phase(self, slot: str) -> list[object]:
         modules: list[object] = []
@@ -502,15 +510,27 @@ class PluginKernel:
 
     @property
     def tool_hooks(self) -> list[Any]:
-        return [h for handle in self._active_handles() for h in handle.contributions.tool_hooks]
+        return [
+            h
+            for handle in self._active_handles()
+            for h in handle.contributions.tool_hooks
+        ]
 
     @property
     def channels(self) -> list[Any]:
-        return [c for handle in self._active_handles() for c in handle.contributions.channels]
+        return [
+            c
+            for handle in self._active_handles()
+            for c in handle.contributions.channels
+        ]
 
     @property
     def proactive_gates(self) -> list[Any]:
-        return [g for handle in self._active_handles() for g in handle.contributions.proactive_gates]
+        return [
+            g
+            for handle in self._active_handles()
+            for g in handle.contributions.proactive_gates
+        ]
 
     @property
     def telegram_bot_commands(self) -> list[tuple[str, str]]:

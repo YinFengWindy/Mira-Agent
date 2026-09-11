@@ -17,6 +17,7 @@ KNOWN_CAPABILITIES = frozenset(
         "proactive_gates",
         "channels",
         "events",
+        "scene_observations",
         "kv",
         "config",
         "background",

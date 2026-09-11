@@ -24,12 +24,14 @@ from agent.config_models import (
     TelegramChannelConfig,
     WiringConfig,
 )
+from agent.scene_preferences import load_scene_preferences, migrate_scene_preferences
 from agent.voice_config import VoiceAsrConfig, VoiceConfig, VoiceTtsConfig
 from core.common.workspace import resolve_default_workspace
 from proactive_v2.config import ProactiveConfig
 from proactive_v2.config_loader import ProactiveConfigError, load_proactive_config
 
 logger = logging.getLogger(__name__)
+
 
 def _validated_timezone(tz_name: str, *, enabled: bool) -> str:
     """仅当 anyaction_enabled=True 时校验时区合法性，无效则启动时 fail-fast。"""
@@ -60,6 +62,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
     from agent.proactive_preferences import migrate_proactive_preferences
 
     data = migrate_proactive_preferences(resolved_path, data)
+    data = migrate_scene_preferences(resolved_path, data)
     return load_config_data(data)
 
 
@@ -154,6 +157,7 @@ def load_config_data(data: dict[str, Any]) -> Config:
         voice=voice,
         wiring=wiring,
         plugins=plugins,
+        scene_observation_enabled=load_scene_preferences(data),
         model_registrations=model_registrations,
     )
 
@@ -174,10 +178,7 @@ def _load_model_registrations(
         raise ValueError("llm.registrations 必须是数组")
     if any(not isinstance(item, dict) for item in raw_registrations):
         raise ValueError("模型注册必须是对象")
-    registrations = [
-        _parse_model_registration(item)
-        for item in raw_registrations
-    ]
+    registrations = [_parse_model_registration(item) for item in raw_registrations]
     _validate_model_registrations(registrations)
     return registrations
 
@@ -328,14 +329,20 @@ def _load_voice_config(data: dict) -> VoiceConfig:
         asr=VoiceAsrConfig(
             enabled=bool(asr.get("enabled", False)),
             provider=str(asr.get("provider", "tencent") or "tencent"),
-            base_url=str(asr.get("base_url", "https://asr.tencentcloudapi.com/") or "https://asr.tencentcloudapi.com/"),
+            base_url=str(
+                asr.get("base_url", "https://asr.tencentcloudapi.com/")
+                or "https://asr.tencentcloudapi.com/"
+            ),
             secret_id=_resolve(str(asr.get("secret_id", ""))),
             secret_key=_resolve(str(asr.get("secret_key", ""))),
         ),
         tts=VoiceTtsConfig(
             enabled=bool(tts.get("enabled", False)),
             provider=str(tts.get("provider", "minimax") or "minimax"),
-            base_url=str(tts.get("base_url", "https://api.minimaxi.com/v1/t2a_v2") or "https://api.minimaxi.com/v1/t2a_v2"),
+            base_url=str(
+                tts.get("base_url", "https://api.minimaxi.com/v1/t2a_v2")
+                or "https://api.minimaxi.com/v1/t2a_v2"
+            ),
             model=str(tts.get("model", "speech-2.8-turbo") or "speech-2.8-turbo"),
             api_key=_resolve(str(tts.get("api_key", ""))),
             volume=float(tts.get("volume", 2.0)),

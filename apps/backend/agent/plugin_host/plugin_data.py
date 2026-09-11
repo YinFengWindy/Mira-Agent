@@ -90,9 +90,7 @@ def migrate_legacy_plugin_config(
         return
     target = plugin_dir / _CONFIG_FILENAME
     legacy = legacy_plugin_root / plugin_id / _CONFIG_FILENAME
-    _migrate_legacy_json(
-        [legacy], target, plugin_id=plugin_id, description="配置覆盖"
-    )
+    _migrate_legacy_json([legacy], target, plugin_id=plugin_id, description="配置覆盖")
 
 
 def open_plugin_kv(
@@ -130,8 +128,8 @@ def _migrate_legacy_json(
 ) -> None:
     """一次性、原子地把 ``candidates`` 中第一个存在的 JSON 文件迁移到 ``target``。
 
-    不搬的话，已在使用 kv 的插件（novelai 的自动 CG 冷却与场景去重、
-    scene_awareness 的会话场景状态）会在升级到本版本时状态归零——对 novelai
+    不搬的话，已在使用 kv 的插件（例如 novelai 的自动 CG 冷却与场景去重）
+    会在升级到本版本时状态归零——对 novelai
     而言意味着去重失效、同一场景被重复生图。
 
     按 ``candidates`` 顺序取第一个存在的来源。**只删除真正被迁移的那一个

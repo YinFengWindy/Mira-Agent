@@ -143,10 +143,11 @@ class SceneObservationCommitted:
     transition: SceneTransition
     scene_key: str = ""
     visual_key: str = ""
-    should_generate: bool = False
-    prompt: str = ""
-    negative_prompt: str = ""
-    size_preset: str = ""
+    visual_description: str = ""
+    role_name: str = ""
+    role_description: str = ""
+    user_message: str = ""
+    assistant_reply: str = ""
     tools_used: tuple[str, ...] = ()
 
 

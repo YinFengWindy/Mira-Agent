@@ -6,6 +6,9 @@ capabilities:
   - tools
   - tool_hooks
   - events
+  - scene_observations
+  - light_provider
+  - light_model
   - kv
   - config
   - rpc

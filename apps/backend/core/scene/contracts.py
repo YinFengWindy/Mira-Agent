@@ -1,28 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from bus.events_lifecycle import SceneTransition
-from plugins.novelai.backend.models import NovelAISizePreset
-from plugins.novelai.backend.prompt_validation import validate_novelai_prompt
 
 if TYPE_CHECKING:
     from agent.provider import ToolCall
 
 SCENE_DECISION_TOOL_NAME = "submit_scene_observation"
-_ALLOWED_SIZE_PRESETS = {"square", "landscape", "portrait"}
-_REQUIRED_ARGUMENTS = (
-    "transition",
-    "should_generate",
-    "scene_key",
-    "visual_key",
-    "prompt",
-    "negative_prompt",
-    "size_preset",
-)
-
-_SceneImageSizePreset = NovelAISizePreset | Literal[""]
+_REQUIRED_ARGUMENTS = ("transition", "scene_key", "visual_key", "visual_description")
 
 SCENE_DECISION_TOOL_SCHEMA: dict[str, Any] = {
     "type": "function",
@@ -39,10 +26,6 @@ SCENE_DECISION_TOOL_SCHEMA: dict[str, Any] = {
                     "enum": ["started", "same", "changed", "closed", "none"],
                     "description": "无当前场景且出现可见场景时为 started；场景本身切换时为 changed；同一场景延续为 same；明确结束为 closed；仅在完全没有可见场景时为 none。",
                 },
-                "should_generate": {
-                    "type": "boolean",
-                    "description": "started 和 changed 必须为 true；same 仅在 visual_key 变化时为 true；closed 和 none 必须为 false。",
-                },
                 "scene_key": {
                     "type": "string",
                     "description": "持续场景的稳定英文标识。started 和 changed 提供新值；same 必须沿用 current_scene_key；closed 和 none 必须为空字符串。",
@@ -51,18 +34,9 @@ SCENE_DECISION_TOOL_SCHEMA: dict[str, Any] = {
                     "type": "string",
                     "description": "本次可见定格的稳定英文标识，包含动作、姿势、位置关系、构图或光线。动作或镜头有实质变化时必须换新值；closed 和 none 必须为空字符串。",
                 },
-                "prompt": {
+                "visual_description": {
                     "type": "string",
-                    "description": "生成 CG 时的英文 NovelAI tags；不生成时必须为空字符串。",
-                },
-                "negative_prompt": {
-                    "type": "string",
-                    "description": "生成 CG 时的英文 NovelAI negative tags；不生成时必须为空字符串。",
-                },
-                "size_preset": {
-                    "type": "string",
-                    "enum": ["", "square", "landscape", "portrait"],
-                    "description": "生成 CG 时选择尺寸；不生成时必须为空字符串。",
+                    "description": "用自然语言描述已发生的可见场景事实：人物外观、动作、位置、环境及光线；不得编造后续动作。closed 和 none 为空。",
                 },
             },
         },
@@ -85,15 +59,12 @@ class SceneDecisionInput:
 
 @dataclass(frozen=True)
 class SceneDecision:
-    """Validated scene transition and optional CG rendering request."""
+    """Validated scene transition and provider-independent visual facts."""
 
     transition: SceneTransition
     scene_key: str = ""
     visual_key: str = ""
-    should_generate: bool = False
-    prompt: str = ""
-    negative_prompt: str = ""
-    size_preset: _SceneImageSizePreset = ""
+    visual_description: str = ""
 
 
 class SceneDecisionProtocolError(ValueError):
@@ -179,7 +150,7 @@ def parse_scene_decision_payload(
     argument_keys: tuple[str, ...] = (),
     content_length: int = 0,
 ) -> SceneDecision:
-    """Apply scene and NovelAI invariants to one schema-complete payload."""
+    """Apply neutral scene invariants to one schema-complete payload."""
 
     def fail(message: str) -> None:
         raise SceneDecisionProtocolError(
@@ -190,34 +161,27 @@ def parse_scene_decision_payload(
             content_length=content_length,
         )
 
+    if any(not isinstance(payload.get(key), str) for key in _REQUIRED_ARGUMENTS):
+        fail("场景观察参数必须是字符串")
     transition_text = str(payload.get("transition") or "").strip()
     if transition_text not in {"started", "same", "changed", "closed", "none"}:
         fail(f"场景观察 transition 不支持: {transition_text}")
     transition = cast(SceneTransition, transition_text)
-    should_generate = payload.get("should_generate")
-    if not isinstance(should_generate, bool):
-        fail("场景观察缺少布尔 should_generate")
-    if transition in {"started", "changed"} and not should_generate:
-        fail(f"场景 {transition} 必须生成 CG")
-    if transition in {"closed", "none"} and should_generate:
-        fail(f"场景 {transition} 不能生成 CG")
-
     scene_key = str(payload.get("scene_key") or "").strip()
     visual_key = str(payload.get("visual_key") or "").strip()
-    prompt = str(payload.get("prompt") or "").strip()
-    negative_prompt = str(payload.get("negative_prompt") or "").strip()
-    size_preset = str(payload.get("size_preset") or "").strip()
-    has_image_parameters = any((prompt, negative_prompt, size_preset))
+    visual_description = str(payload.get("visual_description") or "").strip()
+    if set(payload) - set(_REQUIRED_ARGUMENTS):
+        fail("场景观察包含未知参数")
 
     if transition == "none":
         if current_scene_key:
             fail("已有场景时不能返回 none")
-        if scene_key or visual_key or has_image_parameters:
-            fail("无场景结果不能提供场景或图像参数")
+        if scene_key or visual_key or visual_description:
+            fail("无场景结果不能提供场景或视觉描述")
         return SceneDecision(transition=transition)
     if transition == "closed":
-        if scene_key or visual_key or has_image_parameters:
-            fail("关闭场景结果不能提供场景或图像参数")
+        if scene_key or visual_key or visual_description:
+            fail("关闭场景结果不能提供场景或视觉描述")
         return SceneDecision(transition=transition)
     if transition == "same" and not scene_key:
         scene_key = current_scene_key
@@ -231,32 +195,11 @@ def parse_scene_decision_payload(
         visual_key = current_visual_key
     if not visual_key:
         fail("场景观察缺少 visual_key")
-    if transition == "same" and should_generate == (visual_key == current_visual_key):
-        fail("场景 same 仅在 visual_key 变化时生成 CG")
-    if not should_generate:
-        if has_image_parameters:
-            fail("未生成 CG 的场景不能提供图像参数")
-        return SceneDecision(
-            transition=transition,
-            scene_key=scene_key,
-            visual_key=visual_key,
-        )
-
-    if not prompt:
-        fail("场景观察生成 CG 时缺少 prompt")
-    if size_preset not in _ALLOWED_SIZE_PRESETS:
-        fail(f"场景观察 size_preset 不支持: {size_preset}")
-    try:
-        validate_novelai_prompt(prompt, field_name="prompt")
-        validate_novelai_prompt(negative_prompt, field_name="negative_prompt")
-    except ValueError as error:
-        fail(str(error))
+    if not visual_description:
+        fail("可见场景缺少 visual_description")
     return SceneDecision(
         transition=transition,
         scene_key=scene_key,
         visual_key=visual_key,
-        should_generate=True,
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        size_preset=cast(_SceneImageSizePreset, size_preset),
+        visual_description=visual_description,
     )
