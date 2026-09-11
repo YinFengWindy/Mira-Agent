@@ -76,7 +76,8 @@ def _format_cache_status(turns: tuple[KVCacheTurn, ...]) -> str:
     overall_hit = sum(turn.hit_tokens or 0 for turn in turns)
     overall_pct = (overall_hit / overall_prompt * 100) if overall_prompt > 0 else 0.0
     lines = [
-        f"⚡ KVCache · 最近 {len(turns)} 轮", "",
+        f"⚡ KVCache · 最近 {len(turns)} 轮",
+        "",
         f"命中率  {overall_pct:.1f}%  {_pct_bar(overall_pct)}",
         f"Token  {overall_hit:,} / {overall_prompt:,}",
     ]
@@ -88,7 +89,9 @@ def _format_cache_status(turns: tuple[KVCacheTurn, ...]) -> str:
         hit, prompt = turn.hit_tokens or 0, turn.prompt_tokens or 0
         pct = (hit / prompt * 100) if prompt > 0 else 0.0
         lines.extend(["", ""])
-        lines.append(f"{_format_ts(turn.timestamp)}   {_pct_emoji(pct)} {pct:.1f}%  {_pct_bar(pct)}")
+        lines.append(
+            f"{_format_ts(turn.timestamp)}   {_pct_emoji(pct)} {pct:.1f}%  {_pct_bar(pct)}"
+        )
         lines.append(f"    {hit:,} / {prompt:,} tokens")
         if preview:
             lines.append(f"    {preview}")

@@ -64,7 +64,9 @@ def test_synthesized_legacy_manifest_grants_all(tmp_path: Path):
     assert manifest.capabilities == LEGACY_CAPABILITIES
 
 
-def test_manifest_parses_optional_dependencies_without_making_them_strong(tmp_path: Path):
+def test_manifest_parses_optional_dependencies_without_making_them_strong(
+    tmp_path: Path,
+):
     _ = (tmp_path / "manifest.yaml").write_text(
         "api: 2\nid: demo\ncapabilities: [dependencies]\n"
         "optional_dependencies: [observe, observe]\n",

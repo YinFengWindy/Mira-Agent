@@ -15,20 +15,33 @@ _COMMANDS = [("memorystatus", "查看记忆整理状态"), ("kvcache", "查看 K
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("observe", ["missing", "disabled", "failed", "unexported"])
-async def test_status_commands_stay_active_without_observe(kernel_factory, run_command, observe):
+async def test_status_commands_stay_active_without_observe(
+    kernel_factory, run_command, observe
+):
     async with kernel_factory(observe=observe) as (kernel, bus):
-        record = next(record for record in kernel.discover() if record.name == "status_commands")
+        record = next(
+            record for record in kernel.discover() if record.name == "status_commands"
+        )
         assert record.manifest.is_v2
         assert record.manifest.dependencies == ()
         assert record.manifest.optional_dependencies == ("observe",)
-        assert set(record.manifest.capabilities) == {"lifecycle", "bot_commands", "dependencies"}
+        assert set(record.manifest.capabilities) == {
+            "lifecycle",
+            "bot_commands",
+            "dependencies",
+        }
         assert kernel.telegram_bot_commands == _COMMANDS
         assert "还没有完成过记忆整理" in await run_command(kernel, bus, "/memorystatus")
-        assert await run_command(kernel, bus, "/kvcache") == "KVCache 不可用（observe 未安装、未启用或未提供遥测接口）。"
+        assert (
+            await run_command(kernel, bus, "/kvcache")
+            == "KVCache 不可用（observe 未安装、未启用或未提供遥测接口）。"
+        )
 
 
 @pytest.mark.asyncio
-async def test_missing_provider_does_not_import_its_implementation(kernel_factory, run_command, monkeypatch):
+async def test_missing_provider_does_not_import_its_implementation(
+    kernel_factory, run_command, monkeypatch
+):
     original_import = builtins.__import__
 
     def reject_observe(name, *args, **kwargs):
@@ -42,15 +55,22 @@ async def test_missing_provider_does_not_import_its_implementation(kernel_factor
 
 
 @pytest.mark.asyncio
-async def test_real_observe_writer_and_provider_reload_use_current_api(kernel_factory, run_command):
+async def test_real_observe_writer_and_provider_reload_use_current_api(
+    kernel_factory, run_command
+):
     async with kernel_factory(observe="active") as (kernel, bus):
         assert await run_command(kernel, bus, "/kvcache") == "暂无 KVCache 数据。"
         modules = kernel.before_turn_modules
         first_api = kernel._dependency_api("observe")
         event = TurnCommitted(
-            session_key="telegram:1", channel="telegram", chat_id="1",
-            input_message="hi", persisted_user_message="hi", assistant_response="真实回复",
-            tools_used=[], react_stats={"cache_prompt_tokens": 1000, "cache_hit_tokens": 800},
+            session_key="telegram:1",
+            channel="telegram",
+            chat_id="1",
+            input_message="hi",
+            persisted_user_message="hi",
+            assistant_response="真实回复",
+            tools_used=[],
+            react_stats={"cache_prompt_tokens": 1000, "cache_hit_tokens": 800},
         )
         await bus.emit(event)
         async with asyncio.timeout(5):
@@ -74,7 +94,9 @@ async def test_real_observe_writer_and_provider_reload_use_current_api(kernel_fa
 
 
 @pytest.mark.asyncio
-async def test_repeated_status_enable_and_unload_have_no_duplicate_contributions(kernel_factory, run_command):
+async def test_repeated_status_enable_and_unload_have_no_duplicate_contributions(
+    kernel_factory, run_command
+):
     async with kernel_factory() as (kernel, bus):
         for _ in range(3):
             assert await kernel.load("status_commands")
@@ -88,7 +110,9 @@ async def test_repeated_status_enable_and_unload_have_no_duplicate_contributions
 
 
 @pytest.mark.asyncio
-async def test_partial_setup_failure_rolls_back_modules_and_commands(kernel_factory, monkeypatch):
+async def test_partial_setup_failure_rolls_back_modules_and_commands(
+    kernel_factory, monkeypatch
+):
     original_add = BotCommandsCapability.add
 
     def fail_after_registration(self, command, description):

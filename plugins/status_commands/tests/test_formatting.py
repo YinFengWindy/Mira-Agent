@@ -2,7 +2,11 @@
 
 
 def test_multimodal_preview_keeps_text_without_image_payload(backend):
-    value = [{"type": "text", "text": " first "}, {"type": "image_url", "image_url": "secret"}, {"type": "text", "text": "second"}]
+    value = [
+        {"type": "text", "text": " first "},
+        {"type": "image_url", "image_url": "secret"},
+        {"type": "text", "text": "second"},
+    ]
     assert backend.formatting.content_to_text(value) == "first\nsecond"
 
 

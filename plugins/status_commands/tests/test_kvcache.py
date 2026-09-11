@@ -12,13 +12,23 @@ from plugins.observe.backend.telemetry import KVCacheTurn
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("content", "limit"),
-    [("/kvcache", 5), (" /KVCACHE@SomeBot 3 ", 3), ("/cache_status 8 extra", 8),
-     ("/kvcache invalid", 5), ("/kvcache 0", 1), ("/kvcache -5", 1), ("/kvcache 999", 30)],
+    [
+        ("/kvcache", 5),
+        (" /KVCACHE@SomeBot 3 ", 3),
+        ("/cache_status 8 extra", 8),
+        ("/kvcache invalid", 5),
+        ("/kvcache 0", 1),
+        ("/kvcache -5", 1),
+        ("/kvcache 999", 30),
+    ],
 )
-async def test_cache_command_queries_public_reader_with_bounded_limit(backend, command_frame, content, limit):
+async def test_cache_command_queries_public_reader_with_bounded_limit(
+    backend, command_frame, content, limit
+):
     query = Mock(return_value=())
     dependencies = PluginDependencies(
-        (), Mock(return_value=SimpleNamespace(recent_cache_turns=query)),
+        (),
+        Mock(return_value=SimpleNamespace(recent_cache_turns=query)),
         optional_declared=("observe",),
     )
     frame = command_frame(content)
@@ -28,13 +38,18 @@ async def test_cache_command_queries_public_reader_with_bounded_limit(backend, c
 
 
 @pytest.mark.asyncio
-async def test_cache_report_keeps_totals_per_turn_time_bars_and_previews(backend, command_frame):
+async def test_cache_report_keeps_totals_per_turn_time_bars_and_previews(
+    backend, command_frame
+):
     turns = (
         KVCacheTurn(" a reply\nwith spaces ", "2026-09-11T04:05:00Z", 1000, 800),
-        KVCacheTurn("[SYSTEM_CONTEXT_FRAME] hidden", "2026-09-11T04:04:00Z", None, None),
+        KVCacheTurn(
+            "[SYSTEM_CONTEXT_FRAME] hidden", "2026-09-11T04:04:00Z", None, None
+        ),
     )
     dependencies = PluginDependencies(
-        (), Mock(return_value=SimpleNamespace(recent_cache_turns=Mock(return_value=turns))),
+        (),
+        Mock(return_value=SimpleNamespace(recent_cache_turns=Mock(return_value=turns))),
         optional_declared=("observe",),
     )
     frame = command_frame("/kvcache")
@@ -49,10 +64,13 @@ async def test_cache_report_keeps_totals_per_turn_time_bars_and_previews(backend
 
 
 @pytest.mark.asyncio
-async def test_storage_failure_replies_but_programming_errors_propagate(backend, command_frame):
+async def test_storage_failure_replies_but_programming_errors_propagate(
+    backend, command_frame
+):
     query = Mock(side_effect=[OSError("read failed"), AttributeError("bad API")])
     dependencies = PluginDependencies(
-        (), Mock(return_value=SimpleNamespace(recent_cache_turns=query)),
+        (),
+        Mock(return_value=SimpleNamespace(recent_cache_turns=query)),
         optional_declared=("observe",),
     )
     module = backend.KVCacheCommandModule(dependencies)
@@ -65,7 +83,9 @@ async def test_storage_failure_replies_but_programming_errors_propagate(backend,
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("content", ["hello", "/kvcache_extra", "/memorystatus"])
-async def test_unrelated_commands_do_not_query_telemetry(backend, command_frame, content):
+async def test_unrelated_commands_do_not_query_telemetry(
+    backend, command_frame, content
+):
     dependencies = Mock(spec=PluginDependencies)
     frame = command_frame(content)
     await backend.KVCacheCommandModule(dependencies).run(frame)

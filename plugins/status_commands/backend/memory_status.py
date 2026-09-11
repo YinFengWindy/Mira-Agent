@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from agent.lifecycle.commands import abort_command, normalize_command
 from agent.prompting import is_context_frame
@@ -55,7 +55,9 @@ class MemoryStatusCommandModule:
         return frame
 
 
-def _format_memory_status_reply(messages: list[dict], last_consolidated: int) -> str:
+def _format_memory_status_reply(
+    messages: list[dict[str, Any]], last_consolidated: int
+) -> str:
     consolidated_user = _count_real_user_messages(messages[:last_consolidated])
     total_user = _count_real_user_messages(messages)
     pending_user = max(0, total_user - consolidated_user)
@@ -69,7 +71,9 @@ def _format_memory_status_reply(messages: list[dict], last_consolidated: int) ->
     else:
         lines.append(f"上次整理到 {pending_user} 条用户消息之前。")
     if last_user_message:
-        lines.extend(["", "最后已整理的用户消息：", f"“{preview_text(last_user_message)}”"])
+        lines.extend(
+            ["", "最后已整理的用户消息：", f"“{preview_text(last_user_message)}”"]
+        )
     lines.extend(
         [
             "",
@@ -80,21 +84,19 @@ def _format_memory_status_reply(messages: list[dict], last_consolidated: int) ->
     return "\n".join(lines)
 
 
-def _count_real_user_messages(messages: list[dict]) -> int:
+def _count_real_user_messages(messages: list[dict[str, Any]]) -> int:
     return sum(1 for item in messages if _is_real_user_message(item))
 
 
-def _latest_real_user_content(messages: list[dict]) -> str:
+def _latest_real_user_content(messages: list[dict[str, Any]]) -> str:
     for item in reversed(messages):
         if _is_real_user_message(item):
             return content_to_text(item.get("content", ""))
     return ""
 
 
-def _is_real_user_message(item: dict) -> bool:
+def _is_real_user_message(item: dict[str, Any]) -> bool:
     if item.get("role") != "user":
         return False
     content = content_to_text(item.get("content", ""))
     return bool(content) and not is_context_frame(content)
-
-

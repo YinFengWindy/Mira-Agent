@@ -526,7 +526,9 @@ async def test_weather_tool_via_facade(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_optional_provider_lifecycle_does_not_activate_or_unload_consumer(tmp_path):
+async def test_optional_provider_lifecycle_does_not_activate_or_unload_consumer(
+    tmp_path,
+):
     from agent.plugin_host.dependencies import PluginDependencyError
 
     for name, optional, body in (
@@ -537,11 +539,30 @@ async def test_optional_provider_lifecycle_does_not_activate_or_unload_consumer(
         (package / "backend").mkdir(parents=True)
         _ = (package / "manifest.yaml").write_text(
             f"api: 2\nid: {name}\ncapabilities: [dependencies]\n"
-            f"optional_dependencies: {optional}\n", encoding="utf-8",
+            f"optional_dependencies: {optional}\n",
+            encoding="utf-8",
         )
         _ = (package / "backend/plugin.py").write_text(
-            f"async def setup(ctx):\n    {body}\n", encoding="utf-8",
+            f"async def setup(ctx):\n    {body}\n",
+            encoding="utf-8",
         )
+    # Disposal runs while the provider is UNLOADING, before its export is cleared.
+    # Optional reads must already report it unavailable at this boundary.
+    _ = (tmp_path / "provider/manifest.yaml").write_text(
+        "api: 2\nid: provider\ncapabilities: [dependencies]\n"
+        "optional_dependencies: [consumer]\n",
+        encoding="utf-8",
+    )
+    _ = (tmp_path / "provider/backend/plugin.py").write_text(
+        "async def setup(ctx):\n"
+        "    ctx.expose({'version': 'first'})\n"
+        "    def on_unload():\n"
+        "        consumer = ctx.dependencies.get_optional('consumer')\n"
+        "        if consumer is not None:\n"
+        "            assert consumer.get_optional('provider') is None\n"
+        "    ctx.effect('check-unloading', on_unload)\n",
+        encoding="utf-8",
+    )
     kernel = make_kernel([tmp_path], event_bus=EventBus(), namespace="optional")
     try:
         assert await kernel.load("consumer")
@@ -566,25 +587,41 @@ async def test_optional_provider_lifecycle_does_not_activate_or_unload_consumer(
     finally:
         await kernel.terminate_all()
     # A handle from the retired kernel cannot read any future generation's API.
-    assert consumer.get_optional("provider") is None
+    next_kernel = make_kernel(
+        [tmp_path], event_bus=EventBus(), namespace="next_optional"
+    )
+    try:
+        assert await next_kernel.load("provider")
+        assert next_kernel._dependency_api("provider") == {
+            "version": "second-generation"
+        }
+        assert consumer.get_optional("provider") is None
+    finally:
+        await next_kernel.terminate_all()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["missing", "disabled", "failed", "unexported"])
-async def test_optional_unavailable_exports_return_none_but_require_stays_strict(tmp_path, provider):
+async def test_optional_unavailable_exports_return_none_but_require_stays_strict(
+    tmp_path, provider
+):
     from agent.plugin_host.dependencies import PluginDependencyError
 
     package = tmp_path / "provider"
     (package / "backend").mkdir(parents=True)
     _ = (package / "manifest.yaml").write_text(
-        "api: 2\nid: provider\ncapabilities: []\n", encoding="utf-8",
+        "api: 2\nid: provider\ncapabilities: []\n",
+        encoding="utf-8",
     )
     body = "raise RuntimeError('setup failure')" if provider == "failed" else "pass"
     _ = (package / "backend/plugin.py").write_text(
-        f"async def setup(ctx):\n    {body}\n", encoding="utf-8",
+        f"async def setup(ctx):\n    {body}\n",
+        encoding="utf-8",
     )
     kernel = make_kernel(
-        [tmp_path], event_bus=EventBus(), namespace="unavailable",
+        [tmp_path],
+        event_bus=EventBus(),
+        namespace="unavailable",
         plugin_configs={"provider": {"enabled": provider != "disabled"}},
     )
     try:

@@ -29,15 +29,15 @@ def test_undeclared_reads_fail_before_resolving(method: str):
 
 
 def test_optional_declaration_does_not_grant_strong_require():
-    dependencies = PluginDependencies(
-        (), Mock(), optional_declared=("optional",)
-    )
+    dependencies = PluginDependencies((), Mock(), optional_declared=("optional",))
     with pytest.raises(PluginDependencyError, match="未声明"):
         dependencies.require("optional")
 
 
 def test_optional_lookup_rechecks_provider_and_propagates_resolver_errors():
-    resolve = Mock(side_effect=[{"version": 1}, None, {"version": 2}, ValueError("broken")])
+    resolve = Mock(
+        side_effect=[{"version": 1}, None, {"version": 2}, ValueError("broken")]
+    )
     dependencies = PluginDependencies((), resolve, optional_declared=("provider",))
     assert dependencies.get_optional("provider") == {"version": 1}
     assert dependencies.get_optional("provider") is None

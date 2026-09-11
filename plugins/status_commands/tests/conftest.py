@@ -47,23 +47,36 @@ def kernel_factory(tmp_path: Path):
     @asynccontextmanager
     async def start(*, observe: str = "missing"):
         root = tmp_path / "plugins"
-        shutil.copytree(PLUGIN_ROOT, root / "status_commands", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(
+            PLUGIN_ROOT,
+            root / "status_commands",
+            ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", ".venv"),
+        )
         if observe != "missing":
             # The declared test dependency works both in a checkout and as an installed wheel.
             spec = importlib.util.find_spec("plugins.observe")
             assert spec is not None and spec.submodule_search_locations
             provider = Path(next(iter(spec.submodule_search_locations)))
-            shutil.copytree(provider, root / "observe", ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(
+                provider, root / "observe", ignore=shutil.ignore_patterns("__pycache__")
+            )
             if observe in {"failed", "unexported"}:
-                body = "raise RuntimeError('observe setup failed')" if observe == "failed" else "pass"
+                body = (
+                    "raise RuntimeError('observe setup failed')"
+                    if observe == "failed"
+                    else "pass"
+                )
                 _ = (root / "observe/backend/plugin.py").write_text(
-                    f"async def setup(ctx):\n    {body}\n", encoding="utf-8",
+                    f"async def setup(ctx):\n    {body}\n",
+                    encoding="utf-8",
                 )
         bus = EventBus()
         kernel = PluginKernel(
-            [root], namespace="status_integration",
+            [root],
+            namespace="status_integration",
             services=HostServices(
-                event_bus=bus, workspace=tmp_path / "workspace",
+                event_bus=bus,
+                workspace=tmp_path / "workspace",
                 plugin_configs={"observe": {"enabled": observe != "disabled"}},
             ),
         )
@@ -82,8 +95,12 @@ def command_frame():
         session = session or Session(key="telegram:1")
         return BeforeTurnFrame(
             input=TurnState(
-                msg=InboundMessage(channel="telegram", sender="user", chat_id="1", content=content),
-                session_key=session.key, dispatch_outbound=True, session=session,
+                msg=InboundMessage(
+                    channel="telegram", sender="user", chat_id="1", content=content
+                ),
+                session_key=session.key,
+                dispatch_outbound=True,
+                session=session,
             ),
             slots={"session:session": session},
         )
@@ -99,7 +116,10 @@ def run_command(command_frame):
         manager = MagicMock(get_or_create=MagicMock(return_value=session))
         context_store = MagicMock(spec=ContextStore, prepare=AsyncMock())
         for module in default_before_turn_modules(
-            bus, manager, context_store, plugin_modules=kernel.before_turn_modules,
+            bus,
+            manager,
+            context_store,
+            plugin_modules=kernel.before_turn_modules,
         ):
             frame = await module.run(frame)
         assert frame.output is not None and frame.output.abort

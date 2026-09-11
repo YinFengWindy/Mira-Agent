@@ -33,7 +33,9 @@ def backend():
             del sys.modules[key]
 
 
-def test_missing_storage_returns_no_data_without_creating_files(tmp_path: Path, backend):
+def test_missing_storage_returns_no_data_without_creating_files(
+    tmp_path: Path, backend
+):
     workspace = tmp_path / "not-created"
     reader = backend.telemetry.ObserveTelemetry(workspace)
     assert reader.recent_cache_turns("session") == ()
@@ -41,28 +43,47 @@ def test_missing_storage_returns_no_data_without_creating_files(tmp_path: Path, 
 
 
 @pytest.mark.asyncio
-async def test_real_writer_query_filters_orders_limits_and_preserves_nulls(tmp_path: Path, backend):
+async def test_real_writer_query_filters_orders_limits_and_preserves_nulls(
+    tmp_path: Path, backend
+):
     writer = backend.writer.TraceWriter(tmp_path / "observe" / "observe.db")
     reader = backend.telemetry.ObserveTelemetry(tmp_path)
     task = asyncio.create_task(writer.run())
     try:
         for index in range(35):
-            writer.emit(backend.events.TurnTrace(
-                source="agent", session_key="selected", user_msg="hi", llm_output=f"reply {index}",
-                react_cache_prompt_tokens=100 + index,
-                react_cache_hit_tokens=None if index == 34 else index,
-            ))
-        writer.emit(backend.events.TurnTrace(
-            source="agent", session_key="another", user_msg="hi", llm_output="wrong session",
-        ))
+            writer.emit(
+                backend.events.TurnTrace(
+                    source="agent",
+                    session_key="selected",
+                    user_msg="hi",
+                    llm_output=f"reply {index}",
+                    react_cache_prompt_tokens=100 + index,
+                    react_cache_hit_tokens=None if index == 34 else index,
+                )
+            )
+        writer.emit(
+            backend.events.TurnTrace(
+                source="agent",
+                session_key="another",
+                user_msg="hi",
+                llm_output="wrong session",
+            )
+        )
         # TraceWriter stores the source value too; historical non-agent rows must not leak.
-        writer.emit(backend.events.TurnTrace(
-            source="maintenance", session_key="selected", user_msg="hi", llm_output="wrong source",
-        ))
+        writer.emit(
+            backend.events.TurnTrace(
+                source="maintenance",
+                session_key="selected",
+                user_msg="hi",
+                llm_output="wrong source",
+            )
+        )
         await writer.drain()
         turns = reader.recent_cache_turns("selected")
         assert isinstance(turns, tuple)
-        assert [turn.reply for turn in turns] == [f"reply {index}" for index in range(34, 29, -1)]
+        assert [turn.reply for turn in turns] == [
+            f"reply {index}" for index in range(34, 29, -1)
+        ]
         assert turns[0].prompt_tokens == 134
         assert turns[0].hit_tokens is None
         assert turns[0].timestamp
@@ -91,7 +112,9 @@ def test_reader_opens_existing_database_read_only(tmp_path: Path, backend, monke
         return connection
 
     monkeypatch.setattr(sqlite3, "connect", assert_read_only)
-    assert backend.telemetry.ObserveTelemetry(tmp_path).recent_cache_turns("session") == ()
+    assert (
+        backend.telemetry.ObserveTelemetry(tmp_path).recent_cache_turns("session") == ()
+    )
 
 
 def test_storage_errors_preserve_the_sqlite_cause(tmp_path: Path, backend):

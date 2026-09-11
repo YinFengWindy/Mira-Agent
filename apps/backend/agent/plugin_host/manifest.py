@@ -105,7 +105,9 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     dependencies = _parse_dependencies(raw, "dependencies")
     optional_dependencies = _parse_dependencies(raw, "optional_dependencies")
     if set(dependencies) & set(optional_dependencies):
-        raise ManifestError("插件依赖不能同时声明为 dependencies 和 optional_dependencies")
+        raise ManifestError(
+            "插件依赖不能同时声明为 dependencies 和 optional_dependencies"
+        )
     return PluginManifest(
         id=plugin_id,
         version=_optional_str(raw.get("version")),

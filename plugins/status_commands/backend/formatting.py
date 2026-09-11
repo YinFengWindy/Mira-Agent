@@ -1,14 +1,19 @@
 """Shared text formatting for diagnostic replies."""
 
+from typing import cast
+
+
 def content_to_text(content: object) -> str:
     """Extract readable text from plain or multimodal conversation content."""
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
         parts: list[str] = []
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
-                parts.append(str(item.get("text", "")).strip())
+        for item in cast(list[object], content):
+            if isinstance(item, dict):
+                segment = cast(dict[object, object], item)
+                if segment.get("type") == "text":
+                    parts.append(str(segment.get("text", "")).strip())
         return "\n".join(part for part in parts if part).strip()
     return str(content).strip()
 
@@ -19,5 +24,3 @@ def preview_text(text: str, limit: int = 80) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 1] + "…"
-
-

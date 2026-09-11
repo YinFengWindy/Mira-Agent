@@ -6,10 +6,15 @@ from session.manager import Session
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["/memorystatus", "/MEMORY_STATUS@Bot ignored", " /compact_status "])
-async def test_memory_aliases_keep_real_user_counts_and_last_preview(backend, command_frame, command):
+@pytest.mark.parametrize(
+    "command", ["/memorystatus", "/MEMORY_STATUS@Bot ignored", " /compact_status "]
+)
+async def test_memory_aliases_keep_real_user_counts_and_last_preview(
+    backend, command_frame, command
+):
     session = Session(
-        key="telegram:1", last_consolidated=3,
+        key="telegram:1",
+        last_consolidated=3,
         messages=[
             {"role": "user", "content": "[SYSTEM_CONTEXT_FRAME] hidden"},
             {"role": "user", "content": [{"type": "text", "text": "第一条"}]},
@@ -31,10 +36,19 @@ async def test_memory_aliases_keep_real_user_counts_and_last_preview(backend, co
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("last", "expected"),
-    [(-9, "当前会话还没有完成过记忆整理。"), (99, "当前会话已经整理到最新的用户消息。")],
+    [
+        (-9, "当前会话还没有完成过记忆整理。"),
+        (99, "当前会话已经整理到最新的用户消息。"),
+    ],
 )
-async def test_memory_position_is_clamped_without_changing_session(backend, command_frame, last, expected):
-    session = Session(key="telegram:1", messages=[{"role": "user", "content": "hi"}], last_consolidated=last)
+async def test_memory_position_is_clamped_without_changing_session(
+    backend, command_frame, last, expected
+):
+    session = Session(
+        key="telegram:1",
+        messages=[{"role": "user", "content": "hi"}],
+        last_consolidated=last,
+    )
     frame = command_frame("/memorystatus", session)
     await backend.MemoryStatusCommandModule().run(frame)
     assert expected in frame.slots["session:ctx"].abort_reply
@@ -42,7 +56,9 @@ async def test_memory_position_is_clamped_without_changing_session(backend, comm
 
 
 @pytest.mark.asyncio
-async def test_memory_command_preserves_prior_abort_and_ignores_unrelated_input(backend, command_frame):
+async def test_memory_command_preserves_prior_abort_and_ignores_unrelated_input(
+    backend, command_frame
+):
     module = backend.MemoryStatusCommandModule()
     frame = command_frame("/memorystatus")
     previous = object()
