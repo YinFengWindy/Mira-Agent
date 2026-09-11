@@ -75,3 +75,32 @@ test("an item with no usable label never reaches the menu", () => {
   assert.deepEqual(registry.list(), []);
   assert.deepEqual(errors, [trayChannels.setEntry, trayChannels.setEntry]);
 });
+
+test("a label that is not a string is refused, not stringified", () => {
+  const { ipc, registry, errors } = setup();
+
+  // `String({})` is "[object Object]" — non-empty, so a coercing boundary would
+  // pass it and render exactly that in a menu the user sees.
+  for (const label of [{}, 7, [], null, true]) {
+    ipc.send(trayChannels.setEntry, { pluginId: "desktop_pet", entryId: "toggle", label });
+  }
+
+  assert.deepEqual(registry.list(), []);
+  assert.equal(errors.length, 5);
+});
+
+test("enabled must be a boolean, so a truthy string cannot enable a dead item", () => {
+  const { ipc, registry, errors } = setup();
+
+  // `enabled !== false` reads "no" as enabled — the opposite of what it says.
+  ipc.send(trayChannels.setEntry, {
+    pluginId: "desktop_pet", entryId: "toggle", label: "显示桌宠", enabled: "no",
+  });
+
+  assert.deepEqual(registry.list(), []);
+  assert.deepEqual(errors, [trayChannels.setEntry]);
+
+  // Absent is still fine: it means "enabled", which is the documented default.
+  ipc.send(trayChannels.setEntry, { pluginId: "desktop_pet", entryId: "toggle", label: "显示桌宠" });
+  assert.equal(registry.list()[0]?.enabled, true);
+});

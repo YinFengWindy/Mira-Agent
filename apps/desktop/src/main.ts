@@ -84,8 +84,8 @@ let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
  *
  * Module scope, and created eagerly, because a plugin can contribute an item
  * from its `setup(ctx)` long before the tray itself exists — the plugin-host
- * window is created well above, and on platforms without a tray lifecycle no
- * `Tray` is ever constructed at all.
+ * window is created earlier in `whenReady` than the tray is, and on platforms
+ * without a tray lifecycle no `Tray` is ever constructed at all.
  */
 const pluginTray = new PluginTrayRegistry();
 let desktopSurfaces: DesktopSurfaceHost | null = null;
@@ -268,9 +268,14 @@ function reloadVoiceSettings(): void {
  * glide, per role-requested move — and `DesktopObservationController.restore()`
  * republishes observation state with an empty bubble. Without this guard,
  * dragging the pet while a reply bubble was up would wipe the bubble, and every
- * settle would also rebuild the tray menu and re-evaluate voice admission.
- * `DesktopPetPresence` is exactly the part of the blob the host reacts to, so
- * comparing it is the same question as "is there anything to do here".
+ * settle would re-evaluate voice admission. `DesktopPetPresence` is exactly the
+ * part of the blob the host reacts to, so comparing it is the same question as
+ * "is there anything to do here".
+ *
+ * The tray is no longer one of those consumers and is not protected by this
+ * guard: since #181-D it follows `PluginTrayRegistry`, which the pet drives
+ * from its own side. That path has its own no-change check, in
+ * `PluginTrayRegistry.setEntry`.
  */
 function handleDesktopPetSettingsChanged(stored: unknown): void {
   const next = readDesktopPetPresence(stored);
@@ -567,6 +572,10 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   isQuitting = true;
   desktopTray?.destroy();
+  // Nulled, not just destroyed: `pluginTray.onChanged` is never unsubscribed,
+  // so a late `setEntry` would otherwise call `setContextMenu` on a destroyed
+  // Tray and turn a benign race into a reported failure.
+  desktopTray = null;
   if (pluginHostWindow && !pluginHostWindow.isDestroyed()) {
     pluginHostWindow.destroy();
   }

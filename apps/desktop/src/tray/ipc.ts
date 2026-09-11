@@ -34,10 +34,15 @@ export function registerTrayIpc(host: TrayIpcHost, registry: PluginTrayRegistry)
   host.on(trayChannels.setEntry, (_event, payload) => {
     try {
       const request = readEntryRequest(payload);
-      registry.setEntry(request.pluginId, request.entryId, {
-        label: String((payload as { label?: unknown }).label ?? ""),
-        enabled: (payload as { enabled?: unknown }).enabled !== false,
-      });
+      const { label, enabled } = payload as { label?: unknown; enabled?: unknown };
+      // Checked, not coerced. `String({})` is `"[object Object]"`, which passes
+      // a non-empty test and renders as exactly that in a menu the user sees;
+      // and `enabled !== false` reads the string `"no"` as enabled.
+      if (typeof label !== "string") throw new PluginTrayError("托盘条目标签必须是字符串");
+      if (enabled !== undefined && typeof enabled !== "boolean") {
+        throw new PluginTrayError("托盘条目 enabled 必须是布尔值");
+      }
+      registry.setEntry(request.pluginId, request.entryId, { label, enabled });
     } catch (error) {
       report(trayChannels.setEntry, error);
     }

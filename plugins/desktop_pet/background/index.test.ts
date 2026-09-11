@@ -164,23 +164,6 @@ test("a failed restore is reported, not rethrown, so the contribution stays aliv
   assert.deepEqual([...fake.events.keys()].length, 3);
 });
 
-test("a show command puts the pet on screen and a hide command takes it off", async () => {
-  const fake = recorder();
-  await petBackground.setup(fake.ctx);
-  await flush();
-  const command = fake.events.get(desktopPetCommandMethod);
-  assert.ok(command);
-
-  command({ kind: "show" });
-  await flush();
-  assert.ok(fake.surfaceCalls.some(([call]) => call === "create"));
-
-  command({ kind: "hide" });
-  await flush();
-  assert.ok(fake.surfaceCalls.some(([call]) => call === "destroy"));
-  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
-});
-
 test("a sync command carries forceVisible through, and only when it is a boolean", async () => {
   const fake = recorder({ stored: { visible: true, roleId: "mira", packageId: "pet-1", positions: {} } });
   await petBackground.setup(fake.ctx);
@@ -205,13 +188,18 @@ test("a sync command carries forceVisible through, and only when it is a boolean
   assert.equal((fake.state.stored as { visible: boolean }).visible, false);
 });
 
-test("a command the host does not send is ignored rather than guessed at", async () => {
+test("a command kind the host does not send is ignored rather than guessed at", async () => {
   const fake = recorder();
   await petBackground.setup(fake.ctx);
   await flush();
   const before = fake.surfaceCalls.length;
 
-  fake.events.get(desktopPetCommandMethod)?.({ kind: "explode" });
+  // `show` and `hide` used to be real kinds; the tray was their only producer
+  // and it now calls the controller directly, so they are gone with it. An
+  // unknown kind must not be guessed into one of the surviving ones.
+  for (const kind of ["explode", "show", "hide", undefined]) {
+    fake.events.get(desktopPetCommandMethod)?.({ kind });
+  }
   await flush();
 
   assert.equal(fake.surfaceCalls.length, before);
@@ -270,11 +258,11 @@ test("the tray item follows the pet, saying hide once it is showing", async () =
   await petBackground.setup(fake.ctx);
   await flush();
 
-  fake.events.get(desktopPetCommandMethod)?.({ kind: "show" });
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
   await flush();
   assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "隐藏桌宠", enabled: true });
 
-  fake.events.get(desktopPetCommandMethod)?.({ kind: "hide" });
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
   await flush();
   assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "显示桌宠", enabled: true });
 });

@@ -97,13 +97,13 @@ export default {
     ctx.surfaces.onSettled(desktopPetSurfaceId, (settled) => controller.handleSettled(settled));
     ctx.events.on(desktopPetActionMethod, (payload) => controller.handleAgentAction(payload));
     ctx.events.on(desktopPetCommandMethod, (payload) => {
-      const kind = payload.kind;
-      if (kind === "show") void controller.show().catch((error) => reportError("show", error));
-      else if (kind === "hide") void controller.hide().catch((error) => reportError("hide", error));
-      else if (kind === "sync") {
-        const forceVisible = typeof payload.forceVisible === "boolean" ? payload.forceVisible : undefined;
-        void controller.sync(forceVisible).catch((error) => reportError("sync", error));
-      }
+      // `sync` is the only kind the host sends. The tray used to send show and
+      // hide; it now calls this controller directly (see `refreshTrayEntry`),
+      // so those branches went with their producer rather than sitting here as
+      // an unreachable API nobody could exercise.
+      if (payload.kind !== "sync") return;
+      const forceVisible = typeof payload.forceVisible === "boolean" ? payload.forceVisible : undefined;
+      void controller.sync(forceVisible).catch((error) => reportError("sync", error));
     });
     ctx.events.on(desktopPetObservationMethod, (payload) => controller.publishObservation(payload));
 

@@ -1,6 +1,7 @@
 import { Menu, Tray } from "electron";
 import { desktopWindowIcon } from "../paths.js";
 import type { PluginTrayEntry } from "./registry.js";
+import { buildTrayMenuTemplate } from "./menuTemplate.js";
 
 type CreateDesktopTrayOptions = {
   onShowWindow: () => void;
@@ -42,17 +43,10 @@ export function createDesktopTray({
 }: CreateDesktopTrayOptions): DesktopTray {
   const tray = new Tray(desktopWindowIcon);
   const refresh = () => {
-    tray.setContextMenu(
-      Menu.buildFromTemplate([
-        { label: "显示主窗口", click: () => onShowWindow() },
-        ...(pluginEntries?.() ?? []).map((entry) => ({
-          label: entry.label,
-          enabled: entry.enabled,
-          click: () => onPluginEntryClick?.(entry.pluginId, entry.entryId),
-        })),
-        { label: "退出 Shiori", click: () => onQuitRequested() },
-      ]),
-    );
+    tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate(
+      pluginEntries?.() ?? [],
+      { onShowWindow, onQuitRequested, onPluginEntryClick },
+    )));
   };
   tray.setToolTip("Shiori");
   refresh();

@@ -18,7 +18,7 @@ export class PluginTrayError extends Error {}
  * Holds the tray menu items plugins have contributed, independently of whether
  * a tray actually exists.
  *
- * Separate from `tray.ts` for two reasons, both load-bearing:
+ * Separate from `tray/menu.ts` for two reasons, both load-bearing:
  *
  * - **Ordering.** The plugin-host window is created well before the tray
  *   (`main.ts`), so a plugin's `setup(ctx)` can contribute an entry while
@@ -28,7 +28,7 @@ export class PluginTrayError extends Error {}
  *   is ever constructed. A plugin must not have to know that, so contributing
  *   an entry on a platform with no tray is accepted and simply never rendered.
  *
- * It is also the seam that keeps `tray.ts` free of plugin concepts: that file
+ * It is also the seam that keeps `tray/menu.ts` free of plugin concepts: it
  * renders a list and reports clicks, and has no idea the desktop pet exists.
  */
 export class PluginTrayRegistry {
@@ -47,12 +47,15 @@ export class PluginTrayRegistry {
     const key = entryKey(pluginId, entryId);
     const label = entry.label.trim();
     if (!label) throw new PluginTrayError(`托盘条目缺少标签: ${key}`);
-    this.entries.set(key, {
-      pluginId,
-      entryId,
-      label,
-      enabled: entry.enabled ?? true,
-    });
+    const enabled = entry.enabled ?? true;
+    const current = this.entries.get(key);
+    this.entries.set(key, { pluginId, entryId, label, enabled });
+    // Re-setting an entry to the value it already had is not a change. Plugins
+    // recompute their item from whatever state they track and call this
+    // unconditionally — the desktop pet does it on every remembered position,
+    // i.e. after every drag, glide and role-requested move — and each notify
+    // rebuilds a native menu.
+    if (current?.label === label && current.enabled === enabled) return;
     this.notify();
   }
 

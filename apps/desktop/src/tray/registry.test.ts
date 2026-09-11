@@ -80,14 +80,25 @@ test("observers are notified exactly when the menu would render differently", ()
   registry.setEntry("desktop_pet", "toggle", { label: "隐藏桌宠" });
   assert.equal(notifications, 2);
 
+  // Re-setting an entry to the value it already has is not a change. The pet
+  // recomputes its item after every remembered position — every drag, glide
+  // and role-requested move — and each notify rebuilds a native menu.
+  registry.setEntry("desktop_pet", "toggle", { label: "隐藏桌宠" });
+  registry.setEntry("desktop_pet", "toggle", { label: "隐藏桌宠", enabled: true });
+  assert.equal(notifications, 2);
+
+  // Only `enabled` differing is still a change.
+  registry.setEntry("desktop_pet", "toggle", { label: "隐藏桌宠", enabled: false });
+  assert.equal(notifications, 3);
+
   // Nothing to remove: the menu is unchanged, so the tray must not rebuild.
   registry.removeEntry("desktop_pet", "missing");
   registry.removeAllForPlugin("novelai");
-  assert.equal(notifications, 2);
+  assert.equal(notifications, 3);
 
   unsubscribe();
   registry.removeEntry("desktop_pet", "toggle");
-  assert.equal(notifications, 2);
+  assert.equal(notifications, 3);
 });
 
 test("an entry with no usable label is refused rather than rendered blank", () => {

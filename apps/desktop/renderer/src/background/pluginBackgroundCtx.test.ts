@@ -364,3 +364,24 @@ test("removeEntry drops the handler, so a stale click does nothing", () => {
   assert.deepEqual(clicked, []);
   assert.deepEqual(tray.calls.at(-1), ["removeEntry", "demo", "toggle"]);
 });
+
+test("a setEntry that lands after teardown does not put the item back", async () => {
+  const tray = fakeTray();
+  const scope = new BackgroundEffectScope();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked, scope });
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => {} });
+
+  await scope.disposeAll();
+  tray.calls.length = 0;
+
+  // A plugin can have an await in flight across being disabled — the pet
+  // persists its position outside its own operation queue, so a store write
+  // can return after teardown and drive one more refresh. Writing the entry
+  // back would leave a menu item whose click subscription is already cut:
+  // it outlives its plugin and does nothing when clicked, until the next
+  // launch.
+  ctx.tray.setEntry("toggle", { label: "隐藏桌宠", onClick: () => {} });
+  ctx.tray.removeEntry("toggle");
+
+  assert.deepEqual(tray.calls, []);
+});

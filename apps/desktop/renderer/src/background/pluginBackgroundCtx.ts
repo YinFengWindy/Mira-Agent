@@ -108,6 +108,7 @@ function createPluginBackgroundTray(
 ): PluginBackgroundTray {
   const handlers = new Map<string, () => void>();
   let registered = false;
+  let disposed = false;
 
   const register = () => {
     if (registered) return;
@@ -122,6 +123,7 @@ function createPluginBackgroundTray(
     // this side's bookkeeping has drifted — and the host can make the same call
     // itself when a plugin's renderer dies without running any teardown.
     scope.addEffect("tray:entries", () => {
+      disposed = true;
       handlers.clear();
       tray.removeAllEntries(pluginId);
     });
@@ -129,11 +131,22 @@ function createPluginBackgroundTray(
 
   return {
     setEntry(entryId, entry) {
+      // Silently ignored after teardown rather than trusted not to happen. A
+      // plugin can have an `await` in flight across being disabled — the pet
+      // persists its position outside its own operation queue, so a store
+      // write can return after `disposeAll()` and drive one more `setEntry`.
+      // Without this the entry is written straight back into the host's
+      // registry, with its click subscription already cut: a menu item that
+      // outlives its plugin and does nothing when clicked, until the next
+      // launch. Keeping the invariant inside the capability means no plugin
+      // has to be careful for it to hold.
+      if (disposed) return;
       register();
       handlers.set(entryId, entry.onClick);
       tray.setEntry(pluginId, entryId, { label: entry.label, enabled: entry.enabled });
     },
     removeEntry(entryId) {
+      if (disposed) return;
       handlers.delete(entryId);
       tray.removeEntry(pluginId, entryId);
     },

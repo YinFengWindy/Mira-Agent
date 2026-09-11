@@ -61,11 +61,17 @@ export const desktopPetSurfaceKey: SurfaceKey = { pluginId: desktopPetPluginId, 
 export const desktopPetCommandMethod = "desktop.pet.command";
 export const desktopPetObservationMethod = "desktop.pet.observation";
 
-/** One host-issued pet lifecycle command. */
-export type DesktopPetCommand =
-  | { kind: "show" }
-  | { kind: "hide" }
-  | { kind: "sync"; forceVisible?: boolean };
+/**
+ * One host-issued pet lifecycle command.
+ *
+ * Only `sync` is left. `show` and `hide` existed for the tray entry, whose
+ * only producer was the host's own menu builder — since #181-D the pet owns
+ * that item and calls its controller directly, with no round trip through the
+ * main process. `sync` survives because its caller is the *main window's*
+ * role form, and there is still no route from there to a plugin's background
+ * code; it goes when #181-D's backend work turns it into a plugin RPC.
+ */
+export type DesktopPetCommand = { kind: "sync"; forceVisible?: boolean };
 
 /**
  * The pet's state as far as the host is concerned.
