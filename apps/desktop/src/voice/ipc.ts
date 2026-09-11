@@ -1,6 +1,5 @@
 import { BrowserWindow, ipcMain } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
-import type { DesktopPetController } from "../pet/controller.js";
 import type { DesktopVoiceController } from "./controller.js";
 import { isVoiceInteractionBusy } from "./interactionState.js";
 import type { BrowserVoicePlayback } from "./playback.js";
@@ -8,7 +7,16 @@ import type { BrowserVoiceRecorder } from "./recorder.js";
 
 /** Main-process dependencies needed by the voice-specific IPC boundary. */
 export type RegisterVoiceIpcOptions = {
-  desktopPet: DesktopPetController;
+  /**
+   * Whether a sending window is the pet's surface.
+   *
+   * Injected rather than resolved here: voice input rides on the pet (see
+   * `availability.ts`) but this module has no business knowing which plugin
+   * that is. `main.ts` supplies the check from
+   * `pluginCoupling/desktopPet.ts`, and #221 removes it altogether by making
+   * voice a host capability injected into the surface.
+   */
+  isPetWindow: (window: { readonly id: number } | null) => boolean;
   voiceRecorder: BrowserVoiceRecorder;
   voiceController: DesktopVoiceController;
   voicePlayback: BrowserVoicePlayback;
@@ -16,7 +24,7 @@ export type RegisterVoiceIpcOptions = {
 
 /** Registers capture, testing, playback, and pet voice IPC handlers. */
 export function registerVoiceIpc({
-  desktopPet,
+  isPetWindow,
   voiceRecorder,
   voiceController,
   voicePlayback,
@@ -89,19 +97,19 @@ export function registerVoiceIpc({
     voicePlayback.handleError(event.sender, String(payload.id || ""), String(payload.message || "音频播放失败"));
   });
   ipcMain.on("desktop:voice-press-start", (event) => {
-    if (!desktopPet.isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
+    if (!isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
     voiceController.startPress("pet");
   });
   ipcMain.on("desktop:voice-pointer-moved", (event) => {
-    if (!desktopPet.isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
+    if (!isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
     voiceController.pointerMoved("pet");
   });
   ipcMain.on("desktop:voice-release", (event) => {
-    if (!desktopPet.isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
+    if (!isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
     voiceController.release("pet");
   });
   ipcMain.on("desktop:voice-cancel", (event) => {
-    if (!desktopPet.isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
+    if (!isPetWindow(BrowserWindow.fromWebContents(event.sender))) return;
     voiceController.cancel("pet");
   });
 }

@@ -121,6 +121,16 @@ export const surfacePositionChannel = "desktop:surface-position";
 export const surfaceMessageChannel = "desktop:surface-message";
 /** Channel carrying a surface's retained state, replayed whenever it reports ready. */
 export const surfaceStateChannel = "desktop:surface-state";
+/**
+ * Channel carrying a settle to the plugin-host renderer (#181-C).
+ *
+ * Distinct from `surfacePositionChannel`, which goes to the surface's *own*
+ * window so it can lay itself out. This one goes to the window running the
+ * owning plugin's `app.background` code, which is what actually decides
+ * whether a settle is worth persisting — `surfaceSettleReason` is only
+ * meaningful there, and the surface renderer never needed it.
+ */
+export const surfaceSettledChannel = "desktop:surface-settled";
 
 export class DesktopSurfaceError extends Error {}
 
@@ -250,6 +260,21 @@ export class DesktopSurfaceHost {
     for (const record of [...this.surfaces.values()]) {
       if (record.key.pluginId === pluginId) this.destroy(record.key);
     }
+  }
+
+  /**
+   * Tears down every surface, whoever owns it.
+   *
+   * For the case where the process that owns *all* of them is gone: since
+   * #181-C every surface is driven by plugin `app.background` code in the
+   * plugin-host renderer, so that renderer crashing leaves each one a
+   * frameless, always-on-top window with nobody left to move, hide or close
+   * it — the user cannot get rid of it without killing the app. Reclaiming
+   * them is the only safe response; the alternative is a window the user
+   * cannot dismiss.
+   */
+  destroyAll(): void {
+    for (const record of [...this.surfaces.values()]) this.destroy(record.key);
   }
 
   show(key: SurfaceKey): void {

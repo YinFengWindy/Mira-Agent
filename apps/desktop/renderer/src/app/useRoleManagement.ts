@@ -142,15 +142,15 @@ export function useRoleManagement({
     }
     const updated = res.payload.role as RoleRecord;
     if (desktopPetEnablementChanged) {
-      try {
-        await window.miraDesktop.syncPet(nextRoleForm.desktopPetEnabled);
-      } catch (reason) {
-        setSavingRole(false);
-        const message = String(reason);
-        setError(message);
-        setWorkspaceFeedback({ tone: "error", message: `桌宠同步失败：${message}` });
-        return;
-      }
+      // Deliberately unguarded. Since #181-C `syncPet` hands the request to the
+      // plugin that owns the pet and returns immediately, so it cannot reject
+      // and there is nothing here to catch — the `try/catch` that used to show
+      // "桌宠同步失败" is removed rather than left in place looking like it
+      // still protects something. A sync that fails inside the plugin reaches
+      // the host diagnostic log (`background/backgroundDiagnostics.ts`);
+      // putting it back in front of the user needs #181-D, which turns this
+      // into a plugin RPC this can await again.
+      await window.miraDesktop.syncPet(nextRoleForm.desktopPetEnabled);
     }
     const { resolvedRole } = await refreshRolesAndResolveRole(updated);
     updateRoleForm((current) => ({

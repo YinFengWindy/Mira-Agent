@@ -10,6 +10,8 @@ function fakeCtx(pluginId: string, scope: BackgroundEffectScope, log: string[]):
     surfaces: {} as BackgroundCtx["surfaces"],
     rpc: {} as BackgroundCtx["rpc"],
     events: { on: () => {} },
+    store: { read: () => Promise.resolve(null), write: () => Promise.resolve() },
+    assets: { url: () => null },
     effect(label, dispose) {
       scope.addEffect(label, () => { log.push(`${pluginId}:dispose:${label}`); return dispose(); });
     },

@@ -92,7 +92,11 @@ export function registerSurfaceIpc(host: SurfaceIpcHost, options: RegisterSurfac
   host.handle(surfaceChannels.create, (_event, payload) => {
     const request = readCreateRequest(payload);
     if (!request) throw new DesktopSurfaceError("surface 创建请求不合法");
-    return surfaces.create(request.key, request.spec, request.anchor);
+    const anchor = surfaces.create(request.key, request.spec, request.anchor);
+    // `displayId` is answered here rather than on a channel of its own so a
+    // plugin that remembers a per-display position can apply it before the
+    // window has painted — see `SurfaceCreateResultPayload`.
+    return { ...anchor, displayId: surfaces.displayId(request.key) };
   });
 
   host.handle(surfaceChannels.workArea, (_event, payload): SurfaceWorkArea => {

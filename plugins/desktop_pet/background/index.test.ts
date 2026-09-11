@@ -1,0 +1,241 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type {
+  BackgroundCtx,
+  PluginBackgroundSettled,
+} from "../../../apps/desktop/renderer/src/background/pluginBackgroundRegistry";
+import petBackground, {
+  desktopPetActionMethod,
+  desktopPetCommandMethod,
+  desktopPetObservationMethod,
+} from "./index";
+import { desktopPetSurfaceId } from "./controller";
+
+/**
+ * Covers the wiring, not the behaviour behind it.
+ *
+ * `controller.test.ts` proves that a correctly-wired controller does the right
+ * thing; this file proves the wiring exists and routes correctly, which is the
+ * part #181-C actually wrote from scratch. The two failure modes it exists for
+ * are both invisible to every other test and to the type checker: dropping one
+ * of the four registrations (the `ctx.effect` one is what makes "停用即回收"
+ * true at all), and mistranslating a command payload — `sync(undefined)` keeps
+ * the pet's current visibility while `sync(false)` hides it, so one wrong
+ * character turns the surface's "隐藏桌宠" menu entry into a no-op.
+ */
+
+/** The mutable bits a test both seeds and inspects. */
+type RecorderState = {
+  stored: unknown;
+  /** Answers `binding.get`; throwing here rejects the call. */
+  bindingAnswer: () => unknown;
+};
+
+type Recorder = {
+  ctx: BackgroundCtx;
+  effects: string[];
+  events: Map<string, (payload: Record<string, unknown>) => void>;
+  settled: Map<string, (settled: PluginBackgroundSettled) => void>;
+  surfaceCalls: string[][];
+  rpcCalls: string[];
+  state: RecorderState;
+};
+
+function recorder(overrides: Partial<RecorderState> = {}): Recorder {
+  const effects: string[] = [];
+  const events = new Map<string, (payload: Record<string, unknown>) => void>();
+  const settled = new Map<string, (settled: PluginBackgroundSettled) => void>();
+  const surfaceCalls: string[][] = [];
+  const rpcCalls: string[] = [];
+  const state: RecorderState = {
+    stored: overrides.stored ?? null,
+    bindingAnswer: overrides.bindingAnswer ?? (() => ({
+      binding: {
+        role_id: "mira",
+        package: { id: "pet-1", display_name: "Pet", spritesheet_abs: "C:/sheet.webp" },
+        actions: {},
+      },
+    })),
+  };
+  return {
+    effects,
+    events,
+    settled,
+    surfaceCalls,
+    rpcCalls,
+    state,
+    ctx: {
+      surfaces: {
+        create: (surfaceId) => {
+          surfaceCalls.push(["create", surfaceId]);
+          return Promise.resolve({ x: 0, y: 0, displayId: "display-1" });
+        },
+        destroy: (surfaceId) => { surfaceCalls.push(["destroy", surfaceId]); return Promise.resolve(); },
+        show: (surfaceId) => { surfaceCalls.push(["show", surfaceId]); },
+        hide: (surfaceId) => { surfaceCalls.push(["hide", surfaceId]); },
+        workArea: () => Promise.resolve({ x: 0, y: 0, width: 800, height: 600 }),
+        setPosition: (surfaceId) => { surfaceCalls.push(["setPosition", surfaceId]); },
+        moveTo: (surfaceId) => { surfaceCalls.push(["moveTo", surfaceId]); },
+        post: (surfaceId) => { surfaceCalls.push(["post", surfaceId]); },
+        setState: (surfaceId) => { surfaceCalls.push(["setState", surfaceId]); },
+        onSettled: (surfaceId, handler) => { settled.set(surfaceId, handler); },
+      },
+      rpc: {
+        call: <T,>(method: string) => {
+          rpcCalls.push(method);
+          return Promise.resolve(state.bindingAnswer() as T);
+        },
+      },
+      events: { on: (method, handler) => { events.set(method, handler); } },
+      store: {
+        read: () => Promise.resolve(state.stored),
+        write: (value) => { state.stored = value; return Promise.resolve(); },
+      },
+      assets: { url: (path) => (path ? `shiori-asset://local/${path}` : null) },
+      effect: (label) => { effects.push(label); },
+    },
+  };
+}
+
+/** Lets the controller's internal promise chain drain. */
+async function flush(): Promise<void> {
+  for (let index = 0; index < 6; index += 1) await Promise.resolve();
+}
+
+test("setup registers every subscription the pet needs, and one reclaiming effect", async () => {
+  const fake = recorder();
+
+  await petBackground.setup(fake.ctx);
+
+  // Without this effect the surface survives the plugin being disabled, and
+  // #181's "停用桌宠插件后 surface 全部回收" quietly stops being true.
+  assert.deepEqual(fake.effects, ["desktop_pet_controller"]);
+  assert.deepEqual([...fake.events.keys()].sort(), [
+    desktopPetActionMethod,
+    desktopPetCommandMethod,
+    desktopPetObservationMethod,
+  ].sort());
+  assert.deepEqual([...fake.settled.keys()], [desktopPetSurfaceId]);
+});
+
+test("setup restores a pet that was visible when the app last closed", async () => {
+  const fake = recorder({ stored: { visible: true, roleId: "mira", packageId: "pet-1", positions: {} } });
+
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  assert.deepEqual(fake.rpcCalls, ["binding.get"]);
+  assert.ok(fake.surfaceCalls.some(([call]) => call === "create"), "the pet should be on screen");
+});
+
+test("setup leaves a pet that was hidden hidden, without creating a surface", async () => {
+  const fake = recorder({ stored: { visible: false, roleId: "mira", packageId: "pet-1", positions: {} } });
+
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  assert.deepEqual(fake.surfaceCalls.filter(([call]) => call === "create"), []);
+});
+
+test("a failed restore is reported, not rethrown, so the contribution stays alive", async () => {
+  const fake = recorder({
+    stored: { visible: true, roleId: "mira", packageId: "pet-1", positions: {} },
+    bindingAnswer: () => { throw new Error("bridge 还没起来"); },
+  });
+
+  // A thrown `setup` makes `PluginBackgroundHost` dispose the whole scope, and
+  // nothing retries it — the pet would stay dead until the app restarted.
+  await assert.doesNotReject(petBackground.setup(fake.ctx));
+  assert.deepEqual(fake.effects, ["desktop_pet_controller"]);
+  assert.deepEqual([...fake.events.keys()].length, 3);
+});
+
+test("a show command puts the pet on screen and a hide command takes it off", async () => {
+  const fake = recorder();
+  await petBackground.setup(fake.ctx);
+  await flush();
+  const command = fake.events.get(desktopPetCommandMethod);
+  assert.ok(command);
+
+  command({ kind: "show" });
+  await flush();
+  assert.ok(fake.surfaceCalls.some(([call]) => call === "create"));
+
+  command({ kind: "hide" });
+  await flush();
+  assert.ok(fake.surfaceCalls.some(([call]) => call === "destroy"));
+  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
+});
+
+test("a sync command carries forceVisible through, and only when it is a boolean", async () => {
+  const fake = recorder({ stored: { visible: true, roleId: "mira", packageId: "pet-1", positions: {} } });
+  await petBackground.setup(fake.ctx);
+  await flush();
+  const command = fake.events.get(desktopPetCommandMethod);
+  assert.ok(command);
+
+  // This is the surface's right-click "隐藏桌宠": `false` must reach
+  // `sync(false)`, because `sync(undefined)` keeps the current visibility and
+  // the menu entry would silently do nothing.
+  command({ kind: "sync", forceVisible: false });
+  await flush();
+  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
+
+  // Absent, or present but not a boolean: neither may be read as "hide".
+  command({ kind: "sync", forceVisible: "false" });
+  await flush();
+  assert.equal((fake.state.stored as { visible: boolean }).visible, false, "a string must not force anything");
+
+  command({ kind: "sync" });
+  await flush();
+  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
+});
+
+test("a command the host does not send is ignored rather than guessed at", async () => {
+  const fake = recorder();
+  await petBackground.setup(fake.ctx);
+  await flush();
+  const before = fake.surfaceCalls.length;
+
+  fake.events.get(desktopPetCommandMethod)?.({ kind: "explode" });
+  await flush();
+
+  assert.equal(fake.surfaceCalls.length, before);
+});
+
+test("an observation payload reaches the surface as retained state", async () => {
+  const fake = recorder();
+  await petBackground.setup(fake.ctx);
+  await flush();
+  fake.events.get(desktopPetCommandMethod)?.({ kind: "show" });
+  await flush();
+  const before = fake.surfaceCalls.filter(([call]) => call === "setState").length;
+
+  fake.events.get(desktopPetObservationMethod)?.({ status: "observing", enabled: true, bubble: "hi", persistent: false });
+
+  assert.equal(fake.surfaceCalls.filter(([call]) => call === "setState").length, before + 1);
+});
+
+test("a settle for the pet's surface reaches the controller", async () => {
+  const fake = recorder();
+  await petBackground.setup(fake.ctx);
+  await flush();
+  fake.events.get(desktopPetCommandMethod)?.({ kind: "show" });
+  await flush();
+
+  fake.settled.get(desktopPetSurfaceId)?.({
+    placement: {
+      anchor: { x: 12, y: 34 },
+      bodyOffset: { x: 0, y: 0 },
+      workArea: { x: 0, y: 0, width: 800, height: 600 },
+    },
+    reason: "drag",
+    displayId: "display-1",
+  });
+  await flush();
+
+  assert.deepEqual(
+    (fake.state.stored as { positions: Record<string, unknown> }).positions,
+    { "mira:display-1": { x: 12, y: 34 } },
+  );
+});

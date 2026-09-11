@@ -1,0 +1,158 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+/** File-name-safe plugin ids; anything else could escape the store directory. */
+const safePluginId = /^[A-Za-z0-9_-]+$/;
+
+export type PluginDataStoreOptions = {
+  /** Directory holding one `<pluginId>.json` per plugin. */
+  directory: string;
+  /**
+   * Where this plugin's data lived before it had a store, migrated on first
+   * read. Returning `null` (the default) means "no earlier location".
+   */
+  legacyPathFor?: (pluginId: string) => string | null;
+  /** Reports a failed read, write or migration; the store itself never throws at callers. */
+  onError?: (pluginId: string, operation: "read" | "write" | "migrate", error: unknown) => void;
+};
+
+export class PluginDataStoreError extends Error {}
+
+/**
+ * Persists one JSON blob per plugin on the plugin's behalf.
+ *
+ * A plugin's always-resident `app.background` code runs in a renderer (see
+ * `pluginHost/window.ts`), so it has no filesystem of its own — but plenty of
+ * plugins have state that must outlive a restart and does not belong in their
+ * user-facing config (`plugin.config.*`): the desktop pet's remembered window
+ * position per role and display is the first case, and it is runtime state, not
+ * something to show in a settings form.
+ *
+ * The shape of the blob is entirely the plugin's business; this class only
+ * knows it is JSON. The one exception is deliberate and documented at its call
+ * site: host code that still has to know something about a specific plugin
+ * during the #174 migration reads that plugin's snapshot rather than inventing
+ * a second channel for the same fact.
+ */
+export class PluginDataStore {
+  private readonly snapshots = new Map<string, unknown>();
+  private readonly listeners = new Set<(pluginId: string, value: unknown) => void>();
+  /** Per-plugin write chain, so two concurrent writes cannot interleave their renames. */
+  private readonly writeChains = new Map<string, Promise<void>>();
+
+  constructor(private readonly options: PluginDataStoreOptions) {}
+
+  /**
+   * Reads a plugin's stored value, migrating it from its pre-store location
+   * the first time.
+   *
+   * A missing or unparseable file reads as `null` rather than throwing: an
+   * absent file is the ordinary state of a plugin that has never written, and
+   * a corrupt one is not something a plugin can act on any better than by
+   * starting from its own defaults.
+   */
+  async read(pluginId: string): Promise<unknown> {
+    const stored = await this.readJson(pluginId, this.pathFor(pluginId));
+    // `present` and "the value is null" are deliberately different answers.
+    // Migrating whenever the value reads as null would re-run it on a file
+    // that exists but is corrupt — and the pre-store file is still on disk, so
+    // the migration would overwrite the damaged current state with data from
+    // whenever the user last upgraded. A corrupt file must fall back to the
+    // plugin's own defaults instead, which is what `null` means to the plugin.
+    if (stored.present) {
+      this.snapshots.set(pluginId, stored.value);
+      return stored.value;
+    }
+    const migrated = await this.migrate(pluginId);
+    this.snapshots.set(pluginId, migrated);
+    return migrated;
+  }
+
+  /** Replaces a plugin's stored value and notifies `onChanged` observers. */
+  async write(pluginId: string, value: unknown): Promise<void> {
+    const path = this.pathFor(pluginId);
+    const serialized = `${JSON.stringify(value, null, 2)}\n`;
+    const chain = (this.writeChains.get(pluginId) ?? Promise.resolve()).then(async () => {
+      await mkdir(this.options.directory, { recursive: true });
+      const temporaryPath = `${path}.tmp`;
+      await writeFile(temporaryPath, serialized, "utf-8");
+      // Rename, not a second `writeFile`: a crash between two writes leaves a
+      // truncated file that reads as corrupt, while a rename is atomic on both
+      // Windows and POSIX, so the file is either wholly old or wholly new.
+      await rename(temporaryPath, path);
+    });
+    this.writeChains.set(pluginId, chain.catch(() => undefined));
+    await chain;
+    this.snapshots.set(pluginId, value);
+    for (const listener of this.listeners) listener(pluginId, value);
+  }
+
+  /**
+   * The last value read or written for a plugin, without touching the disk.
+   *
+   * Synchronous on purpose: its callers are main-process code paths that
+   * cannot await (a tray menu builder, a window-close policy).
+   */
+  snapshot(pluginId: string): unknown {
+    return this.snapshots.get(pluginId) ?? null;
+  }
+
+  /** Observes writes, so host state derived from a plugin's data can be refreshed. */
+  onChanged(listener: (pluginId: string, value: unknown) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private pathFor(pluginId: string): string {
+    if (!safePluginId.test(pluginId)) {
+      throw new PluginDataStoreError(`插件 id 不合法: ${pluginId}`);
+    }
+    return join(this.options.directory, `${pluginId}.json`);
+  }
+
+  /**
+   * Reads one JSON file, separating "there is no file" from "the file is
+   * unusable" — see `read` for why that distinction has to survive this far.
+   */
+  private async readJson(
+    pluginId: string,
+    path: string,
+  ): Promise<{ present: boolean; value: unknown }> {
+    try {
+      return { present: true, value: JSON.parse(await readFile(path, "utf-8")) as unknown };
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return { present: false, value: null };
+      this.options.onError?.(pluginId, "read", error);
+      // Present but unreadable: still `present`, so nothing tries to
+      // reconstruct it from a source that is older than what just broke.
+      return { present: true, value: null };
+    }
+  }
+
+  /**
+   * Copies a plugin's pre-store file into the store.
+   *
+   * Reached only when the store file does not exist at all, which after the
+   * first successful migration is never again — see `read`.
+   *
+   * The old file is left where it is rather than deleted: this runs on a user's
+   * existing installation, the copy has not been proven good yet at this point,
+   * and nothing reads the old path afterwards. It costs a few hundred bytes.
+   */
+  private async migrate(pluginId: string): Promise<unknown> {
+    const legacyPath = this.options.legacyPathFor?.(pluginId) ?? null;
+    if (!legacyPath) return null;
+    const legacy = await this.readJson(pluginId, legacyPath);
+    if (!legacy.present || legacy.value === null) return null;
+    try {
+      await this.write(pluginId, legacy.value);
+    } catch (error) {
+      // Reported, not thrown: the plugin can still run on the migrated value
+      // held in memory, and it will be written again the next time the plugin
+      // saves anything.
+      this.options.onError?.(pluginId, "migrate", error);
+    }
+    return legacy.value;
+  }
+}

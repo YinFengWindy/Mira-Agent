@@ -64,7 +64,17 @@ export type DesktopPetWorkArea = {
   height: number;
 };
 
-/** Persisted application-level desktop-pet configuration. */
+/**
+ * The pet's persisted state, held in this plugin's own `ctx.store` blob.
+ *
+ * Deliberately not `plugin.config.*`: none of this is something a user edits
+ * in a settings form. `positions` is keyed by `<roleId>:<displayId>`, so
+ * unplugging a monitor does not drag the pet somewhere the user never put it.
+ *
+ * The host still reads `visible`, `roleId` and `packageId` out of this blob —
+ * see `apps/desktop/src/pluginCoupling/desktopPet.ts` for which host features
+ * need them and which issues remove that reading.
+ */
 export type DesktopPetSettings = {
   visible: boolean;
   roleId: string | null;

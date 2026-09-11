@@ -58,15 +58,12 @@ function setup(overrides: {
     registerVoiceIpc: () => undefined,
   } as unknown as DesktopIpcHost;
 
-  const desktopPet = {
-    isPetWindow: (window: BrowserWindow | null) =>
-      Boolean(window) && (window as unknown as FakeWindow).label === petWindowLabel,
-    rendererReady: (...args: unknown[]) => { petCalls.push({ method: "rendererReady", args }); },
-    setBubbleHeight: (...args: unknown[]) => { petCalls.push({ method: "setBubbleHeight", args }); },
-    sync: async (...args: unknown[]) => { petCalls.push({ method: "sync", args }); },
-    beginDrag: (...args: unknown[]) => { petCalls.push({ method: "beginDrag", args }); },
-    moveDrag: (...args: unknown[]) => { petCalls.push({ method: "moveDrag", args }); },
-    endDrag: (...args: unknown[]) => { petCalls.push({ method: "endDrag", args }); },
+  // Since #181-C there is no pet object in this process: the boundary takes a
+  // window predicate and a command sink, both supplied by `main.ts`.
+  const isPetWindow = (window: BrowserWindow | null) =>
+    Boolean(window) && (window as unknown as FakeWindow).label === petWindowLabel;
+  const requestDesktopPetCommand = (command: unknown) => {
+    petCalls.push({ method: "command", args: [command] });
   };
 
   registerDesktopIpcHandlers(host, {
@@ -83,7 +80,8 @@ function setup(overrides: {
     },
     localAssetImportsRoot: "imports",
     openLocalAttachment: async () => ({ ok: true }),
-    desktopPet,
+    isPetWindow,
+    requestDesktopPetCommand,
     desktopObservation: {
       restore: async () => { observationCalls.push("restore"); },
       dismissBubble: () => { observationCalls.push("dismissBubble"); },
@@ -195,6 +193,24 @@ describe("desktop ipc permission boundaries", () => {
 
     await ipc.invokeHandler("desktop:pet-observation-dismiss", ipc.windows.pet.webContents);
     assert.deepEqual(ipc.observationCalls, ["dismissBubble"]);
+  });
+
+  it("turns a pet sync request into a command for the plugin that owns the pet", async () => {
+    const ipc = setup();
+
+    await ipc.invokeHandler("desktop:pet-sync", ipc.windows.main.webContents, false);
+    await ipc.invokeHandler("desktop:pet-sync", ipc.windows.main.webContents);
+    await ipc.invokeHandler("desktop:pet-sync", ipc.windows.main.webContents, "not a boolean");
+
+    // Since #181-C the controller lives in the plugin host renderer, so this
+    // cannot await the sync — and must not refresh observation on its own
+    // either; that happens when the plugin writes its settings back.
+    assert.deepEqual(ipc.petCalls, [
+      { method: "command", args: [{ kind: "sync", forceVisible: false }] },
+      { method: "command", args: [{ kind: "sync", forceVisible: undefined }] },
+      { method: "command", args: [{ kind: "sync", forceVisible: undefined }] },
+    ]);
+    assert.deepEqual(ipc.observationCalls, []);
   });
 
   it("keeps no pet-specific window channels of its own", () => {

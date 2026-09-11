@@ -56,6 +56,7 @@ function setup() {
   const surfaces = new DesktopSurfaceHost({
     createWindow: () => { const window = new FakeWindow(); windows.push(window); return window; },
     workAreaFor: () => workArea,
+    displayIdFor: (window) => `display-${window.id}`,
     cursorScreenPoint: () => ({ x: 0, y: 0 }),
   });
   const ipc = new FakeIpc();
@@ -68,7 +69,10 @@ const key = { pluginId: "demo", surfaceId: "main" };
 test("create places the surface and reports the clamped anchor back to the caller", () => {
   const { ipc, surfaces, windows } = setup();
   const applied = ipc.invoke(surfaceChannels.create, { ...key, spec, x: -20, y: 40 });
-  assert.deepEqual(applied, { x: 0, y: 40 });
+  // The display comes back with the anchor rather than on a second call: a
+  // plugin that remembers a per-display position has to apply it before the
+  // window paints, and a round trip would show the fallback corner first.
+  assert.deepEqual(applied, { x: 0, y: 40, displayId: `display-${windows[0].id}` });
   assert.equal(surfaces.has(key), true);
   assert.deepEqual(windows[0].bounds, { x: 0, y: 40, width: 100, height: 100 });
 });

@@ -11,6 +11,26 @@ export type SurfacePlacementPayload = {
   workArea: { x: number; y: number; width: number; height: number };
 };
 
+/**
+ * Where a freshly created surface landed, and which display it landed on.
+ *
+ * `displayId` rides along with the creation result rather than being a second
+ * call because a plugin that remembers a position *per display* needs both in
+ * one breath: it has to pick the remembered anchor before the surface has
+ * painted anything, and a follow-up round trip would put a visible jump
+ * between the fallback corner and the remembered position.
+ */
+export type SurfaceCreateResultPayload = { x: number; y: number; displayId: string };
+
+/** A settle reported to the owning plugin's `app.background` code. */
+export type SurfaceSettledPayload = {
+  pluginId: string;
+  surfaceId: string;
+  placement: SurfacePlacementPayload;
+  reason: import("../surface/host.js").SurfaceSettleReason;
+  displayId: string;
+};
+
 /** What a plugin declares when asking the host to create one of its windows. */
 export type SurfaceSpecPayload = {
   body: { width: number; height: number };
@@ -33,7 +53,7 @@ export type DesktopSurfacesApi = {
     surfaceId: string,
     spec: SurfaceSpecPayload,
     anchor: { x: number; y: number },
-  ): Promise<{ x: number; y: number }>;
+  ): Promise<SurfaceCreateResultPayload>;
   destroy(pluginId: string, surfaceId: string): Promise<void>;
   show(pluginId: string, surfaceId: string): void;
   hide(pluginId: string, surfaceId: string): void;
@@ -346,6 +366,24 @@ export type DesktopApi = {
    */
   surfaces: DesktopSurfacesApi;
   surface: DesktopSurfaceSelfApi;
+  /**
+   * Reports every surface settle to whoever is listening in this window.
+   *
+   * Unlike `surface.onPlacement`, which the host addresses to one surface's own
+   * renderer, this is a broadcast into the plugin-host window: the listener
+   * filters by `pluginId`/`surfaceId`. See `surfaceSettledChannel`.
+   */
+  onSurfaceSettled(listener: (settled: SurfaceSettledPayload) => void): () => void;
+  /**
+   * Per-plugin persisted JSON, for background code that has no filesystem.
+   *
+   * Distinct from `plugin.config.*`, which is the user-editable settings form:
+   * this is runtime state a plugin keeps to itself. See `plugins/dataStore.ts`.
+   */
+  pluginData: {
+    read(pluginId: string): Promise<unknown>;
+    write(pluginId: string, value: unknown): Promise<void>;
+  };
   /** Subscribes to microphone commands issued by the main-process recorder. */
   onVoiceCaptureCommand(listener: (command: VoiceCaptureCommand) => void): () => void;
   /** Reports captured 16-bit PCM samples to the owning main-process recorder. */
