@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
+import shutil
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,28 +14,13 @@ from agent.core.response_parser import parse_response
 from agent.core.runtime_support import TurnRunResult
 from agent.core.types import ContextBundle
 from agent.lifecycle.facade import TurnLifecycle
-from agent.lifecycle.types import AfterReasoningCtx
+from agent.plugin_host import HostServices, PluginKernel
 from bootstrap.wiring import wire_turn_lifecycle
 from bus.event_bus import EventBus
 from bus.events import InboundMessage
 from bus.events_lifecycle import TurnCommitted
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-
-
-def _load_meme_plugin_class() -> Any:
-    path = REPO_ROOT / "plugins" / "meme" / "backend" / "plugin.py"
-    spec = importlib.util.spec_from_file_location(
-        "test_p7_meme_plugin",
-        path,
-        submodule_search_locations=[str(path.parent)],
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(str(path))
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module.MemePlugin
 
 
 class _DummySession:
@@ -275,24 +259,9 @@ def test_response_parser_keeps_reply_protocols_for_plugins():
 # ── 新链 (AfterReasoning + AfterTurn) 端到端测试 ──
 
 
-class _CitationPersistModule:
-    slot = "test.citation.persist"
-    requires = ("after_reasoning.build_ctx", "reasoning:ctx")
-    produces = ("reasoning:ctx", "persist:assistant:cited_memory_ids")
-
-    async def run(self, frame):
-        ctx = frame.slots["reasoning:ctx"]
-        ctx.reply = "原始回复 <meme:shy>"
-        frame.slots["persist:assistant:cited_memory_ids"] = ["mem_1"]
-        return frame
-
-
 @pytest.mark.asyncio
 async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(tmp_path: Path):
     from agent.core.passive_turn import ContextStore
-    from agent.plugins.context import PluginContext, PluginKVStore
-
-    MemePlugin = _load_meme_plugin_class()
 
     order: list[str] = []
     memes = tmp_path / "memes"
@@ -321,19 +290,23 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
     dispatch_port = SimpleNamespace(
         dispatch=AsyncMock(side_effect=lambda *a, **kw: order.append("dispatch")),
     )
-    plugin_dir = tmp_path / "plugins" / "meme"
-    plugin_dir.mkdir(parents=True)
-    meme_plugin = MemePlugin()
-    meme_plugin.context = PluginContext(
-        event_bus=event_bus,
-        tool_registry=None,
-        plugin_id="meme",
-        plugin_dir=plugin_dir,
-        kv_store=PluginKVStore(plugin_dir / ".kv.json"),
-        workspace=tmp_path,
+    plugin_root = tmp_path / "plugins"
+    for plugin_id in ("citation", "meme"):
+        shutil.copytree(
+            REPO_ROOT / "plugins" / plugin_id,
+            plugin_root / plugin_id,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
+    kernel = PluginKernel(
+        [plugin_root],
+        services=HostServices(
+            event_bus=event_bus,
+            workspace=tmp_path,
+            session_manager=session_manager,
+        ),
     )
-    await meme_plugin.initialize()
-    event_bus.on(AfterReasoningCtx, meme_plugin.decorate_meme)
+    await kernel.load_all()
+    assert kernel.loaded_count == 2
     context_store = SimpleNamespace(
         prepare=AsyncMock(
             return_value=ContextBundle(
@@ -380,7 +353,7 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
             event_bus=event_bus,
             outbound_port=cast(Any, dispatch_port),
             history_window=100,
-            after_reasoning_plugin_modules=[_CitationPersistModule()],
+            after_reasoning_plugin_modules=kernel.after_reasoning_modules,
         )
     )
     wire_turn_lifecycle(
@@ -397,6 +370,7 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
 
     out = await agent_core.process(msg, "telegram:456")
     await event_bus.drain()
+    await kernel.terminate_all()
 
     # 1. outbound 内容来自 meme 插件装饰后
     assert out.content == "原始回复"
@@ -411,6 +385,7 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
     assert session.messages[1]["content"] == "原始回复"
     assert session.messages[1]["reasoning_content"] == "思考"
     assert session.messages[1]["cited_memory_ids"] == ["mem_1"]
+    assert session.messages[1]["media"] == [str(image)]
     presence.record_user_message.assert_called_once_with("telegram:456")
     session_manager.append_messages.assert_awaited_once()
 
