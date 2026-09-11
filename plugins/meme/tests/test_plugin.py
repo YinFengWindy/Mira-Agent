@@ -19,11 +19,11 @@ from agent.plugins.registry import plugin_registry
 from bus.event_bus import EventBus
 from core.roles import RoleStore
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_meme_plugin_module() -> Any:
-    path = REPO_ROOT / "plugins" / "meme" / "backend" / "plugin.py"
+    path = PLUGIN_DIR / "backend" / "plugin.py"
     spec = importlib.util.spec_from_file_location(
         "test_meme_plugin",
         path,
@@ -120,10 +120,12 @@ async def test_meme_prompt_module_injects_bottom_section(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
-async def test_plugin_manager_collects_meme_prompt_module_before_initialize(tmp_path: Path) -> None:
+async def test_plugin_manager_collects_meme_prompt_module_before_initialize(
+    tmp_path: Path,
+) -> None:
     _write_meme_workspace(tmp_path)
     plugin_dir = tmp_path / "plugin_src" / "meme"
-    shutil.copytree(REPO_ROOT / "plugins" / "meme" / "backend", plugin_dir)
+    shutil.copytree(PLUGIN_DIR / "backend", plugin_dir)
     manager = PluginManager(
         [plugin_dir.parent],
         event_bus=EventBus(),
@@ -185,7 +187,9 @@ async def test_meme_plugin_strips_empty_protocol_tag(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_role_reactions_use_sendable_assets_and_global_emoji(tmp_path: Path) -> None:
+async def test_role_reactions_use_sendable_assets_and_global_emoji(
+    tmp_path: Path,
+) -> None:
     image = tmp_path / "reaction.png"
     image.write_bytes(b"reaction")
     role_store = RoleStore(tmp_path)
@@ -232,7 +236,9 @@ async def test_role_reactions_use_sendable_assets_and_global_emoji(tmp_path: Pat
         chat_id="role:mira",
         tools_used=(),
         thinking=None,
-        response_metadata=ResponseMetadata(raw_text="喜欢 <emoji:heart> <meme:reactions>"),
+        response_metadata=ResponseMetadata(
+            raw_text="喜欢 <emoji:heart> <meme:reactions>"
+        ),
         streamed=False,
         tool_chain=(),
         context_retry={},
@@ -246,7 +252,9 @@ async def test_role_reactions_use_sendable_assets_and_global_emoji(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_role_reactions_reject_disabled_category_and_unknown_emoji(tmp_path: Path) -> None:
+async def test_role_reactions_reject_disabled_category_and_unknown_emoji(
+    tmp_path: Path,
+) -> None:
     image = tmp_path / "reaction.png"
     image.write_bytes(b"reaction")
     store = RoleStore(tmp_path)
@@ -272,7 +280,9 @@ async def test_role_reactions_reject_disabled_category_and_unknown_emoji(tmp_pat
         chat_id="role:mira",
         tools_used=(),
         thinking=None,
-        response_metadata=ResponseMetadata(raw_text="好 <emoji:unknown> <meme:private>"),
+        response_metadata=ResponseMetadata(
+            raw_text="好 <emoji:unknown> <meme:private>"
+        ),
         streamed=False,
         tool_chain=(),
         context_retry={},

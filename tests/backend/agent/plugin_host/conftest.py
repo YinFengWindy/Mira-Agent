@@ -16,10 +16,10 @@ from agent.plugins.registry import plugin_registry
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+# 夹具布局适配仅供宿主的旧内核回归测试使用
+from tests.support.plugin_fixtures import stage_plugin_fixture as stage_plugin_fixture
 
-# 夹具布局适配归仓库根 conftest 所有，两棵测试树共用同一份实现
-from conftest import stage_plugin_fixture as stage_plugin_fixture
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
 @pytest.fixture(autouse=True)

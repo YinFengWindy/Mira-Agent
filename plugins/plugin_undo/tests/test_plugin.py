@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +10,7 @@ from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from plugins.plugin_undo.backend.plugin import PluginUndo, UndoCommandModule
 from session.manager import SessionManager
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 
 class _MemoryEngine:
@@ -112,7 +112,7 @@ async def test_scoped_setup_unload_and_restart_remove_and_restore_single_contrib
 ):
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(Path(__file__).resolve().parents[1], root / "plugin_undo")
+    _ = stage_plugin_package(Path(__file__).resolve().parents[1], root / "plugin_undo")
     manager = SessionManager(tmp_path / "workspace")
     kernel = PluginKernel(
         [root],

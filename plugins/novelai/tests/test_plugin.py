@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.provider import LLMResponse, ToolCall
 from agent.lifecycle.types import AfterReasoningCtx, AfterToolResultCtx
@@ -21,7 +21,7 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.roles.store import RoleStore
 from session.manager import SessionManager
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 _PLUGIN_CONFIG = {"novelai": {"enabled": True, "token": "novel-token"}}
 
 
@@ -40,7 +40,7 @@ def _load_novelai_plugin(
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "novelai"
-        shutil.copytree(_REPO_ROOT / "plugins" / "novelai", plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel
