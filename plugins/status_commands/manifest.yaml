@@ -1,0 +1,10 @@
+api: 2
+id: status_commands
+version: '0.1.0'
+desc: 会话记忆整理与 KVCache 遥测诊断命令
+capabilities:
+  - lifecycle
+  - bot_commands
+  - dependencies
+optional_dependencies:
+  - observe

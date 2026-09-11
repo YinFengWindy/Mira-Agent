@@ -523,3 +523,76 @@ async def test_weather_tool_via_facade(tmp_path: Path):
     assert tools.get_tool("get_weather") is not None
     await kernel.terminate_all()
     assert tools.get_tool("get_weather") is None
+
+
+@pytest.mark.asyncio
+async def test_optional_provider_lifecycle_does_not_activate_or_unload_consumer(tmp_path):
+    from agent.plugin_host.dependencies import PluginDependencyError
+
+    for name, optional, body in (
+        ("consumer", "[provider]", "ctx.expose(ctx.dependencies)"),
+        ("provider", "[]", "ctx.expose({'version': 'first'})"),
+    ):
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        _ = (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: [dependencies]\n"
+            f"optional_dependencies: {optional}\n", encoding="utf-8",
+        )
+        _ = (package / "backend/plugin.py").write_text(
+            f"async def setup(ctx):\n    {body}\n", encoding="utf-8",
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus(), namespace="optional")
+    try:
+        assert await kernel.load("consumer")
+        consumer = kernel._dependency_api("consumer")
+        assert consumer.get_optional("provider") is None
+        assert [row["id"] for row in kernel.states()] == ["consumer"]
+        assert await kernel.load("provider")
+        first = consumer.get_optional("provider")
+        assert first == {"version": "first"}
+        assert await kernel.unload("provider") == []
+        assert kernel.loaded_count == 1
+        assert consumer.get_optional("provider") is None
+        _ = (tmp_path / "provider/backend/plugin.py").write_text(
+            "async def setup(ctx):\n    ctx.expose({'version': 'second-generation'})\n",
+            encoding="utf-8",
+        )
+        assert await kernel.load("provider")
+        assert consumer.get_optional("provider") == {"version": "second-generation"}
+        assert consumer.get_optional("provider") is not first
+        with pytest.raises(PluginDependencyError, match="未声明"):
+            consumer.get_optional("undeclared")
+    finally:
+        await kernel.terminate_all()
+    # A handle from the retired kernel cannot read any future generation's API.
+    assert consumer.get_optional("provider") is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["missing", "disabled", "failed", "unexported"])
+async def test_optional_unavailable_exports_return_none_but_require_stays_strict(tmp_path, provider):
+    from agent.plugin_host.dependencies import PluginDependencyError
+
+    package = tmp_path / "provider"
+    (package / "backend").mkdir(parents=True)
+    _ = (package / "manifest.yaml").write_text(
+        "api: 2\nid: provider\ncapabilities: []\n", encoding="utf-8",
+    )
+    body = "raise RuntimeError('setup failure')" if provider == "failed" else "pass"
+    _ = (package / "backend/plugin.py").write_text(
+        f"async def setup(ctx):\n    {body}\n", encoding="utf-8",
+    )
+    kernel = make_kernel(
+        [tmp_path], event_bus=EventBus(), namespace="unavailable",
+        plugin_configs={"provider": {"enabled": provider != "disabled"}},
+    )
+    try:
+        if provider != "missing":
+            await kernel.load_all()
+        assert kernel._dependency_api("provider", True) is None
+        expected = "未导出接口" if provider == "unexported" else "不可用"
+        with pytest.raises(PluginDependencyError, match=expected):
+            kernel._dependency_api("provider")
+    finally:
+        await kernel.terminate_all()

@@ -62,3 +62,35 @@ def test_synthesized_legacy_manifest_grants_all(tmp_path: Path):
     assert manifest.id == "hello"
     assert not manifest.is_v2
     assert manifest.capabilities == LEGACY_CAPABILITIES
+
+
+def test_manifest_parses_optional_dependencies_without_making_them_strong(tmp_path: Path):
+    _ = (tmp_path / "manifest.yaml").write_text(
+        "api: 2\nid: demo\ncapabilities: [dependencies]\n"
+        "optional_dependencies: [observe, observe]\n",
+        encoding="utf-8",
+    )
+    manifest = load_manifest(tmp_path)
+    assert manifest is not None
+    assert manifest.optional_dependencies == ("observe",)
+    assert manifest.dependencies == ()
+
+
+@pytest.mark.parametrize("value", ["observe", "[null]", "['']", "[3]"])
+def test_manifest_rejects_invalid_optional_dependency_ids(tmp_path: Path, value: str):
+    _ = (tmp_path / "manifest.yaml").write_text(
+        f"api: 2\ncapabilities: []\noptional_dependencies: {value}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ManifestError, match="optional_dependencies"):
+        load_manifest(tmp_path)
+
+
+def test_dependency_cannot_be_both_strong_and_optional(tmp_path: Path):
+    _ = (tmp_path / "manifest.yaml").write_text(
+        "api: 2\ncapabilities: []\ndependencies: [observe]\n"
+        "optional_dependencies: [observe]\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ManifestError, match="同时声明"):
+        load_manifest(tmp_path)

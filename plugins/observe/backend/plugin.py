@@ -10,6 +10,7 @@ from core.memory.events import MemoryWritten, RetrievalCompleted
 
 from .collector import GlobalErrorCollector
 from .retention import run_retention_if_needed
+from .telemetry import ObserveTelemetry
 from .writer import TraceWriter
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
     ctx.events.on(TurnCommitted, lambda event: _observe_turn_committed(writer, event))
     ctx.events.on(RetrievalCompleted, lambda event: _observe_retrieval(writer, event))
     ctx.events.on(MemoryWritten, lambda event: _observe_memory_written(writer, event))
+    ctx.expose(ObserveTelemetry(workspace))
 
 
 def _observe_turn_committed(writer: TraceWriter, event: TurnCommitted) -> None:

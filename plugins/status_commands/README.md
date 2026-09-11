@@ -1,37 +1,22 @@
 # status_commands 插件
 
-内置诊断命令拦截器。在 BeforeTurn 管道的早期阶段识别 `/memory_status` 和 `/kvcache` 命令，直接返回诊断报告，绕过后续的记忆检索和 LLM 推理。
+通过 v2 `setup(ctx)` 注册诊断命令。`lifecycle` 贡献在会话获取后、记忆检索前执行；`bot_commands` 贡献菜单项。命令直接回复，不进入检索或 LLM，也不改写会话消息。停用或装配失败时，两类贡献一起撤销。
 
----
+## 命令
 
-## 接入点
+| 命令 | 别名 | 输出 |
+|---|---|---|
+| `/memorystatus` | `/memory_status`、`/compact_status` | 当前会话记忆整理位置、尚未整理的真实用户消息数、最后已整理消息预览 |
+| `/kvcache` | `/cache_status` | 最近几轮的缓存命中率、token 数量及回复预览 |
 
-| 接入方式 | 阶段 |
-|---|---|
-| `before_turn_modules()` | `before_turn.acquire_session` 之后——命令识别与 abort |
+命令不区分大小写，支持 Telegram 的 `@bot` 后缀。`/kvcache` 默认显示 5 轮，整数参数限制在 1–30；无效参数使用默认值。
 
----
+## 可选遥测读取
 
-## 运作逻辑
+manifest 通过 `optional_dependencies: [observe]` 声明可选读取权限。每次 `/kvcache` 都用 `ctx.dependencies.get_optional("observe")` 取得当前运行代的公开 API，再调用 `recent_cache_turns(session_key, limit=...)`。命令插件不直接打开遥测存储。
 
-两个命令各对应一个 PhaseModule，均插入在记忆检索（`_PrepareContextModule`）之前。任意一个命中时，向 `session:ctx` slot 写入一个 `abort=True` 的 `BeforeTurnCtx`，后续管道模块及 LLM 推理全部跳过，直接返回该 slot 的内容作为本轮回复。
+observe 的 `ObserveTelemetry` 返回不可变的 `KVCacheTurn` 记录；读取实现、路径和存储结构归 observe 所有。读取不会创建存储。未生成数据时显示“暂无 KVCache 数据。”；observe 未安装、停用、加载失败或没有公开接口时显示明确的不可用回复；存储读取失败显示“KVCache 查询失败。”。
 
-### MemoryStatusCommandModule（`/memory_status` / `/compact_status`）
+可选依赖不会启动 observe，也不会让状态命令随 observe 一起卸载。observe 重新启用后，下一条命令读取新接口，无需重新注册命令。
 
-读取当前 session 的 `messages` 列表和 `last_consolidated` 指针，统计：
-
-- 已整理到的用户消息数量（`last_consolidated` 之前）。
-- 尚未整理的用户消息数量。
-- 最后一条已整理用户消息的预览。
-- 当前会话总消息数。
-
-格式化为可读文本后作为 abort_reply 返回。只统计"真实用户消息"（role=user 且非 context frame 占位符）。
-
-### KVCacheCommandModule（`/kvcache` / `/cache_status`）
-
-查询 observe 数据库（`observe/observe.db`），从 `turns` 表取最近 N 轮（默认 5，可追加参数覆盖，最大 30）的 KVCache 统计字段：
-
-- `react_cache_prompt_tokens`：本轮送入的 prompt tokens 总量。
-- `react_cache_hit_tokens`：命中缓存的 tokens 数量。
-
-计算每轮命中率和总体命中率，格式化为表格后返回。若 observe 数据库不存在则返回提示信息。
+独立插件测试安装见 [TESTING.md](TESTING.md)。observe 仅为测试 extra 的依赖，运行 status_commands 不要求安装它。
