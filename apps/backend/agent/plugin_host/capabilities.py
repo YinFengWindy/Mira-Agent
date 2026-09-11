@@ -87,7 +87,9 @@ class ToolsCapability:
         search_hint: str | None = None,
     ) -> None:
         if self._registry is None:
-            raise RuntimeError(f"插件 {self._plugin_id} 请求 tools 能力，但宿主未提供 ToolRegistry")
+            raise RuntimeError(
+                f"插件 {self._plugin_id} 请求 tools 能力，但宿主未提供 ToolRegistry"
+            )
         name = str(tool.name)
         self._registry.register(
             tool,
@@ -130,7 +132,9 @@ class ToolsCapability:
 class LifecycleCapability:
     """向 Shiori 定义的 phase 槽位贡献模块；槽位顺序语义仍由核心拥有。"""
 
-    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+    def __init__(
+        self, contributions: PluginContributions, effects: EffectScope
+    ) -> None:
         self._contributions = contributions
         self._effects = effects
 
@@ -180,8 +184,7 @@ class ToolHooksCapability:
 
         hook 名统一在这里生成（``build_hook_name``），插件不再需要各自导入宿主的
         ``PluginToolHook``、手写 f-string 拼接或维护 ``_PLUGIN_NAME`` 常量（#182 评审）。
-        legacy 适配器把 handler 包成 ``functools.partial`` 后会丢失 ``__name__``，
-        因此保留 ``handler_name`` 覆盖参数，供其显式传入 metadata 里记录的原始 handler 名。
+        包装函数或 partial 可以显式提供 ``handler_name``，保持公开诊断名称稳定。
         """
         resolved_name = handler_name or getattr(handler, "__name__", repr(handler))
         hook = PluginToolHook(
@@ -196,7 +199,9 @@ class ToolHooksCapability:
 class ProactiveGatesCapability:
     """贡献参与主动 tick 准入的 gate；不允许直接投递消息。"""
 
-    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+    def __init__(
+        self, contributions: PluginContributions, effects: EffectScope
+    ) -> None:
         self._contributions = contributions
         self._effects = effects
 
@@ -212,7 +217,9 @@ class ProactiveGatesCapability:
 class ChannelsCapability:
     """贡献渠道 adapter；渠道宿主接管其生命周期。"""
 
-    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+    def __init__(
+        self, contributions: PluginContributions, effects: EffectScope
+    ) -> None:
         self._contributions = contributions
         self._effects = effects
 
@@ -226,15 +233,11 @@ class ChannelsCapability:
 
 
 class BotCommandsCapability:
-    """贡献 bot 命令（如 Telegram `/xxx`）；卸载时随 effect 从聚合列表摘除。
+    """贡献 bot 命令（如 Telegram `/xxx`）；卸载时随 effect 从聚合列表摘除。"""
 
-    承接 kernel.telegram_bot_commands 的 v2 一侧来源，与 legacy 插件的
-    ``telegram_bot_commands()`` 方法两条路径并存，聚合逻辑见 kernel.py。
-    迁移期两条来源之间不做去重（同一命令被两侧同时贡献会重复出现在聚合列表里）；
-    目前没有插件跨两条路径重复注册同一命令，暂不需要额外处理。
-    """
-
-    def __init__(self, contributions: PluginContributions, effects: EffectScope) -> None:
+    def __init__(
+        self, contributions: PluginContributions, effects: EffectScope
+    ) -> None:
         self._contributions = contributions
         self._effects = effects
 
@@ -324,5 +327,8 @@ class BackgroundCapability:
         _ = task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, Exception):  # noqa: BLE001 - 卸载路径只收敛不传播
+        except (
+            asyncio.CancelledError,
+            Exception,
+        ):  # noqa: BLE001 - 卸载路径只收敛不传播
             pass

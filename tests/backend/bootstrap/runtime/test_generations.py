@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -8,7 +8,11 @@ from bootstrap.runtime.generations import RuntimeCandidate
 
 
 def candidate():
-    core = SimpleNamespace(stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    core = SimpleNamespace(
+        stop=AsyncMock(),
+        assert_hot_unloadable=Mock(),
+        memory_runtime=SimpleNamespace(aclose=AsyncMock()),
+    )
     return RuntimeCandidate(1, core, SimpleNamespace(model="old"), published=True)
 
 
@@ -33,7 +37,7 @@ async def test_retirement_keeps_memory_alive_while_core_drains():
     entered = asyncio.Event()
     finish = asyncio.Event()
 
-    async def drain():
+    async def drain(**kwargs):
         entered.set()
         await finish.wait()
 
@@ -53,3 +57,34 @@ async def test_cleanup_failure_still_closes_memory_and_is_reported():
     with pytest.raises(RuntimeError, match="plugin cleanup failed"):
         await version.retire()
     version.core.memory_runtime.aclose.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_refused_retirement_preserves_bookkeeping_until_forced_shutdown():
+    from bootstrap.runtime.generations import GenerationManager
+    from agent.plugin_host import PluginRestartRequired
+
+    version = candidate()
+    version.core.assert_hot_unloadable.side_effect = PluginRestartRequired(["unsafe"])
+    manager = GenerationManager()
+    manager.start(version)
+    with pytest.raises(PluginRestartRequired):
+        await version.retire()
+    with pytest.raises(PluginRestartRequired):
+        manager.retire(version)
+    assert not version.retired
+    assert not version.closed
+    version.core.stop.assert_not_awaited()
+    version.core.memory_runtime.aclose.assert_not_awaited()
+    await manager.close_all(force=True)
+    assert version.closed
+    version.core.stop.assert_awaited_once_with(force=True)
+
+
+@pytest.mark.asyncio
+async def test_unpublished_candidate_uses_force_without_blocking_on_declaration():
+    version = candidate()
+    version.published = False
+    await version.retire()
+    version.core.assert_hot_unloadable.assert_not_called()
+    version.core.stop.assert_awaited_once_with(force=True)

@@ -47,7 +47,7 @@ class PluginHandle:
     contributions: PluginContributions = field(default_factory=PluginContributions)
     instance: Any = None
     drainers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
-    error: Exception | None = None
+    error: BaseException | None = None
 
     @property
     def plugin_id(self) -> str:

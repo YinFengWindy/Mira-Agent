@@ -1,416 +1,179 @@
-# 插件系统
+# 插件开发
 
-agent 每次收到一条用户消息，经过 6 个生命周期阶段产出一条回复。插件可以在这些阶段的任意位置插入自己的逻辑。
+Shiori 只有一套显式 v2 插件运行时。插件提供 `manifest.yaml` 和异步 `setup(ctx)`，宿主按声明授予能力，并用作用域回收事件、阶段贡献、工具和后台任务。
 
-## 先理解它怎么运转的
+## 包布局与发现
 
-插件包统一放在仓库顶层 `plugins/<id>/` 下，采用 `{backend,ui,tests}` 三分布局，包自包含：
-
-```
-plugins/<id>/
-  manifest.yaml          # 包声明：id、entry、capabilities（v2 插件必填；legacy 插件可省略）
+```text
+plugins/example/
+  manifest.yaml
   backend/
-    plugin.py             # 后端入口，默认路径；manifest 显式写 entry 时以它为准
-    ...                    # 插件其余后端模块
-  tests/                  # 该插件的单测，与插件包同目录、自包含
-  ui/                      # 预留：面向渲染进程的前端资源（暂无插件使用）
-  plugin_config.json       # 用户级配置覆盖，留在包根（gitignored，不进仓库）
-  plugin.disabled          # 存在即禁用该插件（gitignored，不进仓库）
+    plugin.py
+    config.py
+  ui/index.tsx         # 可选，主窗口贡献
+  background/index.ts # 可选，app.background
+  surface/index.tsx   # 可选，桌面 surface
+  tests/test_plugin.py
+  pyproject.toml
+  TESTING.md
+  README.md
 ```
 
-启动时自动发现、加载、注册。过程：
+后端扫描 `bootstrap.paths.plugin_roots()` 返回的插件根目录。开发态和桌面 bundle 使用顶层 `plugins/`；安装态使用已安装插件包。只有显式 `api: 2` 的 manifest 会成为插件，默认入口是 `backend/plugin.py`。入口作为包导入，内部可使用相对 import；同目录名先发现者优先，重复 manifest ID 会报错。
 
-```
-PluginKernel.discover()
-  → 扫描 plugins/ 下每个子目录
-  → 含 manifest.yaml 且声明 api: 2 → 按 v2 契约解析（entry、capabilities 必填）
-  → 否则要求 backend/plugin.py 存在，合成隐式 legacy manifest
-  → 动态 import 入口文件（v2 是 manifest.entry，legacy 是 backend/plugin.py）
-  → v2 插件调用 setup(ctx)；legacy 插件走 Plugin.__init_subclass__() 自动注册 + initialize()
-  → 失败则回滚该插件已注册的一切（effect scope 逆序处置），不影响其他插件
-```
-
-插件有 **4 种方式** 介入 agent 的行为。不是四种独立的系统，是同一份代码可以同时使用全部四种。
-
-| 机制 | 适合做什么 | 在哪用 |
-|------|-----------|--------|
-| **PhaseModule** | 在某个 Phase 的精确位置注入逻辑 | 写一个方法返回模块列表，模块链会自动编排 |
-| **EventBus 装饰器** | 在生命周期关键节点做观察或改写 | `@on_before_turn` 等 9 种 |
-| **@on_tool_pre** | 工具执行前拦截、改参数、拒绝 | LLM 调用工具时 |
-| **@tool** | 给 LLM 注册新工具 | 任何时候 LLM 决定调工具 |
-
----
-
-## PhaseModule：插件系统最核心的机制
-
-每个生命周期 Phase 是一条模块链。插件的模块和内置模块在链上是平等的——都声明 `slot`（身份）、`requires`（依赖哪个内置模块）、`produces`（产出什么数据 slot），框架用**拓扑排序**自动决定执行顺序。
-
-```
-BeforeTurn 管道（拓扑排序后）:
-  before_turn.acquire_session  →  setup_helper.chatid  →  before_turn.prepare_context  →  before_turn.build_ctx  →  before_turn.emit  →  recall_inspector.main  →  before_turn.collect_exports  →  before_turn.return
-                ↑                            ↑                               ↑                                          ↑                             ↑
-           插件注入点                   requires="before_turn.acquire_session"                                     插件注入点               requires="before_turn.emit"
+```yaml
+api: 2
+id: example
+version: '0.1.0'
+desc: 示例插件
+capabilities:
+  - config
+  - events
+  - lifecycle
+  - rpc
+config_model: config:ExampleConfig
+supports_hot_unload: true
 ```
 
-插件不再选"early 还是 late"这种固定注入点，而是**精确声明依赖哪个内置模块的 slot**。`requires=("before_turn.acquire_session",)` 就是 early，`requires=("before_turn.emit",)` 就是 late。
+`capabilities` 必须显式列出，可以是空列表。只声明实际使用的能力；未授权属性访问会抛 `CapabilityNotGranted`。`config_model` 可以是入口中的类名，也可以是相对入口包的 `模块:类名`。模型必须继承 Pydantic `BaseModel`。
 
-### 写一个 PhaseModule
+## setup 与配置
 
 ```python
+# backend/config.py
+from pydantic import BaseModel
+
+class ExampleConfig(BaseModel):
+    """Values editable through the plugin configuration channel."""
+    label: str = "example"
+```
+
+```python
+# backend/plugin.py
+from agent.lifecycle.types import AfterTurnCtx
+from .config import ExampleConfig
+
+async def setup(ctx):
+    """Registers this activation's contributions and cleanup."""
+    config = ExampleConfig.model_validate(ctx.config.as_dict())
+
+    async def after_turn(event: AfterTurnCtx):
+        await ctx.rpc.emit("updated", {"label": config.label})
+
+    async def read_label(payload):
+        return {"label": config.label}
+
+    ctx.events.on(AfterTurnCtx, after_turn)
+    ctx.rpc.register("label.get", read_label)
+```
+
+运行配置来自 `[plugins.example]`。`enabled` 是宿主拥有的启停字段，不应放进插件模型。插件自己在 `setup` 校验读取值；宿主配置 schema 注册表为 `plugin.config.get/set` 提供 schema、默认值和写入校验。没有配置模型的插件不会得到自动表单。
+
+桌面普通设置草稿不携带插件配置快照。保存时后端在同一配置事务锁内保留当前插件表，因此不会覆盖其它窗口刚完成的插件设置或启停更改。原始 `runtime.apply` 仍是整份配置替换；普通表单通过 `preserve_plugins: true` 明确选择保留语义。
+
+## 能力与副作用
+
+| 能力 | 用途 |
+| --- | --- |
+| `events` | `ctx.events.on(EventType, handler)`；订阅自动随插件撤销 |
+| `lifecycle` | `ctx.lifecycle.contribute(phase, modules)`；登记阶段模块 |
+| `tools` / `tool_hooks` | 注册工具或工具执行前处理器 |
+| `proactive_gates` | 贡献主动行为准入 gate |
+| `channels` / `bot_commands` | 贡献渠道及机器人命令 |
+| `rpc` | 注册 `plugin.<id>.<method>`，发送同命名空间事件 |
+| `background` | `ctx.background.spawn(coro, name=...)`；卸载取消并等待任务 |
+| `kv` | 工作区 `plugins/<id>/kv.json` 中的私有状态 |
+| `config` | 本代插件配置快照 |
+| `dependencies` | 读取已声明提供方的本代公开 API |
+| `runtime` | 本代是否重载、前代是否活动，以及收尾任务登记 |
+| `workspace` / `role_store` / `session_manager` / `memory_engine` | 获取宿主拥有的实际服务 |
+| `scene_observations` / `role_runtime_registry` | 场景观察需求与角色运行时协作 |
+
+能力名的完整权威清单位于 `agent/plugin_host/manifest.py`。不要自己构造另一份 RoleStore 来写同一份角色文件，应获取宿主共享的 `role_store`。能力是架构边界，不是 Python 进程内安全沙箱。
+
+其它外部资源用 `ctx.effect("label", disposer)` 登记清理；disposer 可同步或异步。作用域按逆序处置，一项失败不会跳过剩余 effect。初始化抛错会撤销已登记贡献；再次启用使用新作用域，不能重复保留旧订阅。
+
+## 阶段与依赖
+
+阶段槽位为 `before_turn`、`before_reasoning`、`prompt_render`、`before_step`、`after_step`、`after_reasoning`、`after_turn`。模块声明唯一 `slot`、所需 `requires` 和导出的 `produces`；宿主核心拥有具体执行顺序与帧语义。
+
+```python
+from agent.lifecycle.types import PromptRenderCtx
 from agent.prompting import PromptSectionRender
 
-class MyPromptModule:
-    slot = "my_plugin.prompt"               # 模块身份，用于被依赖
-    requires = ("prompt_render.emit",       # 声明依赖：在 emit 之后运行
-                "prompt:ctx",)              # 声明依赖：需要 prompt:ctx 数据 slot
-    produces = ("prompt:ctx",)              # 声明产出：可能改写 prompt:ctx
+class ExamplePrompt:
+    """Adds a prompt section after the host creates its prompt context."""
+    slot = "example.prompt"
+    requires = ("prompt_render.emit", "prompt:ctx")
+    produces = ("prompt:ctx",)
 
     async def run(self, frame):
-        ctx = frame.slots["prompt:ctx"]     # PromptRenderCtx 实例
-        ctx.system_sections_bottom.append(
-            PromptSectionRender(
-                name="my_rules",
-                content="## 自定义规则\n请用中文回答。",
-                is_static=True,
-            )
-        )
-        return frame
-```
-
-然后在 Plugin 子类上暴露它：
-
-```python
-class MyPlugin(Plugin):
-    name = "my_plugin"
-
-    def prompt_render_modules(self):        # 7 个统一方法之一
-        return [MyPromptModule()]
-```
-
-`requires` / `produces` 在**启动时**就会被校验——如果链上某个模块要求 `reasoning:ctx` 但前面没有人产出它，启动就会报 warning。`slot` 声明为空的模块也会在拓扑排序时直接报错。
-
-### 7 个注入方法 + 内置模块 Slot 锚点
-
-插件覆写 7 个方法之一返回模块列表，每个模块通过 `requires` 声明依赖的内置模块 slot 来决定精确插入位置。
-
-| Phase | 方法 | 常用锚点 slot（`requires=`） | 用途 |
-|-------|------|---------------------------|------|
-| BeforeTurn | `before_turn_modules()` | `before_turn.acquire_session`（early 拦截）<br>`before_turn.emit`（late 补充） | 命令拦截、记录上下文 |
-| BeforeReasoning | `before_reasoning_modules()` | `before_reasoning.sync_tools`（emit 前修改）<br>`before_reasoning.emit`（emit 后传数据） | 修改 ctx、写 slot |
-| PromptRender | `prompt_render_modules()` | `prompt_render.emit`（注入 section）<br>`citation.prompt`（在 citation 之后） | 注入 system prompt |
-| BeforeStep | `before_step_modules()` | `before_step.build_ctx`（emit 前）<br>`before_step.emit`（emit 后） | 修改每步 ctx |
-| AfterStep | `after_step_modules()` | `after_step.copy_input`（fanout 前）<br>`after_step.fanout`（fanout 后） | telemetry |
-| AfterReasoning | `after_reasoning_modules()` | `after_reasoning.build_ctx`（emit 前改 reply）<br>`after_reasoning.emit`（emit 后清理）<br>`after_reasoning.persist_user`（持久化前写 slot） | 回复后处理 |
-| AfterTurn | `after_turn_modules()` | `after_turn.build_work`（commit 前写 extra）<br>`after_turn.fanout_committed`（fanout 前写 telemetry） | 收尾 |
-
-**完整的内置模块 slot 列表**可通过 `uv run python apps/backend/main.py --inspect-modules` 打印 ASCII 依赖树查看。
-
----
-
-## Slot：模块间的类型化数据总线
-
-这是插件系统最巧妙的设计。每个 Phase 内部，模块不直接调下一个模块——它们只读写 `frame.slots`，管道的 collection 模块负责把 slots 翻译成下游能用的东西。
-
-### Slot 的工作原理
-
-```
-Module A: frame.slots["persist:assistant:cited_memory_ids"] = ["m1", "m2"]
-         ↓
-Module B: （不需要关心 A 做了什么）
-         ↓
-_Collect 模块在管道末尾扫描所有 slots，按前缀规则合并到输出
-         ↓
-_PersistAssistantMessage 模块从合并好的数据里拿到了 cited_memory_ids
-```
-
-你不需要知道下游模块的签名，不需要 import 任何东西——**写对 slot key 就行**。
-
-### 完整的 Slot 前缀表
-
-| 前缀 | 阶段 | 最终去向 |
-|------|------|---------|
-| `session:extra_hint:*` | BeforeTurn late | 合并进 `BeforeTurnCtx.extra_hints`，最终注入 system prompt |
-| `session:abort_reply` | BeforeTurn late | 设置 abort → 整个 turn 跳过推理，直接返回这段文本 |
-| `reasoning:extra_hint:*` | BeforeReasoning | 合并进 `BeforeReasoningCtx.extra_hints` → prompt |
-| `reasoning:abort_reply` | BeforeReasoning | 跳过 LLM 推理 |
-| `prompt:section_top:*` | PromptRender | 插入 system prompt 顶部 |
-| `prompt:section_bottom:*` | PromptRender | 插入 system prompt 底部 |
-| `prompt:extra_hint:*` | PromptRender | context frame 额外提示 |
-| `step:extra_hint:*` | BeforeStep | 注入到本轮 messages 中 |
-| `step:early_stop_reason` | BeforeStep | 停止 tool loop |
-| `step:telemetry:*` | AfterStep | 合并进 `AfterStepCtx.extra_metadata`（TAP handler 可见） |
-| `persist:user:*` | AfterReasoning | 持久化到 user 消息的额外字段 |
-| `persist:assistant:*` | AfterReasoning | 持久化到 assistant 消息的额外字段 |
-| `persist:assistant:cited_memory_ids` | AfterReasoning | citation 插件专用：被引用的记忆 ID 列表 |
-| `outbound:metadata:*` | AfterReasoning | 出站消息的 metadata 字典 |
-| `outbound:media:*` | AfterReasoning | 追加出站媒体 URL |
-| `turn:extra:*` | AfterTurn | TurnCommitted 事件的 extra 字段 |
-| `turn:telemetry:*` | AfterTurn | 合并进 `AfterTurnCtx.extra_metadata` |
-
-### 实际例子
-
-**例 1：注入一个提示到 system prompt（最简单）**
-
-```python
-class HintModule:
-    async def run(self, frame):
-        frame.slots["prompt:section_bottom:weather"] = "# 天气规则\n今天北京暴雨，建议提醒用户带伞"
-        return frame
-```
-
-`prompt:section_bottom:*` 前缀 + 自定义 key `weather`。管道的 `_CollectPromptExportSlotsModule` 会自动扫描所有以 `prompt:section_bottom:` 开头的 slot，合并进 system prompt。
-
-**例 2：在 after_step 写入 telemetry 让 TAP handler 能看到**
-
-```python
-class PressureModule:
-    async def run(self, frame):
-        ctx = frame.slots["step:ctx"]
-        if ctx.context_tokens_estimate > 800_000:
-            frame.slots["step:early_stop_reason"] = "context_pressure"
-            frame.slots["step:telemetry:pressure_tokens"] = ctx.context_tokens_estimate
-        return frame
-```
-
-`after_step_before_fanout` 位置写入的 `step:telemetry:*` 会在 fanout 之前被收集进 `extra_metadata`，所有 `@on_after_step` TAP handler 都能读到（但 `after_step_after_fanout` 写入的 telemetry 只有第二轮收集才能拿到，fanout 的 handler 已经看不到了）。
-
-**例 3：在 after_reasoning 中给 assistant 消息加自定义字段**
-
-```python
-class CitationModule:
-    async def run(self, frame):
-        # 正则扫 reply 里有没有 §cited:[id1,id2]§
-        reply = frame.slots["reasoning:ctx"].reply
-        cleaned, ids = extract_cited_ids(reply)
-        if ids:
-            # 写 slot → 持久化模块自动拿这个 key 写数据库
-            frame.slots["persist:assistant:cited_memory_ids"] = ids
-        # 把标签从 reply 文本里剥掉
-        frame.slots["reasoning:ctx"].reply = cleaned
-        return frame
-```
-
-这就是 citation 插件的实际写法。`persist:assistant:cited_memory_ids` 是一个约定好的 slot key——`_PersistAssistantMessageModule` 在持久化时专门会读这个 key，把它存到消息记录的 `extra` 字段里。**你只需要知道这个 key 名，不需要知道是谁读的、怎么存的。**
-
----
-
-## EventBus 装饰器
-
-PhaseModule 适合"在某一个精确位置做一件事"。但如果你的逻辑很简单——比如"每轮结束后记录一下回复长度"——直接挂一个装饰器就够。
-
-```python
-from agent.plugins import Plugin, on_after_turn
-from agent.lifecycle.types import AfterTurnCtx
-
-class MyPlugin(Plugin):
-    name = "my_plugin"
-
-    @on_after_turn()
-    async def log_reply(self, ctx: AfterTurnCtx) -> None:
-        print(f"回复长度: {len(ctx.reply)}")
-```
-
-### GATE（可修改事件）
-
-这 5 个装饰器的 handler 可以修改 ctx，甚至可以用 `ctx.abort = True` 阻断整个 turn：
-
-| 装饰器 | ctx 类型 | 关键可写字段 |
-|--------|---------|-------------|
-| `@on_before_turn()` | `BeforeTurnCtx` | `abort`, `abort_reply`, `extra_hints` |
-| `@on_before_reasoning()` | `BeforeReasoningCtx` | `abort`, `abort_reply`, `extra_hints` |
-| `@on_prompt_render()` | `PromptRenderCtx` | `system_sections_bottom`, `extra_hints` |
-| `@on_before_step()` | `BeforeStepCtx` | `extra_hints`, `early_stop`, `early_stop_reply` |
-| `@on_after_reasoning()` | `AfterReasoningCtx` | `reply`, `media`, `meme_tag`, `outbound_metadata` |
-
-```python
-@on_before_turn()
-async def block_spam(self, ctx: BeforeTurnCtx) -> BeforeTurnCtx:
-    if "禁止词" in ctx.content:
-        ctx.abort = True
-        ctx.abort_reply = "此消息已被拦截"
-    return ctx  # GATE 必须返回 ctx
-```
-
-`priority` 参数控制执行顺序（越大越先执行，默认 0）：
-
-```python
-@on_before_turn(priority=100)
-async def first(self, ctx): ...
-```
-
-### TAP（只观察）
-
-这 4 个装饰器的 handler 不能修改事件，只能观察/记录：
-
-| 装饰器 | ctx 类型 |
-|--------|---------|
-| `@on_after_step()` | `AfterStepCtx` |
-| `@on_after_turn()` | `AfterTurnCtx` |
-| `@on_tool_call()` | `BeforeToolCallCtx` |
-| `@on_tool_result()` | `AfterToolResultCtx` |
-
----
-
-## @on_tool_pre — LLM 调工具前拦截
-
-PhaseModule 和 EventBus 管的是生命周期，`@on_tool_pre` 管的是**工具调用**。
-
-```python
-from agent.plugins import Plugin, on_tool_pre
-from agent.lifecycle.types import PreToolCtx
-from agent.tool_hooks import HookOutcome
-
-class ShellSafety(Plugin):
-    name = "shell_safety"
-
-    @on_tool_pre(tool_name="shell")
-    async def block_interactive(self, ctx: PreToolCtx) -> HookOutcome | dict | None:
-        cmd = str(ctx.arguments.get("command", ""))
-        if "vi " in cmd or "vim " in cmd:
-            return HookOutcome(decision="deny", reason="禁止交互式命令")
-        return None
-```
-
-`PreToolCtx` 关键字段：`tool_name`, `arguments`（dict）, `session_key`, `call_id`, `source`, `tool_batch`（批量调用时的完整列表）, `tool_batch_index`（自己在批量中的位置）。
-
-返回值三种：
-- `None` — 不管，继续执行
-- `dict` — 替换 arguments
-- `HookOutcome(decision="deny")` — 拒绝调用
-
-**不填 `tool_name` 匹配所有工具**（tool_loop_guard 就这么做）。
-
----
-
-## @tool — 注册 LLM 可调用的工具
-
-```python
-from agent.plugins import Plugin, tool
-
-class MyPlugin(Plugin):
-    name = "my_plugin"
-
-    @tool(name="get_weather", risk="read-only", search_hint="查天气")
-    async def get_weather(self, event, city: str, date: str = "today") -> str:
-        """查询指定城市的天气。
-
-        Args:
-            city: 城市名称
-            date: 日期，默认 today
-        """
-        return f"{city} {date}：晴，23°C"
-```
-
-JSON Schema 从函数签名和 docstring 的 `Args:` 段自动生成。前两个参数 `self` 和 `event` 固定（`event` 传 `None`）。
-
----
-
-## 配置文件
-
-```json
-// 插件包根目录（不是 backend/）下 _conf_schema.json（声明默认值）
-{"max_results": {"default": 5, "description": "最大返回数"}}
-
-// 插件包根目录下 plugin_config.json（用户覆盖，gitignored）
-{"max_results": 10}
-```
-
-代码里读：`self.context.config.get("max_results")` 或 `self.context.config.max_results`。
-
----
-
-## 其他
-
-| 能力 | API |
-|------|-----|
-| KV 存储 | `self.context.kv_store.get/set/increment()` → workspace 下 `plugins/{plugin_id}/kv.json`（**不是**插件目录，见 issue #209：插件目录在打包形态下只读且升级即丢） |
-| 直接订阅 EventBus | `self.context.event_bus.on(TurnCommitted, handler)` — 不需要装饰器 |
-| 初始化 / 清理 | `async def initialize(self)`, `async def terminate(self)` |
-
----
-
-## 例子
-
-### citation — 纯 PhaseModule 的典型用法
-
-```python
-class CitationPlugin(Plugin):
-    name = "citation"
-
-    # 三个模块在一个方法里返回，topo-sort 自动按 requires 排好
-    def after_reasoning_modules(self):
-        return [CitationAfterReasoningModule(), ProtocolTagCleanupModule()]
-
-    def prompt_render_modules(self):
-        return [CitationPromptModule()]
-```
-
-三个模块通过 `slot` / `requires` 声明各自的插入位置：
-
-| 模块 | slot | requires | 效果 |
-|------|------|----------|------|
-| `CitationPromptModule` | `citation.prompt` | `prompt_render.emit` | 在 emit 之后注入引用协议到 system prompt |
-| `CitationAfterReasoningModule` | `citation.after_reasoning` | `after_reasoning.build_ctx` | 在 build 之后扫 `§cited:[]§` 提取 ID |
-| `ProtocolTagCleanupModule` | `citation.protocol_cleanup` | `after_reasoning.emit` | 在 emit 之后清理残留协议标签 |
-
-**meme 插件依赖 citation**：`MemePromptModule` 的 `requires=("citation.prompt", ...)` —— citation 产出 prompt section 后 meme 才运行。框架自动保证顺序。
-
-### tool_loop_guard — 纯 @on_tool_pre 的典型用法
-
-```python
-class ToolLoopGuard(Plugin):
-    name = "tool_loop_guard"
-
-    @on_tool_pre()  # 通配所有工具
-    async def guard(self, ctx: PreToolCtx) -> HookOutcome | None:
-        sig = f"{ctx.tool_name}:{json.dumps(ctx.arguments, sort_keys=True)}"
-        state = self._states.setdefault(ctx.session_key, _LoopState())
-        if sig == state.signature:
-            state.count += 1
-        else:
-            state.signature = sig
-            state.count = 1
-        if state.count >= 3:
-            return HookOutcome(decision="deny", reason="连续重复 3 次")
-        return None
-```
-
-### 命令拦截 — 用 slot 做 abort
-
-```python
-class UndoCommandModule:
-    slot = "plugin_undo.undo"
-    requires = ("before_turn.acquire_session",  # ← 锚定 acquire_session 之后
-                "session:session",)              # ← 需要 session 数据
-    produces = ("session:ctx",)
-
-    async def run(self, frame):
-        if "session:ctx" in frame.slots:
-            return frame
-        state = frame.input
-        if state.msg.content.strip() == "/undo":
-            frame.slots["session:ctx"] = BeforeTurnCtx(
-                ..., abort=True, abort_reply="已回滚上一轮。"
+        ctx = frame.slots.get("prompt:ctx")
+        if isinstance(ctx, PromptRenderCtx):
+            ctx.system_sections_bottom.append(
+                PromptSectionRender(name="example", content="Example context", is_static=True)
             )
         return frame
+
+async def setup(ctx):
+    """Contributes one scoped prompt module."""
+    ctx.lifecycle.contribute("prompt_render", [ExamplePrompt()])
 ```
 
-`requires=("before_turn.acquire_session",)` 让它跑在 prepare_context 之前——整个 turn 不走记忆检索、不走 LLM 推理，直接返回。
+模块依赖其它插件提供的槽位时，还应在 manifest 声明插件依赖。例如 meme 的 `dependencies: [citation]` 保证 citation 先活动；提供方缺失、停用或失败时 meme 为 `BLOCKED`，不会显示活动但缺少提示词。卸载提供方会级联其强依赖消费者。
 
----
+需要调用另一个插件的 API 时，提供方用 `ctx.expose(api)`，消费者声明 `dependencies` 和同名 capability，再调用 `ctx.dependencies.require("provider")`。只需要加载顺序时不必调用 `require`。可选提供方用 `optional_dependencies` 和 `get_optional`：它不会强制启动提供方，提供方不可用时返回 `None`，也不会触发消费者级联卸载。
 
-## 所有真实插件
+## 热卸载与进程退出
 
-| 插件 | 用了什么 | 一句话 |
-|------|---------|--------|
-| citation | PhaseModule ×3 | 扫 `§cited:[]§` 标签提取被引用的记忆 ID |
-| meme | PhaseModule + @on_after_reasoning GATE | 扫 `<meme:tag>` 替换成表情图片（依赖 citation） |
-| observe | 裸 EventBus 订阅 | 全链路 trace 写入 observe.db |
-| tool_loop_guard | @on_tool_pre(通配) | 连续重复调同一工具 3 次就 deny |
-| shell_safety | @on_tool_pre(shell) | 拒绝 vi/vim/sudo 等交互命令 |
-| shell_restore | @on_tool_pre(shell) | rm 改写成 mv |
-| context_pressure | PhaseModule | token 超 80% 窗口时提前停止 tool loop |
-| plugin_undo | PhaseModule | /undo 回滚 |
-| status_commands | PhaseModule | /memorystatus, /kvcache |
-| setup_helper | PhaseModule | /chatid, /myid |
-| recall_inspector | PhaseModule + @on_tool_result TAP | recall_memory 调用追踪 |
+`supports_hot_unload` 是严格布尔值，省略时为 `true`。不能可靠在进程内卸载的插件必须显式写 `false`。
+
+- 正常卸载先检查目标和全部强依赖消费者；任一活动插件不支持热卸载，整次操作拒绝，所有实例保持活动。
+- 当前设置修改采用整代准备/发布。如果当前代存在这类活动插件，插件启停、插件配置、普通或原始配置保存均返回 `plugin_restart_required`，包含 `plugin_ids`，不启动候选、不写配置或角色数据、不切换 generation。完全相同配置与只改角色模型绑定的事务仍可执行。
+- 用户应退出应用后修改配置，再重新启动；本轮没有“已保存、待重启”的第二份配置。
+- 真正退出宿主、未发布候选失败/取消/丢弃，以及初始化回滚都强制回收已登记资源。声明不会豁免 effect 清理。
+
+内核的 `unload`、`terminate_all` 及宿主 `CoreRuntime.stop` 正常入口遵守声明；`force` 仅供最终资源回收路径。普通退出仍按引用排空，不因强制清理而提前取消已接受的工作。
+
+## 桌面 RPC、事件与 UI
+
+`ctx.rpc.register("label.get", handler)` 注册 `plugin.example.label.get`。前端插件组件得到已绑定自身命名空间的 `client.call("label.get")`，不自行拼宿主 IPC。`await ctx.rpc.emit("updated", payload)` 通过 `PluginBridgeEvent` 与所属 generation 的服务下发 `plugin.example.updated`，旧代事件不会冒充新代。
+
+主窗口在构建时发现 `plugins/*/ui/index.tsx`，默认导出 `PluginUiModule`：
+
+```tsx
+import type { PluginUiModule } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
+
+const exampleUi: PluginUiModule = {
+  pluginId: "example",
+  settingsSection: { kind: "schema", label: "Example" },
+};
+export default exampleUi;
+```
+
+已使用的插槽包括 `settings.section`（qqbot/novelai）、`nav.page`（story）、`role.assets`（desktop_pet）。角色设置与聊天图片动作也有独立贡献契约。插件 UI 只通过注入的服务和 RPC 协作，启停状态决定其可见性。
+
+`app.background` 在隐藏的 plugin-host renderer 运行，入口是 `background/index.ts` 的 `{ pluginId, setup(ctx) }`。桌宠已通过它拥有控制器、surface、托盘项与订阅。它的 `BackgroundCtx` 不是 Python 上下文：通过自己的 `effect`、`events`、`rpc`、`surfaces`、`tray`、`store` 管理资源。使用 `surface/` 入口渲染独立桌面窗口。
+
+通用命名空间事件已经存在；桌宠仍有的专用跨 renderer/宿主桥迁移由 #218 承接，屏幕观察/语音边界由 #220/#221 承接，不应据此新增宿主领域硬编码。
+
+## 测试、安装与数据升级
+
+测试放在本包 `tests/`，文件与 `backend/` 模块对应。通过显式安装的 `shiori-plugin-testkit` 使用公共 fake 与包暂存：
+
+```python
+from pathlib import Path
+from shiori_plugin_testkit.packages import stage_plugin_package
+
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
+# 在 tmp_path 下整包暂存，保留源码/manifest/资源，排除运行状态和构建缓存。
+# staged = stage_plugin_package(PLUGIN_DIR, tmp_path / "plugins/example")
+```
+
+兄弟插件通过 `plugin_directory("citation")` 定位，并在 `pyproject.toml` 明确声明安装依赖；不得推导原仓库路径，也不得导入宿主测试树。异步测试由 pytest-asyncio 执行，公共支持来自 testkit 的 pytest entry point。宿主 fixture 仅存在于 `tests/conftest.py`。
+
+仓库开发使用 `uv sync --dev`，再 `uv run pytest plugins/example/tests`。仓库外验收运行 `uv run python scripts/verify_plugin_tests.py --plugins example --output <仓库外新目录>`：从副本构建非 editable wheel，在独立环境运行真实插件测试，检查模块来源，并确认 await 后故意失败的异步断言真正执行。完整步骤见 [插件测试](../agents/plugin-testing.md) 与各包 `TESTING.md`。
+
+旧停用标记仅由配置启动升级读取：按当前 manifest 身份写入缺失的 `[plugins.<id>].enabled = false`，显式配置优先。持久化失败保留原配置与标记，重试不会覆盖已保存选择；无法确认当前插件身份时保留标记，等待包可用。内核日常启停不读取标记。已归核心的主动/场景偏好保持各自升级逻辑。
+
+通用 KV 位于 `agent/plugin_host/kv.py`，旧 `.kv.json` 的现存可恢复数据仍由 `plugin_data` 原子迁入工作区。历史 `plugin_config.json` 与 `config.local.toml` 的数据归位由 #214 独立跟踪；本轮删除旧 loader，不删除用户这些文件，也不把它们重新作为 v2 配置回退。

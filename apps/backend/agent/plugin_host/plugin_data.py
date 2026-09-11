@@ -25,9 +25,7 @@ import json
 import logging
 from pathlib import Path
 
-# PluginKVStore 是通用工具而非旧系统语义，#184 删除旧插件系统时应把它移到
-# plugin_host 下；在那之前从原处导入，避免这次修复顺带扩大改动面。
-from agent.plugins.context import PluginKVStore
+from agent.plugin_host.kv import PluginKVStore
 from infra.persistence.json_store import atomic_save_json
 
 logger = logging.getLogger(__name__)
@@ -36,61 +34,12 @@ logger = logging.getLogger(__name__)
 PLUGIN_DATA_DIRNAME = "plugins"
 _KV_FILENAME = "kv.json"
 _LEGACY_KV_FILENAME = ".kv.json"
-_CONFIG_FILENAME = "plugin_config.json"
-# 插件禁用标记文件名；公开导出供 kernel.py 复用，避免常量在两处各写一份
-# （#178 复审 #6）。
-DISABLED_MARKER = "plugin.disabled"
 
 
 def plugin_data_dir(workspace: Path, plugin_id: str) -> Path:
     """Returns the writable per-plugin data directory under the workspace."""
 
     return workspace / PLUGIN_DATA_DIRNAME / plugin_id
-
-
-def migrate_legacy_disabled_marker(
-    plugin_dir: Path, plugin_id: str, legacy_plugin_root: Path | None
-) -> None:
-    """把插件包上移前留下的 ``plugin.disabled`` 标记搬到新的插件目录。
-
-    与 kv 同一个病根：该标记被 gitignore 覆盖，目录重命名经 git 落到本地时不会
-    跟着搬，导致用户此前停用的插件在升级后**自己变回启用**。标记本身没有内容，
-    迁移只是重建它。
-    """
-
-    if legacy_plugin_root is None:
-        return
-    target = plugin_dir / DISABLED_MARKER
-    legacy = legacy_plugin_root / plugin_id / DISABLED_MARKER
-    if target.exists() or not legacy.exists():
-        return
-    _ = target.write_text("", encoding="utf-8")
-    logger.info("插件 %s 的停用标记已从 %s 迁移到 %s", plugin_id, legacy, target)
-    try:
-        legacy.unlink()
-    except OSError as error:
-        logger.warning("插件 %s 的旧停用标记删除失败，已忽略: %s", plugin_id, error)
-
-
-def migrate_legacy_plugin_config(
-    plugin_dir: Path, plugin_id: str, legacy_plugin_root: Path | None
-) -> None:
-    """把插件包上移前留下的 ``plugin_config.json`` 搬到新的插件目录。
-
-    与 kv / plugin.disabled 同一病根：``plugins/*/plugin_config.json`` 被
-    gitignore 覆盖，目录重命名经 git 落到本地时不会跟着搬。
-    ``agent/plugins/manager.py::_load_plugin_config`` （被 legacy 适配器复用）
-    仍从新插件目录读取用户配置覆盖，不迁移会让用户此前的配置覆盖静默失效。
-
-    目标位置是插件包根目录（不是 workspace）——它是插件配置而非用户运行时
-    私有数据，挪进 workspace 属于另一个议题，这里不做。
-    """
-
-    if legacy_plugin_root is None:
-        return
-    target = plugin_dir / _CONFIG_FILENAME
-    legacy = legacy_plugin_root / plugin_id / _CONFIG_FILENAME
-    _migrate_legacy_json([legacy], target, plugin_id=plugin_id, description="配置覆盖")
 
 
 def open_plugin_kv(

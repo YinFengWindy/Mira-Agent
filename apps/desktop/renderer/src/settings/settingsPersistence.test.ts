@@ -52,8 +52,7 @@ function createSettingsFormData(
       searchEnabled: true,
       spawnEnabled: true,
       memoryOptimizerEnabled: false,
-      memoryOptimizerIntervalSeconds: 3600,
-      pluginsRawToml: "",
+      memoryOptimizerIntervalSeconds: 3600
     },
   };
 }

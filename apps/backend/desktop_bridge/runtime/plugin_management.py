@@ -4,10 +4,8 @@ Owns the ``plugins.list``/``plugins.setEnabled`` request bodies so
 ``ReloadableDesktopService`` only has to dispatch, not implement discovery
 or the enable/disable write path itself.
 
-Enable state lives in ``[plugins.<id>].enabled`` (config state), never the
-legacy ``plugin.disabled`` marker file — see the "启停" decision in
-docs/specs/2026-09-09-issue-174-plugin-system-restructure.md: new code
-must not depend on that file even though it is not removed.
+Enable state lives in ``[plugins.<id>].enabled``. Historical preference
+upgrade belongs to the configuration loading boundary.
 
 Toggling reuses the exact same transactional settings-apply pipeline as
 ``plugin.config.set`` (#177): any write to the ``plugins`` table changes
@@ -64,6 +62,7 @@ class RuntimePluginManagement:
                     "version": record.manifest.version or "",
                     "description": record.manifest.desc or "",
                     "enabled": self._enabled(plugin_id),
+                    "supports_hot_unload": record.manifest.supports_hot_unload,
                     "dependencies": list(record.manifest.dependencies),
                     "state": state["state"] if state else "DISCOVERED",
                     "error": state["error"] if state else "",
@@ -92,9 +91,12 @@ class RuntimePluginManagement:
         if not isinstance(operation_id, str) or not operation_id.strip():
             raise RuntimeApplyError("runtime_invalid_request", "操作 ID 不能为空")
         kernel = self._plugin_kernel()
-        known_ids = {record.manifest.id for record in kernel.discover()} if kernel else set()
+        known_ids = (
+            {record.manifest.id for record in kernel.discover()} if kernel else set()
+        )
         if plugin_id not in known_ids:
             raise RuntimeApplyError("plugin_not_found", f"插件 {plugin_id} 不存在")
+
         # 只翻一个开关、其余字段沿用当前已提交的配置，所以基准表必须在事务锁内
         # 读取：在锁外读会把并发落地的 runtime.apply 或 plugin.config.set 整份覆盖。
         def _merge(current_text: str) -> str:

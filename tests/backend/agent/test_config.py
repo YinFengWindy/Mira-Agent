@@ -15,9 +15,17 @@ def test_load_config_accepts_empty_model_registry(tmp_path, content):
 
 
 def test_load_config_retains_incomplete_registration_for_repair():
-    loaded = config.load_config_data({"llm": {"registrations": [{
-        "id": "00000000-0000-4000-a000-000000000001",
-    }]}})
+    loaded = config.load_config_data(
+        {
+            "llm": {
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                    }
+                ]
+            }
+        }
+    )
     assert len(loaded.model_registrations) == 1
     assert loaded.model_registrations[0].model == ""
 
@@ -94,10 +102,12 @@ system_prompt = "system"
 
 
 @pytest.mark.parametrize("name", ["vl_model", "vl_api_key", "vl_base_url"])
-def test_load_config_rejects_legacy_root_visual_fields(tmp_path: Path, name: str) -> None:
+def test_load_config_rejects_legacy_root_visual_fields(
+    tmp_path: Path, name: str
+) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        f'''\
+        f"""\
 {name} = "legacy"
 
 [[llm.registrations]]
@@ -105,7 +115,7 @@ id = "00000000-0000-4000-a000-000000000001"
 provider = "openai"
 model = "main"
 effort = "none"
-''',
+""",
         encoding="utf-8",
     )
 
@@ -181,8 +191,7 @@ effort = "none"
 
 [agent]
 system_prompt = "test"
-""".strip()
-        + "\n",
+""".strip() + "\n",
         encoding="utf-8",
     )
     return config_path
@@ -199,3 +208,43 @@ def test_load_config_defaults_memory_window_and_optimizer_interval(tmp_path: Pat
 
     assert cfg.memory_window == 40
     assert cfg.memory_optimizer_interval_seconds == 64800
+
+
+def test_load_config_upgrades_plugin_markers_but_candidate_parsing_is_pure(
+    tmp_path, monkeypatch
+):
+    import agent.plugin_preferences as preferences
+
+    packages = tmp_path / "plugins"
+    marker = packages / "demo/plugin.disabled"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+    (marker.parent / "manifest.yaml").write_text(
+        "api: 2\nid: demo\ncapabilities: []\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(preferences, "plugin_roots", lambda: [packages])
+    monkeypatch.setattr(preferences, "REPOSITORY_ROOT", tmp_path)
+    path = tmp_path / "config.toml"
+    path.write_text("[plugins.demo]\nsecret = 'keep'\n", encoding="utf-8")
+    before = path.read_bytes()
+    assert config.load_config_text(path.read_text(encoding="utf-8")).plugins[
+        "demo"
+    ] == {"secret": "keep"}
+    assert path.read_bytes() == before
+    assert config.load_config(path).plugins["demo"] == {
+        "secret": "keep",
+        "enabled": False,
+    }
+
+
+def test_load_config_resolves_plugin_environment_values(tmp_path, monkeypatch):
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[plugins.qqbot]\napp_id = "qq-app"\nclient_secret = "${QQBOT_SECRET}"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("QQBOT_SECRET", "qq-secret")
+    assert config.load_config(path).plugins["qqbot"] == {
+        "app_id": "qq-app",
+        "client_secret": "qq-secret",
+    }

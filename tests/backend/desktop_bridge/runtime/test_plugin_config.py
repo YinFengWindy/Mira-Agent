@@ -1,10 +1,4 @@
-"""plugin.config.get/set：schema 通道读写，覆盖验收标准 3 与 4。
-
-用真实插件（仓库自带的 qqbot，经 v2 manifest 的 ``config_model`` 声明配置
-模型——#183 之前经 legacy ``Plugin.ConfigModel`` 声明，迁移后 schema 解析路径
-换了但通道行为不变）和一个完全没有配置模型的旧插件（hello 夹具）做被测对象，
-而不是只能造假插件；证明 ``plugin.config`` 通道对存量插件立刻可用。
-"""
+"""真实 qqbot schema 与显式 v2 fixture 的插件配置通道回归。"""
 
 from __future__ import annotations
 
@@ -16,7 +10,7 @@ import pytest
 
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
-from tests.support.plugin_fixtures import stage_plugin_fixture
+from shiori_plugin_testkit.packages import stage_plugin_package
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -40,10 +34,8 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Stages qqbot (has ConfigModel), hello (has none) and a nullable-default model."""
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    # 夹具是旧扁平布局、内核要求 backend/；不重整这些插件根本不会被加载，
-    # 而「无配置模型返回 schema=None」这类断言在插件缺席时同样成立，测试会假绿。
-    _ = stage_plugin_fixture("hello", root)
-    _ = stage_plugin_fixture("nullable_config", root)
+    _ = stage_plugin_package(_HELLO_FIXTURE_DIR, root / "hello")
+    _ = stage_plugin_package(_NULLABLE_FIXTURE_DIR, root / "nullable_config")
     monkeypatch.setattr(
         "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
     )

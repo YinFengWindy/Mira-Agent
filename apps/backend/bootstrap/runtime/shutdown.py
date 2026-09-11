@@ -40,26 +40,38 @@ class RuntimeShutdownMixin:
             self.agent_loop.stop()
         if self.scheduler is not None:
             self.scheduler.stop()
-        controls = [task for task in self._background_tasks if task.get_name() != "bus_dispatch_outbound"]
+        controls = [
+            task
+            for task in self._background_tasks
+            if task.get_name() != "bus_dispatch_outbound"
+        ]
         for task in controls:
             task.cancel()
         outcomes = await asyncio.gather(*controls, return_exceptions=True)
-        self._cleanup_errors.extend(error for error in outcomes if isinstance(error, Exception))
-        self._background_tasks = [task for task in self._background_tasks if task not in controls]
+        self._cleanup_errors.extend(
+            error for error in outcomes if isinstance(error, Exception)
+        )
+        self._background_tasks = [
+            task for task in self._background_tasks if task not in controls
+        ]
 
     async def _close_generations(self) -> None:
         if not self._generation_manager.tracked and self.core is not None:
             await run_cleanup_steps(
-                ("partial_core.stop", self.core.stop),
+                ("partial_core.stop", lambda: self.core.stop(force=True)),
                 ("partial_memory.close", self.core.memory_runtime.aclose),
             )
             return
-        await self._generation_manager.close_all()
+        await self._generation_manager.close_all(force=True)
 
     async def _drain_outbound(self) -> None:
         if self.bus is not None:
-            if self.bus.outbound_size and not any(not task.done() for task in self._background_tasks):
-                raise RuntimeError("Outbound dispatcher stopped before pending replies were delivered")
+            if self.bus.outbound_size and not any(
+                not task.done() for task in self._background_tasks
+            ):
+                raise RuntimeError(
+                    "Outbound dispatcher stopped before pending replies were delivered"
+                )
             await self.bus.drain_outbound()
 
     async def _stop_channels(self) -> None:
@@ -72,7 +84,9 @@ class RuntimeShutdownMixin:
         for task in self._background_tasks:
             task.cancel()
         outcomes = await asyncio.gather(*self._background_tasks, return_exceptions=True)
-        self._cleanup_errors.extend(error for error in outcomes if isinstance(error, Exception))
+        self._cleanup_errors.extend(
+            error for error in outcomes if isinstance(error, Exception)
+        )
         self._background_tasks = []
 
     async def _close_events(self) -> None:

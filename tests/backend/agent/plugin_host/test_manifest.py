@@ -5,10 +5,8 @@ from pathlib import Path
 import pytest
 
 from agent.plugin_host.manifest import (
-    LEGACY_CAPABILITIES,
     ManifestError,
     load_manifest,
-    synthesize_legacy_manifest,
 )
 
 
@@ -16,17 +14,35 @@ def test_missing_manifest_returns_none(tmp_path: Path):
     assert load_manifest(tmp_path) is None
 
 
-def test_legacy_four_field_manifest_keeps_api_one(tmp_path: Path):
+@pytest.mark.parametrize("content", [b"api: 2\ncapabilities: [\n", b"\xff"])
+def test_manifest_wraps_invalid_yaml_and_encoding(tmp_path, content):
+    (tmp_path / "manifest.yaml").write_bytes(content)
+    with pytest.raises(ManifestError, match="manifest.yaml") as caught:
+        load_manifest(tmp_path)
+    assert caught.value.__cause__ is not None
+
+
+def test_manifest_wraps_read_failure(tmp_path, monkeypatch):
+    (tmp_path / "manifest.yaml").write_text("api: 2\n", encoding="utf-8")
+
+    def deny_read(*args, **kwargs):
+        raise PermissionError("manifest access denied")
+
+    monkeypatch.setattr(Path, "read_text", deny_read)
+    with pytest.raises(ManifestError, match="manifest.yaml") as caught:
+        load_manifest(tmp_path)
+    assert isinstance(caught.value.__cause__, PermissionError)
+
+
+@pytest.mark.parametrize(
+    "api", ["", "api: 1\n", "api: 3\n", "api: true\n", "api: '2'\n"]
+)
+def test_manifest_requires_explicit_supported_api(tmp_path: Path, api: str):
     (tmp_path / "manifest.yaml").write_text(
-        "name: qq_bot\nversion: '1.0'\ndesc: 渠道\nauthor: tester\n",
-        encoding="utf-8",
+        api + "id: demo\ncapabilities: []\n", encoding="utf-8"
     )
-    manifest = load_manifest(tmp_path)
-    assert manifest is not None
-    assert not manifest.is_v2
-    assert manifest.id == "qq_bot"
-    # 旧 manifest 未声明 capabilities 时保持 legacy 全量能力
-    assert manifest.capabilities == LEGACY_CAPABILITIES
+    with pytest.raises(ManifestError, match="api: 2"):
+        load_manifest(tmp_path)
 
 
 def test_v2_manifest_parses_capabilities(tmp_path: Path):
@@ -37,7 +53,7 @@ def test_v2_manifest_parses_capabilities(tmp_path: Path):
     )
     manifest = load_manifest(tmp_path)
     assert manifest is not None
-    assert manifest.is_v2
+    assert manifest.api == 2
     assert manifest.entry == "main.py"
     assert manifest.capabilities == ("events", "kv")
 
@@ -55,13 +71,6 @@ def test_unknown_capability_rejected(tmp_path: Path):
     )
     with pytest.raises(ManifestError, match="warp_drive"):
         _ = load_manifest(tmp_path)
-
-
-def test_synthesized_legacy_manifest_grants_all(tmp_path: Path):
-    manifest = synthesize_legacy_manifest(tmp_path / "hello")
-    assert manifest.id == "hello"
-    assert not manifest.is_v2
-    assert manifest.capabilities == LEGACY_CAPABILITIES
 
 
 def test_manifest_parses_optional_dependencies_without_making_them_strong(
@@ -96,3 +105,27 @@ def test_dependency_cannot_be_both_strong_and_optional(tmp_path: Path):
     )
     with pytest.raises(ManifestError, match="同时声明"):
         load_manifest(tmp_path)
+
+
+@pytest.mark.parametrize("value", ["false", "true"])
+def test_manifest_declares_hot_unload_support(tmp_path, value):
+    (tmp_path / "manifest.yaml").write_text(
+        f"api: 2\ncapabilities: []\nsupports_hot_unload: {value}\n", encoding="utf-8"
+    )
+    assert load_manifest(tmp_path).supports_hot_unload is (value == "true")
+
+
+@pytest.mark.parametrize("value", ["'false'", "0", "[]", "null"])
+def test_manifest_rejects_non_boolean_hot_unload_declaration(tmp_path, value):
+    (tmp_path / "manifest.yaml").write_text(
+        f"api: 2\ncapabilities: []\nsupports_hot_unload: {value}\n", encoding="utf-8"
+    )
+    with pytest.raises(ManifestError, match="supports_hot_unload"):
+        load_manifest(tmp_path)
+
+
+def test_existing_manifest_defaults_to_hot_unloadable(tmp_path):
+    (tmp_path / "manifest.yaml").write_text(
+        "api: 2\ncapabilities: []\n", encoding="utf-8"
+    )
+    assert load_manifest(tmp_path).supports_hot_unload is True

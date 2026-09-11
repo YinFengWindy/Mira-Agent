@@ -27,7 +27,7 @@ from agent.prompting import (
     PromptSectionRender,
     build_context_frame_message,
 )
-from agent.plugins.role_prompt import (
+from agent.role_prompt import (
     build_role_cache_prefix_section,
     build_role_system_section,
 )
@@ -183,7 +183,10 @@ class MessageEnvelopeBuilder:
             if value.startswith(("http://", "https://")):
                 continue
             path = Path(value)
-            if not path.is_file() or path.suffix.lower() not in _READABLE_TEXT_ATTACHMENT_SUFFIXES:
+            if (
+                not path.is_file()
+                or path.suffix.lower() not in _READABLE_TEXT_ATTACHMENT_SUFFIXES
+            ):
                 continue
             quoted_path = json.dumps(value, ensure_ascii=False)
             file_refs.append(f"- 文件路径: {value}")
@@ -284,7 +287,9 @@ class ContextBuilder:
         context: dict[str, str] = {}
         if turn_injection_prompt:
             context["turn_injection"] = turn_injection_prompt
-        if isinstance((session_metadata or {}).get(INTERRUPTED_TURN_METADATA_KEY), dict):
+        if isinstance(
+            (session_metadata or {}).get(INTERRUPTED_TURN_METADATA_KEY), dict
+        ):
             context["interrupted_turn"] = (
                 "上一轮助手回复因用户主动中断而未完成。已保留的 assistant "
                 "content 和 reasoning_content 只是中断时的原始快照，不能视为完整结论，"

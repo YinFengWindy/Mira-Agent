@@ -8,6 +8,7 @@ from core.roles import RoleStore
 from core.roles.role_macros import expand_role_macros
 from core.roles.role_prompt_compiler import RoleKnowledgeMatcher, RolePromptCompiler
 
+
 def build_role_system_section(
     *,
     workspace: Path,
@@ -26,15 +27,19 @@ def build_role_system_section(
 
     role_name = role.name.strip() or role_id
     profile = role.profile
-    prompt = RolePromptCompiler().compile(
-        role,
-        matched_knowledge_entries=RoleKnowledgeMatcher().match(
-            profile.knowledge_base,
-            current_message,
-        ),
-        runtime_context=role.runtime_config,
-        user_name=str(metadata.get("user_name") or ""),
-    ).content.strip()
+    prompt = (
+        RolePromptCompiler()
+        .compile(
+            role,
+            matched_knowledge_entries=RoleKnowledgeMatcher().match(
+                profile.knowledge_base,
+                current_message,
+            ),
+            runtime_context=role.runtime_config,
+            user_name=str(metadata.get("user_name") or ""),
+        )
+        .content.strip()
+    )
     if not prompt:
         raise ValueError(f"role.system_prompt required: {role_id}")
     return PromptSectionRender(
@@ -58,7 +63,9 @@ def build_role_cache_prefix_section(
     if role is None:
         return None
 
-    runtime_config = role.runtime_config if isinstance(role.runtime_config, dict) else {}
+    runtime_config = (
+        role.runtime_config if isinstance(role.runtime_config, dict) else {}
+    )
     config_lines = [
         f"{key}={runtime_config[key]}"
         for key in sorted(runtime_config)

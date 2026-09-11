@@ -31,6 +31,8 @@ export type PluginSummary = {
   state: string;
   error: string;
   hasConfigSchema: boolean;
+  /** Whether an active plugin can be replaced without restarting the process. */
+  supportsHotUnload: boolean;
 };
 
 export type PluginSetEnabledResult = {
@@ -83,7 +85,7 @@ export function createPluginBridgeClient(invoke?: DesktopInvoke): PluginBridgeCl
     async listPlugins() {
       const payload = await invokePluginPayload<{ plugins: Array<{
         id: string; name: string; version: string; description: string;
-        enabled: boolean; state: string; error: string; has_config_schema: boolean;
+        enabled: boolean; state: string; error: string; has_config_schema: boolean; supports_hot_unload: boolean;
       }> }>(resolveInvoke(), "plugins.list", {});
       return payload.plugins.map((item) => ({
         id: item.id,
@@ -94,6 +96,7 @@ export function createPluginBridgeClient(invoke?: DesktopInvoke): PluginBridgeCl
         state: item.state,
         error: item.error,
         hasConfigSchema: item.has_config_schema,
+        supportsHotUnload: item.supports_hot_unload,
       }));
     },
     async setEnabled(pluginId, enabled, options) {

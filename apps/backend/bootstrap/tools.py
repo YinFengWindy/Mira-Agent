@@ -151,20 +151,43 @@ class CoreRuntime:
 
         return await inspect_core_modules(self)
 
-    async def stop(self) -> None:
-        """Drains child work before releasing this generation's providers."""
+    def assert_hot_unloadable(self) -> None:
+        """Refuses live replacement before scene, event, or provider teardown starts."""
+        if self.plugin_manager is not None:
+            self.plugin_manager.assert_hot_unloadable()
+
+    async def stop(self, *, force: bool = False) -> None:
+        """Drains owned work and releases resources; shutdown/rollback may force cleanup."""
+        if not force:
+            self.assert_hot_unloadable()
+        steps = []
         if self.scene_service is not None:
-            await self.scene_service.close()
+            steps.append(("scene.close", self.scene_service.close))
         spawn = self.tools.get_tool("spawn")
         if spawn is not None:
-            await spawn.manager.drain()
-        await self.event_bus.drain()
-        await self.memory_runtime.markdown.maintenance.drain()
+            steps.append(("spawn.drain", spawn.manager.drain))
+        steps.extend(
+            [
+                ("event_bus.drain", self.event_bus.drain),
+                (
+                    "memory.maintenance.drain",
+                    self.memory_runtime.markdown.maintenance.drain,
+                ),
+            ]
+        )
         if self.scene_followup_subscription is not None:
-            self.scene_followup_subscription.stop()
-        steps = []
+
+            async def stop_scene_followup() -> None:
+                self.scene_followup_subscription.stop()
+
+            steps.append(("scene_followup.stop", stop_scene_followup))
         if self.plugin_manager is not None:
-            steps.append(("plugins.terminate", self.plugin_manager.terminate_all))
+            steps.append(
+                (
+                    "plugins.terminate",
+                    lambda: self.plugin_manager.terminate_all(force=force),
+                )
+            )
         steps.extend(
             [
                 ("mcp.shutdown", self.mcp_registry.shutdown),
@@ -659,7 +682,7 @@ def _resolve_plugin_dirs(workspace: Path) -> list[Path]:
 def _legacy_plugin_root() -> Path | None:
     """插件包上移到仓库顶层之前的位置，用于一次性迁移遗留的本地状态。
 
-    `.kv.json` 与 `plugin.disabled` 都被 gitignore 覆盖，目录重命名经 git
+    `.kv.json` 被 gitignore 覆盖，目录重命名经 git
     落到本地时不会跟着搬，会静默留在旧路径（见 #178 / #209）。打包形态下
     这个目录不存在，返回 None。
     """

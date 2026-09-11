@@ -17,19 +17,18 @@ from agent.plugin_host.manifest import (
     PluginManifest,
     load_manifest,
 )
-from agent.plugin_host.plugin_data import DISABLED_MARKER
 from agent.plugin_host.rpc import PluginRpcRegistry
 from agent.plugin_host.runtime_context import (
     CapabilityNotGranted,
     PluginRuntimeContext,
 )
 from agent.plugin_host.tool_hooks import PluginToolHook
+from agent.plugin_host.unload import PluginRestartRequired
 
 __all__ = [
     "CapabilityNotGranted",
     "ConfigModelError",
     "DEFAULT_ENTRY",
-    "DISABLED_MARKER",
     "EffectScope",
     "HostServices",
     "KNOWN_CAPABILITIES",
@@ -41,6 +40,7 @@ __all__ = [
     "PluginKernel",
     "PluginManifest",
     "PluginRecord",
+    "PluginRestartRequired",
     "PluginRpcRegistry",
     "PluginRuntimeContext",
     "PluginState",

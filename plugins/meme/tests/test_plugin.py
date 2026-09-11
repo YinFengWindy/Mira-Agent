@@ -77,9 +77,7 @@ async def _load_kernel(
     stage_plugin_package(plugin_source, root / "meme")
     if citation != "missing":
         stage_plugin_package(plugin_directory("citation"), root / "citation")
-        if citation == "disabled":
-            (root / "citation" / "plugin.disabled").touch()
-        elif citation == "failed":
+        if citation == "failed":
             (root / "citation" / "backend" / "plugin.py").write_text(
                 'async def setup(ctx):\n    raise RuntimeError("citation failed")\n',
                 encoding="utf-8",
@@ -89,6 +87,7 @@ async def _load_kernel(
         [root],
         services=HostServices(
             event_bus=bus,
+            plugin_configs={"citation": {"enabled": citation != "disabled"}},
             workspace=tmp_path,
             session_manager=session_manager,
         ),
@@ -138,7 +137,7 @@ async def test_meme_discovery_uses_v2_and_declares_citation(
 ) -> None:
     kernel, _ = await load_kernel(tmp_path)
     record = next(record for record in kernel.discover() if record.name == "meme")
-    assert record.manifest.is_v2
+    assert record.manifest.api == 2
     assert record.manifest.dependencies == ("citation",)
     assert set(record.manifest.capabilities) == {
         "lifecycle",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -15,8 +16,129 @@ from tests.backend.agent.plugin_host.conftest import (
     REPOSITORY_ROOT,
     before_turn_ctx,
     make_kernel,
-    stage_plugin_fixture,
+    stage_plugin_package,
+    PLUGIN_FIXTURES,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [False, True])
+async def test_setup_cancellation_rolls_back_before_force_cleanup(tmp_path, strict):
+    for name in ("active", "waiting"):
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: [events, lifecycle]\n"
+            "supports_hot_unload: false\n",
+            encoding="utf-8",
+        )
+        (package / "backend/plugin.py").write_text(
+            "import asyncio\n"
+            "async def setup(ctx):\n"
+            "    state = ['started']\n"
+            "    ctx.expose(state)\n"
+            "    ctx.effect('close', lambda: state.append('closed'))\n"
+            "    async def on_event(event):\n"
+            f"        event.append('{name}')\n"
+            "        return event\n"
+            "    ctx.events.on(list, on_event)\n"
+            "    ctx.lifecycle.contribute('before_turn', [object()])\n"
+            + ("    await asyncio.Event().wait()\n" if name == "waiting" else ""),
+            encoding="utf-8",
+        )
+    bus = EventBus()
+    kernel = make_kernel([tmp_path], event_bus=bus, strict=strict)
+    loading = asyncio.create_task(kernel.load_all())
+    await asyncio.sleep(0)
+    waiting = kernel._handles["waiting"]
+    state = waiting.instance
+    active_state = kernel._dependency_api("active")
+    assert waiting.state is PluginState.LOADING
+    assert state == ["started"]
+    assert waiting.effects.labels
+    assert len(waiting.contributions.phase_modules["before_turn"]) == 1
+    loading.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await loading
+    try:
+        assert state == ["started", "closed"]
+        assert waiting.effects.labels == []
+        assert waiting.contributions.phase_modules["before_turn"] == []
+        assert waiting.state is PluginState.FAILED
+        assert isinstance(waiting.error, asyncio.CancelledError)
+        assert await bus.emit([]) == ["active"]
+        assert active_state == ["started"]
+    finally:
+        await kernel.terminate_all(force=True)
+    assert active_state == ["started", "closed"]
+    assert state == ["started", "closed"]
+    assert await bus.emit([]) == []
+    assert kernel.states() == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_yaml_is_diagnosed_without_blocking_valid_sibling(
+    tmp_path, caplog
+):
+    from agent.plugin_host.manifest import ManifestError
+
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / "manifest.yaml").write_text("api: 2\ncapabilities: [\n", encoding="utf-8")
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    try:
+        await kernel.load_all()
+        assert kernel.loaded_count == 1
+        assert kernel.states()[0]["id"] == "hello"
+        assert "broken" in caplog.text
+        assert "manifest" in caplog.text
+    finally:
+        await kernel.terminate_all(force=True)
+    strict_kernel = make_kernel([tmp_path], event_bus=EventBus(), strict=True)
+    with pytest.raises(ManifestError, match="manifest.yaml"):
+        await strict_kernel.load_all()
+
+
+@pytest.mark.asyncio
+async def test_force_cleanup_recovers_effects_after_rollback_is_cancelled(tmp_path):
+    package = tmp_path / "waiting"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        "api: 2\ncapabilities: []\nsupports_hot_unload: false\n", encoding="utf-8"
+    )
+    (package / "backend/plugin.py").write_text(
+        "import asyncio\n"
+        "async def setup(ctx):\n"
+        "    state = {'closed': False, 'closing': asyncio.Event()}\n"
+        "    ctx.expose(state)\n"
+        "    ctx.effect('close', lambda: state.update(closed=True))\n"
+        "    async def interrupted_close():\n"
+        "        state['closing'].set()\n"
+        "        await asyncio.Event().wait()\n"
+        "    ctx.effect('interrupted', interrupted_close)\n"
+        "    await asyncio.Event().wait()\n",
+        encoding="utf-8",
+    )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    loading = asyncio.create_task(kernel.load_all())
+    await asyncio.sleep(0)
+    handle = kernel._handles["waiting"]
+    state = handle.instance
+    loading.cancel()
+    try:
+        await asyncio.wait_for(state["closing"].wait(), timeout=1)
+    finally:
+        loading.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await loading
+    assert handle.effects.labels == ["custom:close"]
+    assert not state["closed"]
+    await kernel.terminate_all(force=True)
+    assert state["closed"]
+    assert handle.effects.labels == []
+    assert kernel.states() == []
+
 
 _EXPECTED_TOP_LEVEL_PLUGINS = {
     "akasha",
@@ -47,6 +169,12 @@ def test_discover_finds_all_top_level_plugins():
     names = {record.name for record in records}
 
     assert names == _EXPECTED_TOP_LEVEL_PLUGINS
+    assert (
+        next(
+            record for record in records if record.name == "desktop_pet"
+        ).manifest.version
+        == "0.1.0"
+    )
     # discover() 只报出名字证明不了入口真的存在；record.entry_file 必须是磁盘上
     # 真实存在的文件，否则装配阶段 import 会直接失败（#178 复审 #11）。
     for record in records:
@@ -241,20 +369,21 @@ async def _on_turn(event):
 
 
 @pytest.mark.asyncio
-async def test_disabled_marker_skips_plugin(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+async def test_obsolete_marker_cannot_override_authoritative_config(tmp_path: Path):
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    kernel = make_kernel(
+        [tmp_path], event_bus=EventBus(), plugin_configs={"hello": {"enabled": True}}
+    )
     await kernel.load_all()
-
-    assert kernel.loaded_count == 0
-    assert any(item["state"] == PluginState.DISABLED.name for item in kernel.states())
+    assert kernel.loaded_count == 1
+    await kernel.terminate_all()
 
 
 @pytest.mark.asyncio
 async def test_config_enabled_false_skips_plugin(tmp_path: Path):
     """启停(issue #174)的来源是配置状态，不是 plugin.disabled 文件。"""
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     kernel = make_kernel(
         [tmp_path],
         event_bus=EventBus(),
@@ -268,7 +397,7 @@ async def test_config_enabled_false_skips_plugin(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
 
@@ -277,8 +406,8 @@ async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
-    _ = stage_plugin_fixture("hello", tmp_path)
-    _ = stage_plugin_fixture("weather", tmp_path)
+    _ = stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
+    _ = stage_plugin_package(PLUGIN_FIXTURES / "weather", tmp_path / "weather")
     kernel = make_kernel([tmp_path, tmp_path], event_bus=EventBus())
 
     records = kernel.discover()
@@ -290,7 +419,7 @@ async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_runtime_disable_then_enable(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -310,7 +439,7 @@ async def test_runtime_disable_then_enable(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_load_all_is_idempotent(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -322,23 +451,6 @@ async def test_load_all_is_idempotent(tmp_path: Path):
     assert result.extra_metadata.get("hello_touched") is True
 
 
-@pytest.mark.asyncio
-async def test_telegram_bot_commands_aggregated(tmp_path: Path):
-    plugin_dir = tmp_path / "cmds" / "backend"
-    plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n"
-        "class Cmds(Plugin):\n"
-        "    name = 'cmds'\n"
-        "    def telegram_bot_commands(self):\n"
-        "        return [('undo', '撤销上一轮')]\n",
-        encoding="utf-8",
-    )
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-    assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
-
-
 _V2_BOT_COMMANDS_PLUGIN = """
 async def setup(ctx):
     ctx.bot_commands.add("chatid", "查看我的 chat_id")
@@ -348,39 +460,18 @@ _V2_BOT_COMMANDS_MANIFEST = "api: 2\nid: v2cmds\ncapabilities:\n  - bot_commands
 
 
 @pytest.mark.asyncio
-async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unload(
-    tmp_path: Path,
-):
-    """kernel.telegram_bot_commands 必须同时聚合 legacy 实例与 v2 贡献两条来源（#182）。"""
-    legacy_dir = tmp_path / "cmds"
-    legacy_dir.mkdir()
-    (legacy_dir / "backend").mkdir()
-    (legacy_dir / "backend" / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n"
-        "class Cmds(Plugin):\n"
-        "    name = 'cmds'\n"
-        "    def telegram_bot_commands(self):\n"
-        "        return [('undo', '撤销上一轮')]\n",
-        encoding="utf-8",
-    )
-    v2_dir = tmp_path / "v2cmds"
-    v2_dir.mkdir()
-    (v2_dir / "backend").mkdir()
-    (v2_dir / "backend" / "plugin.py").write_text(
+async def test_bot_commands_are_scoped_contributions_only(tmp_path: Path):
+    package = tmp_path / "v2cmds"
+    (package / "backend").mkdir(parents=True)
+    (package / "backend/plugin.py").write_text(
         _V2_BOT_COMMANDS_PLUGIN, encoding="utf-8"
     )
-    (v2_dir / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
-
+    (package / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
-
-    assert sorted(kernel.telegram_bot_commands) == sorted(
-        [("undo", "撤销上一轮"), ("chatid", "查看我的 chat_id")]
-    )
-
-    # 卸载 v2 插件后，其 bot 命令必须随 effect 一并摘除，legacy 一侧不受影响
-    _ = await kernel.unload("v2cmds")
-    assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
+    assert kernel.telegram_bot_commands == [("chatid", "查看我的 chat_id")]
+    await kernel.unload("v2cmds")
+    assert kernel.telegram_bot_commands == []
 
 
 _RPC_PLUGIN = """
@@ -516,7 +607,7 @@ async def setup(ctx):
 
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
-    stage_plugin_fixture("weather", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "weather", tmp_path / "weather")
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=EventBus(), tools=tools)
     await kernel.load_all()
@@ -633,3 +724,129 @@ async def test_optional_unavailable_exports_return_none_but_require_stays_strict
             kernel._dependency_api("provider")
     finally:
         await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_unsafe_strong_dependency_closure_is_rejected_before_any_effect(tmp_path):
+    from agent.plugin_host import PluginRestartRequired
+
+    for name, dependencies, safe in [
+        ("provider", [], True),
+        ("safe", ["provider"], True),
+        ("unsafe", ["provider"], False),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\ndependencies: {dependencies}\nsupports_hot_unload: {str(safe).lower()}\n",
+            encoding="utf-8",
+        )
+        (package / "backend/plugin.py").write_text(
+            'async def setup(ctx):\n    state = []\n    ctx.expose(state)\n    ctx.effect("close", lambda: state.append("closed"))\n',
+            encoding="utf-8",
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    states = {
+        name: kernel._dependency_api(name) for name in ("provider", "safe", "unsafe")
+    }
+    try:
+        for operation in (lambda: kernel.unload("provider"), kernel.terminate_all):
+            with pytest.raises(PluginRestartRequired) as caught:
+                await operation()
+            assert caught.value.plugin_ids == ("unsafe",)
+            assert kernel.loaded_count == 3
+            assert all(value == [] for value in states.values())
+        await kernel.unload("safe")
+        assert states["safe"] == ["closed"]
+        assert states["unsafe"] == []
+    finally:
+        await kernel.terminate_all(force=True)
+    assert all(value == ["closed"] for value in states.values())
+
+
+@pytest.mark.asyncio
+async def test_force_cleanup_continues_after_an_unsafe_plugin_effect_fails(tmp_path):
+    for name, fail in [("one", True), ("two", False)]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\nsupports_hot_unload: false\n",
+            encoding="utf-8",
+        )
+        body = "raise OSError('close failed')" if fail else "pass"
+        (package / "backend/plugin.py").write_text(
+            f'async def setup(ctx):\n    state = []\n    ctx.expose(state)\n    def close():\n        state.append("closed")\n        {body}\n    ctx.effect("close", close)\n',
+            encoding="utf-8",
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    state = {name: kernel._dependency_api(name) for name in ("one", "two")}
+    with pytest.raises(ExceptionGroup, match="Plugin cleanup failed"):
+        await kernel.terminate_all(force=True)
+    assert state == {"one": ["closed"], "two": ["closed"]}
+    assert kernel.states() == []
+
+
+@pytest.mark.asyncio
+async def test_unsafe_declaration_never_blocks_setup_failure_rollback(tmp_path):
+    package = tmp_path / "broken"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        "api: 2\nid: broken\ncapabilities: [events]\nsupports_hot_unload: false\n",
+        encoding="utf-8",
+    )
+    (package / "backend/plugin.py").write_text(
+        'async def setup(ctx):\n    async def on_event(event):\n        event.append("leaked")\n        return event\n    ctx.events.on(list, on_event)\n    raise RuntimeError("setup failed")\n',
+        encoding="utf-8",
+    )
+    bus = EventBus()
+    kernel = make_kernel([tmp_path], event_bus=bus)
+    await kernel.load_all()
+    assert kernel.states()[0]["state"] == "FAILED"
+    assert await bus.emit([]) == []
+    await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_only_manifested_v2_entries_are_loaded(tmp_path):
+    for name, manifest in [
+        ("missing", None),
+        ("old", "api: 1\ncapabilities: []\n"),
+        ("missing_setup", "api: 2\ncapabilities: []\n"),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "backend/plugin.py").write_text("value = 1\n", encoding="utf-8")
+        if manifest is not None:
+            (package / "manifest.yaml").write_text(manifest, encoding="utf-8")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    assert [record.name for record in kernel.discover()] == ["missing_setup"]
+    await kernel.load_all()
+    assert kernel.loaded_count == 0
+    assert kernel.states()[0]["state"] == "FAILED"
+    assert "setup(ctx)" in kernel.states()[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_optional_unsafe_consumer_does_not_block_provider_unload(tmp_path):
+    for name, body in [
+        ("consumer", "supports_hot_unload: false\noptional_dependencies: [provider]\n"),
+        ("provider", ""),
+    ]:
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "backend/plugin.py").write_text(
+            "async def setup(ctx):\n    pass\n", encoding="utf-8"
+        )
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: []\n" + body, encoding="utf-8"
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    try:
+        assert await kernel.unload("provider") == []
+        assert kernel.loaded_count == 1
+        assert kernel.states()[0]["id"] == "consumer"
+    finally:
+        await kernel.terminate_all(force=True)

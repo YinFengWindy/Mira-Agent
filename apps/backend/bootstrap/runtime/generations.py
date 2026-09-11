@@ -27,11 +27,18 @@ class RuntimeCandidate:
     retired: bool = False
     published: bool = False
     closed: bool = False
-    drained: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
-    on_closed: Callable[[RuntimeCandidate], None] | None = field(default=None, repr=False)
+    drained: asyncio.Event = field(
+        default_factory=asyncio.Event, init=False, repr=False
+    )
+    on_closed: Callable[[RuntimeCandidate], None] | None = field(
+        default=None, repr=False
+    )
     _close_task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     channel_host: ChannelHost | None = None
-    _work_changed: asyncio.Event = field(default_factory=asyncio.Event, init=False, repr=False)
+    force_close: bool = False
+    _work_changed: asyncio.Event = field(
+        default_factory=asyncio.Event, init=False, repr=False
+    )
 
     def acquire(self, *, persistent: bool = False):
         """Pins this exact version for a request or a detached child operation."""
@@ -48,8 +55,14 @@ class RuntimeCandidate:
             self._work_changed.clear()
             await self._work_changed.wait()
 
+    def assert_retirable(self) -> None:
+        """Checks replacement admission before changing retirement bookkeeping."""
+        if self.published and not self.force_close:
+            self.core.assert_hot_unloadable()
+
     async def retire(self) -> None:
         """Stops accepting work and closes only after the final lease exits."""
+        self.assert_retirable()
         self.retired = True
         await self.close_if_idle()
 
@@ -60,6 +73,7 @@ class RuntimeCandidate:
             return
         if not self.retired or self.references or self.closed:
             return
+        self.assert_retirable()
         self.closed = True
         self._close_task = asyncio.create_task(self._close_resources())
         await asyncio.shield(self._close_task)
@@ -67,7 +81,7 @@ class RuntimeCandidate:
     async def _close_resources(self) -> None:
         try:
             try:
-                await self.core.stop()
+                await self.core.stop(force=self.force_close or not self.published)
             finally:
                 await self.core.memory_runtime.aclose()
         finally:
@@ -80,7 +94,9 @@ class RuntimeCandidate:
 class RuntimeLease:
     """A releasable reference to the immutable resources chosen at task start."""
 
-    def __init__(self, candidate: RuntimeCandidate, *, persistent: bool = False) -> None:
+    def __init__(
+        self, candidate: RuntimeCandidate, *, persistent: bool = False
+    ) -> None:
         self._candidate = candidate
         self._released = False
         self._persistent = persistent
@@ -149,7 +165,9 @@ class GenerationManager:
     @property
     def retained(self) -> tuple[RuntimeCandidate, ...]:
         """Returns open resource owners for cross-generation task inspection."""
-        return tuple(generation for generation in self._tracked if not generation.closed)
+        return tuple(
+            generation for generation in self._tracked if not generation.closed
+        )
 
     @property
     def accepting_work(self) -> bool:
@@ -186,6 +204,7 @@ class GenerationManager:
 
     def start(self, candidate: RuntimeCandidate) -> None:
         """Adopts the first published generation at process start."""
+        candidate.published = True
         self.current = candidate
         self.track(candidate)
 
@@ -199,6 +218,7 @@ class GenerationManager:
 
     def retire(self, previous: RuntimeCandidate) -> None:
         """Schedules the replaced generation's close once its accepted work ends."""
+        previous.assert_retirable()
         previous.retired = True
         self._retirements.spawn(
             previous.close_if_idle(),
@@ -209,10 +229,14 @@ class GenerationManager:
         """Refuses new acquisition once process shutdown begins."""
         self._closed = True
 
-    async def close_all(self) -> None:
+    async def close_all(self, *, force: bool = False) -> None:
         """Retires every tracked generation and waits for their resources to close."""
         generations = list(self._tracked)
+        if not force:
+            for generation in generations:
+                generation.core.assert_hot_unloadable()
         for generation in generations:
+            generation.force_close = force
             generation.retired = True
 
         async def close(generation: RuntimeCandidate) -> None:
@@ -221,7 +245,8 @@ class GenerationManager:
             await generation.close_if_idle()
 
         outcomes = await asyncio.gather(
-            *(close(generation) for generation in generations), return_exceptions=True,
+            *(close(generation) for generation in generations),
+            return_exceptions=True,
         )
         errors = [error for error in outcomes if isinstance(error, Exception)]
         if errors:

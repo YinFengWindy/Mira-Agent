@@ -14,7 +14,7 @@ import pytest
 from agent.config import load_config_text
 from agent.plugin_host.handle import PluginState
 from bootstrap.app import AppRuntime, RuntimeFeatures
-from tests.support.plugin_fixtures import stage_plugin_fixture
+from shiori_plugin_testkit.packages import stage_plugin_package
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -22,13 +22,7 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 _QQBOT_PLUGIN_DIR = _REPOSITORY_ROOT / "plugins" / "qqbot"
 _HELLO_FIXTURE_DIR = _REPOSITORY_ROOT / "tests" / "fixtures" / "plugins" / "hello"
 
-# Written on the fly into tmp_path rather than checked in under
-# tests/fixtures/plugins/: that directory is scanned wholesale by the
-# legacy agent.plugins.manager test suite too (test_manager.py), which
-# doesn't understand v2-only (api: 2, setup(ctx)) plugins and would start
-# failing its discover()/loaded_count bookkeeping if a v2-only fixture
-# showed up in that shared corpus. Building it inline (matching
-# test_kernel.py's own v2 RPC fixture) keeps it scoped to this test only.
+# A scoped RPC fixture exercises the public bridge registration.
 _RPC_DEMO_PLUGIN_PY = """
 async def _ping(payload):
     return {"pong": payload.get("value")}
@@ -53,8 +47,7 @@ def _stage_plugin_dirs(
 ) -> None:
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
-    # 夹具是旧扁平布局，内核要求 backend/；不重整就根本不会被加载
-    _ = stage_plugin_fixture("hello", root)
+    _ = stage_plugin_package(_HELLO_FIXTURE_DIR, root / "hello")
     if with_rpc_demo:
         rpc_demo_dir = root / "rpc_demo"
         (rpc_demo_dir / "backend").mkdir(parents=True)

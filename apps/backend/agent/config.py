@@ -63,6 +63,9 @@ def load_config(path: str | Path = "config.toml") -> Config:
 
     data = migrate_proactive_preferences(resolved_path, data)
     data = migrate_scene_preferences(resolved_path, data)
+    from agent.plugin_preferences import migrate_plugin_preferences
+
+    data = migrate_plugin_preferences(resolved_path, data)
     return load_config_data(data)
 
 

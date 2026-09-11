@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agent.plugins.context import PluginKVStore
+from agent.plugin_host.kv import PluginKVStore
 from agent.tools.message_push import MessagePushTool
 from agent.tools.registry import ToolRegistry
 from bus.events_lifecycle import SceneObservationCommitted

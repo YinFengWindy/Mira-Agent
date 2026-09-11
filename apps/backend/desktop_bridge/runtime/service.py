@@ -26,6 +26,7 @@ from desktop_bridge.runtime.factory import build_desktop_service
 from desktop_bridge.runtime.plugin_config import RuntimePluginConfig
 from desktop_bridge.runtime.plugin_management import RuntimePluginManagement
 from desktop_bridge.runtime.role_tasks import RuntimeRoleTasks
+from desktop_bridge.runtime.settings_form import settings_form_write
 from desktop_bridge.service import DesktopBridgeService
 
 if TYPE_CHECKING:
@@ -53,7 +54,9 @@ class ReloadableDesktopService:
         self.plugin_config = RuntimePluginConfig(app, self.settings)
         self.plugin_management = RuntimePluginManagement(app, self.settings)
         lease = app.pin()
-        self._current = _ServiceGeneration(build_desktop_service(lease.core, roles), lease)
+        self._current = _ServiceGeneration(
+            build_desktop_service(lease.core, roles), lease
+        )
         self._entries = [self._current]
         self._listeners: set = set()
         self._retirements = TaskCollector("Desktop runtime retirement")
@@ -92,7 +95,9 @@ class ReloadableDesktopService:
             "config_toml": self.settings.config_text,
             "models_registered": bool(config.model_registrations),
             "roles": {
-                role.id: resolver.availability(role.id) if resolver else {"available": False}
+                role.id: (
+                    resolver.availability(role.id) if resolver else {"available": False}
+                )
                 for role in self.roles.list_roles()
             },
         }
@@ -103,34 +108,65 @@ class ReloadableDesktopService:
         request_id = str(request.get("id") or "bridge-request")
         payload = request.get("payload") or {}
         if not isinstance(payload, dict):
-            return BridgeResponse(request_id, "response", method,
-                                  error=BridgeError("invalid_request", "payload 必须是对象"))
+            return BridgeResponse(
+                request_id,
+                "response",
+                method,
+                error=BridgeError("invalid_request", "payload 必须是对象"),
+            )
         policy = self.resolve_method_policy(method)
         if policy.handler is Handler.SETTINGS:
+
             async def compute_settings_result():
-                result = self.status() if method == "runtime.status" else await self.settings.apply(
-                    payload, prepare_service=self._prepare, publish_service=self._publish,
-                )
-                if method == "runtime.apply":
-                    await self.publish_event({"id": request_id, "type": "event",
-                                              "method": "runtime.applied", "payload": result})
-                return result
-            return await self._respond_or_apply_error(request_id, method, compute_settings_result)
-        if policy.handler is Handler.PLUGIN_CONFIG:
-            async def compute_plugin_config_result():
-                return (
-                    self.plugin_config.get(payload) if method == "plugin.config.get"
-                    else await self.plugin_config.set(
-                        payload, prepare_service=self._prepare, publish_service=self._publish,
+                result = (
+                    self.status()
+                    if method == "runtime.status"
+                    else await self.settings.apply(
+                        payload,
+                        prepare_service=self._prepare,
+                        publish_service=self._publish,
+                        derive=settings_form_write(payload),
                     )
                 )
-            return await self._respond_or_apply_error(request_id, method, compute_plugin_config_result)
+                if method == "runtime.apply":
+                    await self.publish_event(
+                        {
+                            "id": request_id,
+                            "type": "event",
+                            "method": "runtime.applied",
+                            "payload": result,
+                        }
+                    )
+                return result
+
+            return await self._respond_or_apply_error(
+                request_id, method, compute_settings_result
+            )
+        if policy.handler is Handler.PLUGIN_CONFIG:
+
+            async def compute_plugin_config_result():
+                return (
+                    self.plugin_config.get(payload)
+                    if method == "plugin.config.get"
+                    else await self.plugin_config.set(
+                        payload,
+                        prepare_service=self._prepare,
+                        publish_service=self._publish,
+                    )
+                )
+
+            return await self._respond_or_apply_error(
+                request_id, method, compute_plugin_config_result
+            )
         if policy.handler is Handler.PLUGIN_MANAGEMENT:
+
             async def compute_plugin_management_result():
                 if method == "plugins.list":
                     return self.plugin_management.list(payload)
                 result = await self.plugin_management.set_enabled(
-                    payload, prepare_service=self._prepare, publish_service=self._publish,
+                    payload,
+                    prepare_service=self._prepare,
+                    publish_service=self._publish,
                 )
                 # `plugins.setEnabled` performs a real settings apply (same
                 # `RuntimeSettingsApplication.apply` as `runtime.apply`, same
@@ -150,34 +186,63 @@ class ReloadableDesktopService:
                 # and `useOnboardingSnapshot` already treat `runtime.applied`
                 # as "something changed, refetch"; an extra one from a plugin
                 # toggle is a harmless idempotent refresh for both.
-                await self.publish_event({
-                    "id": request_id, "type": "event",
-                    "method": "runtime.applied", "payload": result,
-                })
+                await self.publish_event(
+                    {
+                        "id": request_id,
+                        "type": "event",
+                        "method": "runtime.applied",
+                        "payload": result,
+                    }
+                )
                 return result
-            return await self._respond_or_apply_error(request_id, method, compute_plugin_management_result)
+
+            return await self._respond_or_apply_error(
+                request_id, method, compute_plugin_management_result
+            )
         if policy.handler is Handler.ROLE_TASKS:
             role_id = str(payload.get("role_id") or "")
             try:
                 if method == "roles.tasks.list":
                     tasks = self.role_tasks.list_tasks(role_id)
                 else:
-                    tasks = await self.role_tasks.cancel_task(role_id, str(payload.get("task_id") or ""))
-                    await self.publish_event({"id": request_id, "type": "event", "method": "roles.tasks.updated",
-                                              "payload": {"role_id": role_id}})
+                    tasks = await self.role_tasks.cancel_task(
+                        role_id, str(payload.get("task_id") or "")
+                    )
+                    await self.publish_event(
+                        {
+                            "id": request_id,
+                            "type": "event",
+                            "method": "roles.tasks.updated",
+                            "payload": {"role_id": role_id},
+                        }
+                    )
                 return BridgeResponse(request_id, "response", method, {"tasks": tasks})
             except (KeyError, ValueError, RuntimeError) as error:
-                return BridgeResponse(request_id, "response", method,
-                                      error=BridgeError("invalid_request", str(error)))
+                return BridgeResponse(
+                    request_id,
+                    "response",
+                    method,
+                    error=BridgeError("invalid_request", str(error)),
+                )
         if not policy.admission_exempt and not self.app.accepting_work:
-            return BridgeResponse(request_id, "response", method,
-                                  error=BridgeError("runtime_reloading", "正在更新渠道配置，请稍后重试"))
+            return BridgeResponse(
+                request_id,
+                "response",
+                method,
+                error=BridgeError("runtime_reloading", "正在更新渠道配置，请稍后重试"),
+            )
         entry = self._owner(policy.owner_routing, payload)
         if method == "chat.send":
             session_key = f"role:{payload.get('role_id', '')}"
-            if any(item.service.chat_service.is_busy(session_key) for item in self._entries):
-                return BridgeResponse(request_id, "response", method,
-                                      error=BridgeError("chat_busy", "当前会话已有正在执行的聊天任务"))
+            if any(
+                item.service.chat_service.is_busy(session_key) for item in self._entries
+            ):
+                return BridgeResponse(
+                    request_id,
+                    "response",
+                    method,
+                    error=BridgeError("chat_busy", "当前会话已有正在执行的聊天任务"),
+                )
         entry.requests += 1
         entry.idle.clear()
         try:
@@ -201,17 +266,34 @@ class ReloadableDesktopService:
             result = await compute()
             return BridgeResponse(request_id, "response", method, result)
         except RuntimeApplyError as exc:
-            return BridgeResponse(request_id, "response", method,
-                                  error=BridgeError(exc.code, str(exc), exc.details))
+            return BridgeResponse(
+                request_id,
+                "response",
+                method,
+                error=BridgeError(exc.code, str(exc), exc.details),
+            )
 
     def _owner(self, routing: OwnerRouting, payload):
         for entry in self._entries:
             service = entry.service
-            if routing is OwnerRouting.BUSY_CHAT_SESSION and service.chat_service.is_busy(str(payload.get("session_key") or "")):
+            if (
+                routing is OwnerRouting.BUSY_CHAT_SESSION
+                and service.chat_service.is_busy(str(payload.get("session_key") or ""))
+            ):
                 return entry
-            if routing is OwnerRouting.BUSY_VOICE_TURN and service.chat_service.owns_voice_turn(str(payload.get("voice_turn_id") or "")):
+            if (
+                routing is OwnerRouting.BUSY_VOICE_TURN
+                and service.chat_service.owns_voice_turn(
+                    str(payload.get("voice_turn_id") or "")
+                )
+            ):
                 return entry
-            if routing is OwnerRouting.BUSY_VOICE_SYNTHESIS and service.voice_handler.owns_synthesis(str(payload.get("voice_request_id") or "")):
+            if (
+                routing is OwnerRouting.BUSY_VOICE_SYNTHESIS
+                and service.voice_handler.owns_synthesis(
+                    str(payload.get("voice_request_id") or "")
+                )
+            ):
                 return entry
         return self._current
 
@@ -251,8 +333,10 @@ class ReloadableDesktopService:
         if kernel is not None:
             await kernel.drain()
         try:
-            await run_cleanup_steps(("desktop.service.close", entry.service.aclose),
-                                    ("desktop.runtime.release", entry.lease.release))
+            await run_cleanup_steps(
+                ("desktop.service.close", entry.service.aclose),
+                ("desktop.runtime.release", entry.lease.release),
+            )
         finally:
             self._entries.remove(entry)
 
@@ -261,12 +345,19 @@ class ReloadableDesktopService:
         self._retirements.cancel_all()
         await self._retirements.drain()
         try:
-            await run_cleanup_steps(*[
-                step for entry in self._entries
-                for step in (("desktop.service.close", entry.service.aclose),
-                             ("desktop.runtime.release", entry.lease.release))
-            ])
+            await run_cleanup_steps(
+                *[
+                    step
+                    for entry in self._entries
+                    for step in (
+                        ("desktop.service.close", entry.service.aclose),
+                        ("desktop.runtime.release", entry.lease.release),
+                    )
+                ]
+            )
         finally:
             self._entries.clear()
         if self._retirements.errors:
-            raise ExceptionGroup("Desktop runtime retirement failed", self._retirements.errors)
+            raise ExceptionGroup(
+                "Desktop runtime retirement failed", self._retirements.errors
+            )

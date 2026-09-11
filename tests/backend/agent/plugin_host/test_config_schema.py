@@ -1,4 +1,4 @@
-"""config_schema.py：manifest / legacy 两条模型来源解析、schema 导出与校验。"""
+"""config_schema.py：manifest 模型来源解析、schema 导出与校验。"""
 
 from __future__ import annotations
 
@@ -63,7 +63,9 @@ def test_manifest_bare_class_name_resolves_from_entry_module(tmp_path: Path):
 
 def test_manifest_bare_class_name_missing_raises(tmp_path: Path):
     (tmp_path / "plugin.py").write_text("value = 1\n", encoding="utf-8")
-    record = _record(tmp_path, import_path="cfg_bare_missing", config_model="NoSuchConfig")
+    record = _record(
+        tmp_path, import_path="cfg_bare_missing", config_model="NoSuchConfig"
+    )
     _import_module(record.import_path, record.entry_file)
 
     with pytest.raises(ConfigModelError, match="pydantic BaseModel"):
@@ -74,7 +76,9 @@ def test_manifest_bare_class_name_missing_raises(tmp_path: Path):
 
 
 def test_manifest_module_colon_class_resolves_from_submodule(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text("async def setup(ctx):\n    return None\n", encoding="utf-8")
+    (tmp_path / "plugin.py").write_text(
+        "async def setup(ctx):\n    return None\n", encoding="utf-8"
+    )
     (tmp_path / "config.py").write_text(
         "from pydantic import BaseModel\n\n\n"
         "class NovelAIConfig(BaseModel):\n"
@@ -93,7 +97,9 @@ def test_manifest_module_colon_class_resolves_from_submodule(tmp_path: Path):
 
 
 def test_manifest_module_colon_class_import_failure_raises(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text("async def setup(ctx):\n    return None\n", encoding="utf-8")
+    (tmp_path / "plugin.py").write_text(
+        "async def setup(ctx):\n    return None\n", encoding="utf-8"
+    )
     record = _record(
         tmp_path, import_path="cfg_module_missing", config_model="config:NovelAIConfig"
     )
@@ -104,59 +110,10 @@ def test_manifest_module_colon_class_import_failure_raises(tmp_path: Path):
 
 
 def test_manifest_config_model_not_a_base_model_raises(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text("class NotAModel:\n    pass\n", encoding="utf-8")
+    (tmp_path / "plugin.py").write_text(
+        "class NotAModel:\n    pass\n", encoding="utf-8"
+    )
     record = _record(tmp_path, import_path="cfg_not_model", config_model="NotAModel")
-    _import_module(record.import_path, record.entry_file)
-
-    with pytest.raises(ConfigModelError, match="pydantic BaseModel"):
-        resolve_config_model(record)
-
-
-# ── legacy Plugin.ConfigModel 类属性 ─────────────────────────────────────────
-
-
-def test_legacy_config_model_attribute_is_discovered_after_import(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text(
-        "from pydantic import BaseModel\n"
-        "from agent.plugins import Plugin\n\n\n"
-        "class LegacyConfig(BaseModel):\n"
-        "    app_id: str = ''\n\n\n"
-        "class LegacyPlugin(Plugin):\n"
-        "    name = 'legacy_demo'\n"
-        "    ConfigModel = LegacyConfig\n",
-        encoding="utf-8",
-    )
-    record = _record(tmp_path, import_path="cfg_legacy_demo")
-    _import_module(record.import_path, record.entry_file)
-
-    model_cls = resolve_config_model(record)
-
-    assert model_cls is not None
-    assert model_cls.__name__ == "LegacyConfig"
-
-
-def test_legacy_plugin_without_config_model_returns_none(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n\n\n"
-        "class PlainPlugin(Plugin):\n"
-        "    name = 'plain_demo'\n",
-        encoding="utf-8",
-    )
-    record = _record(tmp_path, import_path="cfg_legacy_plain")
-    _import_module(record.import_path, record.entry_file)
-
-    assert resolve_config_model(record) is None
-
-
-def test_legacy_config_model_not_a_base_model_raises(tmp_path: Path):
-    (tmp_path / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n\n\n"
-        "class BadPlugin(Plugin):\n"
-        "    name = 'bad_demo'\n"
-        "    ConfigModel = object\n",
-        encoding="utf-8",
-    )
-    record = _record(tmp_path, import_path="cfg_legacy_bad")
     _import_module(record.import_path, record.entry_file)
 
     with pytest.raises(ConfigModelError, match="pydantic BaseModel"):

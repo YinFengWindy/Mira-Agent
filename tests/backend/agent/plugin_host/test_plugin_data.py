@@ -9,8 +9,6 @@ import pytest
 
 import agent.plugin_host.plugin_data as plugin_data
 from agent.plugin_host.plugin_data import (
-    migrate_legacy_disabled_marker,
-    migrate_legacy_plugin_config,
     open_plugin_kv,
     plugin_data_dir,
 )
@@ -90,7 +88,11 @@ def test_kv_migrates_from_the_pre_move_plugin_root(tmp_path: Path):
     legacy_file.parent.mkdir(parents=True)
     _ = legacy_file.write_text(
         json.dumps(
-            {"auto_cg_sessions": {"role:mira": {"turn": 1076, "last_success_turn": 1061}}}
+            {
+                "auto_cg_sessions": {
+                    "role:mira": {"turn": 1076, "last_success_turn": 1061}
+                }
+            }
         ),
         encoding="utf-8",
     )
@@ -108,21 +110,6 @@ def test_kv_migrates_from_the_pre_move_plugin_root(tmp_path: Path):
     assert not legacy_file.exists()
 
 
-def test_disabled_marker_migrates_from_the_pre_move_plugin_root(tmp_path: Path):
-    """停用标记同样是 gitignore 的本地状态，不迁移会让停用的插件自己变回启用。"""
-    plugin_dir = tmp_path / "plugins" / "demo"
-    plugin_dir.mkdir(parents=True)
-    legacy_root = tmp_path / "apps" / "backend" / "plugins"
-    legacy_marker = legacy_root / "demo" / "plugin.disabled"
-    legacy_marker.parent.mkdir(parents=True)
-    _ = legacy_marker.write_text("", encoding="utf-8")
-
-    migrate_legacy_disabled_marker(plugin_dir, "demo", legacy_root)
-
-    assert (plugin_dir / "plugin.disabled").exists()
-    assert not legacy_marker.exists()
-
-
 def test_migration_only_deletes_the_candidate_it_actually_migrated(tmp_path: Path):
     """迁移只应删除真正被当作来源的那份候选，不得顺手销毁用户的另一份数据。
 
@@ -138,7 +125,9 @@ def test_migration_only_deletes_the_candidate_it_actually_migrated(tmp_path: Pat
     legacy_root = tmp_path / "apps" / "backend" / "plugins"
     untouched_candidate = legacy_root / "novelai" / ".kv.json"
     untouched_candidate.parent.mkdir(parents=True)
-    _ = untouched_candidate.write_text(json.dumps({"value": "must survive"}), encoding="utf-8")
+    _ = untouched_candidate.write_text(
+        json.dumps({"value": "must survive"}), encoding="utf-8"
+    )
 
     store = open_plugin_kv(
         workspace=workspace,
@@ -181,44 +170,6 @@ def test_migration_failure_leaves_source_intact_and_no_partial_target(
 
     assert source.exists(), "写入失败时旧数据必须原样保留"
     assert json.loads(source.read_text(encoding="utf-8")) == {"value": "still here"}
-    assert not (plugin_data_dir(workspace, "demo") / "kv.json").exists(), (
-        "写入失败不能留下半截 target"
-    )
-
-
-def test_plugin_config_migrates_from_the_pre_move_plugin_root(tmp_path: Path):
-    """`plugin_config.json` 与 `.kv.json` / `plugin.disabled` 同一病根，也必须迁移。
-
-    复审 #4：不迁移的话，legacy 插件经 `agent/plugins/manager.py::_load_plugin_config`
-    读取新插件目录时会读不到用户此前的配置覆盖，覆盖静默失效。
-    """
-    plugin_dir = tmp_path / "plugins" / "weather"
-    plugin_dir.mkdir(parents=True)
-    legacy_root = tmp_path / "apps" / "backend" / "plugins"
-    legacy_config = legacy_root / "weather" / "plugin_config.json"
-    legacy_config.parent.mkdir(parents=True)
-    _ = legacy_config.write_text(json.dumps({"api_key": "old-secret"}), encoding="utf-8")
-
-    migrate_legacy_plugin_config(plugin_dir, "weather", legacy_root)
-
-    target = plugin_dir / "plugin_config.json"
-    assert json.loads(target.read_text(encoding="utf-8")) == {"api_key": "old-secret"}
-    assert not legacy_config.exists()
-    # 配置留在插件包根目录，不挪进 workspace——它是插件配置而非用户运行时数据
-    assert target.parent == plugin_dir
-
-
-def test_plugin_config_migration_never_overwrites_existing_target(tmp_path: Path):
-    """新插件目录里已有用户新写的配置时，旧位置的陈旧残留不得覆盖它。"""
-    plugin_dir = tmp_path / "plugins" / "weather"
-    plugin_dir.mkdir(parents=True)
-    target = plugin_dir / "plugin_config.json"
-    _ = target.write_text(json.dumps({"api_key": "current"}), encoding="utf-8")
-    legacy_root = tmp_path / "apps" / "backend" / "plugins"
-    legacy_config = legacy_root / "weather" / "plugin_config.json"
-    legacy_config.parent.mkdir(parents=True)
-    _ = legacy_config.write_text(json.dumps({"api_key": "stale"}), encoding="utf-8")
-
-    migrate_legacy_plugin_config(plugin_dir, "weather", legacy_root)
-
-    assert json.loads(target.read_text(encoding="utf-8")) == {"api_key": "current"}
+    assert not (
+        plugin_data_dir(workspace, "demo") / "kv.json"
+    ).exists(), "写入失败不能留下半截 target"

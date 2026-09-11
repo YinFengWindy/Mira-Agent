@@ -362,3 +362,51 @@ async def test_core_scene_demand_respects_followup_strategy_and_independent_cons
         assert model.await_count == expected
     finally:
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_core_stop_preflights_before_teardown_and_force_continues_after_failure(
+    tmp_path, monkeypatch
+):
+    from shiori_plugin_testkit.packages import stage_plugin_package
+    from agent.config_models import Config
+    from agent.plugin_host import PluginRestartRequired
+    from bootstrap.app import AppRuntime, RuntimeFeatures
+
+    root = tmp_path / "plugins"
+    stage_plugin_package(
+        _REPO_ROOT / "tests/fixtures/plugins/restart_required",
+        root / "restart_required",
+    )
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [root])
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    core = app.core
+    state = core.plugin_manager._dependency_api("restart_required")
+    scene_close = AsyncMock(wraps=core.scene_service.close)
+    monkeypatch.setattr(core.scene_service, "close", scene_close)
+    try:
+        with pytest.raises(PluginRestartRequired):
+            await core.stop()
+        scene_close.assert_not_awaited()
+        assert not core.event_bus._closed
+        assert state == ["started"]
+        scene_close.side_effect = OSError("scene close failed")
+        with pytest.raises(OSError, match="scene close failed"):
+            await core.stop(force=True)
+        assert state == ["started", "closed"]
+        assert core.event_bus._closed
+    finally:
+        scene_close.side_effect = None
+        await app.shutdown()

@@ -253,7 +253,7 @@ bootstrap/memory.py:116 → engine = plugin_runtime.engine
     ↓
     ├── 被动 reply: DefaultMemoryRetrievalPipeline(memory=...) → engine.retrieve()
     ├── 工具注册: memorize/forget/recall_memory 拿到 engine 引用
-    └── PluginManager(memory_engine=...) → 所有插件都能通过 self.context.memory_engine 访问
+    └── HostServices(memory_engine=...) → 声明 memory_engine capability 的插件通过 ctx.memory_engine 访问
     ↓
   proactive_v2/tools.py:38 → ToolDeps.memory → engine.retrieve_interest_block()
 ```

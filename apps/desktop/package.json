@@ -28,6 +28,7 @@
     "electron-updater": "^6.8.9",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "smol-toml": "1.8.0",
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {

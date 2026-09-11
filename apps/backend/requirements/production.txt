@@ -19,3 +19,4 @@ rich>=14.0.0
 telegramify-markdown
 websockets>=15.0,<16
 toml>=0.10.2
+tomli-w>=1.2.0

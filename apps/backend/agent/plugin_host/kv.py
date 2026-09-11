@@ -1,46 +1,31 @@
+"""Persistent storage exposed by the plugin kv capability."""
+
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from pydantic import BaseModel
-    from agent.plugins.config import PluginConfig
-
-
-@dataclass
-class PluginContext:
-    event_bus: Any
-    tool_registry: Any
-    plugin_id: str
-    plugin_dir: Path
-    kv_store: "PluginKVStore"
-    config: "BaseModel | PluginConfig | None" = None
-    app_config: Any = None
-    light_provider: Any = None
-    light_model: str = ""
-    workspace: Path | None = None
-    session_manager: Any = None
-    memory_engine: Any = None
-    relationship_runtime: Any = None
+from typing import Any
 
 
 class PluginKVStore:
+    """File-backed per-plugin state, independent of plugin activation."""
+
     def __init__(self, path: Path) -> None:
         self._path = path
 
     def get(self, key: str, default: Any = None) -> Any:
+        """Reads the latest persisted value, or the supplied default."""
         return self._read().get(key, default)
 
     def set(self, key: str, value: Any) -> None:
+        """Persists one value while retaining the remaining keys."""
         # 1. 读取现有数据，写入新值，落盘
         data = self._read()
         data[key] = value
         self._write(data)
 
     def increment(self, key: str, delta: int = 1) -> int:
+        """Adds delta to a persisted counter and returns its new value."""
         # 1. 读取 → 加 delta → 写回，返回新值
         data = self._read()
         new_val = int(data.get(key, 0)) + delta

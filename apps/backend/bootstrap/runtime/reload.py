@@ -50,6 +50,7 @@ class RuntimeReloadMixin:
         current = self._generation_manager.require_running()
         if config == self.config:
             return current
+        current.core.assert_hot_unloadable()
         validate_memory_transition(self.config, config, self.workspace)
         snapshot = deepcopy(config)
         core = await prepare_core_runtime(
@@ -68,13 +69,18 @@ class RuntimeReloadMixin:
             self._prepare_background(candidate)
             plugins = core.plugin_manager
             candidate.channel_host = await start_channels(
-                snapshot, bus=self.bus, session_manager=self.session_manager,
-                push_tool=self.push_tool, http_resources=self.http_resources,
-                event_bus=self.event_bus, interrupt_controller=self._dispatcher,
+                snapshot,
+                bus=self.bus,
+                session_manager=self.session_manager,
+                push_tool=self.push_tool,
+                http_resources=self.http_resources,
+                event_bus=self.event_bus,
+                interrupt_controller=self._dispatcher,
                 bot_commands=plugins.telegram_bot_commands if plugins else None,
                 plugin_channels=plugins.channels if plugins else None,
                 enable_message_channels=self.features.enable_message_channels,
-                previous_host=self.channel_host, strict=True,
+                previous_host=self.channel_host,
+                strict=True,
             )
         except BaseException:
             self._discard_background(candidate)
@@ -93,13 +99,20 @@ class RuntimeReloadMixin:
             if commit is not None:
                 commit()
             return
-        if candidate.closed or candidate.published or candidate.generation != self.generation + 1:
+        if (
+            candidate.closed
+            or candidate.published
+            or candidate.generation != self.generation + 1
+        ):
             raise RuntimeError("Runtime candidate is stale or already consumed")
+        current.core.assert_hot_unloadable()
         if self.channel_host is None or candidate.channel_host is None:
             self._publish_pointer(candidate, commit)
             return
         async with channel_handover_barrier(
-            self.channel_host, candidate, current=current,
+            self.channel_host,
+            candidate,
+            current=current,
             accepted=self._generation_manager.tracked,
             background_groups=self._background_groups,
             admission=self._generation_manager.admission,
@@ -119,8 +132,11 @@ class RuntimeReloadMixin:
         self._discard_background(candidate)
         await candidate.retire()
 
-    def _publish_pointer(self, candidate: RuntimeCandidate, commit: Callable[[], None] | None) -> None:
+    def _publish_pointer(
+        self, candidate: RuntimeCandidate, commit: Callable[[], None] | None
+    ) -> None:
         """Runs durable commit and pointer publication in one synchronous step."""
+        self._generation_manager.require_running().core.assert_hot_unloadable()
         validate_memory_transition(self.config, candidate.config, self.workspace)
         if commit is not None:
             commit()
@@ -140,7 +156,9 @@ class RuntimeReloadMixin:
             try:
                 self._discard_background(current)
             except BaseException as cleanup_error:
-                raise BaseExceptionGroup("Background recovery failed", [error, cleanup_error]) from error
+                raise BaseExceptionGroup(
+                    "Background recovery failed", [error, cleanup_error]
+                ) from error
             raise
 
     async def _retire_transports(self, accepted: tuple[RuntimeCandidate, ...]) -> None:
