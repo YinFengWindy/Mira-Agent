@@ -6,11 +6,13 @@ import type { PluginRpcClient } from "../../../apps/desktop/renderer/src/plugins
 import {
   __getSnapshotForTests,
   backToStudio,
+  clearError,
   loadHistory,
   openPromptTagLibrary,
   openPromptTagWorkspaceSection,
   refreshRoles,
   resetNovelAiPageStoreForTests,
+  selectActiveHistoryRecord,
   selectBlockedReasonForNovelAiPage,
   setActiveRoleId,
   setPromptTagSection,
@@ -203,5 +205,39 @@ describe("novelAiPageStore (issue #226 gap A's 'real complication')", () => {
       await view.cleanup();
       resetNovelAiPageStoreForTests();
     }
+  });
+});
+
+describe("novelAiPageStore selectors and error clearing", () => {
+  it("selectActiveHistoryRecord prefers the explicit selection, then the newest, then nothing", () => {
+    const history = [
+      { id: "b", prompt: "newest" },
+      { id: "a", prompt: "older" },
+    ] as unknown as Parameters<typeof selectActiveHistoryRecord>[0];
+    assert.equal(selectActiveHistoryRecord(history, "a")?.id, "a");
+    // No explicit selection falls back to the newest, not to null.
+    assert.equal(selectActiveHistoryRecord(history, "")?.id, "b");
+    // A selection that is no longer in history must not blank the preview.
+    assert.equal(selectActiveHistoryRecord(history, "gone")?.id, "b");
+    assert.equal(selectActiveHistoryRecord([], "a"), null);
+  });
+
+  it("clearError drops the banner, and is a no-op when there is nothing to drop", async () => {
+    resetNovelAiPageStoreForTests();
+    const before = __getSnapshotForTests();
+    // Nothing to clear: the snapshot identity must not change, or every
+    // subscriber re-renders for nothing.
+    clearError();
+    assert.equal(__getSnapshotForTests(), before, "clearError on a clean store must not produce a new snapshot");
+
+    const failingClient: PluginRpcClient = { call: async () => { throw new Error("boom"); } };
+    await loadHistory(failingClient, "role-1");
+    assert.notEqual(__getSnapshotForTests().error, "");
+
+    // Submitting an emptied prompt takes this path. Losing it was a silent
+    // regression when `useImageStudioState` was dissolved (#226 spec review).
+    clearError();
+    assert.equal(__getSnapshotForTests().error, "");
+    resetNovelAiPageStoreForTests();
   });
 });

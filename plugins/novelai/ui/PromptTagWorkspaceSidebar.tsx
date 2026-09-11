@@ -1,4 +1,5 @@
 import type React from "react";
+import { SidebarResizeHandle } from "../../../apps/desktop/renderer/src/shared/SidebarResizeHandle";
 import { cx, secondarySidebarSurfaceClass, sidebarNavItemClass } from "../../../apps/desktop/renderer/src/shared/styles";
 
 export type PromptTagWorkspaceSectionId = "list" | "create" | "detail";
@@ -50,16 +51,7 @@ export function PromptTagWorkspaceSidebar({
         <button className={cx(actionClass, activeSection === "list" && activeClass)} type="button" onClick={() => onOpenSection("list")}>提示词列表</button>
         <button className={cx(actionClass, activeSection === "create" && activeClass)} type="button" onClick={() => onOpenSection("create")}>新建提示词</button>
       </div>
-      <div
-        className={cx(
-          "sidebar-resize-handle absolute bottom-0 right-0 top-0 cursor-col-resize bg-transparent",
-          collapsed ? "w-0" : "w-2",
-        )}
-        role="separator"
-        aria-label="调整侧边栏宽度"
-        aria-orientation="vertical"
-        onPointerDown={onBeginResize}
-      />
+      <SidebarResizeHandle collapsed={collapsed} onBeginResize={onBeginResize} />
     </aside>
   );
 }

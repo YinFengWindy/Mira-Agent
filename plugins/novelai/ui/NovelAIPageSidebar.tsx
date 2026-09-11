@@ -6,6 +6,7 @@ import { ImageStudioSidebar } from "./ImageStudioSidebar";
 import { PromptTagWorkspaceSidebar } from "./PromptTagWorkspaceSidebar";
 import {
   backToStudio,
+  clearError,
   loadHistory,
   openPromptTagLibrary,
   setPromptTagSection,
@@ -121,7 +122,14 @@ export function NovelAIPageSidebar({ animating, collapsed, width, onBeginResize,
   }
 
   async function handleSubmit(): Promise<void> {
-    if (!form.prompt.trim() || validationError) return;
+    // An empty prompt clears any error still on screen rather than just
+    // bailing: the user has plainly abandoned the attempt that produced it, so
+    // leaving the old message up reads as if this submit failed too.
+    if (!form.prompt.trim()) {
+      clearError();
+      return;
+    }
+    if (validationError) return;
     await submitGenerate(client, {
       role_id: form.roleId,
       session_key: form.roleId ? `role:${form.roleId}` : "desktop:image-studio",

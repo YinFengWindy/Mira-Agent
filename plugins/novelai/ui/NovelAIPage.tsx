@@ -5,6 +5,7 @@ import { PromptTagLibraryPage } from "./PromptTagLibraryPage";
 import {
   openPromptTagWorkspaceSection,
   refreshRoles,
+  selectActiveHistoryRecord,
   selectRecord,
   setActiveRoleId,
   useNovelAiPageStore,
@@ -71,7 +72,7 @@ export function NovelAIPage({ client, activeRoleId }: NovelAIPageProps) {
 
   return (
     <ImageStudioPage
-      activeRecord={store.history.find((item) => item.id === store.selectedRecordId) ?? store.history[0] ?? null}
+      activeRecord={selectActiveHistoryRecord(store.history, store.selectedRecordId)}
       error={store.error}
       generating={store.submitting}
       history={store.history}

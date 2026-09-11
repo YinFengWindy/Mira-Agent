@@ -111,6 +111,30 @@ export function setActiveRoleId(nextActiveRoleId: string): void {
   });
 }
 
+/**
+ * The history record the preview pane should show: the explicitly selected
+ * one, else the most recent. A pure selector rather than an expression in the
+ * page's render body, per AGENTS.md's rule about derived view data.
+ */
+export function selectActiveHistoryRecord(
+  history: NovelAiPageState["history"],
+  selectedRecordId: string,
+): NovelAiPageState["history"][number] | null {
+  return history.find((item) => item.id === selectedRecordId) ?? history[0] ?? null;
+}
+
+/**
+ * Drops the error banner without touching anything else.
+ *
+ * Submitting an emptied prompt uses this: the attempt that produced the error
+ * has been abandoned, so the message should go with it rather than sit there
+ * looking like a fresh failure.
+ */
+export function clearError(): void {
+  if (!state.error) return;
+  commit({ ...state, error: "" });
+}
+
 let rolesInflight: Promise<void> | null = null;
 
 /**
