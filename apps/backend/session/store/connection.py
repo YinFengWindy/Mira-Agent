@@ -8,13 +8,15 @@ from pathlib import Path
 
 from conversation.store import ensure_conversation_schema
 
+
 class _SessionConnection:
     def __init__(self, db_path: str | Path):
         self.db_path = str(db_path)
         self._workspace = Path(db_path).expanduser().resolve().parent
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._lock = threading.Lock()
+        # Conversation projections reenter the shared connection within undo's transaction.
+        self._lock = threading.RLock()
         self._closed = False
         self._has_fts = False
         self._init_schema()

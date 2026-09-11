@@ -13,6 +13,7 @@ from ..store import SessionStore
 
 from .models import Session
 
+
 class _ManagerCoreMixin:
     def __init__(self, workspace: Path):
         self.workspace = workspace
@@ -25,7 +26,9 @@ class _ManagerCoreMixin:
             connection=self._store._conn,
             lock=self._store._lock,
         )
-        self._conversation_projector = ConversationStateProjector(self.conversation_store)
+        self._conversation_projector = ConversationStateProjector(
+            self.conversation_store
+        )
         self._cache: dict[str, Session] = {}
         self._write_locks: dict[str, asyncio.Lock] = {}
 

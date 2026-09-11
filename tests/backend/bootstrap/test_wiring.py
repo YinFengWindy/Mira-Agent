@@ -47,7 +47,11 @@ def _dump_toml(data: dict, prefix: tuple[str, ...] = ()) -> list[str]:
     for key, value in data.items():
         if isinstance(value, dict):
             continue
-        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
+        if (
+            isinstance(value, list)
+            and value
+            and all(isinstance(item, dict) for item in value)
+        ):
             continue
         scalar_lines.append(f"{key} = {_toml_value(value)}")
 
@@ -60,7 +64,11 @@ def _dump_toml(data: dict, prefix: tuple[str, ...] = ()) -> list[str]:
     for key, value in data.items():
         if isinstance(value, dict):
             lines.extend(_dump_toml(value, prefix + (key,)))
-        elif isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
+        elif (
+            isinstance(value, list)
+            and value
+            and all(isinstance(item, dict) for item in value)
+        ):
             for item in value:
                 lines.append(f"[[{'.'.join(prefix + (key,))}]]")
                 for item_key, item_value in item.items():
@@ -97,13 +105,15 @@ def test_config_load_reads_wiring_block(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -130,13 +140,15 @@ def test_config_load_defaults_empty_toolsets_to_full_wiring(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -158,13 +170,15 @@ def test_config_load_reads_memory_engine_selector(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {"system_prompt": "s"},
             "memory": {
@@ -186,13 +200,15 @@ def test_config_load_ignores_wiring_memory_engine(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -218,13 +234,15 @@ def test_config_load_ignores_legacy_memory_v2_enabled(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {"system_prompt": "s"},
             "memory_v2": {
@@ -240,19 +258,23 @@ def test_config_load_ignores_legacy_memory_v2_enabled(tmp_path: Path):
     assert cfg.memory.engine == ""
 
 
-def test_config_load_reads_embedding_and_ignores_private_memory_sections(tmp_path: Path):
+def test_config_load_reads_embedding_and_ignores_private_memory_sections(
+    tmp_path: Path,
+):
     cfg_path = tmp_path / "config.toml"
     _write_toml(
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {"system_prompt": "s"},
             "memory": {
@@ -287,13 +309,15 @@ def test_config_load_rejects_legacy_socket_configuration(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -317,13 +341,15 @@ def test_config_load_reads_agent_dev_mode(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -343,13 +369,15 @@ def test_config_load_accepts_dev_model_alias(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -372,13 +400,15 @@ def test_config_load_rejects_removed_qqbot_channel_block(
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -419,13 +449,15 @@ def test_config_load_rejects_removed_fitbit_integration_block(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -467,8 +499,7 @@ socket = "/tmp/toml-shiori.sock"
 
 [integrations.fitbit]
 enabled = true
-""".strip()
-        + "\n",
+""".strip() + "\n",
         encoding="utf-8",
     )
 
@@ -482,13 +513,15 @@ def test_config_load_reads_qq_websocket_timeout(tmp_path: Path):
         cfg_path,
         {
             "llm": {
-                "registrations": [{
-                    "id": "00000000-0000-4000-a000-000000000001",
-                    "provider": "openai",
-                    "model": "m",
-                    "api_key": "k",
-                    "effort": "none",
-                }],
+                "registrations": [
+                    {
+                        "id": "00000000-0000-4000-a000-000000000001",
+                        "provider": "openai",
+                        "model": "m",
+                        "api_key": "k",
+                        "effort": "none",
+                    }
+                ],
             },
             "agent": {
                 "system_prompt": "s",
@@ -509,7 +542,9 @@ def test_config_load_reads_qq_websocket_timeout(tmp_path: Path):
     assert cfg.channels.qq.websocket_open_timeout_seconds == 9.5
 
 
-def test_build_registered_tools_respects_toolset_order_and_subset(monkeypatch, tmp_path: Path):
+def test_build_registered_tools_respects_toolset_order_and_subset(
+    monkeypatch, tmp_path: Path
+):
     calls: list[str] = []
 
     class _MemoryProvider:
@@ -524,7 +559,11 @@ def test_build_registered_tools_respects_toolset_order_and_subset(monkeypatch, t
 
         def register(self, registry, deps):
             calls.append(self._name)
-            extras = {"mcp_registry": SimpleNamespace(shutdown=AsyncMock())} if self._name == "mcp" else {}
+            extras = (
+                {"mcp_registry": SimpleNamespace(shutdown=AsyncMock())}
+                if self._name == "mcp"
+                else {}
+            )
             return SimpleNamespace(extras=extras)
 
     monkeypatch.setattr(
@@ -595,7 +634,7 @@ def test_build_loop_deps_uses_context_factory(monkeypatch, tmp_path: Path):
             Any,
             SimpleNamespace(
                 get_or_create=lambda key: None,
-                save_async=lambda session: None,
+                commit_consolidation=lambda request, write_memory, publish_committed: None,
             ),
         ),
         presence=cast(Any, None),
@@ -713,9 +752,7 @@ async def test_wire_turn_lifecycle_registers_afterstep_progress_handler():
             tools_called=("noop",),
             partial_reply="部分回复",
             tools_used_so_far=("a", "b"),
-            tool_chain_partial=(
-                {"text": "tool", "calls": []},
-            ),
+            tool_chain_partial=({"text": "tool", "calls": []},),
             partial_thinking="思考",
             has_more=True,
         )

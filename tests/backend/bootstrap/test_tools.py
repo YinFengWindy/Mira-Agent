@@ -1,17 +1,45 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 
 from bootstrap.tools import (
+    _bind_memory_lifecycle_if_supported,
     _resolve_plugin_dirs,
     _role_owns_channel_target,
     _validate_role_target,
 )
 from core.roles import RoleRepository, RoleStore
+from core.memory.markdown import MarkdownMemoryMaintenance, MarkdownMemoryStore
+from session.manager import SessionManager
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_memory_lifecycle_binds_the_session_owner_commit_operation(tmp_path: Path):
+    manager = SessionManager(tmp_path)
+    maintenance = MarkdownMemoryMaintenance(
+        store=MarkdownMemoryStore(tmp_path),
+        provider=cast(Any, SimpleNamespace()),
+        model="test",
+        keep_count=0,
+    )
+
+    _bind_memory_lifecycle_if_supported(
+        markdown=maintenance,
+        session_manager=manager,
+        relationship_runtime=cast(
+            Any, SimpleNamespace(refresh_snapshot_after_consolidation=AsyncMock())
+        ),
+        relationship_optimizer=cast(Any, object()),
+    )
+
+    assert maintenance._get_session == manager.get_or_create
+    assert maintenance._commit_consolidation == manager.commit_consolidation
 
 
 def test_resolve_plugin_dirs_uses_repository_root_in_dev(tmp_path: Path) -> None:

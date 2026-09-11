@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -80,7 +80,7 @@ from core.roles.self_seed import LlmRoleSelfSeedGenerator
 from infra.screen_capture import PrimaryScreenCapture
 from conversation.push_sync import ExternalImageSyncService
 from proactive_v2.presence import PresenceStore
-from session.manager import Session, SessionManager
+from session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -371,9 +371,6 @@ def _bind_memory_lifecycle_if_supported(
     relationship_runtime: RoleRelationshipRuntimeService,
     relationship_optimizer: RelationshipSnapshotOptimizer,
 ) -> None:
-    async def _save_session(session: object) -> None:
-        await session_manager.save_async(cast(Session, session))
-
     async def _after_consolidation(session: object) -> None:
         await relationship_runtime.refresh_snapshot_after_consolidation(
             session,
@@ -383,7 +380,7 @@ def _bind_memory_lifecycle_if_supported(
     markdown.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=session_manager.get_or_create,
-            save_session=_save_session,
+            commit_consolidation=session_manager.commit_consolidation,
             after_consolidation=_after_consolidation,
         )
     )
