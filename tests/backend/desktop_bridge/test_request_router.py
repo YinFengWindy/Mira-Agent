@@ -51,11 +51,11 @@ async def test_request_router_stops_after_the_owning_handler_matches() -> None:
 
 
 @pytest.mark.asyncio
-async def test_removed_builtin_story_route_is_not_handled() -> None:
+async def test_unregistered_domain_route_is_not_handled() -> None:
     router = _router()
 
     result = await router.dispatch(
-        "stories.list",
+        "unknown.list",
         {},
         request_id="request-3",
         emit_event=Mock(),

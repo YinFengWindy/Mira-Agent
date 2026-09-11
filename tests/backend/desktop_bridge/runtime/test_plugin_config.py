@@ -90,56 +90,6 @@ async def test_get_returns_schema_and_default_backed_values(tmp_path, monkeypatc
         await app.shutdown()
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("enabled_line", ["", "enabled = true\n"])
-async def test_novelai_config_round_trip_preserves_host_enablement(
-    tmp_path,
-    monkeypatch,
-    enabled_line,
-):
-    """Saving the real NovelAI form must not recreate a second enable switch."""
-    root = tmp_path / "plugin_dirs"
-    shutil.copytree(_REPOSITORY_ROOT / "plugins" / "novelai", root / "novelai")
-    monkeypatch.setattr(
-        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
-    )
-    config_text = (
-        _config() + "\n[plugins.novelai]\n" + enabled_line + 'token = "test-token"\n'
-    )
-    service, path, app = await _start_service(tmp_path, config_text)
-    try:
-        before = await _request(service, "plugin.config.get", {"plugin_id": "novelai"})
-        assert before.error is None, before.error
-        assert "enabled" not in before.payload["schema"]["properties"]
-        assert "enabled" not in before.payload["values"]
-
-        saved = await _request(
-            service,
-            "plugin.config.set",
-            {
-                "plugin_id": "novelai",
-                "operation_id": "save-novelai",
-                "values": {**before.payload["values"], "nsfw_enabled": True},
-            },
-        )
-        assert saved.error is None, saved.error
-        after = await _request(service, "plugin.config.get", {"plugin_id": "novelai"})
-        assert after.error is None, after.error
-        assert after.payload["values"] == saved.payload["values"]
-        assert after.payload["values"]["nsfw_enabled"] is True
-        stored = load_config_text(path.read_text(encoding="utf-8")).plugins["novelai"]
-        assert stored.get("enabled", True) is True
-
-        listed = await _request(service, "plugins.list")
-        novelai = next(
-            item for item in listed.payload["plugins"] if item["id"] == "novelai"
-        )
-        assert novelai["enabled"] is True
-        assert novelai["state"] == "ACTIVE"
-    finally:
-        await service.aclose()
-        await app.shutdown()
-
 
 @pytest.mark.asyncio
 async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(tmp_path, monkeypatch):

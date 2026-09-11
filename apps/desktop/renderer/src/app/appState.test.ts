@@ -47,17 +47,17 @@ describe("appState", () => {
     }), false);
   });
 
-  it("treats the Story workspace as a distinct history destination", () => {
-    const storyEntry: NavigationEntry = {
+  it("treats a plugin page as a distinct history destination", () => {
+    const pluginPageEntry: NavigationEntry = {
       view: { kind: "plugin-page", pageId: "sample" },
       activeRoleId: "mira",
       settingsSection: "models",
     };
 
-    assert.equal(navigationEntriesEqual(storyEntry, { ...storyEntry, view: { kind: "plugin-page", pageId: "sample" } }), true);
-    assert.equal(navigationEntriesEqual(storyEntry, { ...storyEntry, view: { kind: "chat" } }), false);
-    assert.deepEqual(cloneView(storyEntry.view), { kind: "plugin-page", pageId: "sample" });
-    assert.equal(viewsEqual(storyEntry.view, { kind: "chat" }), false);
+    assert.equal(navigationEntriesEqual(pluginPageEntry, { ...pluginPageEntry, view: { kind: "plugin-page", pageId: "sample" } }), true);
+    assert.equal(navigationEntriesEqual(pluginPageEntry, { ...pluginPageEntry, view: { kind: "chat" } }), false);
+    assert.deepEqual(cloneView(pluginPageEntry.view), { kind: "plugin-page", pageId: "sample" });
+    assert.equal(viewsEqual(pluginPageEntry.view, { kind: "chat" }), false);
   });
 
   it("distinguishes plugin nav pages by their page id", () => {

@@ -10,6 +10,7 @@ import pytest
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
+from conftest import plugin_bridge_request
 from desktop_bridge.method_policy import Concurrency
 
 
@@ -68,3 +69,41 @@ def test_story_requires_active_novelai_and_unloads_before_it(
             await kernel.terminate_all()
 
     asyncio.run(run())
+
+
+@pytest.mark.asyncio
+async def test_novelai_toggle_blocks_and_restores_story_without_deleting_data(
+    tmp_path, plugin_runtime
+):
+    """Story owns the contract for its NovelAI dependency and persisted archives."""
+    async with plugin_runtime(("novelai", "story")) as (service, _):
+        response = await plugin_bridge_request(service, "plugin.story.list")
+        assert response.error is None, response.error
+        saved = tmp_path / "stories" / "keep.txt"
+        saved.write_text("existing story data", encoding="utf-8")
+        response = await plugin_bridge_request(
+            service, "plugin.story.get", {"story_id": "missing"}
+        )
+        assert response.error is not None
+        assert response.error.code == "story_not_found"
+
+        for enabled in (False, True):
+            toggled = await plugin_bridge_request(
+                service,
+                "plugins.setEnabled",
+                {
+                    "plugin_id": "novelai",
+                    "enabled": enabled,
+                    "operation_id": f"novelai-{enabled}",
+                },
+            )
+            assert toggled.error is None, toggled.error
+            listed = await plugin_bridge_request(service, "plugins.list")
+            story = next(
+                row for row in listed.payload["plugins"] if row["id"] == "story"
+            )
+            assert story["dependencies"] == ["novelai"]
+            assert story["state"] == ("ACTIVE" if enabled else "BLOCKED")
+            response = await plugin_bridge_request(service, "plugin.story.list")
+            assert (response.error is None) is enabled
+            assert saved.read_text(encoding="utf-8") == "existing story data"

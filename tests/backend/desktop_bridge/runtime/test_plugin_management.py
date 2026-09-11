@@ -81,50 +81,6 @@ async def _request(service: ReloadableDesktopService, method: str, payload=None)
     )
 
 
-@pytest.mark.asyncio
-async def test_novelai_toggle_blocks_and_restores_story_without_deleting_data(
-    tmp_path, monkeypatch
-):
-    root = tmp_path / "plugin_dirs"
-    for name in ("novelai", "story"):
-        shutil.copytree(_REPOSITORY_ROOT / "plugins" / name, root / name)
-    monkeypatch.setattr(
-        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
-    )
-    service, _, app = await _start_service(tmp_path)
-    try:
-        response = await _request(service, "plugin.story.list")
-        assert response.error is None, response.error
-        saved = tmp_path / "stories" / "keep.txt"
-        saved.write_text("existing story data", encoding="utf-8")
-        response = await _request(service, "plugin.story.get", {"story_id": "missing"})
-        assert response.error is not None
-        assert response.error.code == "story_not_found"
-
-        for enabled in (False, True):
-            toggled = await _request(
-                service,
-                "plugins.setEnabled",
-                {
-                    "plugin_id": "novelai",
-                    "enabled": enabled,
-                    "operation_id": f"novelai-{enabled}",
-                },
-            )
-            assert toggled.error is None, toggled.error
-            listed = await _request(service, "plugins.list")
-            story = next(
-                row for row in listed.payload["plugins"] if row["id"] == "story"
-            )
-            assert story["dependencies"] == ["novelai"]
-            assert story["state"] == ("ACTIVE" if enabled else "BLOCKED")
-            response = await _request(service, "plugin.story.list")
-            assert (response.error is None) is enabled
-            assert saved.read_text(encoding="utf-8") == "existing story data"
-    finally:
-        await service.aclose()
-        await app.shutdown()
-
 
 @pytest.mark.asyncio
 async def test_plugin_events_are_forwarded_only_by_their_owning_generation(

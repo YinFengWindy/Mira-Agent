@@ -225,7 +225,7 @@ async def test_health_response_is_not_blocked_by_slow_mutation(
     async def _handle(request, emit_event):
         del emit_event
         method = str(request["method"])
-        if method == "novelai.generate":
+        if method == "plugin.demo.slow":
             mutation_started.set()
             await release_mutation.wait()
         return BridgeResponse(
@@ -241,7 +241,7 @@ async def test_health_response_is_not_blocked_by_slow_mutation(
             health_written.set()
 
     server.service.handle = _handle
-    await lines.put(json.dumps({"id": "slow", "method": "novelai.generate"}))
+    await lines.put(json.dumps({"id": "slow", "method": "plugin.demo.slow"}))
     await lines.put(json.dumps({"id": "health", "method": "health"}))
     serve_task = asyncio.create_task(
         server.serve_streams(read_line=lines.get, write_payload=_write)
@@ -296,7 +296,7 @@ async def test_server_eof_cancels_and_awaits_in_flight_request(
 ) -> None:
     server = _build_server(tmp_path, stub_core_runtime)
     lines = iter(
-        [json.dumps({"id": "slow", "method": "novelai.generate"}), None]
+        [json.dumps({"id": "slow", "method": "plugin.demo.slow"}), None]
     )
     cancelled = asyncio.Event()
 

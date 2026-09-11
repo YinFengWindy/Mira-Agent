@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useStoryGalleryRefresh } from "./useStoryGalleryRefresh";
+import { useCallback, useState } from "react";
 import type { RoleRecord } from "../../../apps/desktop/renderer/src/shared/types";
 import type { StoryBridgeClient } from "./storyBridgeClient";
 import type { StoryCgGallery } from "./types";
@@ -82,12 +83,7 @@ export function useStoryWorkspacePresentation({ roles, client, controller, onExi
   const refreshCgGallery = useCallback(async () => {
     setCgGallery(await client.listCgGallery());
   }, [client]);
-  useEffect(() => window.miraDesktop.onEvent((event) => {
-    if (mode !== "gallery" || event.method !== "stories.resource.changed") return;
-    void refreshCgGallery().catch((error: unknown) => {
-      reportError(error instanceof Error ? error.message : "无法刷新 CG 集");
-    });
-  }), [mode, refreshCgGallery, reportError]);
+  useStoryGalleryRefresh(mode === "gallery", refreshCgGallery, reportError);
   const openCgGallery = useCallback(() => {
     clearError();
     setMode("gallery");
