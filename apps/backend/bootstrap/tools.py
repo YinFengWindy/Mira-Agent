@@ -43,7 +43,7 @@ from core.scene.demand import SceneObservationDemand
 from core.scene.service import SceneObservationService
 from core.scene.state import SceneStateStore
 from core.common.cleanup import run_cleanup_steps
-from bootstrap.paths import REPOSITORY_ROOT, resource_root
+from bootstrap.paths import REPOSITORY_ROOT, resource_root, plugin_roots
 from bootstrap.runtime.construction import track_build_resource
 from bootstrap.toolsets.meta import (
     build_readonly_tools,
@@ -656,7 +656,7 @@ def build_core_runtime(
 
 def _resolve_plugin_dirs(workspace: Path) -> list[Path]:
     """Resolves the top-level `plugins/` directory for dev and frozen runs."""
-    return [resource_root() / "plugins"]
+    return plugin_roots()
 
 
 def _legacy_plugin_root() -> Path | None:

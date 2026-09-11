@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 import tempfile
 import threading
 from pathlib import Path
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
@@ -15,7 +15,7 @@ from core.roles.store import RoleStore
 from plugins.desktop_pet.backend.models import RolePetPackage
 from plugins.desktop_pet.backend.pet_state import RolePetStateStore
 
-_PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
@@ -27,7 +27,7 @@ def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "desktop_pet"
-        shutil.copytree(_PLUGIN_ROOT, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel

@@ -2,37 +2,19 @@ from __future__ import annotations
 
 import json
 import random
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
 
 from core.roles import RoleStore
+from bootstrap.paths import common_emojis_paths
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
-_COMMON_EMOJIS_PATH = Path("apps/desktop/renderer/src/chat/common_emojis.json")
-_PACKAGED_COMMON_EMOJIS_PATH = Path("common_emojis.json")
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-
-
-def _common_emojis_candidates(workspace: Path) -> list[Path]:
-    """Return packaged and development locations in lookup priority order."""
-    packaged_root = getattr(sys, "_MEIPASS", None)
-    candidates: list[Path] = []
-    if isinstance(packaged_root, str) and packaged_root:
-        candidates.append(Path(packaged_root) / _PACKAGED_COMMON_EMOJIS_PATH)
-    candidates.extend(
-        (
-            workspace / _COMMON_EMOJIS_PATH,
-            _REPOSITORY_ROOT / _COMMON_EMOJIS_PATH,
-        )
-    )
-    return candidates
 
 
 def load_common_emojis(workspace: Path) -> dict[str, str]:
     """Load the user-sendable emoji list shared with the desktop picker."""
-    for path in _common_emojis_candidates(workspace):
+    for path in common_emojis_paths(workspace):
         if not path.is_file():
             continue
         try:
@@ -109,7 +91,9 @@ class MemeCatalog:
                 continue
             info = cast(dict[str, object], raw_info)
             aliases = info.get("aliases", [])
-            alias_items = cast(list[object], aliases) if isinstance(aliases, list) else []
+            alias_items = (
+                cast(list[object], aliases) if isinstance(aliases, list) else []
+            )
             self._categories[raw_name] = MemeCategory(
                 name=raw_name,
                 desc=str(info.get("desc", "") or ""),
@@ -140,7 +124,7 @@ class MemeCatalog:
         if not cats:
             return None
         lines = [
-            '【表情协议】`<meme:tag>` 是系统内置回复格式标记，不是 emoji（Unicode 表情符号），不受【禁止 emoji】规则限制。',
+            "【表情协议】`<meme:tag>` 是系统内置回复格式标记，不是 emoji（Unicode 表情符号），不受【禁止 emoji】规则限制。",
             "",
             "可用表情类别：",
         ]
@@ -239,7 +223,7 @@ class RoleReactionCatalog:
         lines.extend(
             [
                 "",
-                '用户明确要求表情、表情包或用表情表达心情时，优先选择合适的已有协议。',
+                "用户明确要求表情、表情包或用表情表达心情时，优先选择合适的已有协议。",
                 "历史回复没有使用表情不代表本轮不能使用。",
             ]
         )

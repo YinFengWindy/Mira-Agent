@@ -1,7 +1,12 @@
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "shiori-agent"
 version = "0.1.0"
 requires-python = ">=3.12"
+dynamic = ["dependencies"]
 
 [tool.black]
 line-length = 88
@@ -15,10 +20,21 @@ select = ["E4", "E7", "E9", "F"]
 "__init__.py" = ["F401"]
 "scripts/build_akasha_db.py" = ["E402"]
 "scripts/build_fts_idf.py" = ["E402"]
-"conftest.py" = ["E402"]
+"tests/conftest.py" = ["F401"]
+"tests/support/legacy_stubs.py" = ["E402"]
 
 [dependency-groups]
 dev = [
     "rich>=15.0.0",
+    "shiori-plugin-testkit==0.1.0",
+    "black>=26.0.0",
+    "ruff>=0.15",
+    "pyright>=1.1.403",
+    "pytest-cov>=6.0.0",
+    "pyinstaller>=6.18.0",
 ]
 
+
+[tool.uv.sources]
+shiori-plugin-default-memory = { path = "plugins/default_memory", editable = true }
+shiori-plugin-testkit = { path = "packages/plugin-testkit", editable = true }
