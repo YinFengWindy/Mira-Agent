@@ -14,6 +14,7 @@ import tomllib
 import zipfile
 
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 UV = str(Path(sys.executable).with_name("uv.exe" if os.name == "nt" else "uv"))
@@ -206,7 +207,7 @@ def verify_plugin(
         cwd=case,
         log=case / "install.log",
     )
-    ids = plugin_dependencies({plugin_id})
+    ids = plugin_dependencies({plugin_id}, extras=frozenset({"test"}))
     allowed = ["shiori-plugin-" + name.replace("_", "-") for name in sorted(ids)]
     check = (
         _PROVENANCE_CHECK.replace("__SOURCE__", repr(str(source)))
@@ -259,24 +260,51 @@ def verify_plugin(
     }
 
 
-def plugin_dependencies(plugin_ids: set[str]) -> set[str]:
-    """Resolves only declared sibling packages plus the host's required memory engine."""
+def plugin_dependencies(
+    plugin_ids: set[str], *, extras: frozenset[str] = frozenset()
+) -> set[str]:
+    """Resolves selected extras and declared sibling dependencies for this interpreter.
+
+    Runtime requirements always apply. Each requested extra adds its own optional
+    requirements; siblings receive only extras explicitly requested on their edge.
+    The independently built testkit is a foundation package, not a plugin directory.
+    """
     resolved: set[str] = set()
-    pending = ["default_memory", *plugin_ids]
+    visited: set[tuple[str, str]] = set()
+    pending = [("default_memory", "")]
+    for plugin_id in plugin_ids:
+        pending.append((plugin_id, ""))
+        pending.extend((plugin_id, canonicalize_name(extra)) for extra in extras)
     while pending:
-        plugin_id = pending.pop()
-        if plugin_id in resolved:
+        plugin_id, extra = pending.pop()
+        if (plugin_id, extra) in visited:
             continue
-        metadata = tomllib.loads(
+        visited.add((plugin_id, extra))
+        project = tomllib.loads(
             (REPOSITORY / "plugins" / plugin_id / "pyproject.toml").read_text(
                 encoding="utf-8"
             )
-        )
+        )["project"]
         resolved.add(plugin_id)
-        for requirement in metadata["project"].get("dependencies", []):
-            name = Requirement(requirement).name
-            if name.startswith("shiori-plugin-"):
-                pending.append(name.removeprefix("shiori-plugin-").replace("-", "_"))
+        requirements = list(project.get("dependencies", []))
+        # Optional groups are evaluated in their own active extra context. Runtime
+        # requirements also get the base context, matching normal package installs.
+        for group, optional in project.get("optional-dependencies", {}).items():
+            if extra and canonicalize_name(group) == extra:
+                requirements.extend(optional)
+        for raw_requirement in requirements:
+            requirement = Requirement(raw_requirement)
+            if requirement.marker and not requirement.marker.evaluate({"extra": extra}):
+                continue
+            name = canonicalize_name(requirement.name)
+            if name == "shiori-plugin-testkit" or not name.startswith("shiori-plugin-"):
+                continue
+            sibling = name.removeprefix("shiori-plugin-").replace("-", "_")
+            pending.append((sibling, ""))
+            pending.extend(
+                (sibling, canonicalize_name(selected))
+                for selected in requirement.extras
+            )
     return resolved
 
 
@@ -304,7 +332,7 @@ def main() -> None:
             raise ValueError(
                 f"Tested plugin {plugin_id} must declare its package and test dependencies"
             )
-    dependencies = plugin_dependencies(set(plugin_ids))
+    dependencies = plugin_dependencies(set(plugin_ids), extras=frozenset({"test"}))
     copies, wheels = {}, {}
     for plugin_id in sorted(dependencies):
         copies[plugin_id] = artifact_root / "sources" / plugin_id
