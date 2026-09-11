@@ -139,9 +139,6 @@ type DesktopAppFrameProps = {
   onPickRoleAssets: (categoryId: string) => void;
   onUpdateRoleAssetOrganization: (categories: import("../shared/types").RoleAssetCategory[], bindings: Record<string, string>, removedIllustrations?: string[]) => Promise<boolean>;
   onRemoveRoleAsset: (path: string) => void;
-  onImportRolePetPackage: () => void;
-  onRemoveRolePetPackage: (packageId: string) => void;
-  onSelectRolePetPackage: (packageId: string) => void;
   onSelectAvatarAsset: (path: string) => void;
   onSelectChatBackground: (path: string) => void;
   onSaveRoleAssets: (nextSelection?: { avatarAsset?: string; chatBackground?: string; moodIllustrationBindings?: Record<string, string> }) => void;
@@ -267,9 +264,6 @@ export function DesktopAppFrame({
   onPickRoleAssets,
   onUpdateRoleAssetOrganization,
   onRemoveRoleAsset,
-  onImportRolePetPackage,
-  onRemoveRolePetPackage,
-  onSelectRolePetPackage,
   onSelectAvatarAsset,
   onSelectChatBackground,
   onSaveRoleAssets,
@@ -494,9 +488,6 @@ export function DesktopAppFrame({
               onPickAssets={onPickRoleAssets}
               onUpdateAssetOrganization={onUpdateRoleAssetOrganization}
               onRemoveAsset={onRemoveRoleAsset}
-              onImportPetPackage={onImportRolePetPackage}
-              onRemovePetPackage={onRemoveRolePetPackage}
-              onSelectPetPackage={onSelectRolePetPackage}
               onSelectAvatarAsset={onSelectAvatarAsset}
               onSelectChatBackground={onSelectChatBackground}
               onUpdateRoleForm={onUpdateRoleForm}

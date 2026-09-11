@@ -3,6 +3,7 @@ id: desktop_pet
 desc: 桌宠：角色绑定解析、动作工具与透明置顶窗口
 capabilities:
   - workspace
+  - role_store
   - events
   - tools
   - rpc

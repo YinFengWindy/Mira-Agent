@@ -363,42 +363,11 @@ export function useRoleManagement({
     openRoleWorkspace({ kind: "role-assets", roleId: resolvedRole.id }, { recordHistory: false });
   }
 
-  async function importRolePetPackage(): Promise<void> {
-    if (!detailRoleId) return;
-    const source = await window.miraDesktop.pickPetPackage();
-    if (!source) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.import", payload: { role_id: detailRoleId, source } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-  }
-
-  async function removeRolePetPackage(packageId: string): Promise<void> {
-    if (!detailRoleId) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.remove", payload: { role_id: detailRoleId, package_id: packageId } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-    await window.miraDesktop.syncPet();
-  }
-
-  async function selectRolePetPackage(packageId: string): Promise<void> {
-    if (!detailRoleId) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.select", payload: { role_id: detailRoleId, package_id: packageId } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-    await window.miraDesktop.syncPet();
-  }
+  // `importRolePetPackage` / `removeRolePetPackage` / `selectRolePetPackage`
+  // are gone: since #181-D the desktop pet contributes its own package
+  // manager through the `role.assets` slot and calls its own
+  // `plugin.desktop_pet.pets.*` methods, so the host neither knows what a
+  // pet package is nor routes these three actions.
 
   return {
     saveRole,
@@ -406,9 +375,6 @@ export function useRoleManagement({
     confirmDeleteRole,
     pickRoleAssets,
     removeRoleAsset,
-    importRolePetPackage,
-    removeRolePetPackage,
-    selectRolePetPackage,
     updateRoleAssetOrganization,
   };
 }

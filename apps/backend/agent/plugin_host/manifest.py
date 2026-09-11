@@ -27,6 +27,12 @@ KNOWN_CAPABILITIES = frozenset(
         # 因此不各建一个 Capability 类，直接在 kernel._build_capabilities 里
         # 透传 HostServices 的同名字段。
         "workspace",
+        # 共享宿主那一个 RoleStore 实例。与 workspace 并列而不是让插件自己
+        # RoleStore(ctx.workspace)：后者每次都新建一个 RoleManifestRepository，
+        # 而写锁是 **按实例的** threading.RLock（manifest.py）。两个实例写同一份
+        # roles.json 时 atomic_save_json 只保证单次写原子、不防丢更新，读-改-写
+        # 会互相覆盖。共享实例 = 共享那把锁。
+        "role_store",
         "memory_engine",
         "session_manager",
         "light_provider",

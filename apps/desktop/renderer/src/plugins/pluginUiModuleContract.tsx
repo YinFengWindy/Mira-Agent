@@ -2,7 +2,12 @@ import type React from "react";
 import type { SettingsSubsection, StandaloneSettingsSectionProps } from "../settings/settingsPageTypes";
 import { createPluginSchemaSettingsSection } from "./PluginSchemaSettingsSection";
 import { createPluginRpcClient, type PluginRpcClient } from "./pluginBridgeClient";
-import { pluginUiRegistry, type PluginNavPageProps, type PluginNavPageSidebarProps } from "./pluginUiRegistry";
+import {
+  pluginUiRegistry,
+  type PluginNavPageProps,
+  type PluginNavPageSidebarProps,
+  type PluginRoleAssetsProps,
+} from "./pluginUiRegistry";
 
 /**
  * Props a plugin-authored nav.page component receives: the base slot props
@@ -33,6 +38,18 @@ export type PluginSettingsSectionContribution =
     component: React.ComponentType<PluginSettingsSectionComponentProps>;
   };
 
+/**
+ * Props a plugin-authored role.assets panel receives: the base slot props plus
+ * its injected, namespace-scoped RPC client — the same treatment the other two
+ * slots get, and the only way such a panel can reach any data at all.
+ */
+export type PluginRoleAssetsComponentProps = PluginRoleAssetsProps & { client: PluginRpcClient };
+
+/** One plugin's panel inside the role asset page. */
+export type PluginRoleAssetsContribution = {
+  component: React.ComponentType<PluginRoleAssetsComponentProps>;
+};
+
 export type PluginNavPageContribution = {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
@@ -54,6 +71,7 @@ export type PluginUiModule = {
   pluginId: string;
   settingsSection?: PluginSettingsSectionContribution;
   navPage?: PluginNavPageContribution;
+  roleAssets?: PluginRoleAssetsContribution;
 };
 
 /** Narrows an unknown default export down to a well-formed PluginUiModule, without an unsafe cast. */
@@ -95,7 +113,7 @@ export function applyPluginUiModules(
       console.error(`[pluginUiModules] ${path} 的默认导出不是合法的 PluginUiModule，已跳过`);
       continue;
     }
-    const { pluginId, settingsSection, navPage } = uiModule;
+    const { pluginId, settingsSection, navPage, roleAssets } = uiModule;
     if (settingsSection) {
       const id = pluginId;
       registry.registerSettingsSection({
@@ -108,6 +126,14 @@ export function applyPluginUiModules(
         Component: settingsSection.kind === "schema"
           ? createPluginSchemaSettingsSection(pluginId)
           : bindPluginClient(pluginId, settingsSection.component),
+      });
+    }
+    if (roleAssets) {
+      registry.registerRoleAssetsPanel({
+        slot: "role.assets",
+        id: pluginId,
+        pluginId,
+        Component: bindPluginClient(pluginId, roleAssets.component),
       });
     }
     if (navPage) {

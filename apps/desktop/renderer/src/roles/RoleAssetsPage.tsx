@@ -7,8 +7,8 @@ import { getNextRoleAssetSelection, getSelectedRoleAssetPath } from "./roleAsset
 import { applyMoodToIllustration, getMoodForIllustration } from "./roleMoodBindingSelection";
 import { RoleMoodBindingsPanel } from "./RoleMoodBindingsPanel";
 import { RoleAssetCategoryGroups } from "./RoleAssetCategoryGroups";
-import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
 import { RoleDifferenceGenerationPanel } from "./RoleDifferenceGenerationPanel";
+import { useRoleAssetsPanels } from "../plugins/useRoleAssetsPanels";
 import type { RoleDifferenceGenerationState } from "./roleDifferenceGeneration";
 
 type RoleAssetsPageProps = {
@@ -21,9 +21,6 @@ type RoleAssetsPageProps = {
   onBackToDetail: () => void;
   onPickAssets: (categoryId: string) => void;
   onRemoveAsset: (path: string) => void;
-  onImportPetPackage: () => void;
-  onRemovePetPackage: (packageId: string) => void;
-  onSelectPetPackage: (packageId: string) => void;
   onSelectAvatarAsset: (path: string) => void;
   onSelectChatBackground: (path: string) => void;
   onUpdateRoleForm: React.Dispatch<React.SetStateAction<RoleFormState>>;
@@ -47,9 +44,6 @@ export function RoleAssetsPage({
   onBackToDetail,
   onPickAssets,
   onRemoveAsset,
-  onImportPetPackage,
-  onRemovePetPackage,
-  onSelectPetPackage,
   onSelectAvatarAsset,
   onSelectChatBackground,
   onUpdateRoleForm,
@@ -58,6 +52,7 @@ export function RoleAssetsPage({
   differenceGeneration,
   onGenerateDifferences,
 }: RoleAssetsPageProps) {
+  const roleAssetsPanels = useRoleAssetsPanels();
   const assetPairs = (activeRole?.illustrations ?? []).map((relPath, index) => ({
     relPath,
     absPath: activeRole?.illustrations_abs[index] ?? "",
@@ -185,7 +180,19 @@ export function RoleAssetsPage({
                 onUpdateOrganization={onUpdateAssetOrganization}
               />
             </div>
-            <RolePetPackagesPanel role={activeRole} disabled={!bridgeReady || savingSelection} onImport={onImportPetPackage} onRemove={onRemovePetPackage} onSelect={onSelectPetPackage} />
+            {/*
+              * Plugin-owned panels (#181-D). The desktop pet's package manager
+              * used to be rendered here by name, which meant this page — and
+              * `RoleRecord`, and four props above — had to know what a pet
+              * package is. It now contributes itself through `role.assets`.
+              */}
+            {roleAssetsPanels.map((panel) => (
+              <panel.Component
+                key={panel.id}
+                roleId={activeRole?.id ?? ""}
+                disabled={!bridgeReady || savingSelection}
+              />
+            ))}
           </div>
           <div className="grid min-h-0 grid-rows-[minmax(0,1fr)] bg-white p-6">
             <div className="flex min-h-0 flex-col">

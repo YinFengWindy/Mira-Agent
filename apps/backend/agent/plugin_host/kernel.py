@@ -62,6 +62,10 @@ class HostServices:
     event_bus: EventBus
     tool_registry: Any = None
     workspace: Path | None = None
+    # 宿主唯一的 RoleStore 实例（bootstrap 里的 canonical 那个）。插件经
+    # role_store capability 拿到的必须是它本身，见 manifest.KNOWN_CAPABILITIES
+    # 里那段注释：另起一个实例就是另起一把写锁。
+    role_store: Any = None
     session_manager: Any = None
     memory_engine: Any = None
     app_config: Any = None
@@ -312,6 +316,7 @@ class PluginKernel:
             # 直传引用，无需 effect 包装：宿主拥有这些服务的生命周期，插件只读，
             # 卸载时无需撤销任何登记（对齐 legacy PluginContext 的同名字段）。
             "workspace": lambda: services.workspace,
+            "role_store": lambda: services.role_store,
             "memory_engine": lambda: services.memory_engine,
             "session_manager": lambda: services.session_manager,
             "light_provider": lambda: services.light_provider,
