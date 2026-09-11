@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from agent.plugins.context import PluginKVStore
+from agent.plugin_host.kv import PluginKVStore
 from agent.tool_hooks.types import HookOutcome
 
 _THIRD_PERSON_PROMPT_TERMS = (

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from agent.plugins.role_prompt import (
+from agent.role_prompt import (
     build_role_cache_prefix_section,
     build_role_system_section,
 )
@@ -65,17 +65,31 @@ def test_role_system_section_rejects_missing_role_context(tmp_path) -> None:
         )
 
 
-def test_role_system_section_expands_runtime_identity_and_places_constraints_last(tmp_path):
+def test_role_system_section_expands_runtime_identity_and_places_constraints_last(
+    tmp_path,
+):
     RoleStore(tmp_path).create_role(
-        name="Mira", role_id="mira", system_prompt="legacy",
+        name="Mira",
+        role_id="mira",
+        system_prompt="legacy",
         profile={
-            "character": {"profile": "{{char}}认识{{user}}", "response_constraints": "回答{{user}}"},
-            "knowledge_base": {"enabled": True, "entries": [{"content": "知识", "always_active": True}]},
+            "character": {
+                "profile": "{{char}}认识{{user}}",
+                "response_constraints": "回答{{user}}",
+            },
+            "knowledge_base": {
+                "enabled": True,
+                "entries": [{"content": "知识", "always_active": True}],
+            },
         },
     )
 
-    section = build_role_system_section(workspace=tmp_path, session_metadata={"role_id": "mira", "user_name": "风"})
+    section = build_role_system_section(
+        workspace=tmp_path, session_metadata={"role_id": "mira", "user_name": "风"}
+    )
 
     assert "Mira认识风" in section.content
     assert "回答风" in section.content
-    assert section.content.index("[role_knowledge]") < section.content.index("[role_response_constraints]")
+    assert section.content.index("[role_knowledge]") < section.content.index(
+        "[role_response_constraints]"
+    )

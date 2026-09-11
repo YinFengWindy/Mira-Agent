@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from agent.plugins.context import PluginKVStore
+from agent.plugin_host.kv import PluginKVStore
 from agent.tool_hooks.types import HookOutcome
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
 

@@ -16,7 +16,7 @@ import pytest
 
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
-from tests.support.plugin_fixtures import stage_plugin_fixture
+from shiori_plugin_testkit.packages import stage_plugin_package
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -42,8 +42,8 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
     # 夹具是旧扁平布局、内核要求 backend/；不重整这些插件根本不会被加载，
     # 而「无配置模型返回 schema=None」这类断言在插件缺席时同样成立，测试会假绿。
-    _ = stage_plugin_fixture("hello", root)
-    _ = stage_plugin_fixture("nullable_config", root)
+    _ = stage_plugin_package(_HELLO_FIXTURE_DIR, root / "hello")
+    _ = stage_plugin_package(_NULLABLE_FIXTURE_DIR, root / "nullable_config")
     monkeypatch.setattr(
         "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
     )

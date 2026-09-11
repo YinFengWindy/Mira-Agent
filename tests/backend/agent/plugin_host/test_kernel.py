@@ -15,7 +15,8 @@ from tests.backend.agent.plugin_host.conftest import (
     REPOSITORY_ROOT,
     before_turn_ctx,
     make_kernel,
-    stage_plugin_fixture,
+    stage_plugin_package,
+    PLUGIN_FIXTURES,
 )
 
 _EXPECTED_TOP_LEVEL_PLUGINS = {
@@ -47,6 +48,12 @@ def test_discover_finds_all_top_level_plugins():
     names = {record.name for record in records}
 
     assert names == _EXPECTED_TOP_LEVEL_PLUGINS
+    assert (
+        next(
+            record for record in records if record.name == "desktop_pet"
+        ).manifest.version
+        == "0.1.0"
+    )
     # discover() 只报出名字证明不了入口真的存在；record.entry_file 必须是磁盘上
     # 真实存在的文件，否则装配阶段 import 会直接失败（#178 复审 #11）。
     for record in records:
@@ -241,20 +248,21 @@ async def _on_turn(event):
 
 
 @pytest.mark.asyncio
-async def test_disabled_marker_skips_plugin(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+async def test_obsolete_marker_cannot_override_authoritative_config(tmp_path: Path):
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    kernel = make_kernel(
+        [tmp_path], event_bus=EventBus(), plugin_configs={"hello": {"enabled": True}}
+    )
     await kernel.load_all()
-
-    assert kernel.loaded_count == 0
-    assert any(item["state"] == PluginState.DISABLED.name for item in kernel.states())
+    assert kernel.loaded_count == 1
+    await kernel.terminate_all()
 
 
 @pytest.mark.asyncio
 async def test_config_enabled_false_skips_plugin(tmp_path: Path):
     """启停(issue #174)的来源是配置状态，不是 plugin.disabled 文件。"""
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     kernel = make_kernel(
         [tmp_path],
         event_bus=EventBus(),
@@ -268,7 +276,7 @@ async def test_config_enabled_false_skips_plugin(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
 
@@ -277,8 +285,8 @@ async def test_config_enabled_defaults_to_true_when_absent(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
-    _ = stage_plugin_fixture("hello", tmp_path)
-    _ = stage_plugin_fixture("weather", tmp_path)
+    _ = stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
+    _ = stage_plugin_package(PLUGIN_FIXTURES / "weather", tmp_path / "weather")
     kernel = make_kernel([tmp_path, tmp_path], event_bus=EventBus())
 
     records = kernel.discover()
@@ -290,7 +298,7 @@ async def test_duplicate_plugin_name_first_wins(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_runtime_disable_then_enable(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -310,7 +318,7 @@ async def test_runtime_disable_then_enable(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_load_all_is_idempotent(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
     bus = EventBus()
     kernel = make_kernel([tmp_path], event_bus=bus)
     await kernel.load_all()
@@ -322,23 +330,6 @@ async def test_load_all_is_idempotent(tmp_path: Path):
     assert result.extra_metadata.get("hello_touched") is True
 
 
-@pytest.mark.asyncio
-async def test_telegram_bot_commands_aggregated(tmp_path: Path):
-    plugin_dir = tmp_path / "cmds" / "backend"
-    plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n"
-        "class Cmds(Plugin):\n"
-        "    name = 'cmds'\n"
-        "    def telegram_bot_commands(self):\n"
-        "        return [('undo', '撤销上一轮')]\n",
-        encoding="utf-8",
-    )
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-    assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
-
-
 _V2_BOT_COMMANDS_PLUGIN = """
 async def setup(ctx):
     ctx.bot_commands.add("chatid", "查看我的 chat_id")
@@ -348,39 +339,18 @@ _V2_BOT_COMMANDS_MANIFEST = "api: 2\nid: v2cmds\ncapabilities:\n  - bot_commands
 
 
 @pytest.mark.asyncio
-async def test_telegram_bot_commands_aggregates_legacy_and_v2_then_drops_on_unload(
-    tmp_path: Path,
-):
-    """kernel.telegram_bot_commands 必须同时聚合 legacy 实例与 v2 贡献两条来源（#182）。"""
-    legacy_dir = tmp_path / "cmds"
-    legacy_dir.mkdir()
-    (legacy_dir / "backend").mkdir()
-    (legacy_dir / "backend" / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n"
-        "class Cmds(Plugin):\n"
-        "    name = 'cmds'\n"
-        "    def telegram_bot_commands(self):\n"
-        "        return [('undo', '撤销上一轮')]\n",
-        encoding="utf-8",
-    )
-    v2_dir = tmp_path / "v2cmds"
-    v2_dir.mkdir()
-    (v2_dir / "backend").mkdir()
-    (v2_dir / "backend" / "plugin.py").write_text(
+async def test_bot_commands_are_scoped_contributions_only(tmp_path: Path):
+    package = tmp_path / "v2cmds"
+    (package / "backend").mkdir(parents=True)
+    (package / "backend/plugin.py").write_text(
         _V2_BOT_COMMANDS_PLUGIN, encoding="utf-8"
     )
-    (v2_dir / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
-
+    (package / "manifest.yaml").write_text(_V2_BOT_COMMANDS_MANIFEST, encoding="utf-8")
     kernel = make_kernel([tmp_path], event_bus=EventBus())
     await kernel.load_all()
-
-    assert sorted(kernel.telegram_bot_commands) == sorted(
-        [("undo", "撤销上一轮"), ("chatid", "查看我的 chat_id")]
-    )
-
-    # 卸载 v2 插件后，其 bot 命令必须随 effect 一并摘除，legacy 一侧不受影响
-    _ = await kernel.unload("v2cmds")
-    assert kernel.telegram_bot_commands == [("undo", "撤销上一轮")]
+    assert kernel.telegram_bot_commands == [("chatid", "查看我的 chat_id")]
+    await kernel.unload("v2cmds")
+    assert kernel.telegram_bot_commands == []
 
 
 _RPC_PLUGIN = """
@@ -516,7 +486,7 @@ async def setup(ctx):
 
 @pytest.mark.asyncio
 async def test_weather_tool_via_facade(tmp_path: Path):
-    stage_plugin_fixture("weather", tmp_path)
+    stage_plugin_package(PLUGIN_FIXTURES / "weather", tmp_path / "weather")
     tools = ToolRegistry()
     kernel = make_kernel([tmp_path], event_bus=EventBus(), tools=tools)
     await kernel.load_all()

@@ -2,8 +2,6 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from agent.plugins import Plugin
-
 
 class Mode(Enum):
     """刻意不继承 str：这样 Enum 实例本身无法直接过 json.dumps。"""
@@ -19,7 +17,6 @@ class NullableConfigModel(BaseModel):
     mode: Mode = Mode.QUIET
 
 
-class NullableConfigPlugin(Plugin):
-    name = "nullable_config"
-    version = "0.1.0"
-    ConfigModel = NullableConfigModel
+async def setup(ctx):
+    """Validates the fixture's explicitly declared configuration model."""
+    NullableConfigModel.model_validate(ctx.config.as_dict())

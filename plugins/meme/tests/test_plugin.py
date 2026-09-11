@@ -138,7 +138,7 @@ async def test_meme_discovery_uses_v2_and_declares_citation(
 ) -> None:
     kernel, _ = await load_kernel(tmp_path)
     record = next(record for record in kernel.discover() if record.name == "meme")
-    assert record.manifest.is_v2
+    assert record.manifest.api == 2
     assert record.manifest.dependencies == ("citation",)
     assert set(record.manifest.capabilities) == {
         "lifecycle",

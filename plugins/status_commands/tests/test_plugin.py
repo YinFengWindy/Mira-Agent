@@ -69,7 +69,7 @@ async def test_status_commands_stay_active_without_observe(
         record = next(
             record for record in kernel.discover() if record.name == "status_commands"
         )
-        assert record.manifest.is_v2
+        assert record.manifest.api == 2
         assert record.manifest.dependencies == ()
         assert record.manifest.optional_dependencies == ("observe",)
         assert set(record.manifest.capabilities) == {

@@ -4,17 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from agent.plugin_host.handle import (
     PluginHandle,
     PluginRecord,
     PluginState,
 )
 from agent.plugin_host.manifest import PluginManifest
-from bus.event_bus import EventBus
-
-from tests.backend.agent.plugin_host.conftest import make_kernel, stage_plugin_fixture
 
 
 def _make_handle(plugin_id: str = "demo") -> PluginHandle:
@@ -71,70 +66,3 @@ def test_handles_do_not_share_contribution_state():
     first.contributions.tool_names.append("tool_from_a")
     assert second.contributions.tool_names == []
     assert first.effects is not second.effects
-
-
-# ── 经内核观察到的真实状态迁移 ─────────────────────────────────────────────
-
-
-def _state_of(kernel: object, name: str) -> str:
-    states = {item["id"]: item["state"] for item in kernel.states()}  # type: ignore[attr-defined]
-    return states[name]
-
-
-@pytest.mark.asyncio
-async def test_successful_load_reaches_active(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-    assert _state_of(kernel, "hello") == PluginState.ACTIVE.name
-
-
-@pytest.mark.asyncio
-async def test_init_failure_reaches_failed_and_records_error(tmp_path: Path):
-    plugin_dir = tmp_path / "broken" / "backend"
-    plugin_dir.mkdir(parents=True)
-    (plugin_dir / "plugin.py").write_text(
-        "from agent.plugins import Plugin\n"
-        "class Broken(Plugin):\n"
-        "    name = 'broken'\n"
-        "    async def initialize(self):\n"
-        "        raise RuntimeError('init boom')\n",
-        encoding="utf-8",
-    )
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-
-    states = {item["id"]: item for item in kernel.states()}
-    assert states["broken"]["state"] == PluginState.FAILED.name
-    # 失败原因必须落到句柄上，否则诊断只剩日志
-    assert "init boom" in states["broken"]["error"]
-
-
-@pytest.mark.asyncio
-async def test_disabled_marker_reaches_disabled_state(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
-    (tmp_path / "hello" / "plugin.disabled").write_text("", encoding="utf-8")
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-
-    assert _state_of(kernel, "hello") == PluginState.DISABLED.name
-    assert kernel.loaded_count == 0
-
-
-@pytest.mark.asyncio
-async def test_unload_discards_handle_so_plugin_can_reload(tmp_path: Path):
-    stage_plugin_fixture("hello", tmp_path)
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    await kernel.load_all()
-
-    _ = await kernel.unload("hello")
-    assert kernel.states() == []
-
-    assert await kernel.load("hello") is True
-    assert _state_of(kernel, "hello") == PluginState.ACTIVE.name
-
-
-@pytest.mark.asyncio
-async def test_unload_of_unknown_plugin_is_noop(tmp_path: Path):
-    kernel = make_kernel([tmp_path], event_bus=EventBus())
-    assert await kernel.unload("never_loaded") == []

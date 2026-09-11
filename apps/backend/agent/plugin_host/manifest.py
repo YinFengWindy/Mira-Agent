@@ -1,4 +1,4 @@
-"""插件 manifest：v2 插件必备的声明文件，legacy 插件由适配器合成隐式 manifest。"""
+"""插件 manifest：显式声明版本、身份及所需宿主能力。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# v1 首批 capability 名称；manifest 只能声明这里列出的能力
+# manifest 只能声明这里列出的宿主能力
 KNOWN_CAPABILITIES = frozenset(
     {
         "tools",
@@ -49,9 +49,6 @@ KNOWN_CAPABILITIES = frozenset(
     }
 )
 
-# legacy Plugin ABC 经适配器运行时隐式获得全部能力（旧 PluginContext 语义）
-LEGACY_CAPABILITIES = tuple(sorted(KNOWN_CAPABILITIES))
-
 # 插件包布局为 plugins/<id>/{backend,ui,tests}/，后端入口固定在 backend/ 下
 DEFAULT_ENTRY = "backend/plugin.py"
 
@@ -76,19 +73,14 @@ class PluginManifest:
     dependencies: tuple[str, ...] = ()
     # Optional APIs never cause provider activation or dependent teardown.
     optional_dependencies: tuple[str, ...] = ()
-    api: int = 1
+    api: int = 2
     metadata: dict[str, object] = field(default_factory=dict)
-
-    @property
-    def is_v2(self) -> bool:
-        return self.api >= 2
 
 
 def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     """读取 manifest.yaml；不存在返回 None，格式非法抛 ManifestError。
 
-    只有显式声明 ``api: 2`` 的 manifest 才按 v2 契约解析；
-    只含 name/version/desc/author 的旧四字段 manifest 保持 legacy 元信息覆盖语义。
+    只接受显式 ``api: 2``；没有 manifest 的目录不属于插件。
     """
     manifest_path = plugin_dir / "manifest.yaml"
     if not manifest_path.exists():
@@ -99,9 +91,11 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     if not isinstance(loaded, dict):
         raise ManifestError(f"manifest.yaml 格式错误，期望 dict: {manifest_path}")
     raw: dict[str, object] = loaded
-    api = int(str(raw.get("api", 1)))
+    if raw.get("api") != 2 or isinstance(raw.get("api"), bool):
+        raise ManifestError(f"插件必须显式声明 api: 2: {manifest_path}")
+    api = 2
     plugin_id = str(raw.get("id") or raw.get("name") or plugin_dir.name)
-    capabilities = _parse_capabilities(raw, manifest_path, required=api >= 2)
+    capabilities = _parse_capabilities(raw, manifest_path)
     dependencies = _parse_dependencies(raw, "dependencies")
     optional_dependencies = _parse_dependencies(raw, "optional_dependencies")
     if set(dependencies) & set(optional_dependencies):
@@ -123,24 +117,10 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     )
 
 
-def synthesize_legacy_manifest(plugin_dir: Path) -> PluginManifest:
-    """为无 manifest（或旧四字段 manifest）的 legacy 插件合成隐式 manifest。"""
-    return PluginManifest(
-        id=plugin_dir.name,
-        entry=DEFAULT_ENTRY,
-        capabilities=LEGACY_CAPABILITIES,
-        api=1,
-    )
-
-
-def _parse_capabilities(
-    raw: dict[str, object], manifest_path: Path, *, required: bool
-) -> tuple[str, ...]:
+def _parse_capabilities(raw: dict[str, object], manifest_path: Path) -> tuple[str, ...]:
     value = raw.get("capabilities")
     if value is None:
-        if required:
-            raise ManifestError(f"v2 manifest 缺少 capabilities 声明: {manifest_path}")
-        return LEGACY_CAPABILITIES
+        raise ManifestError(f"v2 manifest 缺少 capabilities 声明: {manifest_path}")
     if not isinstance(value, list):
         raise ManifestError(f"capabilities 必须是列表: {manifest_path}")
     names = tuple(str(item) for item in value)
