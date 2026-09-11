@@ -95,7 +95,7 @@ async def test_trigger_memory_consolidation_uses_real_entrypoint(tmp_path: Path)
     assert maintenance.consolidate_calls[0].session is session
     assert maintenance.consolidate_calls[0].archive_all is False
     assert maintenance.consolidate_calls[0].force is False
-    loop.session_manager.save_async.assert_awaited_once_with(session)
+    loop.session_manager.save_async.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -116,11 +116,13 @@ async def test_trigger_memory_consolidation_force_runs_below_threshold(tmp_path:
     assert maintenance.consolidate_calls[0].session is session
     assert maintenance.consolidate_calls[0].archive_all is False
     assert maintenance.consolidate_calls[0].force is True
-    loop.session_manager.save_async.assert_awaited_once_with(session)
+    loop.session_manager.save_async.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_trigger_memory_consolidation_returns_false_when_not_needed(tmp_path: Path):
+async def test_trigger_memory_consolidation_returns_false_when_not_needed(
+    tmp_path: Path,
+):
     loop = _make_loop(tmp_path)
     session = SimpleNamespace(
         key="cli:test",

@@ -26,12 +26,14 @@ from .projection import _ProjectionMixin
 from .role_sessions import _RoleSessionsMixin
 from .undo_result import UndoSessionResult
 from .undo import _UndoMixin
+from .consolidation import ConsolidationCommitRequest, _ConsolidationMixin
 
 Session.__module__ = __name__
 
 
 class SessionManager(
     _UndoMixin,
+    _ConsolidationMixin,
     _RoleSessionsMixin,
     _PersistenceMixin,
     _ProjectionMixin,
