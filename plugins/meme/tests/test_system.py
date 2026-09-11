@@ -1,4 +1,5 @@
 """Unit tests for plugins/meme/backend/runtime.py."""
+
 import importlib.util
 import json
 import sys
@@ -8,11 +9,11 @@ from typing import Any
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_meme_runtime() -> Any:
-    path = REPO_ROOT / "plugins" / "meme" / "backend" / "runtime.py"
+    path = PLUGIN_DIR / "backend" / "runtime.py"
     spec = importlib.util.spec_from_file_location("test_meme_runtime", path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))
@@ -52,7 +53,9 @@ def add_image(memes_dir: Path, category: str, name: str = "001.png") -> Path:
     return img
 
 
-def test_load_common_emojis_prefers_packaged_resource(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_common_emojis_prefers_packaged_resource(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     packaged_root = tmp_path / "packaged"
     packaged_root.mkdir()
     (packaged_root / "common_emojis.json").write_text(
@@ -61,7 +64,15 @@ def test_load_common_emojis_prefers_packaged_resource(tmp_path: Path, monkeypatc
     )
     workspace = tmp_path / "workspace"
     (workspace / "apps" / "desktop" / "renderer" / "src" / "chat").mkdir(parents=True)
-    (workspace / "apps" / "desktop" / "renderer" / "src" / "chat" / "common_emojis.json").write_text(
+    (
+        workspace
+        / "apps"
+        / "desktop"
+        / "renderer"
+        / "src"
+        / "chat"
+        / "common_emojis.json"
+    ).write_text(
         json.dumps([{"name": "heart", "value": "<workspace-heart>"}]),
         encoding="utf-8",
     )
@@ -80,20 +91,26 @@ def test_catalog_no_manifest_returns_empty(memes_dir: Path) -> None:
 
 
 def test_catalog_loads_enabled_categories(memes_dir: Path) -> None:
-    write_manifest(memes_dir, {
-        "happy": {"desc": "开心", "aliases": [], "enabled": True},
-        "angry": {"desc": "生气", "aliases": [], "enabled": True},
-    })
+    write_manifest(
+        memes_dir,
+        {
+            "happy": {"desc": "开心", "aliases": [], "enabled": True},
+            "angry": {"desc": "生气", "aliases": [], "enabled": True},
+        },
+    )
     catalog = MemeCatalog(memes_dir)
     names = {c.name for c in catalog.get_enabled_categories()}
     assert names == {"happy", "angry"}
 
 
 def test_catalog_filters_disabled_categories(memes_dir: Path) -> None:
-    write_manifest(memes_dir, {
-        "happy": {"desc": "开心", "enabled": True},
-        "hidden": {"desc": "隐藏", "enabled": False},
-    })
+    write_manifest(
+        memes_dir,
+        {
+            "happy": {"desc": "开心", "enabled": True},
+            "hidden": {"desc": "隐藏", "enabled": False},
+        },
+    )
     catalog = MemeCatalog(memes_dir)
     names = {c.name for c in catalog.get_enabled_categories()}
     assert names == {"happy"}
@@ -101,10 +118,13 @@ def test_catalog_filters_disabled_categories(memes_dir: Path) -> None:
 
 
 def test_catalog_prompt_block_contains_categories(memes_dir: Path) -> None:
-    write_manifest(memes_dir, {
-        "agree": {"desc": "收到、同意", "enabled": True},
-        "shy": {"desc": "害羞", "enabled": True},
-    })
+    write_manifest(
+        memes_dir,
+        {
+            "agree": {"desc": "收到、同意", "enabled": True},
+            "shy": {"desc": "害羞", "enabled": True},
+        },
+    )
     catalog = MemeCatalog(memes_dir)
     block = catalog.build_prompt_block()
     assert block is not None
@@ -128,10 +148,15 @@ def test_catalog_reloads_after_manifest_change(memes_dir: Path) -> None:
     time.sleep(0.01)
     manifest = memes_dir / "manifest.json"
     manifest.write_text(
-        json.dumps({"version": 1, "categories": {
-            "happy": {"desc": "开心", "enabled": True},
-            "shy": {"desc": "害羞", "enabled": True},
-        }}),
+        json.dumps(
+            {
+                "version": 1,
+                "categories": {
+                    "happy": {"desc": "开心", "enabled": True},
+                    "shy": {"desc": "害羞", "enabled": True},
+                },
+            }
+        ),
         encoding="utf-8",
     )
     # Touch to guarantee mtime change on low-resolution filesystems
@@ -162,12 +187,18 @@ def test_catalog_does_not_reload_without_mtime_change(memes_dir: Path) -> None:
     manifest = memes_dir / "manifest.json"
     original_mtime = manifest.stat().st_mtime
     manifest.write_text(
-        json.dumps({"version": 1, "categories": {
-            "surprise": {"desc": "惊讶", "enabled": True},
-        }}),
+        json.dumps(
+            {
+                "version": 1,
+                "categories": {
+                    "surprise": {"desc": "惊讶", "enabled": True},
+                },
+            }
+        ),
         encoding="utf-8",
     )
     import os
+
     os.utime(manifest, (original_mtime, original_mtime))
 
     names = {c.name for c in catalog.get_enabled_categories()}
@@ -218,7 +249,9 @@ def test_pick_image_case_insensitive(memes_dir: Path) -> None:
 # ── MemeDecorator ─────────────────────────────────────────────────────────────
 
 
-def _make_decorator(memes_dir: Path, category: str, with_image: bool = True) -> MemeDecorator:
+def _make_decorator(
+    memes_dir: Path, category: str, with_image: bool = True
+) -> MemeDecorator:
     write_manifest(memes_dir, {category: {"desc": "test", "enabled": True}})
     if with_image:
         add_image(memes_dir, category)
@@ -263,10 +296,13 @@ def test_decorator_empty_dir_has_no_media(memes_dir: Path) -> None:
 
 
 def test_decorator_picks_image_for_parsed_tag(memes_dir: Path) -> None:
-    write_manifest(memes_dir, {
-        "happy": {"desc": "开心", "enabled": True},
-        "agree": {"desc": "同意", "enabled": True},
-    })
+    write_manifest(
+        memes_dir,
+        {
+            "happy": {"desc": "开心", "enabled": True},
+            "agree": {"desc": "同意", "enabled": True},
+        },
+    )
     add_image(memes_dir, "happy", "001.png")
     add_image(memes_dir, "agree", "001.png")
     catalog = MemeCatalog(memes_dir)
@@ -295,10 +331,15 @@ def test_decorator_reflects_hot_reload(memes_dir: Path) -> None:
     time.sleep(0.01)
     manifest = memes_dir / "manifest.json"
     manifest.write_text(
-        json.dumps({"version": 1, "categories": {
-            "happy": {"desc": "开心", "enabled": True},
-            "shy": {"desc": "害羞", "enabled": True},
-        }}),
+        json.dumps(
+            {
+                "version": 1,
+                "categories": {
+                    "happy": {"desc": "开心", "enabled": True},
+                    "shy": {"desc": "害羞", "enabled": True},
+                },
+            }
+        ),
         encoding="utf-8",
     )
     manifest.touch()
@@ -306,3 +347,13 @@ def test_decorator_reflects_hot_reload(memes_dir: Path) -> None:
 
     result = dec.decorate("害羞一下", meme_tag="shy")
     assert len(result.media) == 1, "热更新后新类别应立即可用"
+
+
+def test_load_common_emojis_prefers_workspace_override(tmp_path: Path) -> None:
+    asset = tmp_path / "apps/desktop/renderer/src/chat/common_emojis.json"
+    asset.parent.mkdir(parents=True)
+    asset.write_text(
+        '[{"name": "heart", "value": "workspace override"}]', encoding="utf-8"
+    )
+
+    assert load_common_emojis(tmp_path) == {"heart": "workspace override"}

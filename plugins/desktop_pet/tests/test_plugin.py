@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 import tempfile
 import threading
 from pathlib import Path
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
 from core.roles.store import RolePetPackage, RoleStore
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
@@ -25,7 +25,7 @@ def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "desktop_pet"
-        shutil.copytree(_REPO_ROOT / "plugins" / "desktop_pet", plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel
@@ -113,9 +113,10 @@ def test_binding_get_returns_the_selected_package(tmp_path: Path) -> None:
     assert package["display_name"] == "Pet"
     # Absolute, and named `spritesheet_abs` so the desktop bridge grants it a
     # `shiori-asset://` URL on the way to the renderer.
-    assert Path(package["spritesheet_abs"]) == (
-        store.roles_dir / "assets/mira/pets/pet-1/spritesheet.webp"
-    ).resolve()
+    assert (
+        Path(package["spritesheet_abs"])
+        == (store.roles_dir / "assets/mira/pets/pet-1/spritesheet.webp").resolve()
+    )
 
 
 def test_binding_get_ignores_a_role_whose_pet_is_switched_off(tmp_path: Path) -> None:
@@ -150,6 +151,7 @@ def test_binding_get_reports_nothing_when_no_role_has_a_pet(tmp_path: Path) -> N
     assert resolved is not None
 
     assert asyncio.run(resolved[1]({})) == {"binding": None}
+
 
 def _resolve(kernel: PluginKernel, method: str):
     resolved = kernel.rpc.resolve(f"plugin.desktop_pet.{method}")
@@ -191,7 +193,9 @@ def test_a_plugin_write_waits_on_the_host_role_lock(tmp_path: Path) -> None:
         )
 
     worker.join(timeout=5)
-    assert finished.is_set(), "the plugin write never completed after the lock was released"
+    assert (
+        finished.is_set()
+    ), "the plugin write never completed after the lock was released"
 
 
 def test_pets_list_returns_the_rows_roles_list_used_to_carry(tmp_path: Path) -> None:
@@ -247,7 +251,9 @@ def test_pet_rpc_requires_the_ids_it_acts_on(tmp_path: Path) -> None:
             asyncio.run(_resolve(kernel, method)(payload))
 
 
-def test_every_pet_method_disappears_when_the_plugin_is_unloaded(tmp_path: Path) -> None:
+def test_every_pet_method_disappears_when_the_plugin_is_unloaded(
+    tmp_path: Path,
+) -> None:
     store = RoleStore(tmp_path)
     _bind_pet(tmp_path, store=store)
     kernel = _load_desktop_pet_plugin(services=_services(tmp_path, store))

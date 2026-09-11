@@ -14,7 +14,7 @@ import pytest
 from agent.config import load_config_text
 from agent.plugin_host.handle import PluginState
 from bootstrap.app import AppRuntime, RuntimeFeatures
-from conftest import stage_plugin_fixture
+from tests.support.plugin_fixtures import stage_plugin_fixture
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -46,7 +46,10 @@ def _config() -> str:
 
 
 def _stage_plugin_dirs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, with_rpc_demo: bool = False,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    with_rpc_demo: bool = False,
 ) -> None:
     root = tmp_path / "plugin_dirs"
     shutil.copytree(_QQBOT_PLUGIN_DIR, root / "qqbot")
@@ -58,15 +61,22 @@ def _stage_plugin_dirs(
         (rpc_demo_dir / "backend" / "plugin.py").write_text(
             _RPC_DEMO_PLUGIN_PY, encoding="utf-8"
         )
-        (rpc_demo_dir / "manifest.yaml").write_text(_RPC_DEMO_MANIFEST, encoding="utf-8")
-    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
+        (rpc_demo_dir / "manifest.yaml").write_text(
+            _RPC_DEMO_MANIFEST, encoding="utf-8"
+        )
+    monkeypatch.setattr(
+        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
+    )
 
 
-async def _start_service(tmp_path: Path) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
+async def _start_service(
+    tmp_path: Path,
+) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
     path = tmp_path / "config.toml"
     path.write_text(_config(), encoding="utf-8")
     app = AppRuntime(
-        load_config_text(_config()), tmp_path,
+        load_config_text(_config()),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -79,7 +89,6 @@ async def _request(service: ReloadableDesktopService, method: str, payload=None)
         {"id": method, "method": method, "payload": payload or {}},
         emit_event=lambda event: None,
     )
-
 
 
 @pytest.mark.asyncio
@@ -107,7 +116,9 @@ async def test_plugin_events_are_forwarded_only_by_their_owning_generation(
 
 
 @pytest.mark.asyncio
-async def test_list_reports_every_discovered_plugin_enabled_by_default(tmp_path, monkeypatch):
+async def test_list_reports_every_discovered_plugin_enabled_by_default(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, _, app = await _start_service(tmp_path)
     try:
@@ -126,13 +137,21 @@ async def test_list_reports_every_discovered_plugin_enabled_by_default(tmp_path,
 
 
 @pytest.mark.asyncio
-async def test_set_enabled_false_disables_immediately_and_survives_a_restart(tmp_path, monkeypatch):
+async def test_set_enabled_false_disables_immediately_and_survives_a_restart(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
-        response = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": False, "operation_id": "op-disable",
-        })
+        response = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": False,
+                "operation_id": "op-disable",
+            },
+        )
         assert response.error is None, response.error
         assert response.payload["enabled"] is False
         assert "generation" in response.payload
@@ -153,11 +172,14 @@ async def test_set_enabled_false_disables_immediately_and_survives_a_restart(tmp
     restarted = load_config_text(path.read_text(encoding="utf-8"))
     assert restarted.plugins["hello"]["enabled"] is False
     restarted_app = AppRuntime(
-        restarted, tmp_path,
+        restarted,
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await restarted_app.start()
-    restarted_service = ReloadableDesktopService(restarted_app, path, RoleStore(tmp_path))
+    restarted_service = ReloadableDesktopService(
+        restarted_app, path, RoleStore(tmp_path)
+    )
     try:
         response_after_restart = await _request(restarted_service, "plugins.list")
         by_id = {item["id"]: item for item in response_after_restart.payload["plugins"]}
@@ -169,7 +191,9 @@ async def test_set_enabled_false_disables_immediately_and_survives_a_restart(tmp
 
 
 @pytest.mark.asyncio
-async def test_disabling_a_plugin_makes_its_rpc_method_immediately_uncallable(tmp_path, monkeypatch):
+async def test_disabling_a_plugin_makes_its_rpc_method_immediately_uncallable(
+    tmp_path, monkeypatch
+):
     """端到端证明验收标准 3：不是只看 plugins.list 的 state，而是真的调不通了。
 
     此前只断言 ``plugins.list`` 里的 state 变成 DISABLED，注释里推断"RPC/工具
@@ -186,9 +210,15 @@ async def test_disabling_a_plugin_makes_its_rpc_method_immediately_uncallable(tm
         assert before.error is None, before.error
         assert before.payload == {"pong": 1}
 
-        disabled = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "rpc_demo", "enabled": False, "operation_id": "op-disable-rpc",
-        })
+        disabled = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "rpc_demo",
+                "enabled": False,
+                "operation_id": "op-disable-rpc",
+            },
+        )
         assert disabled.error is None, disabled.error
 
         after = await _request(service, "plugin.rpc_demo.ping", {"value": 1})
@@ -219,13 +249,23 @@ async def test_set_enabled_publishes_runtime_applied(tmp_path, monkeypatch):
     published: list[dict] = []
     service.add_event_listener(lambda event: published.append(event))
     try:
-        response = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": False, "operation_id": "op-disable",
-        })
+        response = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": False,
+                "operation_id": "op-disable",
+            },
+        )
         assert response.error is None, response.error
 
-        applied = [event for event in published if event.get("method") == "runtime.applied"]
-        assert len(applied) == 1, f"expected exactly one runtime.applied, got {published}"
+        applied = [
+            event for event in published if event.get("method") == "runtime.applied"
+        ]
+        assert (
+            len(applied) == 1
+        ), f"expected exactly one runtime.applied, got {published}"
         # The published payload is the exact response payload (plugin_id,
         # enabled, generation, changed) — the same object `set_enabled`
         # returned to the caller, not a re-derived subset of it.
@@ -252,16 +292,30 @@ async def test_list_does_not_publish_runtime_applied(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_set_enabled_re_enables_a_previously_disabled_plugin(tmp_path, monkeypatch):
+async def test_set_enabled_re_enables_a_previously_disabled_plugin(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, _, app = await _start_service(tmp_path)
     try:
-        await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": False, "operation_id": "op-1",
-        })
-        response = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": True, "operation_id": "op-2",
-        })
+        await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": False,
+                "operation_id": "op-1",
+            },
+        )
+        response = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": True,
+                "operation_id": "op-2",
+            },
+        )
 
         assert response.error is None, response.error
         after = await _request(service, "plugins.list")
@@ -274,15 +328,23 @@ async def test_set_enabled_re_enables_a_previously_disabled_plugin(tmp_path, mon
 
 
 @pytest.mark.asyncio
-async def test_set_enabled_rejects_an_unknown_plugin_and_writes_nothing(tmp_path, monkeypatch):
+async def test_set_enabled_rejects_an_unknown_plugin_and_writes_nothing(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
         before = path.read_text(encoding="utf-8")
 
-        response = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "does-not-exist", "enabled": False, "operation_id": "op-1",
-        })
+        response = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "does-not-exist",
+                "enabled": False,
+                "operation_id": "op-1",
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_not_found"
@@ -293,21 +355,39 @@ async def test_set_enabled_rejects_an_unknown_plugin_and_writes_nothing(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_set_enabled_requires_plugin_id_operation_id_and_a_boolean(tmp_path, monkeypatch):
+async def test_set_enabled_requires_plugin_id_operation_id_and_a_boolean(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
         before = path.read_text(encoding="utf-8")
 
-        missing_plugin_id = await _request(service, "plugins.setEnabled", {
-            "enabled": False, "operation_id": "op-1",
-        })
-        missing_operation_id = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": False,
-        })
-        non_boolean_enabled = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "hello", "enabled": "false", "operation_id": "op-2",
-        })
+        missing_plugin_id = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "enabled": False,
+                "operation_id": "op-1",
+            },
+        )
+        missing_operation_id = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": False,
+            },
+        )
+        non_boolean_enabled = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "hello",
+                "enabled": "false",
+                "operation_id": "op-2",
+            },
+        )
 
         assert missing_plugin_id.error.code == "runtime_invalid_request"
         assert missing_operation_id.error.code == "runtime_invalid_request"
@@ -331,16 +411,32 @@ async def test_writing_plugin_config_preserves_the_enabled_flag(tmp_path, monkey
     try:
         # 先停用再启用，让 enabled 以显式形式落进配置表
         for index, flag in enumerate((False, True)):
-            toggled = await _request(service, "plugins.setEnabled", {
-                "plugin_id": "qqbot", "enabled": flag, "operation_id": f"op-toggle-{index}",
-            })
+            toggled = await _request(
+                service,
+                "plugins.setEnabled",
+                {
+                    "plugin_id": "qqbot",
+                    "enabled": flag,
+                    "operation_id": f"op-toggle-{index}",
+                },
+            )
             assert toggled.error is None, toggled.error
-        assert load_config_text(path.read_text(encoding="utf-8")).plugins["qqbot"]["enabled"] is True
+        assert (
+            load_config_text(path.read_text(encoding="utf-8")).plugins["qqbot"][
+                "enabled"
+            ]
+            is True
+        )
 
-        written = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-config",
-            "values": {"app_id": "app-123", "client_secret": "secret-xyz"},
-        })
+        written = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-config",
+                "values": {"app_id": "app-123", "client_secret": "secret-xyz"},
+            },
+        )
         assert written.error is None, written.error
     finally:
         await service.aclose()
@@ -362,15 +458,27 @@ async def test_a_disabled_plugin_cannot_have_its_config_written(tmp_path, monkey
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
-        disabled = await _request(service, "plugins.setEnabled", {
-            "plugin_id": "qqbot", "enabled": False, "operation_id": "op-disable",
-        })
+        disabled = await _request(
+            service,
+            "plugins.setEnabled",
+            {
+                "plugin_id": "qqbot",
+                "enabled": False,
+                "operation_id": "op-disable",
+            },
+        )
         assert disabled.error is None, disabled.error
         before = path.read_text(encoding="utf-8")
 
-        written = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-config", "values": {"app_id": "x"},
-        })
+        written = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-config",
+                "values": {"app_id": "x"},
+            },
+        )
 
         assert written.error is not None
         assert written.error.code == "plugin_config_unsupported"

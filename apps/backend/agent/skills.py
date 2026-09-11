@@ -4,8 +4,10 @@ import re
 import shutil
 from pathlib import Path
 
-# 内置技能目录（项目 skills/ 文件夹）
-BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+from bootstrap.paths import builtin_skills_path
+
+# Canonical source, installed wheel, or frozen-bundle skills.
+BUILTIN_SKILLS_DIR = builtin_skills_path()
 
 
 class SkillsLoader:

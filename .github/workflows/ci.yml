@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install --upgrade pip uv
           .venv/bin/python -m pip install -r apps/backend/requirements/production.txt
           .venv/bin/python -m pip install -r apps/backend/requirements/development.txt
 
@@ -38,9 +38,26 @@ jobs:
           PYTHONWARNINGS: "ignore:.*AbstractEventLoopPolicy.*:DeprecationWarning"
         run: |
           # 不显式传路径：显式路径会覆盖 pytest.ini 的 testpaths
-          # （tests/backend plugins），导致搬到 plugins/*/tests/ 的用例在 CI
-          # 里一个都不会被收集（#178 复审 #1）。
+          # （宿主、plugins/*/tests/ 与 packages/plugin-testkit/tests），
+          # 避免遗漏插件或公开 testkit 的用例（#178、#215）。
           .venv/bin/pytest -q -W error
+
+      - name: Verify portable plugin tests
+        timeout-minutes: 20
+        run: .venv/bin/python scripts/verify_plugin_tests.py --output "${{ runner.temp }}/plugin-isolation"
+
+      - name: Upload plugin isolation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-isolation-evidence
+          path: |
+            ${{ runner.temp }}/plugin-isolation/*.log
+            ${{ runner.temp }}/plugin-isolation/*.txt
+            ${{ runner.temp }}/plugin-isolation/results.json
+            ${{ runner.temp }}/plugin-isolation/cases/*/*.log
+            ${{ runner.temp }}/plugin-isolation/cases/*/provenance.json
+          if-no-files-found: ignore
 
   desktop-check-and-test:
     runs-on: ubuntu-latest

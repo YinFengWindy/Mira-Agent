@@ -7,13 +7,13 @@ from pathlib import Path
 from agent.config import Config
 from agent.memory import MemoryStore
 from bootstrap.memory import ensure_memory_plugin_storage
-from bootstrap.paths import REPOSITORY_ROOT
+from bootstrap.paths import resource_root
 from infra.persistence.json_store import save_json
 from proactive_v2.anyaction import QuotaStore
 from session.store import SessionStore
 
 # Canonical template copied into the user-owned workspace during setup.
-CONFIG_TEMPLATE_PATH = REPOSITORY_ROOT / "config" / "examples" / "config.example.toml"
+CONFIG_TEMPLATE_PATH = resource_root() / "config" / "examples" / "config.example.toml"
 
 _TEXT_FILES: dict[str, str] = {}
 
@@ -42,7 +42,9 @@ class InitSummary:
     next_steps: list[str] = field(default_factory=list)
 
 
-def _write_text_file(path: Path, content: str, *, force: bool, summary: InitSummary) -> None:
+def _write_text_file(
+    path: Path, content: str, *, force: bool, summary: InitSummary
+) -> None:
     existed = path.exists()
     if existed and not force:
         summary.skipped.append(path)
@@ -55,7 +57,9 @@ def _write_text_file(path: Path, content: str, *, force: bool, summary: InitSumm
         summary.created.append(path)
 
 
-def _write_json_file(path: Path, payload: object, *, force: bool, summary: InitSummary) -> None:
+def _write_json_file(
+    path: Path, payload: object, *, force: bool, summary: InitSummary
+) -> None:
     existed = path.exists()
     if existed and not force:
         summary.skipped.append(path)
@@ -159,7 +163,9 @@ def _ensure_workspace_db_assets(
                 else:
                     summary.created.append(path)
         else:
-            summary.notes.append("当前 memory engine 未声明 init 预创建逻辑，跳过语义记忆库。")
+            summary.notes.append(
+                "当前 memory engine 未声明 init 预创建逻辑，跳过语义记忆库。"
+            )
     else:
         summary.notes.append("memory.enabled = false，未预创建语义记忆库。")
 
@@ -188,9 +194,9 @@ def init_workspace(
     summary.notes.append(f"工作区已初始化: {workspace}")
     summary.next_steps = [
         f"1. 编辑 {config_path}，填写以下必填项：",
-        "     [[llm.registrations]]  api_key = \"sk-...\"",
-        "     [channels.telegram]  token = \"...\"   （或配置 QQ 频道）",
-        "     [memory.embedding]  api_key = \"sk-...\"",
+        '     [[llm.registrations]]  api_key = "sk-..."',
+        '     [channels.telegram]  token = "..."   （或配置 QQ 频道）',
+        '     [memory.embedding]  api_key = "sk-..."',
         "2. 运行 uv run python apps/backend/main.py 启动。",
         "3. 向 bot 发一条消息，确认对话正常后，可在 config.toml 开启 proactive。",
     ]

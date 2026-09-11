@@ -1,7 +1,13 @@
 import json
+import importlib
+import sys
+from pathlib import Path
+
+import pytest
 import tomllib
 
 from bootstrap import init_workspace as workspace_init
+from bootstrap.paths import REPOSITORY_ROOT
 
 
 def test_init_workspace_creates_expected_assets(tmp_path):
@@ -23,9 +29,9 @@ def test_init_workspace_creates_expected_assets(tmp_path):
     assert (workspace / "memory" / "consolidation_writes.db").exists()
     assert (workspace / "memory" / "journal").is_dir()
     assert (workspace / "memory" / "memory2.db").exists()
-    assert json.loads(
-        (workspace / "mcp_servers.json").read_text(encoding="utf-8")
-    ) == {"servers": {}}
+    assert json.loads((workspace / "mcp_servers.json").read_text(encoding="utf-8")) == {
+        "servers": {}
+    }
     assert json.loads(
         (workspace / "proactive_sources.json").read_text(encoding="utf-8")
     ) == {"sources": []}
@@ -48,8 +54,8 @@ def test_init_workspace_respects_force_for_text_assets(tmp_path):
         workspace=workspace,
     )
     config_text = config_path.read_text(encoding="utf-8").replace(
-        'max_iterations = 40',
-        'max_iterations = 99',
+        "max_iterations = 40",
+        "max_iterations = 99",
         1,
     )
     config_path.write_text(config_text, encoding="utf-8")
@@ -58,7 +64,7 @@ def test_init_workspace_respects_force_for_text_assets(tmp_path):
         config_path=config_path,
         workspace=workspace,
     )
-    assert 'max_iterations = 99' in config_path.read_text(encoding="utf-8")
+    assert "max_iterations = 99" in config_path.read_text(encoding="utf-8")
     assert any(path == config_path for path in summary_skip.skipped)
 
     summary_force = workspace_init.init_workspace(
@@ -69,3 +75,41 @@ def test_init_workspace_respects_force_for_text_assets(tmp_path):
     assert "[llm]" in config_path.read_text(encoding="utf-8")
     assert any(path == config_path for path in summary_force.overwritten)
 
+
+def test_frozen_workspace_copies_the_bundled_template(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    template = tmp_path / "bundle/config/examples/config.example.toml"
+    template.parent.mkdir(parents=True)
+    original = workspace_init.CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
+    template.write_text(original + "\n# bundled template\n", encoding="utf-8")
+    with monkeypatch.context() as scoped:
+        scoped.setattr(sys, "_MEIPASS", str(tmp_path / "bundle"), raising=False)
+        importlib.reload(workspace_init)
+        try:
+            target = tmp_path / "user/config.toml"
+            workspace_init.init_workspace(
+                config_path=target, workspace=tmp_path / "user"
+            )
+            assert target.read_bytes() == template.read_bytes()
+        finally:
+            scoped.undo()
+            importlib.reload(workspace_init)
+
+
+def test_config_example_does_not_expose_default_memory_private_config() -> None:
+    text = workspace_init.CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+    assert "[memory.embedding]" in text
+    assert "[memory.retrieval]" not in text
+    assert "[memory.gate]" not in text
+    assert "[memory.hyde]" not in text
+    assert "output_dimensionality" not in text
+    assert "[memory_v2]" not in text
+
+
+def test_mcp_servers_example_is_public_empty_configuration() -> None:
+    example_path = REPOSITORY_ROOT / "config/examples/mcp_servers.example.json"
+    payload = json.loads(example_path.read_text(encoding="utf-8"))
+
+    assert payload == {"servers": {}}

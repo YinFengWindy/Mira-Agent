@@ -38,7 +38,7 @@
 - 视图层中的派生计算（dirty 判断、header title、preview 数据、可见状态等）应优先抽到 selector / pure helper，避免散落在页面主体。
 - 每个测试文件只测试对应源文件的行为，对应关系必须一目了然：
   - TypeScript 单测与被测源文件**同目录并列**（`main.ts` / `main.test.ts`）；Electron、onboarding 这类 e2e 放 `apps/desktop/tests/`。
-  - Python 单测放 `tests/backend/`，目录结构镜像 `apps/backend/`。例外：顶层 `plugins/<id>/` 插件包的单测放 `plugins/<id>/tests/`，与插件包同目录、插件包自包含；插件后端代码位于 `plugins/<id>/backend/`（`manifest.yaml`、`README.md`、`plugin.disabled` 等包级文件留在插件根目录），两棵测试树共享仓库根的 `conftest.py`。
+  - Python 单测放 `tests/backend/`，目录结构镜像 `apps/backend/`。例外：顶层 `plugins/<id>/` 插件包的单测放 `plugins/<id>/tests/`，与插件包同目录、插件包自包含；插件后端代码位于 `plugins/<id>/backend/`（`manifest.yaml`、`README.md`、`plugin.disabled` 等包级文件留在插件根目录），宿主 fixture 归 `tests/conftest.py`；插件通过显式安装的 `shiori-plugin-testkit` 获取公共测试支持，不依赖根 conftest 或宿主测试树。独立运行见 `docs/agents/plugin-testing.md`。公共测试支持包 `packages/plugin-testkit/` 自身的单测放在 `packages/plugin-testkit/tests/`，文件名对应 `src/shiori_plugin_testkit/` 的源模块，并由根 pytest 与测试类型配置显式收集。
 - 测试要能证明问题真实存在；不要只写“会通过但证明不了什么”的测试。
 
 ## React 与状态管理
@@ -71,7 +71,7 @@
 - 发现乱码先检查文件编码与终端解码设置，必要时重存为 UTF-8。
 - 验证当轮改动的命令（PowerShell 下逐条执行，不要用 `&&` 串联）：
   - 桌面端：`pnpm test`（单测）、`pnpm typecheck`、`pnpm lint`。
-  - 后端：`uv run pytest`；testpaths 固定为 `tests/backend`，且开了 `-W error`，任何警告都会判失败。
+  - 后端：`uv run pytest`；testpaths 包括 `tests/backend`、`plugins` 和 `packages/plugin-testkit/tests`，且开了 `-W error`，任何警告都会判失败。
   - 后端类型检查有两套配置：源码用 `pyrightconfig.json`，测试用 `pyrightconfig.tests.json`（`--project` 指定）。
 - Python 代码风格走 ruff（`select = ["E4", "E7", "E9", "F"]`）+ black，line-length 88。
 - Python 命令、测试和质量工具必须使用仓库 `.venv`，禁止依赖 PATH 中的系统 Python：Windows 使用 `.venv\\Scripts\\python.exe`、`.venv\\Scripts\\pytest.exe`、`.venv\\Scripts\\ruff.exe` 等；跨平台文档和脚本统一使用 `uv run ...`。

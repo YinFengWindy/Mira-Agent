@@ -10,7 +10,7 @@ import pytest
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
-from conftest import plugin_bridge_request
+from shiori_plugin_testkit.bridge import plugin_bridge_request
 from desktop_bridge.method_policy import Concurrency
 
 
@@ -18,14 +18,27 @@ from desktop_bridge.method_policy import Concurrency
 def test_story_requires_active_novelai_and_unloads_before_it(
     tmp_path, monkeypatch, novelai_enabled
 ):
-    root = Path(__file__).resolve().parents[3]
+    from shiori_plugin_testkit.packages import plugin_directory
+
     packages = tmp_path / "packages"
     for name in ("novelai", "story"):
         shutil.copytree(
-            root / "plugins" / name / "backend", packages / name / "backend"
+            (
+                Path(__file__).resolve().parents[1]
+                if name == "story"
+                else plugin_directory(name)
+            )
+            / "backend",
+            packages / name / "backend",
         )
         shutil.copyfile(
-            root / "plugins" / name / "manifest.yaml", packages / name / "manifest.yaml"
+            (
+                Path(__file__).resolve().parents[1]
+                if name == "story"
+                else plugin_directory(name)
+            )
+            / "manifest.yaml",
+            packages / name / "manifest.yaml",
         )
     monkeypatch.setattr(
         "core.net.http.get_default_http_requester", lambda _: SimpleNamespace()
