@@ -157,3 +157,48 @@ describe("core proactive strategy settings round-trip", () => {
     assert.throws(() => loadSettingsData('[agent.proactive_strategies]\nrelationship = "false"\n'), /必须是布尔值/);
   });
 });
+
+
+describe("settings TOML comments", () => {
+  it("round-trips commented booleans and quoted hashes without changing their values", async () => {
+    configureSettingsConfigPath(join(tmpdir(), "unused-commented-settings.toml"));
+    const source = String.raw`
+[agent.proactive_strategies] # core preferences
+scene_followup = false # disabled
+relationship = true # enabled
+[channels.telegram] # channel token
+ token = "token\"#inside" # outside
+[channels.qq]
+bot_uin = 'literal#inside' # literal value
+[plugins.example]
+tags = ["item#one", "item#two"] # tags
+path = "C:\\" # escaped slash before closing quote
+`;
+    const draft = loadSettingsData(source).formData;
+    assert.deepEqual(draft.proactiveStrategies, { sceneFollowup: false, relationship: true });
+    assert.equal(draft.channels.telegramToken, 'token"#inside');
+    assert.equal(draft.channels.qqBotUin, "literal#inside");
+    assert.match(draft.advanced.pluginsRawToml, /tags = \["item#one", "item#two"\]/);
+    assert.ok(draft.advanced.pluginsRawToml.includes(String.raw`path = "C:\\"`));
+    let applyCalls = 0;
+    const result = await saveSettings(draft, async (request) => {
+      applyCalls += 1;
+      assert.match(request.config_toml, /scene_followup = false/);
+      assert.match(request.config_toml, /relationship = true/);
+      const saved = loadSettingsData(request.config_toml).formData;
+      assert.deepEqual(saved.proactiveStrategies, draft.proactiveStrategies);
+      assert.deepEqual(saved.channels, draft.channels);
+      assert.equal(saved.advanced.pluginsRawToml, draft.advanced.pluginsRawToml);
+      return { ok: true, generation: 2, changed: true };
+    });
+    assert.equal(result.ok, true);
+    assert.equal(applyCalls, 1);
+  });
+
+  for (const value of ['"false" # still a string', "'false' # still a literal string"]) {
+    it(`rejects a quoted boolean with an inline comment: ${value}`, () => {
+      configureSettingsConfigPath(join(tmpdir(), "unused-commented-settings.toml"));
+      assert.throws(() => loadSettingsData(`[agent.proactive_strategies]\nrelationship = ${value}\n`), /必须是布尔值/);
+    });
+  }
+});

@@ -34,11 +34,30 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function stripTomlLineComment(line: string): string {
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (quote !== null) {
+      if (escaped) escaped = false;
+      else if (quote === '"' && character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "#") {
+      return line.slice(0, index);
+    }
+  }
+  return line;
+}
+
 function parseTomlValue(raw: string): unknown {
   const value = raw.trim();
   if (value.startsWith("\"") && value.endsWith("\"")) {
     return JSON.parse(value);
   }
+  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1);
   if (value === "true") return true;
   if (value === "false") return false;
   if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
@@ -53,7 +72,7 @@ function parseToml(content: string): Record<string, unknown> {
   let current = root;
 
   for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
+    const line = stripTomlLineComment(rawLine).trim();
     if (!line || line.startsWith("#")) continue;
 
     if (line.startsWith("[[") && line.endsWith("]]")) {
