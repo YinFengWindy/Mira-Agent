@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import logging
 import sys
@@ -228,6 +229,10 @@ class PluginKernel:
             self._import_entry(handle)
             self._register_config_schema(handle)
             await self._setup_v2(handle)
+        except asyncio.CancelledError as e:
+            # A cancelled setup owns registrations even before it becomes ACTIVE.
+            await self._rollback_failed_load(handle, e)
+            raise
         except Exception as e:
             await self._rollback_failed_load(handle, e)
             if self._strict:
@@ -354,11 +359,13 @@ class PluginKernel:
         }
 
     async def _rollback_failed_load(
-        self, handle: PluginHandle, error: Exception
+        self, handle: PluginHandle, error: BaseException
     ) -> None:
         logger.warning("插件 %s 加载失败，回滚: %s", handle.record.name, error)
         _ = await handle.effects.dispose_all()
         handle.contributions = type(handle.contributions)()
+        handle.instance = None
+        handle.drainers.clear()
         handle.state = PluginState.FAILED
         handle.error = error
 
@@ -403,13 +410,19 @@ class PluginKernel:
             self.assert_hot_unloadable(name)
         errors: list[Exception] = []
         for handle in closure:
-            handle.state = PluginState.UNLOADING
-            errors.extend(await handle.effects.dispose_all())
-            handle.contributions = type(handle.contributions)()
-            handle.instance = None
-            handle.state = PluginState.DISPOSED
+            errors.extend(await self._dispose_handle(handle))
+        return errors
+
+    async def _dispose_handle(self, handle: PluginHandle) -> list[Exception]:
+        handle.state = PluginState.UNLOADING
+        errors = await handle.effects.dispose_all()
+        handle.contributions = type(handle.contributions)()
+        handle.instance = None
+        handle.drainers.clear()
+        handle.state = PluginState.DISPOSED
+        if handle.record.name in self._active_order:
             self._active_order.remove(handle.record.name)
-            self._handles.pop(handle.record.name, None)
+        self._handles.pop(handle.record.name, None)
         return errors
 
     async def terminate_all(self, *, force: bool = False) -> None:
@@ -419,7 +432,9 @@ class PluginKernel:
         errors: list[Exception] = []
         for name in list(self._active_order):
             errors.extend(await self.unload(name, force=True))
-        self._handles.clear()
+        # Failed/interrupted loads may own effects without an active-order entry.
+        for handle in reversed(list(self._handles.values())):
+            errors.extend(await self._dispose_handle(handle))
         if errors:
             raise ExceptionGroup("Plugin cleanup failed", errors)
 

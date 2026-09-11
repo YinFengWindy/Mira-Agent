@@ -113,3 +113,68 @@ async def test_initial_partial_core_failure_forces_unsafe_plugin_cleanup(
     assert app.core.plugin_manager.states() == []
     assert app.core.event_bus._closed
     assert app.http_resources._closed
+
+
+@pytest.mark.asyncio
+async def test_initial_setup_cancellation_releases_plugin_and_runtime(
+    tmp_path, monkeypatch
+):
+    import asyncio
+    from bootstrap.app import RuntimeFeatures
+
+    package = tmp_path / "plugins/waiting"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        "api: 2\nid: waiting\ncapabilities: [events]\nsupports_hot_unload: false\n",
+        encoding="utf-8",
+    )
+    (package / "backend/plugin.py").write_text(
+        "import asyncio\n"
+        "async def setup(ctx):\n"
+        "    state = ['started']\n"
+        "    ctx.expose(state)\n"
+        "    ctx.effect('close', lambda: state.append('closed'))\n"
+        "    async def on_event(event):\n"
+        "        return event\n"
+        "    ctx.events.on(str, on_event)\n"
+        "    await asyncio.Event().wait()\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "bootstrap.tools._resolve_plugin_dirs", lambda _: [package.parent]
+    )
+    app = AppRuntime(
+        Config(
+            provider="",
+            model="",
+            api_key="",
+            model_registrations=[],
+            memory_optimizer_enabled=False,
+        ),
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    starting = asyncio.create_task(app.start())
+
+    async def wait_for_setup():
+        while True:
+            if app.core is not None:
+                handle = app.core.plugin_manager._handles.get("waiting")
+                if handle is not None and handle.instance is not None:
+                    return handle.instance
+            if starting.done():
+                await starting
+                raise AssertionError("runtime finished without entering plugin setup")
+            await asyncio.sleep(0)
+
+    try:
+        state = await asyncio.wait_for(wait_for_setup(), timeout=10)
+        assert state == ["started"]
+    finally:
+        starting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await starting
+    assert state == ["started", "closed"]
+    assert app.core.plugin_manager.states() == []
+    assert app.core.event_bus._closed
+    assert app.http_resources._closed

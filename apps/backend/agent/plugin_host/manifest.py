@@ -49,7 +49,7 @@ DEFAULT_ENTRY = "backend/plugin.py"
 
 
 class ManifestError(Exception):
-    """manifest 缺失必填字段或声明了未知 capability。"""
+    """manifest 无法读取、解析，或声明不符合插件契约。"""
 
 
 @dataclass
@@ -80,11 +80,16 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     只接受显式 ``api: 2``；没有 manifest 的目录不属于插件。
     """
     manifest_path = plugin_dir / "manifest.yaml"
-    if not manifest_path.exists():
-        return None
     import yaml
 
-    loaded = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    try:
+        if not manifest_path.exists():
+            return None
+        loaded = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise ManifestError(
+            f"manifest.yaml 无法读取或解析: {manifest_path}: {exc}"
+        ) from exc
     if not isinstance(loaded, dict):
         raise ManifestError(f"manifest.yaml 格式错误，期望 dict: {manifest_path}")
     raw: dict[str, object] = loaded

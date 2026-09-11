@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,126 @@ from tests.backend.agent.plugin_host.conftest import (
     stage_plugin_package,
     PLUGIN_FIXTURES,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("strict", [False, True])
+async def test_setup_cancellation_rolls_back_before_force_cleanup(tmp_path, strict):
+    for name in ("active", "waiting"):
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: [events, lifecycle]\n"
+            "supports_hot_unload: false\n",
+            encoding="utf-8",
+        )
+        (package / "backend/plugin.py").write_text(
+            "import asyncio\n"
+            "async def setup(ctx):\n"
+            "    state = ['started']\n"
+            "    ctx.expose(state)\n"
+            "    ctx.effect('close', lambda: state.append('closed'))\n"
+            "    async def on_event(event):\n"
+            f"        event.append('{name}')\n"
+            "        return event\n"
+            "    ctx.events.on(list, on_event)\n"
+            "    ctx.lifecycle.contribute('before_turn', [object()])\n"
+            + ("    await asyncio.Event().wait()\n" if name == "waiting" else ""),
+            encoding="utf-8",
+        )
+    bus = EventBus()
+    kernel = make_kernel([tmp_path], event_bus=bus, strict=strict)
+    loading = asyncio.create_task(kernel.load_all())
+    await asyncio.sleep(0)
+    waiting = kernel._handles["waiting"]
+    state = waiting.instance
+    active_state = kernel._dependency_api("active")
+    assert waiting.state is PluginState.LOADING
+    assert state == ["started"]
+    assert waiting.effects.labels
+    assert len(waiting.contributions.phase_modules["before_turn"]) == 1
+    loading.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await loading
+    try:
+        assert state == ["started", "closed"]
+        assert waiting.effects.labels == []
+        assert waiting.contributions.phase_modules["before_turn"] == []
+        assert waiting.state is PluginState.FAILED
+        assert isinstance(waiting.error, asyncio.CancelledError)
+        assert await bus.emit([]) == ["active"]
+        assert active_state == ["started"]
+    finally:
+        await kernel.terminate_all(force=True)
+    assert active_state == ["started", "closed"]
+    assert state == ["started", "closed"]
+    assert await bus.emit([]) == []
+    assert kernel.states() == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_yaml_is_diagnosed_without_blocking_valid_sibling(
+    tmp_path, caplog
+):
+    from agent.plugin_host.manifest import ManifestError
+
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / "manifest.yaml").write_text("api: 2\ncapabilities: [\n", encoding="utf-8")
+    stage_plugin_package(PLUGIN_FIXTURES / "hello", tmp_path / "hello")
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    try:
+        await kernel.load_all()
+        assert kernel.loaded_count == 1
+        assert kernel.states()[0]["id"] == "hello"
+        assert "broken" in caplog.text
+        assert "manifest" in caplog.text
+    finally:
+        await kernel.terminate_all(force=True)
+    strict_kernel = make_kernel([tmp_path], event_bus=EventBus(), strict=True)
+    with pytest.raises(ManifestError, match="manifest.yaml"):
+        await strict_kernel.load_all()
+
+
+@pytest.mark.asyncio
+async def test_force_cleanup_recovers_effects_after_rollback_is_cancelled(tmp_path):
+    package = tmp_path / "waiting"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        "api: 2\ncapabilities: []\nsupports_hot_unload: false\n", encoding="utf-8"
+    )
+    (package / "backend/plugin.py").write_text(
+        "import asyncio\n"
+        "async def setup(ctx):\n"
+        "    state = {'closed': False, 'closing': asyncio.Event()}\n"
+        "    ctx.expose(state)\n"
+        "    ctx.effect('close', lambda: state.update(closed=True))\n"
+        "    async def interrupted_close():\n"
+        "        state['closing'].set()\n"
+        "        await asyncio.Event().wait()\n"
+        "    ctx.effect('interrupted', interrupted_close)\n"
+        "    await asyncio.Event().wait()\n",
+        encoding="utf-8",
+    )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    loading = asyncio.create_task(kernel.load_all())
+    await asyncio.sleep(0)
+    handle = kernel._handles["waiting"]
+    state = handle.instance
+    loading.cancel()
+    try:
+        await asyncio.wait_for(state["closing"].wait(), timeout=1)
+    finally:
+        loading.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await loading
+    assert handle.effects.labels == ["custom:close"]
+    assert not state["closed"]
+    await kernel.terminate_all(force=True)
+    assert state["closed"]
+    assert handle.effects.labels == []
+    assert kernel.states() == []
+
 
 _EXPECTED_TOP_LEVEL_PLUGINS = {
     "akasha",

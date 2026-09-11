@@ -14,6 +14,26 @@ def test_missing_manifest_returns_none(tmp_path: Path):
     assert load_manifest(tmp_path) is None
 
 
+@pytest.mark.parametrize("content", [b"api: 2\ncapabilities: [\n", b"\xff"])
+def test_manifest_wraps_invalid_yaml_and_encoding(tmp_path, content):
+    (tmp_path / "manifest.yaml").write_bytes(content)
+    with pytest.raises(ManifestError, match="manifest.yaml") as caught:
+        load_manifest(tmp_path)
+    assert caught.value.__cause__ is not None
+
+
+def test_manifest_wraps_read_failure(tmp_path, monkeypatch):
+    (tmp_path / "manifest.yaml").write_text("api: 2\n", encoding="utf-8")
+
+    def deny_read(*args, **kwargs):
+        raise PermissionError("manifest access denied")
+
+    monkeypatch.setattr(Path, "read_text", deny_read)
+    with pytest.raises(ManifestError, match="manifest.yaml") as caught:
+        load_manifest(tmp_path)
+    assert isinstance(caught.value.__cause__, PermissionError)
+
+
 @pytest.mark.parametrize(
     "api", ["", "api: 1\n", "api: 3\n", "api: true\n", "api: '2'\n"]
 )
