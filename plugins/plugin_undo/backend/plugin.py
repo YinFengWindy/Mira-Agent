@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from agent.lifecycle.types import BeforeTurnCtx
+from agent.lifecycle.commands import abort_command, normalize_command
 from agent.plugins import Plugin
 from agent.prompting import is_context_frame
 
@@ -37,10 +37,10 @@ class UndoCommandModule:
         if _CTX_SLOT in frame.slots:
             return frame
         state = frame.input
-        if _normalize_command(state.msg.content) != "/undo":
+        if normalize_command(state.msg.content) != "/undo":
             return frame
         reply = await self._plugin.undo(state.session_key)
-        frame.slots[_CTX_SLOT] = _abort_ctx(state, reply)
+        frame.slots[_CTX_SLOT] = abort_command(state, reply)
         return frame
 
 
@@ -162,10 +162,12 @@ async def _undo_last_turn(
         deleted_before = sum(1 for i in delete_indices if i < rollback_index)
         new_last = max(0, rollback_index - deleted_before)
         new_last = min(new_last, len(remaining))
-        deleted_count = session_manager._store.delete_session_messages_and_update_cursor(
-            session.key,
-            ids=deleted_ids,
-            last_consolidated=new_last,
+        deleted_count = (
+            session_manager._store.delete_session_messages_and_update_cursor(
+                session.key,
+                ids=deleted_ids,
+                last_consolidated=new_last,
+            )
         )
         if deleted_count != len(deleted_ids):
             session_manager.invalidate(session.key)
@@ -230,7 +232,9 @@ def _compute_rollback_index(
     rollback_index = min(delete_indices)
     if rollback_index >= old_last_consolidated:
         return min(old_last_consolidated, len(messages) - len(delete_indices))
-    source_ids = {str(item).strip() for item in rollback_source_ids if str(item).strip()}
+    source_ids = {
+        str(item).strip() for item in rollback_source_ids if str(item).strip()
+    }
     for index, message in enumerate(messages):
         msg_id = str(message.get("id") or "").strip()
         if msg_id and msg_id in source_ids:
@@ -257,29 +261,3 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item).strip()]
-
-
-def _normalize_command(content: str) -> str:
-    parts = (content or "").strip().split(maxsplit=1)
-    if not parts:
-        return ""
-    head = parts[0].lower()
-    if "@" in head:
-        head = head.split("@", 1)[0]
-    return head
-
-
-def _abort_ctx(state, reply: str) -> BeforeTurnCtx:
-    return BeforeTurnCtx(
-        session_key=state.session_key,
-        channel=state.msg.channel,
-        chat_id=state.msg.chat_id,
-        content=state.msg.content,
-        timestamp=state.msg.timestamp,
-        skill_names=[],
-        retrieved_memory_block="",
-        retrieval_trace_raw=None,
-        history_messages=(),
-        abort=True,
-        abort_reply=reply,
-    )
