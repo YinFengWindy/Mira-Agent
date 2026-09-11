@@ -18,14 +18,14 @@ import type { SurfaceKey } from "../surface/host.js";
 test("presence reads the three fields the host needs out of the pet's stored blob", () => {
   assert.deepEqual(
     readDesktopPetPresence({ visible: true, roleId: "mira", packageId: "pet-1", positions: {} }),
-    { visible: true, roleId: "mira", available: true },
+    { visible: true, roleId: "mira" },
   );
 });
 
-test("a pet with no package is unavailable, so the tray entry stays disabled", () => {
+test("a pet with no package is not visible, whatever the stored flag says", () => {
   assert.deepEqual(
     readDesktopPetPresence({ visible: true, roleId: "mira", packageId: null }),
-    { visible: false, roleId: "mira", available: false },
+    { visible: false, roleId: "mira" },
   );
 });
 
@@ -76,10 +76,9 @@ test("a remembered position is not a presence change, so it triggers nothing", (
 });
 
 test("every field the host reacts to counts as a change", () => {
-  const base = { visible: true, roleId: "mira", available: true };
+  const base = { visible: true, roleId: "mira" };
 
   assert.equal(desktopPetPresenceChanged(base, { ...base, visible: false }), true);
   assert.equal(desktopPetPresenceChanged(base, { ...base, roleId: "other" }), true);
-  assert.equal(desktopPetPresenceChanged(base, { ...base, available: false }), true);
   assert.equal(desktopPetPresenceChanged(base, { ...base }), false);
 });

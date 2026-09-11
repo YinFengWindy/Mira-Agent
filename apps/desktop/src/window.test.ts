@@ -12,19 +12,29 @@ class FakeWindow extends EventEmitter {
   }
 }
 
-test("main window close is hidden while the desktop pet is running", () => {
+test("main window close is hidden while any plugin surface is on screen", () => {
   assert.equal(shouldHideDesktopWindowOnClose({
     isQuitting: false,
     trayLifecycleEnabled: false,
-    desktopPetRunning: true,
+    pluginSurfacesAlive: true,
   }), true);
+});
+
+test("with no tray and no plugin surface, closing the main window really closes it", () => {
+  // Otherwise a platform without a tray lifecycle would have a window that
+  // cannot be closed and nothing left on screen to reopen it from.
+  assert.equal(shouldHideDesktopWindowOnClose({
+    isQuitting: false,
+    trayLifecycleEnabled: false,
+    pluginSurfacesAlive: false,
+  }), false);
 });
 
 test("explicit app quit still allows the main window to close", () => {
   assert.equal(shouldHideDesktopWindowOnClose({
     isQuitting: true,
     trayLifecycleEnabled: true,
-    desktopPetRunning: true,
+    pluginSurfacesAlive: true,
   }), false);
 });
 

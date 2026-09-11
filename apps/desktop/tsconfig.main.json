@@ -22,7 +22,7 @@
     "src/assets/**/*.ts",
     "src/bridge/**/*.ts",
     "src/paths.ts",
-    "src/tray.ts",
+    "src/tray/**/*.ts",
     "src/window.ts",
     "src/windowSecurity.ts",
     "src/electron-shim.d.ts"

@@ -68,6 +68,23 @@ export type PluginBackgroundStore = {
   write(value: unknown): Promise<void>;
 };
 
+/**
+ * One tray menu item owned by this plugin.
+ *
+ * A `Tray` is main-process-only, so a plugin cannot build one; it says what its
+ * item should read and is told when the user picks it. `setEntry` is
+ * create-or-update so a plugin can rewrite its own label as its state changes
+ * without the item moving in the menu.
+ *
+ * Every entry is reclaimed when the plugin is disabled, by the host rather than
+ * by the plugin — that is what makes #181's "停用桌宠插件后...托盘...全部回收"
+ * independent of disabled code getting a chance to run.
+ */
+export type PluginBackgroundTray = {
+  setEntry(entryId: string, entry: { label: string; enabled?: boolean; onClick: () => void }): void;
+  removeEntry(entryId: string): void;
+};
+
 /** Resolves trusted local paths a plugin received from its own backend. */
 export type PluginBackgroundAssets = {
   /**
@@ -110,10 +127,14 @@ export type PluginBackgroundEvents = {
 /**
  * The handle a plugin's `background/index.ts` receives in `setup(ctx)`.
  *
- * Deliberately narrow — see the issue this shipped under (#226): no `tray`
- * capability yet (that arrives with #181-D, once the pet is its first real
- * consumer), and no access to the main window's DOM or React state, because
- * this code may not even be running in the same renderer as the main window.
+ * Deliberately narrow. There is no access to the main window's DOM or React
+ * state, because this code may not even be running in the same renderer as the
+ * main window — and no general-purpose IPC, so everything a background module
+ * can reach is something listed here.
+ *
+ * `tray` arrived in #181-D with the desktop pet as its first consumer, which
+ * is the order the rest of these were added in too: a capability lands when a
+ * real plugin needs it, not ahead of one.
  */
 export type BackgroundCtx = {
   surfaces: PluginBackgroundSurfaces;
@@ -121,6 +142,7 @@ export type BackgroundCtx = {
   events: PluginBackgroundEvents;
   store: PluginBackgroundStore;
   assets: PluginBackgroundAssets;
+  tray: PluginBackgroundTray;
   /**
    * Registers a disposable side effect (a controller's `terminate()`, a
    * timer, a connection). Always disposed *after* every `events.on`

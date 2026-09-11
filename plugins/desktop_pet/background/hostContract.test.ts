@@ -50,14 +50,14 @@ test("the host reads the pet's presence out of what the plugin actually writes",
   };
   const bound = { ...normalizeDesktopPetSettings(null), ...desktopPetBindingPatch(binding, true) };
 
-  assert.deepEqual(readDesktopPetPresence(bound), { visible: true, roleId: "mira", available: true });
+  assert.deepEqual(readDesktopPetPresence(bound), { visible: true, roleId: "mira" });
   assert.deepEqual(
     readDesktopPetPresence({ ...bound, ...desktopPetBindingPatch(binding, false) }),
-    { visible: false, roleId: "mira", available: true },
+    { visible: false, roleId: "mira" },
   );
   // A pet that never got a binding: what a fresh install stores.
   assert.deepEqual(
     readDesktopPetPresence(normalizeDesktopPetSettings(null)),
-    { visible: false, roleId: null, available: false },
+    { visible: false, roleId: null },
   );
 });
