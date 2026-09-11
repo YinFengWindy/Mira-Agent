@@ -22,7 +22,6 @@ from bus.events_lifecycle import (
 from conversation.service import ConversationService
 from core.roles import (
     RoleAggregateService,
-    RolePetPackageService,
     RoleRelationshipRuntimeService,
     RoleStore,
 )
@@ -166,7 +165,6 @@ class DesktopBridgeService:
                 role_store=role_store,
             )
         )
-        self.pet_packages = RolePetPackageService(role_store)
         self.voice_service = voice_service or VoiceService(
             getattr(config, "voice", None) or VoiceConfig()
         )
@@ -199,7 +197,6 @@ class DesktopBridgeService:
             roles=DesktopRoleRequestHandler(
                 role_service=self.role_service,
                 role_store=role_store,
-                pet_packages=self.pet_packages,
                 role_presenter=self.role_presenter,
                 voice_handler=self.voice_handler,
                 card_import_service=self.role_card_import_service,

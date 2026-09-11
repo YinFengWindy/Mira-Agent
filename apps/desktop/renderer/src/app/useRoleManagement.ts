@@ -362,41 +362,29 @@ export function useRoleManagement({
     openRoleWorkspace({ kind: "role-assets", roleId: resolvedRole.id }, { recordHistory: false });
   }
 
-  async function importRolePetPackage(): Promise<void> {
+  /**
+   * Re-reads the open role after a plugin panel changed data the host stores on it.
+   *
+   * `importRolePetPackage` / `removeRolePetPackage` / `selectRolePetPackage` are
+   * gone — since #181-D the desktop pet contributes its own package manager
+   * through the `role.assets` slot and calls its own `plugin.desktop_pet.pets.*`
+   * methods, so the host neither knows what a pet package is nor routes those
+   * actions. What it *does* still own is the role record those actions mutate:
+   * `selected_pet_package_id` gates the capability toggle, and
+   * `desktop_pet_enabled` is cleared by the backend when the selected package is
+   * deleted. Without this reload the toggle stays greyed out after a successful
+   * import, and a role form holding a stale `desktop_pet_enabled: true` makes the
+   * next `roles.update` fail outright.
+   *
+   * This is the same refresh the three deleted functions each did
+   * (`loadRolesFromBridge` + `applyRoleSnapshot`), reduced to one entry point.
+   * It goes when the pet's data leaves `RoleRecord`.
+   */
+  async function refreshDetailRoleForPlugins(): Promise<void> {
     if (!detailRoleId) return;
-    const source = await window.miraDesktop.pickPetPackage();
-    if (!source) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.import", payload: { role_id: detailRoleId, source } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-  }
-
-  async function removeRolePetPackage(packageId: string): Promise<void> {
-    if (!detailRoleId) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.remove", payload: { role_id: detailRoleId, package_id: packageId } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-    await window.miraDesktop.syncPet();
-  }
-
-  async function selectRolePetPackage(packageId: string): Promise<void> {
-    if (!detailRoleId) return;
-    setSavingRoleAssets(true);
-    const response = await window.miraDesktop.invoke({ method: "roles.pets.select", payload: { role_id: detailRoleId, package_id: packageId } });
-    setSavingRoleAssets(false);
-    if (response.error) { setError(response.error.message); return; }
-    const updated = response.payload.role as RoleRecord;
-    setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-    applyRoleSnapshot(updated);
-    await window.miraDesktop.syncPet();
+    const nextRoles = await loadRolesFromBridge();
+    const updated = nextRoles?.find((role) => role.id === detailRoleId);
+    if (updated) applyRoleSnapshot(updated);
   }
 
   return {
@@ -405,9 +393,7 @@ export function useRoleManagement({
     confirmDeleteRole,
     pickRoleAssets,
     removeRoleAsset,
-    importRolePetPackage,
-    removeRolePetPackage,
-    selectRolePetPackage,
     updateRoleAssetOrganization,
+    refreshDetailRoleForPlugins,
   };
 }

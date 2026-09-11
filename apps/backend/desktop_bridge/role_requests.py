@@ -4,21 +4,25 @@ from collections.abc import Awaitable, Callable
 import inspect
 from typing import Any
 
-from core.roles import RoleAggregateService, RolePetPackageService, RoleStore
+from core.roles import RoleAggregateService, RoleStore
 
 from .role_presenter import DesktopRolePresenter
 from .voice.voice_handler import DesktopVoiceHandler
 
 
 class DesktopRoleRequestHandler:
-    """Handles role and role-owned pet bridge requests."""
+    """Handles role bridge requests.
+
+    No longer "role-owned pet" or role differences: both moved to the plugins
+    that own them (#181-D and #236 respectively), each leaving this router to
+    answer `None` so the plugin RPC dispatcher downstream picks the method up.
+    """
 
     def __init__(
         self,
         *,
         role_service: RoleAggregateService,
         role_store: RoleStore,
-        pet_packages: RolePetPackageService,
         role_presenter: DesktopRolePresenter,
         voice_handler: DesktopVoiceHandler,
         card_import_service: Any | None = None,
@@ -26,7 +30,6 @@ class DesktopRoleRequestHandler:
     ) -> None:
         self._role_service = role_service
         self._role_store = role_store
-        self._pet_packages = pet_packages
         self._role_presenter = role_presenter
         self._voice_handler = voice_handler
         self._card_import_service = card_import_service
@@ -147,35 +150,11 @@ class DesktopRoleRequestHandler:
             if deleted:
                 await self._voice_handler.retire_deleted_role(role.runtime_config)
             return {"deleted": deleted, "session_deleted": session_deleted}
-        if method == "roles.pets.import":
-            role_id = str(payload.get("role_id") or "").strip()
-            package = self._pet_packages.import_package(
-                role_id,
-                str(payload.get("source") or "").strip(),
-            )
-            role = self._role_store.get_role(role_id)
-            if role is None:
-                raise KeyError(f"role 不存在: {role_id}")
-            return {
-                "package": package.to_dict(),
-                "role": self._role_presenter.serialize(role),
-            }
-        if method == "roles.pets.remove":
-            role_id = str(payload.get("role_id") or "").strip()
-            self._pet_packages.remove_package(
-                role_id,
-                str(payload.get("package_id") or "").strip(),
-            )
-            role = self._role_store.get_role(role_id)
-            if role is None:
-                raise KeyError(f"role 不存在: {role_id}")
-            return {"role": self._role_presenter.serialize(role)}
-        if method == "roles.pets.select":
-            role = self._pet_packages.select_package(
-                str(payload.get("role_id") or "").strip(),
-                str(payload.get("package_id") or "").strip(),
-            )
-            return {"role": self._role_presenter.serialize(role)}
+        # `roles.pets.import` / `.remove` / `.select` used to live here. They are
+        # now `plugin.desktop_pet.pets.*`, registered by the plugin that owns
+        # them (#181-D), so the core bridge no longer knows what a pet package
+        # is — and the desktop's package manager, which is now plugin UI, can
+        # only reach its own namespace anyway.
         return None
 
 

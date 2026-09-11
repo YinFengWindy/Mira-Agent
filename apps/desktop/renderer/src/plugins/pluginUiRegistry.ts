@@ -5,8 +5,16 @@ import type {
   StandaloneSettingsSectionProps,
 } from "../settings/settingsPageTypes";
 
-/** The two first-batch UI extension points a plugin (or the core) can contribute to. */
-export type PluginUiSlot = "settings.section" | "nav.page";
+/**
+ * The UI extension points a plugin (or the core) can contribute to.
+ *
+ * `settings.section` and `nav.page` are #179's first batch. `role.assets`
+ * arrived with #181-D, when the desktop pet's package manager became the
+ * first real thing that had to live inside an existing host page rather than
+ * own a page of its own — which is the condition #174's scope note named
+ * ("等有真实插件需求再开") rather than a slot invented ahead of a use.
+ */
+export type PluginUiSlot = "settings.section" | "nav.page" | "role.assets";
 
 /**
  * A settings section backed by the shared settings draft (`SettingsFormData`)
@@ -81,6 +89,48 @@ export type PluginNavPageSidebarProps = {
   collapsed: boolean;
   width: number;
   onBeginResize: (event: React.PointerEvent<HTMLDivElement>) => void;
+};
+
+/**
+ * Props injected into a plugin-contributed panel on the role asset page.
+ *
+ * Deliberately just the two things a panel cannot work out for itself: which
+ * role's asset library is open, and whether the host is currently in a state
+ * where input must be refused (bridge down, or a save in flight). Everything
+ * the panel *shows* is its own data, fetched through its own
+ * `plugin.<id>.*` client — the host does not thread a plugin's domain
+ * through `RoleRecord` on its behalf, which is the coupling #181 exists to
+ * remove.
+ *
+ * `roleId` is empty when no role is open; a panel should render nothing
+ * rather than guess.
+ */
+export type PluginRoleAssetsProps = {
+  roleId: string;
+  disabled: boolean;
+  /**
+   * Tells the host this panel changed something the host still stores on the
+   * role, so it re-reads that role.
+   *
+   * Needed for as long as a plugin's data lives on `RoleRecord`. The desktop
+   * pet's `selected_pet_package_id` is the live case: the host's role capability
+   * toggle reads it, so without this a user who imports and selects a package
+   * gets a toggle that stays greyed out, and — worse — a stale
+   * `desktop_pet_enabled` in the role form can make the *next* role save fail
+   * outright (the backend refuses "enabled with no package selected").
+   *
+   * It exists because the host still owns that field, not as a general
+   * "something happened" hook; it goes when the pet's data leaves `RoleRecord`.
+   */
+  onRoleDataChanged: () => void;
+};
+
+/** One plugin's panel inside the role asset page. */
+export type RoleAssetsPanelEntry = {
+  slot: "role.assets";
+  id: string;
+  pluginId?: string;
+  Component: React.ComponentType<PluginRoleAssetsProps>;
 };
 
 export type NavPageEntry = {
@@ -159,6 +209,7 @@ export function isPluginContributionVisible(
 class PluginUiRegistry {
   private readonly settingsSections = new Map<string, { origin: Origin; entry: SettingsSectionEntry }>();
   private readonly navPages = new Map<string, { origin: Origin; entry: NavPageEntry }>();
+  private readonly roleAssetsPanels = new Map<string, { origin: Origin; entry: RoleAssetsPanelEntry }>();
 
   /** Registers a settings.section entry; a duplicate id is warned about and skipped. */
   registerSettingsSection(entry: SettingsSectionEntry, origin: Origin = "plugin"): void {
@@ -178,6 +229,15 @@ class PluginUiRegistry {
     this.navPages.set(entry.id, { origin, entry });
   }
 
+  /** Registers a role.assets panel; a duplicate id is warned about and skipped. */
+  registerRoleAssetsPanel(entry: RoleAssetsPanelEntry, origin: Origin = "plugin"): void {
+    if (this.roleAssetsPanels.has(entry.id)) {
+      console.warn(`[pluginUiRegistry] role.assets id 重复，已跳过: ${entry.id}`);
+      return;
+    }
+    this.roleAssetsPanels.set(entry.id, { origin, entry });
+  }
+
   /** Removes every contribution owned by one plugin (used by tests and hot-toggle cleanup). */
   unregisterPlugin(pluginId: string): void {
     for (const [id, { entry }] of this.settingsSections) {
@@ -185,6 +245,9 @@ class PluginUiRegistry {
     }
     for (const [id, { entry }] of this.navPages) {
       if (entry.pluginId === pluginId) this.navPages.delete(id);
+    }
+    for (const [id, { entry }] of this.roleAssetsPanels) {
+      if (entry.pluginId === pluginId) this.roleAssetsPanels.delete(id);
     }
   }
 
@@ -200,6 +263,11 @@ class PluginUiRegistry {
   /** Lists nav.page entries with the same built-in-first ordering and filtering. */
   listNavPages(isPluginEnabled?: (pluginId: string) => boolean): NavPageEntry[] {
     return this.listOrdered(this.navPages, isPluginEnabled);
+  }
+
+  /** Lists role.assets panels with the same built-in-first ordering and filtering. */
+  listRoleAssetsPanels(isPluginEnabled?: (pluginId: string) => boolean): RoleAssetsPanelEntry[] {
+    return this.listOrdered(this.roleAssetsPanels, isPluginEnabled);
   }
 
   getSettingsSection(id: string): SettingsSectionEntry | undefined {

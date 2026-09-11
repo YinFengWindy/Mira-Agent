@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.roles.models import RolePetPackage, RoleRecord
+from core.roles.pet_packages import RolePetPackageService
 from core.roles.store import RoleStore
 
 
@@ -28,6 +29,62 @@ class DesktopPetRpcHandlers:
 
     def __init__(self, *, role_store: RoleStore) -> None:
         self._role_store = role_store
+        self._packages = RolePetPackageService(role_store)
+
+    async def pets_list(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """``plugin.desktop_pet.pets.list``: one role's pet packages.
+
+        The same rows ``roles.list`` used to carry on every role payload. They
+        move here because the desktop's package manager UI is becoming this
+        plugin's (#181-D), and a plugin's UI can only reach its own
+        ``plugin.<id>.*`` namespace — it has no way to ask a core method.
+        """
+        role = self._require_role(payload)
+        return {
+            "selected_package_id": role.selected_pet_package_id,
+            "packages": [self._serialize(package) for package in role.pet_packages],
+        }
+
+    async def pets_import(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """``plugin.desktop_pet.pets.import``: validate and install one ZIP."""
+        role_id = _require_role_id(payload)
+        source = str(payload.get("source") or "").strip()
+        if not source:
+            raise ValueError("缺少桌宠包路径")
+        package = self._packages.import_package(role_id, source)
+        return {"package": self._serialize(package), **await self.pets_list(payload)}
+
+    async def pets_remove(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """``plugin.desktop_pet.pets.remove``: delete one package and its files."""
+        self._packages.remove_package(_require_role_id(payload), _require_package_id(payload))
+        return await self.pets_list(payload)
+
+    async def pets_select(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """``plugin.desktop_pet.pets.select``: choose which package renders."""
+        self._packages.select_package(_require_role_id(payload), _require_package_id(payload))
+        return await self.pets_list(payload)
+
+    def _require_role(self, payload: dict[str, Any]) -> RoleRecord:
+        role_id = _require_role_id(payload)
+        role = self._role_store.get_role(role_id)
+        if role is None:
+            raise KeyError(f"role 不存在: {role_id}")
+        return role
+
+    def _serialize(self, package: RolePetPackage) -> dict[str, Any]:
+        """Adds the two absolute paths the desktop grants asset URLs for.
+
+        ``spritesheet_abs`` and ``preview_abs`` are declared trusted fields in
+        ``apps/desktop/src/assets/localAssetPolicy.ts``; the names are the
+        contract, not the shape, so they match what ``role_presenter`` emitted.
+        """
+        roles_dir = self._role_store.roles_dir
+        preview = package.preview_path
+        return {
+            **package.to_dict(),
+            "spritesheet_abs": str((roles_dir / package.spritesheet_path).resolve()),
+            "preview_abs": str((roles_dir / preview).resolve()) if preview else None,
+        }
 
     async def binding_get(self, _payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.desktop_pet.binding.get``: the role/package pair to render.
@@ -82,3 +139,17 @@ class DesktopPetRpcHandlers:
             ),
             None,
         )
+
+
+def _require_role_id(payload: dict[str, Any]) -> str:
+    role_id = str(payload.get("role_id") or "").strip()
+    if not role_id:
+        raise ValueError("缺少 role_id")
+    return role_id
+
+
+def _require_package_id(payload: dict[str, Any]) -> str:
+    package_id = str(payload.get("package_id") or "").strip()
+    if not package_id:
+        raise ValueError("缺少 package_id")
+    return package_id

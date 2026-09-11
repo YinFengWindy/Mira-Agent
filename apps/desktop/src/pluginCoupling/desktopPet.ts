@@ -13,28 +13,32 @@ import type { SurfaceKey } from "../surface/host.js";
  * | What the host needs | Who needs it | Removed by |
  * | --- | --- | --- |
  * | the pet's surface key | voice IPC, observation dismiss | #221 / #220 |
- * | a way to start the pet | `desktop:pet-sync` from the role form | #181-D backend |
+ * | relaying `desktop:pet-sync` | the role form's save, the pet's own panel | #218 |
  * | whether the pet is showing, and whose | voice admission, observation | #221 / #220 |
  *
- * #181-D took two rows off this table. The tray entry is the pet's own now
- * (`ctx.tray`), so the host no longer needs to know what the item should say or
- * whether it can be clicked; and the main window's close policy asks "does any
- * plugin still own a surface" instead of "is the pet running".
+ * #181-D took two rows off this table: the tray entry is the pet's own now
+ * (`ctx.tray`), and the main window's close policy asks "does any plugin still
+ * own a surface" instead of "is the pet running".
  *
- * What the *main process* no longer knows: roles, packages, sprite states,
- * positions, window geometry. That is the part of #181's "宿主不感知桌宠领域"
- * that #181-C delivers, and it is the whole of what this file's scope is.
+ * The remaining `desktop:pet-sync` row changed meaning rather than leaving. It
+ * is no longer "the host starts the pet" — the host has no reason to — it is
+ * the only route from *any* main-window renderer to the pet's background code,
+ * which lives in a different renderer. Both callers are pet-owned code
+ * (`plugins/desktop_pet/ui/RolePetPackagesPanel.tsx`) or about to be; it goes
+ * with surface-to-background messaging (#218).
  *
- * **It is not the whole of the host's pet knowledge.** The host's *renderer*
- * still owns the pet package manager on the role detail page —
- * `roles/RolePetPackagesPanel.tsx`, the pet toggle in `RoleCapabilitiesPanel`,
- * `pet_packages` in `shared/types.ts`, the `roles.pets.*` calls in
- * `app/useRoleManagement.ts`, and `pickPetPackage` on the preload API. That UI
- * knows exactly what a pet package is. It could not move here or into the
- * plugin in #181-C: #179's slots are `settings.section` and `nav.page`, and
- * this is neither — it is a section of the role detail page, for which no slot
- * exists yet. Whoever runs #181-D's final acceptance needs to count it: the
- * criterion is not met for the renderer, and no issue claims it yet.
+ * What the host no longer knows at all: roles, packages, sprite states,
+ * positions, window geometry — in the main process since #181-C, and in the
+ * bridge and the package-manager UI since #181-D.
+ *
+ * **Still outstanding, and not this file's scope.** The pet's data is still on
+ * `RoleRecord` (`pet_packages` / `selected_pet_package_id` /
+ * `desktop_pet_enabled`), so the role capability toggle
+ * (`roles/RoleCapabilitiesPanel.tsx`) and `roles.update` still carry it, and
+ * `desktop_bridge/server.py` still bridges `DesktopPetActionRequested` to
+ * `desktop.pet.action`. Those move when the pet's data leaves the role record;
+ * until then "宿主不感知桌宠领域" is true of the main process, the package
+ * manager and the role bridge, but not of the role *model*.
  */
 
 export const desktopPetPluginId = "desktop_pet";

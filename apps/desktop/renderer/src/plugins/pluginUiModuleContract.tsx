@@ -5,7 +5,12 @@ import { pluginChatImageActionsRegistry, pluginRoleSettingsRegistry, type Plugin
 import type { SettingsSubsection, StandaloneSettingsSectionProps } from "../settings/settingsPageTypes";
 import { createPluginSchemaSettingsSection } from "./PluginSchemaSettingsSection";
 import { createPluginRpcClient, type PluginRpcClient } from "./pluginBridgeClient";
-import { pluginUiRegistry, type PluginNavPageProps, type PluginNavPageSidebarProps } from "./pluginUiRegistry";
+import {
+  pluginUiRegistry,
+  type PluginNavPageProps,
+  type PluginNavPageSidebarProps,
+  type PluginRoleAssetsProps,
+} from "./pluginUiRegistry";
 
 /**
  * Props a plugin-authored nav.page component receives: the base slot props
@@ -36,6 +41,18 @@ export type PluginSettingsSectionContribution =
     component: React.ComponentType<PluginSettingsSectionComponentProps>;
   };
 
+/**
+ * Props a plugin-authored role.assets panel receives: the base slot props plus
+ * its injected, namespace-scoped RPC client — the same treatment the other two
+ * slots get, and the only way such a panel can reach any data at all.
+ */
+export type PluginRoleAssetsComponentProps = PluginRoleAssetsProps & { client: PluginRpcClient };
+
+/** One plugin's panel inside the role asset page. */
+export type PluginRoleAssetsContribution = {
+  component: React.ComponentType<PluginRoleAssetsComponentProps>;
+};
+
 export type PluginNavPageContribution = {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
@@ -49,15 +66,16 @@ export type PluginNavPageContribution = {
 
 /**
  * The shape a plugin's `ui/index.tsx` default-exports to participate in
- * `settings.section` and/or `nav.page`. A plugin id is required (it scopes
- * both its own RPC namespace and hot enable/disable filtering); both slots
- * are optional since a plugin may only need one, or a config-only plugin
- * may only need the schema form.
+ * `settings.section`, `nav.page` and/or `role.assets`. A plugin id is required
+ * (it scopes both its own RPC namespace and hot enable/disable filtering);
+ * every slot is optional since a plugin may only need one, or a config-only
+ * plugin may only need the schema form.
  */
 export type PluginUiModule = {
   pluginId: string;
   settingsSection?: PluginSettingsSectionContribution;
   navPage?: PluginNavPageContribution;
+  roleAssets?: PluginRoleAssetsContribution;
   roleSettings?: PluginRoleSettingsContribution;
   chatImageActions?: React.ComponentType<PluginChatImageActionProps>;
 };
@@ -103,7 +121,7 @@ export function applyPluginUiModules(
       console.error(`[pluginUiModules] ${path} 的默认导出不是合法的 PluginUiModule，已跳过`);
       continue;
     }
-    const { pluginId, settingsSection, navPage } = uiModule;
+    const { pluginId, settingsSection, navPage, roleAssets } = uiModule;
     if (uiModule.roleSettings) pluginRoleSettingsRegistry.register({ pluginId, ...uiModule.roleSettings });
     if (uiModule.chatImageActions) pluginChatImageActionsRegistry.register({
       pluginId, client: createPluginRpcClient(pluginId), Component: uiModule.chatImageActions,
@@ -120,6 +138,14 @@ export function applyPluginUiModules(
         Component: settingsSection.kind === "schema"
           ? createPluginSchemaSettingsSection(pluginId)
           : bindPluginClient(pluginId, settingsSection.component),
+      });
+    }
+    if (roleAssets) {
+      registry.registerRoleAssetsPanel({
+        slot: "role.assets",
+        id: pluginId,
+        pluginId,
+        Component: bindPluginClient(pluginId, roleAssets.component),
       });
     }
     if (navPage) {

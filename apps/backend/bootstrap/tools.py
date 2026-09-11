@@ -526,6 +526,7 @@ def build_core_runtime(
             event_bus=event_bus,
             tool_registry=tools,
             workspace=workspace,
+            role_store=role_store,
             session_manager=session_manager,
             memory_engine=memory_runtime.engine,
             app_config=config,

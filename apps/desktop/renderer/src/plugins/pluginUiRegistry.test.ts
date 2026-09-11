@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { guardedNavPageSelect, PluginUiRegistry, type NavPageEntry, type StandaloneSettingsSectionEntry } from "./pluginUiRegistry.js";
+import {
+  guardedNavPageSelect,
+  PluginUiRegistry,
+  type NavPageEntry,
+  type RoleAssetsPanelEntry,
+  type StandaloneSettingsSectionEntry,
+} from "./pluginUiRegistry.js";
 
 function standaloneSection(id: string, pluginId?: string): StandaloneSettingsSectionEntry {
   return {
@@ -16,6 +22,10 @@ function standaloneSection(id: string, pluginId?: string): StandaloneSettingsSec
 
 function navPage(id: string, pluginId?: string): NavPageEntry {
   return { slot: "nav.page", id, label: id, pluginId, Component: () => null };
+}
+
+function roleAssetsPanel(id: string, pluginId?: string): RoleAssetsPanelEntry {
+  return { slot: "role.assets", id, pluginId, Component: () => null };
 }
 
 describe("PluginUiRegistry", () => {
@@ -97,4 +107,39 @@ describe("guardedNavPageSelect (issue #226 gap B)", () => {
     assert.equal(selected, false);
     assert.equal(blockedReason, "请先创建至少一个角色，再进入生图。");
   });
+
+  it("role.assets panels follow the same visibility rule as every other slot", () => {
+    const registry = new PluginUiRegistry();
+    registry.registerRoleAssetsPanel(roleAssetsPanel("enabled-plugin", "a"));
+    registry.registerRoleAssetsPanel(roleAssetsPanel("disabled-plugin", "b"));
+
+    // Disabling a plugin must drop its panel immediately, not at next reload
+    // (#174 acceptance criterion 3) — the same rule nav.page and
+    // settings.section already follow.
+    const ids = registry.listRoleAssetsPanels((pluginId) => pluginId === "a").map((entry) => entry.id);
+    assert.deepEqual(ids, ["enabled-plugin"]);
+  });
+
+  it("a duplicate role.assets id is refused rather than shadowing the first", () => {
+    const registry = new PluginUiRegistry();
+    registry.registerRoleAssetsPanel(roleAssetsPanel("desktop_pet", "desktop_pet"));
+    registry.registerRoleAssetsPanel(roleAssetsPanel("desktop_pet", "impostor"));
+
+    const entries = registry.listRoleAssetsPanels();
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].pluginId, "desktop_pet");
+  });
+
+  it("unregistering a plugin takes its role.assets panel with the rest", () => {
+    const registry = new PluginUiRegistry();
+    registry.registerRoleAssetsPanel(roleAssetsPanel("a", "a"));
+    registry.registerRoleAssetsPanel(roleAssetsPanel("b", "b"));
+    registry.registerNavPage(navPage("a-page", "a"));
+
+    registry.unregisterPlugin("a");
+
+    assert.deepEqual(registry.listRoleAssetsPanels().map((entry) => entry.id), ["b"]);
+    assert.deepEqual(registry.listNavPages().map((entry) => entry.id), []);
+  });
+
 });

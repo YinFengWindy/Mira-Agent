@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.roles.store import RoleStore
 from plugins.desktop_pet.backend.rpc import DesktopPetRpcHandlers
 from plugins.desktop_pet.backend.tool import DesktopPetActionTool
 
@@ -27,10 +26,13 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
     # 桌面桥接的依赖链拉进来（见 capabilities.RpcCapability.register 的注释）。
     from desktop_bridge.method_policy import Concurrency
 
-    workspace = ctx.workspace
-    if workspace is None:
-        raise RuntimeError("桌宠插件需要 workspace")
-    role_store = RoleStore(workspace)
+    # 宿主那一个 RoleStore，不是 RoleStore(ctx.workspace)。写锁是按实例的
+    # threading.RLock，自己新建一个就是新建一把锁——本插件现在会写 pet 包
+    # （pets.import/remove/select 都是读-改-写整份角色清单），两把锁竞写同一份
+    # roles.json 会互相覆盖。见 manifest.KNOWN_CAPABILITIES 里 role_store 那段。
+    role_store = ctx.role_store
+    if role_store is None:
+        raise RuntimeError("桌宠插件需要 role_store")
     ctx.tools.register(
         DesktopPetActionTool(
             role_store=role_store,
@@ -45,3 +47,9 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
     ctx.rpc.register(
         "binding.get", handlers.binding_get, concurrency=Concurrency.READ_ONLY
     )
+    ctx.rpc.register("pets.list", handlers.pets_list, concurrency=Concurrency.READ_ONLY)
+    # 三个写方法用默认的 Concurrency.MUTATION，与它们此前作为 roles.pets.*
+    # 走 _DEFAULT_POLICY 时的并发语义一致。
+    ctx.rpc.register("pets.import", handlers.pets_import)
+    ctx.rpc.register("pets.remove", handlers.pets_remove)
+    ctx.rpc.register("pets.select", handlers.pets_select)
