@@ -29,7 +29,7 @@ _TINY_PNG = base64.b64decode(
 async def test_regenerate_reuses_exact_request_parameters_with_fresh_seed(
     tmp_path: Path,
 ) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     client = _FakeClient(_json_response(), settings)
     service = NovelAIService(
         settings=settings,
@@ -136,7 +136,6 @@ def _error_response(status_code: int) -> httpx.Response:
 @pytest.mark.asyncio
 async def test_service_persists_generated_image_and_metadata(tmp_path: Path) -> None:
     settings = NovelAISettings(
-        enabled=True,
         token="novel-token",
         add_quality_tags=True,
         undesired_content_preset=2,
@@ -192,7 +191,7 @@ async def test_service_rejects_non_english_tags_before_external_call(
     negative_prompt: str,
     field_name: str,
 ) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     client = _FakeClient(_json_response(), settings)
     service = NovelAIService(
         settings=settings,
@@ -215,7 +214,7 @@ async def test_service_rejects_non_english_tags_before_external_call(
 
 @pytest.mark.asyncio
 async def test_service_expands_prompts_from_tag_knowledge_base(tmp_path: Path) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     prompt_tags = PromptTagStore(tmp_path)
     prompt_tags.upsert(
         {
@@ -252,7 +251,7 @@ async def test_service_expands_prompts_from_tag_knowledge_base(tmp_path: Path) -
 async def test_service_does_not_match_prompt_tags_without_source_text(
     tmp_path: Path,
 ) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     prompt_tags = Mock(spec=PromptTagStore)
     service = NovelAIService(
         settings=settings,
@@ -275,7 +274,7 @@ async def test_service_does_not_match_prompt_tags_without_source_text(
 
 @pytest.mark.asyncio
 async def test_service_img2img_requires_base_image_path(tmp_path: Path) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     service = NovelAIService(
         settings=settings,
         client=_FakeClient(_json_response(), settings),
@@ -295,7 +294,7 @@ async def test_service_img2img_requires_base_image_path(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_service_img2img_uses_custom_strength_and_noise(tmp_path: Path) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     client = _FakeClient(_json_response(), settings)
     service = NovelAIService(
         settings=settings,
@@ -332,7 +331,6 @@ async def test_service_auto_writeback_updates_role_assets(tmp_path: Path) -> Non
         system_prompt="You are Mira.",
     )
     settings = NovelAISettings(
-        enabled=True,
         token="novel-token",
         auto_writeback_role_assets=True,
     )
@@ -362,7 +360,7 @@ async def test_service_auto_writeback_updates_role_assets(tmp_path: Path) -> Non
 
 @pytest.mark.asyncio
 async def test_service_rewrites_v45_subscription_error(tmp_path: Path) -> None:
-    settings = NovelAISettings(enabled=True, token="novel-token")
+    settings = NovelAISettings(token="novel-token")
     client = _FakeClient(_error_response(500), settings)
     client._user_data = {
         "subscription": {
@@ -395,7 +393,6 @@ async def test_service_rewrites_v45_subscription_error(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_service_uses_nsfw_model_when_switch_enabled(tmp_path: Path) -> None:
     settings = NovelAISettings(
-        enabled=True,
         token="novel-token",
         nsfw_enabled=True,
     )

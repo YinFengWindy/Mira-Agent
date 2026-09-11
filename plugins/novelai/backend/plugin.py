@@ -128,7 +128,6 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
 
     auto_cg = AutoCgPolicy(ctx.kv)
     auto_cg_controller = AutoCgController(
-        settings=settings,
         role_store=role_store,
         policy=auto_cg,
         session_manager=ctx.session_manager,

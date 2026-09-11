@@ -2,11 +2,13 @@
 title: NovelAI 与自动 CG
 kind: 领域说明
 status: 当前有效
-last_verified_commit: 0a94bd42
+last_verified_commit: 966af779
 source_paths:
-  - apps/backend/core/integrations/novelai/
   - plugins/scene_awareness/
   - plugins/novelai/
+  - apps/backend/desktop_bridge/role_difference_service.py
+  - apps/backend/desktop_bridge/story_image_generator.py
+  - apps/desktop/renderer/src/app/useChatImageRegeneration.ts
   - apps/backend/bus/events_lifecycle.py
 related:
   - roles.md
@@ -18,12 +20,33 @@ related:
 
 ## NovelAI 基础能力
 
-`apps/backend/core/integrations/novelai/` 拥有设置、请求模型、提示词标签、持久化和 `NovelAIService.generate()`。手动 `generate_image` 工具和自动 CG 都应复用该服务，避免各自实现请求与错误处理。
+`plugins/novelai/backend/` 拥有设置、请求模型、HTTP 客户端、提示词标签、持久化、`NovelAIService.generate()`、生图工具、自动 CG 与 RPC。`plugins/novelai/ui/` 拥有 Image Studio、提示词标签库与历史界面，经 `nav.page` / `settings.section` 注册页面与设置。
+
+手动 `generate_image` 工具和自动 CG 都应复用该服务，避免各自实现请求与错误处理。生成文件与元数据由插件写入 workspace 下的 `private_runtime/novelai/`；运行数据不应随插件停用或包升级删除。
+
+启停只由宿主管理的 `[plugins.novelai].enabled` 决定，插件配置表单与运行时设置不再声明第二个 `enabled`。插件停用后，宿主撤销工具、RPC 与事件订阅。服务仍检查 Token，角色自动 CG 偏好仍独立生效。
+
+## 插件归属核查（2026-09-11）
+
+结论：核心生图实现已归位，但还不是完全可摘出的插件。以下为本轮源码核查发现，除重复 Enabled 状态外，本轮未修改这些边界。
+
+| 残留 | 证据 | 影响 |
+| --- | --- | --- |
+| 聊天图片重生成由宿主编排 | `apps/desktop/renderer/src/app/useChatImageRegeneration.ts` 直接创建 `createPluginRpcClient("novelai")`；`main.tsx` 的 `canRegenerateLightboxImage` 只判断会话与消息 ID | 停用插件后，重生成按钮仍可能可点击；宿主尚无按插件能力注册的图片操作入口 |
+| RPC 超时策略识别 NovelAI 方法名 | `apps/desktop/src/bridge/bridgeTimeoutPolicy.ts` 写死两个 `plugin.novelai.*` 方法的 5 分钟超时 | 新增插件长耗时 RPC 仍需修改宿主策略 |
+| 故事与角色差分调用方持有供应商细节 | `story_image_generator.py` 固定 `nai-diffusion-4-5-full`；`story_simulation/director.py` 要求 NovelAI V4.5 标签；`role_difference_service.py` 固定 sampler、steps、strength 等参数 | 已通过工具调用而非直接导入插件服务，但供应商参数策略仍分散在宿主 |
+| 角色自动 CG 开关属于核心角色表单 | `RoleCapabilitiesPanel.tsx`、`roleFormState.ts`、`appState.ts`、`useRoleManagement.ts` 与共享 `RoleForm` 持有 `autoSceneCgEnabled` | 停用插件不会撤下这项角色配置；尚无插件角色设置扩展位 |
+| 品牌资源尚未共置 | `plugins/novelai/ui/index.tsx` 引用宿主 `assets/novelai-logo-dark.svg` | 插件包仍依赖宿主存放自己的 Logo |
+| 插件仍直接调用部分宿主内部接口 | UI 使用 `window.miraDesktop.invoke("roles.list")`、`pickImages`；后端导入私有 `_resolve_path`、`DesktopSessionPresenter` 并直接创建 `RoleStore` | 共置不等于稳定 SDK 隔离；共享样式和通用类型复用本身不算归位遗漏 |
+
+宿主中的 `_migrate_legacy_novelai_config()` 是升级旧 `[integrations.novelai]` 配置的一次性迁移，需要在插件加载前运行，不应仅为了清空关键字引用而移除。`SceneObservationCommitted` 是 Scene Awareness 与 NovelAI 共享的事件契约，也无需搬入 NovelAI 私有实现。角色差分和故事业务可以保留在各自模块，但供应商专属策略应逐步交回生图提供方。
+
+本轮通过真实插件配置通道验证：表单不再暴露 Enabled，修改 NSFW 设置可保存并读回，显式启用与省略启用字段均保持插件 ACTIVE。插件测试另验证宿主禁用时不注册生图工具/RPC，以及卸载清理和自动 CG 任务释放。
 
 ## 自动 CG 生命周期
 
 1. Scene Awareness 插件在 `BeforeTurn` 捕获被动回合上下文，并在 `AfterTurn` 对非空回复调度场景判断；主动消息则从 `ProactiveMessageCommitted` 接入同一判断链。
-2. `plugins/scene_awareness/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
+2. `plugins/scene_awareness/backend/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
 3. Scene Awareness 对函数参数执行协议和语义校验；有效结果才会持久化这两个键并发布 `SceneObservationCommitted`。`scene_key` 供场景追问保持连续性，`visual_key` 供图片生成判断重复。
 4. NovelAI 插件订阅场景观察事件，`AutoCgController` 根据视觉定格、冷却和手动生成抑制规则决定是否生成。
 5. 成功图片通过消息推送发送，并同步回权威角色会话。

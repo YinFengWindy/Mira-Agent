@@ -9,7 +9,6 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
-from plugins.novelai.backend.models import NovelAISettings
 from plugins.novelai.backend.tool import GenerateImageTool
 
 logger = logging.getLogger(__name__)
@@ -35,14 +34,12 @@ class AutoCgController:
     def __init__(
         self,
         *,
-        settings: NovelAISettings,
         role_store: RoleStore,
         policy: AutoCgPolicy,
         session_manager: Any,
         generate_tool: GenerateImageTool,
         tool_registry: _ToolLookup,
     ) -> None:
-        self._settings = settings
         self._role_store = role_store
         self._policy = policy
         self._session_manager = session_manager
@@ -62,7 +59,8 @@ class AutoCgController:
         self._cancel_pending_task(event.session_key)
         if event.source == "passive":
             self._policy.advance_turn(event.session_key)
-        if not self._settings.enabled or not event.should_generate:
+        # 宿主负责启停订阅；这里只判断本次场景观察是否要求生成。
+        if not event.should_generate:
             return
         session = self._session_manager.get_or_create(event.session_key)
         role_id = str(event.role_id or session.metadata.get("role_id") or "").strip()

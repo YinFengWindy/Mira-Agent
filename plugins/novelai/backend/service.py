@@ -70,7 +70,7 @@ class NovelAIService:
     ) -> GenerateImageResult:
         """Execute a validated NovelAI generation request end-to-end."""
 
-        self._validate_enabled()
+        self._validate_token()
         prompt = request.prompt.strip()
         if not prompt:
             raise ValueError("prompt 不能为空")
@@ -159,7 +159,7 @@ class NovelAIService:
     ) -> GenerateImageResult:
         """Replay one persisted request exactly, changing only its random seed."""
 
-        self._validate_enabled()
+        self._validate_token()
         request_payload = copy.deepcopy(source.request_payload)
         action = str(request_payload.get("action") or "").strip()
         prompt = str(request_payload.get("input") or "").strip()
@@ -300,9 +300,7 @@ class NovelAIService:
             role_asset_paths=role_asset_paths,
         )
 
-    def _validate_enabled(self) -> None:
-        if not self._settings.enabled:
-            raise ValueError("NovelAI 未启用")
+    def _validate_token(self) -> None:
         if not self._settings.token.strip():
             raise ValueError("NovelAI token 未配置")
 

@@ -11,7 +11,6 @@ NovelAISizePreset = Literal["square", "landscape", "portrait", "custom"]
 class NovelAISettings:
     """Runtime settings for the NovelAI image generation integration."""
 
-    enabled: bool = False
     token: str = ""
     base_url: str = "https://image.novelai.net"
     default_model: str = "nai-diffusion-4-5-curated"

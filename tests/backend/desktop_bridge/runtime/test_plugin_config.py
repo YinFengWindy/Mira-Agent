@@ -47,11 +47,16 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 
 
-async def _start_service(tmp_path: Path) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
+async def _start_service(
+    tmp_path: Path,
+    config_text: str | None = None,
+) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
+    config_text = config_text if config_text is not None else _config()
     path = tmp_path / "config.toml"
-    path.write_text(_config(), encoding="utf-8")
+    path.write_text(config_text, encoding="utf-8")
     app = AppRuntime(
-        load_config_text(_config()), tmp_path,
+        load_config_text(config_text),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -80,6 +85,57 @@ async def test_get_returns_schema_and_default_backed_values(tmp_path, monkeypatc
         assert response.payload["values"]["app_id"] == ""
         assert response.payload["values"]["client_secret"] == ""
         assert response.payload["values"]["allow_from"] == []
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled_line", ["", "enabled = true\n"])
+async def test_novelai_config_round_trip_preserves_host_enablement(
+    tmp_path,
+    monkeypatch,
+    enabled_line,
+):
+    """Saving the real NovelAI form must not recreate a second enable switch."""
+    root = tmp_path / "plugin_dirs"
+    shutil.copytree(_REPOSITORY_ROOT / "plugins" / "novelai", root / "novelai")
+    monkeypatch.setattr(
+        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
+    )
+    config_text = (
+        _config() + "\n[plugins.novelai]\n" + enabled_line + 'token = "test-token"\n'
+    )
+    service, path, app = await _start_service(tmp_path, config_text)
+    try:
+        before = await _request(service, "plugin.config.get", {"plugin_id": "novelai"})
+        assert before.error is None, before.error
+        assert "enabled" not in before.payload["schema"]["properties"]
+        assert "enabled" not in before.payload["values"]
+
+        saved = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "novelai",
+                "operation_id": "save-novelai",
+                "values": {**before.payload["values"], "nsfw_enabled": True},
+            },
+        )
+        assert saved.error is None, saved.error
+        after = await _request(service, "plugin.config.get", {"plugin_id": "novelai"})
+        assert after.error is None, after.error
+        assert after.payload["values"] == saved.payload["values"]
+        assert after.payload["values"]["nsfw_enabled"] is True
+        stored = load_config_text(path.read_text(encoding="utf-8")).plugins["novelai"]
+        assert stored.get("enabled", True) is True
+
+        listed = await _request(service, "plugins.list")
+        novelai = next(
+            item for item in listed.payload["plugins"] if item["id"] == "novelai"
+        )
+        assert novelai["enabled"] is True
+        assert novelai["state"] == "ACTIVE"
     finally:
         await service.aclose()
         await app.shutdown()
