@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
 from .common import _MESSAGE_SELECT_COLUMNS
+
 
 class _MessageMixin:
     def count_messages(self, session_key: str) -> int:
@@ -55,9 +57,7 @@ class _MessageMixin:
             else None
         )
         extra_payload = json.dumps(extra or {}, ensure_ascii=False)
-        media_payload = (
-            json.dumps(list(media), ensure_ascii=False) if media else None
-        )
+        media_payload = json.dumps(list(media), ensure_ascii=False) if media else None
         with self._lock:
             self._conn.execute(
                 """
@@ -160,7 +160,9 @@ class _MessageMixin:
                             str(row.get("thread_id") or "") or None,
                             str(row.get("sender_role") or "") or None,
                             (
-                                json.dumps(list(row.get("media") or []), ensure_ascii=False)
+                                json.dumps(
+                                    list(row.get("media") or []), ensure_ascii=False
+                                )
                                 if row.get("media")
                                 else None
                             ),
@@ -192,7 +194,9 @@ class _MessageMixin:
         with self._lock:
             rows = self._conn.execute(
                 """
-                SELECT """ + _MESSAGE_SELECT_COLUMNS + """
+                SELECT """
+                + _MESSAGE_SELECT_COLUMNS
+                + """
                 FROM messages
                 WHERE session_key = ?
                 ORDER BY seq ASC
@@ -456,7 +460,11 @@ class _MessageMixin:
                     raise ValueError("消息不属于指定会话")
                 raw_media = row["media"]
                 media = json.loads(raw_media) if raw_media else []
-                if not isinstance(media, list) or media_index < 0 or media_index >= len(media):
+                if (
+                    not isinstance(media, list)
+                    or media_index < 0
+                    or media_index >= len(media)
+                ):
                     raise ValueError("media_index 超出消息媒体范围")
                 if str(media[media_index] or "") != expected_path:
                     raise ValueError("消息图片已发生变化，请刷新后重试")
@@ -572,13 +580,20 @@ class _MessageMixin:
                 )
             self._conn.commit()
         return int(cur.rowcount or 0)
+
     def delete_session_messages_and_update_cursor(
         self,
         session_key: str,
         *,
         ids: list[str],
         last_consolidated: int,
+        refresh_projections: Callable[[], None] | None = None,
     ) -> int:
+        """Delete every requested session message and update its cursor atomically.
+
+        Missing, duplicate, or foreign IDs fail without deleting any message.
+        The optional projection callback joins this transaction on the shared store.
+        """
         clean_ids = [
             str(message_id).strip() for message_id in ids if str(message_id).strip()
         ]
@@ -597,6 +612,8 @@ class _MessageMixin:
                     """,
                     tuple([session_key, *clean_ids]),
                 ).fetchall()
+                if len(seq_rows) != len(clean_ids):
+                    raise ValueError("撤销消息已发生变化，请刷新后重试")
                 next_seq = (
                     max(int(row["seq"]) for row in seq_rows) + 1 if seq_rows else 0
                 )
@@ -607,6 +624,8 @@ class _MessageMixin:
                     """,
                     tuple([session_key, *clean_ids]),
                 )
+                if cur.rowcount != len(clean_ids):
+                    raise ValueError("撤销消息未完整删除，操作已回滚")
                 self._conn.execute(
                     """
                     UPDATE sessions
@@ -617,6 +636,8 @@ class _MessageMixin:
                     """,
                     (int(last_consolidated), now, next_seq, next_seq, session_key),
                 )
+                if refresh_projections is not None:
+                    refresh_projections()
                 self._conn.commit()
             except Exception:
                 self._conn.rollback()

@@ -37,6 +37,7 @@ from core.memory.markdown import (
 )
 from core.memory.plugin import MemoryPluginRuntime
 from memory2.store import MemoryStore2
+from session.manager import Session, SessionManager
 
 
 def _make_default_engine(
@@ -498,7 +499,7 @@ async def test_markdown_maintenance_records_background_consolidation_failure(
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=AsyncMock(),
+            commit_consolidation=AsyncMock(),
         )
     )
 
@@ -539,7 +540,7 @@ async def test_markdown_maintenance_background_request_does_not_wait(tmp_path: P
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=AsyncMock(),
+            commit_consolidation=AsyncMock(),
         )
     )
 
@@ -569,11 +570,11 @@ async def test_default_memory_engine_refreshes_recent_context_from_lifecycle_rol
         event_bus=event_bus,
     )
     maintenance.refresh_recent_turns = AsyncMock()
-    save_session = AsyncMock()
+    commit_consolidation = AsyncMock()
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=save_session,
+            commit_consolidation=commit_consolidation,
         )
     )
 
@@ -593,7 +594,7 @@ async def test_default_memory_engine_refreshes_recent_context_from_lifecycle_rol
     await _drain_maintenance(maintenance)
 
     maintenance.refresh_recent_turns.assert_awaited_once()
-    save_session.assert_not_awaited()
+    commit_consolidation.assert_not_awaited()
     await event_bus.aclose()
 
 
@@ -617,11 +618,11 @@ async def test_default_memory_engine_refreshes_role_recent_context_in_role_memor
         keep_count=20,
         event_bus=event_bus,
     )
-    save_session = AsyncMock()
+    commit_consolidation = AsyncMock()
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=save_session,
+            commit_consolidation=commit_consolidation,
         )
     )
 
@@ -650,7 +651,7 @@ async def test_default_memory_engine_refreshes_role_recent_context_in_role_memor
     assert "嗯。" in role_recent_context_path.read_text(encoding="utf-8")
     assert global_recent_context_path.exists()
     assert "# 最近发生的事" in global_recent_context_path.read_text(encoding="utf-8")
-    save_session.assert_not_awaited()
+    commit_consolidation.assert_not_awaited()
     await event_bus.aclose()
 
 
@@ -674,11 +675,11 @@ async def test_default_memory_engine_consolidates_ready_session_from_lifecycle(
     maintenance._consolidate_unlocked = AsyncMock(
         return_value=ConsolidateResult(trace={"mode": "markdown"})
     )
-    save_session = AsyncMock()
+    commit_consolidation = AsyncMock()
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=save_session,
+            commit_consolidation=commit_consolidation,
         )
     )
 
@@ -698,7 +699,7 @@ async def test_default_memory_engine_consolidates_ready_session_from_lifecycle(
     await _drain_maintenance(maintenance)
 
     maintenance._consolidate_unlocked.assert_awaited_once()
-    save_session.assert_awaited_once_with(session)
+    commit_consolidation.assert_not_awaited()
     await event_bus.aclose()
 
 
@@ -717,12 +718,25 @@ async def test_markdown_consolidation_advances_window_when_consumer_fails(
         messages=[{"role": "user", "content": "u"}] * 12,
         last_consolidated=0,
     )
+    manager = SessionManager(tmp_path)
+    session = Session(
+        key=session.key,
+        metadata=session.metadata,
+        messages=[dict(message) for message in session.messages],
+    )
+    manager.save(session)
     maintenance = MarkdownMemoryMaintenance(
         store=MarkdownMemoryStore(tmp_path),
         provider=cast(Any, SimpleNamespace()),
         model="lm",
         keep_count=6,
         event_bus=event_bus,
+    )
+    maintenance.bind_lifecycle(
+        MemoryLifecycleBindRequest(
+            get_session=manager.get_or_create,
+            commit_consolidation=manager.commit_consolidation,
+        )
     )
     draft = _ConsolidationDraft(
         window=_ConsolidationWindow(
@@ -792,6 +806,13 @@ async def test_markdown_consolidation_runs_post_consolidation_hook(tmp_path: Pat
         messages=[{"role": "user", "content": f"u{i}"} for i in range(12)],
         last_consolidated=0,
     )
+    manager = SessionManager(tmp_path)
+    session = Session(
+        key=session.key,
+        metadata=session.metadata,
+        messages=[dict(message) for message in session.messages],
+    )
+    manager.save(session)
     maintenance = MarkdownMemoryMaintenance(
         store=MarkdownMemoryStore(tmp_path),
         provider=cast(Any, SimpleNamespace()),
@@ -817,7 +838,7 @@ async def test_markdown_consolidation_runs_post_consolidation_hook(tmp_path: Pat
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=AsyncMock(),
+            commit_consolidation=manager.commit_consolidation,
             after_consolidation=after_consolidation,
         )
     )
@@ -837,6 +858,13 @@ async def test_markdown_consolidation_ignores_post_consolidation_hook_failure(
         messages=[{"role": "user", "content": f"u{i}"} for i in range(12)],
         last_consolidated=0,
     )
+    manager = SessionManager(tmp_path)
+    session = Session(
+        key=session.key,
+        metadata=session.metadata,
+        messages=[dict(message) for message in session.messages],
+    )
+    manager.save(session)
     maintenance = MarkdownMemoryMaintenance(
         store=MarkdownMemoryStore(tmp_path),
         provider=cast(Any, SimpleNamespace()),
@@ -865,7 +893,7 @@ async def test_markdown_consolidation_ignores_post_consolidation_hook_failure(
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=AsyncMock(),
+            commit_consolidation=manager.commit_consolidation,
             after_consolidation=_fail,
         )
     )
@@ -911,7 +939,7 @@ async def test_default_memory_engine_serializes_lifecycle_maintenance(
     maintenance.bind_lifecycle(
         MemoryLifecycleBindRequest(
             get_session=lambda _key: session,
-            save_session=AsyncMock(),
+            commit_consolidation=AsyncMock(),
         )
     )
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from bus.events_lifecycle import TurnCommitted
 from core.memory.events import ConsolidationCommitted
+from session.manager.consolidation import ConsolidationCommitRequest
 
 from .consolidation import _MarkdownConsolidationWorker
 from .contracts import (
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
     from agent.provider import LLMProvider
 
 logger = logging.getLogger("memory.markdown")
+
 
 class MarkdownMemoryMaintenance:
     def __init__(
@@ -58,7 +60,17 @@ class MarkdownMemoryMaintenance:
         self._keep_count = keep_count
         self._consolidation_min_new_messages = max(5, keep_count // 2)
         self._get_session: Callable[[str], object] | None = None
-        self._save_session: Callable[[object], Awaitable[None]] | None = None
+        self._commit_consolidation: (
+            Callable[
+                [
+                    ConsolidationCommitRequest,
+                    Callable[[], Awaitable[None]],
+                    Callable[[], Awaitable[None]],
+                ],
+                Awaitable[bool],
+            ]
+            | None
+        ) = None
         self._after_consolidation: Callable[[object], Awaitable[None]] | None = None
         self._maintenance_queues: dict[str, deque[str]] = {}
         self._maintenance_tasks: dict[str, asyncio.Task[None]] = {}
@@ -76,7 +88,7 @@ class MarkdownMemoryMaintenance:
 
     def bind_lifecycle(self, request: MemoryLifecycleBindRequest) -> None:
         self._get_session = request.get_session
-        self._save_session = request.save_session
+        self._commit_consolidation = request.commit_consolidation
         self._after_consolidation = request.after_consolidation
 
     def share_execution(self, previous: MarkdownMemoryMaintenance) -> None:
@@ -86,7 +98,9 @@ class MarkdownMemoryMaintenance:
     async def drain(self) -> None:
         """Waits for already queued maintenance before its providers are closed."""
         while self._maintenance_tasks:
-            await asyncio.gather(*tuple(self._maintenance_tasks.values()), return_exceptions=True)
+            await asyncio.gather(
+                *tuple(self._maintenance_tasks.values()), return_exceptions=True
+            )
             await asyncio.sleep(0)
 
     def on_turn_committed(self, event: TurnCommitted) -> None:
@@ -108,7 +122,7 @@ class MarkdownMemoryMaintenance:
         return self._maintenance_failures.get(session_key)
 
     def _enqueue_maintenance(self, session_key: str) -> None:
-        if self._get_session is None or self._save_session is None:
+        if self._get_session is None or self._commit_consolidation is None:
             return
         queue = self._maintenance_queues.setdefault(session_key, deque())
         queue.append(session_key)
@@ -137,8 +151,6 @@ class MarkdownMemoryMaintenance:
                         result = await self._consolidate_unlocked(
                             ConsolidateRequest(session=session)
                         )
-                        if result.trace.get("mode") == "markdown" and self._save_session:
-                            await self._save_session(session)
                     except Exception as exc:
                         self._maintenance_failures[session_key] = (
                             _format_consolidation_error(exc)
@@ -166,11 +178,19 @@ class MarkdownMemoryMaintenance:
         try:
             exc = task.exception()
         except Exception as e:
-            logger.warning("markdown memory maintenance inspect failed: session=%s err=%s", session_key, e)
+            logger.warning(
+                "markdown memory maintenance inspect failed: session=%s err=%s",
+                session_key,
+                e,
+            )
             return
         if exc is not None:
             _ = self._maintenance_queues.pop(session_key, None)
-            logger.warning("markdown memory maintenance failed: session=%s err=%s", session_key, exc)
+            logger.warning(
+                "markdown memory maintenance failed: session=%s err=%s",
+                session_key,
+                exc,
+            )
             return
         queue = self._maintenance_queues.get(session_key)
         if queue:
@@ -179,7 +199,9 @@ class MarkdownMemoryMaintenance:
                 name=f"markdown-memory-maintenance:{session_key}",
             )
             self._maintenance_tasks[session_key] = next_task
-            next_task.add_done_callback(lambda t: self._on_maintenance_done(t, session_key))
+            next_task.add_done_callback(
+                lambda t: self._on_maintenance_done(t, session_key)
+            )
         else:
             _ = self._maintenance_queues.pop(session_key, None)
 
@@ -203,8 +225,16 @@ class MarkdownMemoryMaintenance:
         async with lock:
             return await self._consolidate_unlocked(request)
 
-    async def _consolidate_unlocked(self, request: ConsolidateRequest) -> ConsolidateResult:
+    async def _consolidate_unlocked(
+        self, request: ConsolidateRequest
+    ) -> ConsolidateResult:
         session_key = str(getattr(request.session, "key", "") or "")
+        # Capture IDs before preparation yields; undo may mutate the shared Session.
+        expected_ids = tuple(
+            str(message.get("id") or "")
+            for message in getattr(request.session, "messages", [])
+        )
+        expected_cursor = int(getattr(request.session, "last_consolidated", 0))
         draft = await self._worker.prepare_consolidation(
             request.session,
             archive_all=request.archive_all,
@@ -225,7 +255,30 @@ class MarkdownMemoryMaintenance:
                     "elapsed_ms": draft.elapsed_ms,
                 }
             )
-        await self._commit_markdown_draft(request.session, draft)
+        commit = self._commit_consolidation
+        if commit is None:
+            raise RuntimeError("session consolidation commit operation is not bound")
+
+        async def write_memory() -> None:
+            await self._commit_markdown_draft(request.session, draft)
+
+        async def publish_committed() -> None:
+            await self._publish_consolidation(request.session, draft)
+
+        committed = await commit(
+            ConsolidationCommitRequest(
+                session_key=session_key,
+                expected_message_ids=expected_ids,
+                expected_last_consolidated=expected_cursor,
+                last_consolidated=(
+                    0 if draft.archive_all else draft.window.consolidate_up_to
+                ),
+            ),
+            write_memory,
+            publish_committed,
+        )
+        if not committed:
+            return ConsolidateResult(trace={"mode": "skipped", "reason": "stale"})
         await self._run_after_consolidation(request.session)
         if session_key:
             _ = self._maintenance_failures.pop(session_key, None)
@@ -249,7 +302,6 @@ class MarkdownMemoryMaintenance:
         draft: "_ConsolidationDraft",
     ) -> None:
         target_store = self._resolve_store_for_session(session)
-        role_id = str(getattr(session, "metadata", {}).get("role_id") or "").strip()
         history_entries = [entry for entry, _ in draft.history_entry_payloads]
         if history_entries:
             await asyncio.to_thread(
@@ -278,10 +330,11 @@ class MarkdownMemoryMaintenance:
                 history_entries,
                 draft.source_ref,
             )
-        if draft.archive_all:
-            session.last_consolidated = 0
-        else:
-            session.last_consolidated = draft.window.consolidate_up_to
+
+    async def _publish_consolidation(
+        self, session: object, draft: _ConsolidationDraft
+    ) -> None:
+        role_id = str(getattr(session, "metadata", {}).get("role_id") or "").strip()
         if self._event_bus is not None:
             await self._event_bus.emit(
                 ConsolidationCommitted(

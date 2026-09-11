@@ -1,56 +1,40 @@
 from __future__ import annotations
 
 import json
-import shutil
-import importlib.util
-import sys
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import pytest_asyncio
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 from agent.core.response_parser import ResponseMetadata
-from agent.lifecycle.types import AfterReasoningCtx, PromptRenderCtx
-from agent.plugins.context import PluginContext, PluginKVStore
-from agent.plugins.manager import PluginManager
-from agent.plugins.registry import plugin_registry
+from agent.core.runtime_support import TurnRunResult
+from agent.looping.ports import SessionServices
+from agent.lifecycle.phases.after_reasoning import (
+    AfterReasoningFrame,
+    default_after_reasoning_modules,
+)
+from agent.lifecycle.phases.prompt_render import default_prompt_render_modules
+from agent.lifecycle.types import (
+    AfterReasoningCtx,
+    AfterReasoningInput,
+    PromptRenderCtx,
+    TurnState,
+)
+from agent.plugin_host import HostServices, PluginKernel
+from agent.plugin_host.events import ScopedEventBus
 from bus.event_bus import EventBus
+from bus.events import InboundMessage
 from core.roles import RoleStore
+from session.manager import Session
 
-PLUGIN_DIR = Path(__file__).resolve().parents[1]
-
-
-def _load_meme_plugin_module() -> Any:
-    path = PLUGIN_DIR / "backend" / "plugin.py"
-    spec = importlib.util.spec_from_file_location(
-        "test_meme_plugin",
-        path,
-        submodule_search_locations=[str(path.parent)],
-    )
-    if spec is None or spec.loader is None:
-        raise ImportError(str(path))
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_meme_plugin_module = _load_meme_plugin_module()
-MemePlugin = _meme_plugin_module.MemePlugin
-MemePromptModule = _meme_plugin_module.MemePromptModule
-
-
-@pytest.fixture(autouse=True)
-def _clean_registry():
-    plugin_registry._handlers._handlers.clear()
-    plugin_registry._classes.clear()
-    plugin_registry._instances.clear()
-    yield
-    plugin_registry._handlers._handlers.clear()
-    plugin_registry._classes.clear()
-    plugin_registry._instances.clear()
+PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+_KernelLoader = Callable[..., Awaitable[tuple[PluginKernel, EventBus]]]
 
 
 def _write_meme_workspace(workspace: Path) -> Path:
@@ -68,35 +52,59 @@ def _write_meme_workspace(workspace: Path) -> Path:
     return image
 
 
-async def _make_plugin(
+@pytest_asyncio.fixture
+async def load_kernel() -> AsyncIterator[_KernelLoader]:
+    kernels: list[PluginKernel] = []
+
+    async def start(tmp_path: Path, **kwargs: Any):
+        kernel, bus = await _load_kernel(tmp_path, **kwargs)
+        kernels.append(kernel)
+        return kernel, bus
+
+    yield start
+    for kernel in reversed(kernels):
+        await kernel.terminate_all()
+
+
+async def _load_kernel(
     tmp_path: Path,
     *,
-    app_config: object | None = None,
     session_manager: object | None = None,
-) -> MemePlugin:
-    plugin_dir = tmp_path / "plugins" / "meme"
-    plugin_dir.mkdir(parents=True)
-    plugin = MemePlugin()
-    plugin.context = PluginContext(
-        event_bus=None,
-        tool_registry=None,
-        plugin_id="meme",
-        plugin_dir=plugin_dir,
-        kv_store=PluginKVStore(plugin_dir / ".kv.json"),
-        workspace=tmp_path,
-        app_config=app_config,
-        session_manager=session_manager,
+    citation: str = "active",
+    plugin_source: Path = PLUGIN_ROOT,
+):
+    root = tmp_path / "plugins"
+    stage_plugin_package(plugin_source, root / "meme")
+    if citation != "missing":
+        stage_plugin_package(plugin_directory("citation"), root / "citation")
+        if citation == "disabled":
+            (root / "citation" / "plugin.disabled").touch()
+        elif citation == "failed":
+            (root / "citation" / "backend" / "plugin.py").write_text(
+                'async def setup(ctx):\n    raise RuntimeError("citation failed")\n',
+                encoding="utf-8",
+            )
+    bus = EventBus()
+    kernel = PluginKernel(
+        [root],
+        services=HostServices(
+            event_bus=bus,
+            workspace=tmp_path,
+            session_manager=session_manager,
+        ),
     )
-    await plugin.initialize()
-    return plugin
+    await kernel.load_all()
+    return kernel, bus
 
 
 @pytest.mark.asyncio
-async def test_meme_prompt_module_injects_bottom_section(tmp_path: Path) -> None:
+async def test_meme_prompt_module_injects_bottom_section(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
     _write_meme_workspace(tmp_path)
-    plugin = await _make_plugin(tmp_path)
-    module = plugin.prompt_render_modules()[0]
-    assert isinstance(module, MemePromptModule)
+    kernel, bus = await load_kernel(tmp_path)
+    module = kernel.prompt_render_modules[-1]
+    assert type(module).__name__ == "MemePromptModule"
 
     ctx = PromptRenderCtx(
         session_key="telegram:1",
@@ -117,31 +125,71 @@ async def test_meme_prompt_module_injects_bottom_section(tmp_path: Path) -> None
 
     assert ctx.system_sections_bottom[0].name == "memes"
     assert "<meme:shy>" in ctx.system_sections_bottom[0].content
-
-
-@pytest.mark.asyncio
-async def test_plugin_manager_collects_meme_prompt_module_before_initialize(
-    tmp_path: Path,
-) -> None:
-    _write_meme_workspace(tmp_path)
-    plugin_dir = tmp_path / "plugin_src" / "meme"
-    shutil.copytree(PLUGIN_DIR / "backend", plugin_dir)
-    manager = PluginManager(
-        [plugin_dir.parent],
-        event_bus=EventBus(),
-        workspace=tmp_path,
+    ordered = default_prompt_render_modules(
+        bus, MagicMock(), kernel.prompt_render_modules
     )
-
-    await manager.load_all()
-
-    assert manager.loaded_count == 1
-    assert len(manager.prompt_render_modules) == 1
+    names = [type(item).__name__ for item in ordered]
+    assert names.index("CitationPromptModule") < names.index("MemePromptModule")
 
 
 @pytest.mark.asyncio
-async def test_meme_plugin_decorates_after_reasoning(tmp_path: Path) -> None:
+async def test_meme_discovery_uses_v2_and_declares_citation(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
+    kernel, _ = await load_kernel(tmp_path)
+    record = next(record for record in kernel.discover() if record.name == "meme")
+    assert record.manifest.is_v2
+    assert record.manifest.dependencies == ("citation",)
+    assert set(record.manifest.capabilities) == {
+        "lifecycle",
+        "events",
+        "workspace",
+        "session_manager",
+    }
+    assert kernel.loaded_count == 2
+    assert [type(module).__name__ for module in kernel.prompt_render_modules] == [
+        "CitationPromptModule",
+        "MemePromptModule",
+    ]
+    await kernel.terminate_all()
+
+
+@pytest.mark.asyncio
+async def test_meme_kernel_staging_excludes_package_virtual_environments(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
+    source = stage_plugin_package(PLUGIN_ROOT, tmp_path / "source" / "meme")
+    for name in (".venv", "custom-python"):
+        environment = source / name
+        environment.mkdir()
+        _ = (environment / "pyvenv.cfg").write_text(
+            "home = local-test\n", encoding="utf-8"
+        )
+        _ = (environment / "environment-only.txt").write_text(
+            "not a plugin asset", encoding="utf-8"
+        )
+    workspace = tmp_path / "workspace"
+    image = _write_meme_workspace(workspace)
+
+    kernel, bus = await load_kernel(workspace, plugin_source=source)
+
+    assert kernel.loaded_count == 2
+    staged = next(
+        record.plugin_dir for record in kernel.discover() if record.name == "meme"
+    )
+    assert not (staged / ".venv").exists()
+    assert not (staged / "custom-python").exists()
+    assert (source / ".venv" / "pyvenv.cfg").is_file()
+    assert (source / "custom-python" / "pyvenv.cfg").is_file()
+    assert (await bus.emit(_reply_ctx())).media == [str(image)]
+
+
+@pytest.mark.asyncio
+async def test_meme_plugin_decorates_after_reasoning(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
     image = _write_meme_workspace(tmp_path)
-    plugin = await _make_plugin(tmp_path)
+    kernel, bus = await load_kernel(tmp_path)
     ctx = AfterReasoningCtx(
         session_key="telegram:1",
         channel="telegram",
@@ -155,7 +203,7 @@ async def test_meme_plugin_decorates_after_reasoning(tmp_path: Path) -> None:
         reply="好的 <meme:shy>",
     )
 
-    out = await plugin.decorate_meme(ctx)
+    out = await bus.emit(ctx)
 
     assert out.reply == "好的"
     assert out.media == [str(image)]
@@ -163,9 +211,11 @@ async def test_meme_plugin_decorates_after_reasoning(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_meme_plugin_strips_empty_protocol_tag(tmp_path: Path) -> None:
+async def test_meme_plugin_strips_empty_protocol_tag(
+    tmp_path: Path, load_kernel: _KernelLoader
+) -> None:
     _write_meme_workspace(tmp_path)
-    plugin = await _make_plugin(tmp_path)
+    kernel, bus = await load_kernel(tmp_path)
     ctx = AfterReasoningCtx(
         session_key="telegram:1",
         channel="telegram",
@@ -179,7 +229,7 @@ async def test_meme_plugin_strips_empty_protocol_tag(tmp_path: Path) -> None:
         reply="好的 <meme:>",
     )
 
-    out = await plugin.decorate_meme(ctx)
+    out = await bus.emit(ctx)
 
     assert out.reply == "好的"
     assert out.media == []
@@ -189,6 +239,7 @@ async def test_meme_plugin_strips_empty_protocol_tag(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_role_reactions_use_sendable_assets_and_global_emoji(
     tmp_path: Path,
+    load_kernel: _KernelLoader,
 ) -> None:
     image = tmp_path / "reaction.png"
     image.write_bytes(b"reaction")
@@ -206,7 +257,7 @@ async def test_role_reactions_use_sendable_assets_and_global_emoji(
     session_manager = SimpleNamespace(
         get_or_create=lambda _key: SimpleNamespace(metadata={"role_id": "mira"})
     )
-    plugin = await _make_plugin(tmp_path, session_manager=session_manager)
+    kernel, bus = await load_kernel(tmp_path, session_manager=session_manager)
     prompt_ctx = PromptRenderCtx(
         session_key="role:mira",
         channel="desktop",
@@ -222,7 +273,7 @@ async def test_role_reactions_use_sendable_assets_and_global_emoji(
         session_metadata={"role_id": "mira"},
     )
 
-    await plugin.prompt_render_modules()[0].run(
+    await kernel.prompt_render_modules[-1].run(
         SimpleNamespace(slots={"prompt:ctx": prompt_ctx})
     )
     prompt = prompt_ctx.system_sections_bottom[0].content
@@ -230,30 +281,25 @@ async def test_role_reactions_use_sendable_assets_and_global_emoji(
     assert "reactions: 表情包" in prompt
     assert "heart: ❤️" in prompt
 
-    ctx = AfterReasoningCtx(
-        session_key="role:mira",
-        channel="desktop",
-        chat_id="role:mira",
-        tools_used=(),
-        thinking=None,
-        response_metadata=ResponseMetadata(
-            raw_text="喜欢 <emoji:heart> <meme:reactions>"
-        ),
-        streamed=False,
-        tool_chain=(),
-        context_retry={},
-        reply="喜欢 <emoji:heart> <meme:reactions>",
+    out, session = await _run_reply(
+        kernel,
+        bus,
+        "喜欢 [§mem_1]\n§cited:[mem_1]§ <emoji:heart> <emoji:unknown> <meme:reactions> <foo:bar>",
+        role_id="mira",
     )
-    out = await plugin.decorate_meme(ctx)
 
     assert out.reply == "喜欢 ❤️"
     assert out.media == [str(tmp_path / "roles" / role.illustrations[0])]
     assert out.meme_tag == "reactions"
+    assert session.messages[-1]["content"] == "喜欢 ❤️"
+    assert session.messages[-1]["cited_memory_ids"] == ["mem_1"]
+    assert session.messages[-1]["media"] == out.media
 
 
 @pytest.mark.asyncio
 async def test_role_reactions_reject_disabled_category_and_unknown_emoji(
     tmp_path: Path,
+    load_kernel: _KernelLoader,
 ) -> None:
     image = tmp_path / "reaction.png"
     image.write_bytes(b"reaction")
@@ -268,7 +314,7 @@ async def test_role_reactions_reject_disabled_category_and_unknown_emoji(
         illustration_sources=[image],
         illustration_category_id="private",
     )
-    plugin = await _make_plugin(
+    kernel, bus = await load_kernel(
         tmp_path,
         session_manager=SimpleNamespace(
             get_or_create=lambda _key: SimpleNamespace(metadata={"role_id": "mira"})
@@ -289,7 +335,128 @@ async def test_role_reactions_reject_disabled_category_and_unknown_emoji(
         reply="好 <emoji:unknown> <meme:private>",
     )
 
-    out = await plugin.decorate_meme(ctx)
+    out = await bus.emit(ctx)
 
     assert out.reply == "好"
     assert out.media == []
+
+
+async def _run_reply(kernel: PluginKernel, bus: EventBus, reply: str, *, role_id: str):
+    session = Session(key="role:mira", metadata={"role_id": role_id})
+    services = SessionServices(
+        session_manager=MagicMock(append_messages=AsyncMock()),
+    )
+    frame = AfterReasoningFrame(
+        input=AfterReasoningInput(
+            state=TurnState(
+                msg=InboundMessage(
+                    channel="desktop",
+                    sender="user",
+                    chat_id="role:mira",
+                    content="你好",
+                ),
+                session_key=session.key,
+                dispatch_outbound=True,
+                session=session,
+            ),
+            turn_result=TurnRunResult(reply=reply),
+        ),
+    )
+    for module in default_after_reasoning_modules(
+        bus,
+        services,
+        plugin_modules=kernel.after_reasoning_modules,
+    ):
+        frame = await module.run(frame)
+    assert frame.output is not None
+    assert frame.output.outbound.content == frame.output.ctx.reply
+    assert frame.output.outbound.media == frame.output.ctx.media
+    return frame.output.ctx, session
+
+
+def _reply_ctx():
+    return AfterReasoningCtx(
+        session_key="telegram:1",
+        channel="telegram",
+        chat_id="1",
+        reply="好的 <meme:shy>",
+        response_metadata=ResponseMetadata(raw_text="好的 <meme:shy>"),
+        tools_used=(),
+        thinking=None,
+        streamed=False,
+        tool_chain=(),
+        context_retry={},
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("citation", ["missing", "disabled", "failed"])
+async def test_meme_blocks_when_citation_is_unavailable(
+    tmp_path: Path, load_kernel: _KernelLoader, citation: str
+):
+    kernel, bus = await load_kernel(tmp_path, citation=citation)
+    state = next(item for item in kernel.states() if item["id"] == "meme")
+    assert state["state"] == "BLOCKED"
+    assert "citation" in state["error"]
+    assert kernel.prompt_render_modules == []
+    assert kernel.after_reasoning_modules == []
+    assert (await bus.emit(_reply_ctx())).reply == "好的 <meme:shy>"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["meme", "citation"])
+async def test_meme_unload_and_reload_removes_all_contributions(
+    tmp_path: Path, load_kernel: _KernelLoader, provider: str
+):
+    image = _write_meme_workspace(tmp_path)
+    kernel, bus = await load_kernel(tmp_path)
+    for _ in range(3):
+        # Loading an active plugin again must not install a second handler.
+        assert await kernel.load("meme")
+        decorated = await bus.emit(_reply_ctx())
+        assert decorated.reply == "好的"
+        assert decorated.media == [str(image)]
+        assert decorated.meme_tag == "shy"
+        assert len(kernel.prompt_render_modules) == 2
+        assert await kernel.unload(provider) == []
+        assert not any(
+            type(module).__name__ == "MemePromptModule"
+            for module in kernel.prompt_render_modules
+        )
+        untouched = await bus.emit(_reply_ctx())
+        assert untouched.reply == "好的 <meme:shy>"
+        assert untouched.media == []
+        assert await kernel.load("meme")
+    await kernel.terminate_all()
+    assert kernel.prompt_render_modules == []
+    assert kernel.after_reasoning_modules == []
+    assert (await bus.emit(_reply_ctx())).reply == "好的 <meme:shy>"
+
+
+@pytest.mark.asyncio
+async def test_meme_setup_failure_rolls_back_events_and_prompt(
+    tmp_path: Path, load_kernel: _KernelLoader, monkeypatch: pytest.MonkeyPatch
+):
+    image = _write_meme_workspace(tmp_path)
+    original_on = ScopedEventBus.on
+
+    def fail_after_subscription(self: ScopedEventBus, event_type: type, handler: Any):
+        original_on(self, event_type, handler)
+        raise RuntimeError("registration failed after event effect")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(ScopedEventBus, "on", fail_after_subscription)
+        kernel, bus = await load_kernel(tmp_path)
+    state = next(item for item in kernel.states() if item["id"] == "meme")
+    assert state["state"] == "FAILED"
+    assert state["error"] == "registration failed after event effect"
+    assert [type(module).__name__ for module in kernel.prompt_render_modules] == [
+        "CitationPromptModule"
+    ]
+    assert (await bus.emit(_reply_ctx())).reply == "好的 <meme:shy>"
+    assert await kernel.load("meme")
+    decorated = await bus.emit(_reply_ctx())
+    assert decorated.media == [str(image)]
+    assert decorated.meme_tag == "shy"
+    assert len(kernel.prompt_render_modules) == 2
+    await kernel.terminate_all()

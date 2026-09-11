@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+from session.manager.consolidation import ConsolidationCommitRequest
+
 
 @dataclass(frozen=True)
 class ConsolidateRequest:
@@ -27,8 +29,17 @@ class RefreshRecentTurnsRequest:
 
 @dataclass(frozen=True)
 class MemoryLifecycleBindRequest:
+    """Bind maintenance to the session owner's validated memory commit operation."""
+
     get_session: Callable[[str], object]
-    save_session: Callable[[object], Awaitable[None]]
+    commit_consolidation: Callable[
+        [
+            ConsolidationCommitRequest,
+            Callable[[], Awaitable[None]],
+            Callable[[], Awaitable[None]],
+        ],
+        Awaitable[bool],
+    ]
     after_consolidation: Callable[[object], Awaitable[None]] | None = None
 
 

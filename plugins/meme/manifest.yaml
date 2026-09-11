@@ -1,0 +1,11 @@
+api: 2
+id: meme
+version: '0.1.0'
+desc: 角色表情与 emoji 协议，注入可用表情并关联回复媒体
+capabilities:
+  - lifecycle
+  - events
+  - workspace
+  - session_manager
+dependencies:
+  - citation
