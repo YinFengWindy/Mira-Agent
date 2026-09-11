@@ -1,5 +1,3 @@
-import { copyFile, mkdir, stat } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
   BrowserWindow,
@@ -12,6 +10,8 @@ import type { logDesktopDiagnostic } from "../diagnostics.js";
 import type { DesktopBridgeClient } from "./bridgeClient.js";
 import { importLocalAssets } from "../assets/localAssetImport.js";
 import type { LocalAssetRegistry } from "../assets/localAssetRegistry.js";
+import { pickNativeFiles } from "./nativeFilePicker.js";
+import { stagePickedFiles } from "../assets/pickedFileStaging.js";
 import { maxLocalAssetBytes } from "../assets/localAssetContract.js";
 import { applyRuntimeSettings, readRuntimeSettings } from "../settingsRuntime.js";
 import type { DesktopObservationController } from "../observation/controller.js";
@@ -86,41 +86,6 @@ async function importPickerSelection(
     assets.push(reference);
   }
   return assetTransport(importedPaths, assets);
-}
-
-async function importPetPackageSelection(paths: string[], importsRoot: string): Promise<string[]> {
-  const imported: string[] = [];
-  for (const source of paths) {
-    if (extname(source).toLowerCase() !== ".zip") throw new Error("桌宠包必须是 ZIP 文件");
-    const sourceStats = await stat(source);
-    if (!sourceStats.isFile() || sourceStats.size > maxLocalAssetBytes) throw new Error("桌宠包无效或超过 32MB");
-    const destinationDirectory = join(importsRoot, "pets");
-    await mkdir(destinationDirectory, { recursive: true });
-    const destination = join(destinationDirectory, `${randomUUID()}-${basename(source)}`);
-    await copyFile(source, destination);
-    imported.push(destination);
-  }
-  return imported;
-}
-
-async function stageRoleCardSelection(paths: string[], importsRoot: string): Promise<string[]> {
-  const staged: string[] = [];
-  const destinationDirectory = join(importsRoot, "role-cards");
-  await mkdir(destinationDirectory, { recursive: true });
-  for (const source of paths) {
-    const extension = extname(source).toLowerCase();
-    if (![".png", ".apng", ".json", ".charx"].includes(extension)) {
-      throw new Error("角色卡必须是 PNG、APNG、JSON 或 CHARX 文件");
-    }
-    const sourceStats = await stat(source);
-    if (!sourceStats.isFile() || sourceStats.size > maxLocalAssetBytes) {
-      throw new Error("角色卡无效或超过 32MB");
-    }
-    const destination = join(destinationDirectory, `${randomUUID()}-${basename(source)}`);
-    await copyFile(source, destination);
-    staged.push(destination);
-  }
-  return staged;
 }
 
 /** Registers all IPC handlers exposed through the desktop preload bridge. */
@@ -258,7 +223,10 @@ export function registerDesktopIpcHandlers(
       filters: [{ name: "Role cards", extensions: ["png", "apng", "json", "charx"] }],
     });
     if (result.canceled) return assetTransport([], []);
-    const stagedPaths = await stageRoleCardSelection(result.filePaths, localAssetImportsRoot);
+    const stagedPaths = await stagePickedFiles(result.filePaths, localAssetImportsRoot, {
+      namespace: "role-cards", filters: [{ name: "Role cards", extensions: ["png", "apng", "json", "charx"] }],
+      maxFileBytes: maxLocalAssetBytes,
+    });
     const assets = stagedPaths.map((path) => {
       const reference = localAssets.grantPath(path);
       if (!reference) throw new Error("staged role card is outside the trusted workspace");
@@ -303,14 +271,8 @@ export function registerDesktopIpcHandlers(
     }
     return await importPickerSelection(result.filePaths, localAssetImportsRoot, localAssets);
   });
-  host.handle("desktop:pick-pet-package", async () => {
-    const result = await host.showOpenDialog({
-      properties: ["openFile"],
-      filters: [{ name: "Codex Pet Package", extensions: ["zip"] }],
-    });
-    if (result.canceled) return assetTransport([], []);
-    return assetTransport(await importPetPackageSelection(result.filePaths, localAssetImportsRoot), []);
-  });
+  host.handle("desktop:pick-files", (_event, options: unknown) =>
+    pickNativeFiles(options, localAssetImportsRoot, (dialogOptions) => host.showOpenDialog(dialogOptions)));
   host.handle("desktop:open-attachment", async (_event, request: LocalAssetOpenRequest) => {
     const value = String(request?.url || request?.path || "").trim();
     return await openLocalAttachment(value);

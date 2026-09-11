@@ -4,6 +4,8 @@ on:
   pull_request:
     branches:
       - main
+      # Stacked feature PRs require the same complete jobs before their base merges.
+      - "codex/**"
 
 jobs:
   check-and-test:
