@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.provider import LLMResponse, ToolCall
 from agent.lifecycle.types import AfterReasoningCtx, AfterToolResultCtx
@@ -40,7 +40,7 @@ def _load_novelai_plugin(
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "novelai"
-        shutil.copytree(PLUGIN_DIR, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel

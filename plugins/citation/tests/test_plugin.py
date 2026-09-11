@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.core.response_parser import ResponseMetadata
 from agent.lifecycle.types import AfterReasoningCtx, PromptRenderCtx
@@ -182,7 +182,15 @@ async def test_citation_setup_contributes_expected_phase_modules_via_kernel(
     """
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "citation")
+    source = tmp_path / "source-citation"
+    stage_plugin_package(PLUGIN_DIR, source)
+    environment = source / ".venv/Lib/site-packages"
+    environment.mkdir(parents=True)
+    (environment / "review-marker.txt").write_text("environment", encoding="utf-8")
+    stage_plugin_package(source, root / "citation")
+    assert (root / "citation/backend/plugin.py").is_file()
+    assert (root / "citation/manifest.yaml").is_file()
+    assert not (root / "citation/.venv").exists()
     kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
     await kernel.load_all()
 

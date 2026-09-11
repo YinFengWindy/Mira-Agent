@@ -3,13 +3,13 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
-import shutil
 from pathlib import Path
 from typing import Any
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
@@ -25,7 +25,7 @@ def _run(coro: Any) -> Any:
 def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "shell_restore")
+    stage_plugin_package(PLUGIN_DIR, root / "shell_restore")
     return root
 
 

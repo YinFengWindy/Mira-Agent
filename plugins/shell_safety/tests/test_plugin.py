@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 from pathlib import Path
 from typing import Any
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
@@ -24,7 +24,7 @@ def _make_plugin_root(tmp_path: Path) -> Path:
     root = tmp_path / "plugins"
     root.mkdir()
     # 复制整个插件包（含 manifest 与 backend/），内核按 plugins/<id>/backend/plugin.py 发现
-    shutil.copytree(PLUGIN_DIR, root / "shell_safety")
+    stage_plugin_package(PLUGIN_DIR, root / "shell_safety")
     return root
 
 

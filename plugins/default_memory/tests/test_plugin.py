@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.lifecycle.types import AfterToolResultCtx, BeforeTurnCtx
 from agent.plugin_host import HostServices, PluginKernel
@@ -129,7 +129,7 @@ def _load_default_memory_kernel(
 ) -> tuple[PluginKernel, EventBus]:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "default_memory")
+    stage_plugin_package(PLUGIN_DIR, root / "default_memory")
     bus = EventBus()
     kernel = PluginKernel(
         [root],

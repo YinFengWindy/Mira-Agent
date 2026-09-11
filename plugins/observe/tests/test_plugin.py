@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
@@ -22,7 +22,7 @@ def _load_observe_kernel(
 ) -> tuple[PluginKernel, EventBus]:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "observe")
+    stage_plugin_package(PLUGIN_DIR, root / "observe")
     bus = EventBus()
     kernel = PluginKernel(
         [root], services=HostServices(event_bus=bus, workspace=workspace)

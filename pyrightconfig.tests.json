@@ -10,7 +10,8 @@
   "include": [
     "tests/backend",
     "plugins",
-    "tests/support"
+    "tests/support",
+    "packages/plugin-testkit/tests"
   ],
   "exclude": [
     ".venv",

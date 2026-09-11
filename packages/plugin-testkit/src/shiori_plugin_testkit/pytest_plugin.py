@@ -1,8 +1,7 @@
 """Real runtime fixture registered by the explicitly installed testkit distribution."""
 
-import shutil
 import pytest
-from shiori_plugin_testkit.packages import plugin_directory
+from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
 
 
 @pytest.fixture
@@ -19,10 +18,9 @@ def plugin_runtime(tmp_path, monkeypatch):
     async def start(plugin_ids: tuple[str, ...], config_text: str = ""):
         plugin_root = tmp_path / "plugin_dirs"
         for plugin_id in plugin_ids:
-            shutil.copytree(
+            stage_plugin_package(
                 plugin_directory(plugin_id),
                 plugin_root / plugin_id,
-                ignore=shutil.ignore_patterns("__pycache__"),
             )
         monkeypatch.setattr(
             "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [plugin_root]

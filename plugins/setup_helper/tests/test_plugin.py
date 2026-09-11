@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import shutil
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
@@ -72,7 +72,7 @@ async def test_setup_contributes_before_turn_module_and_bot_command_via_kernel(
     """
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(PLUGIN_DIR, root / "setup_helper")
+    stage_plugin_package(PLUGIN_DIR, root / "setup_helper")
     kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
     await kernel.load_all()
 

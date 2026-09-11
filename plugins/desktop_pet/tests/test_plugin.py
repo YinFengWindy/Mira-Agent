@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 import tempfile
 import threading
 from pathlib import Path
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from agent.tools.registry import ToolRegistry
@@ -25,7 +25,7 @@ def _load_desktop_pet_plugin(*, services: HostServices) -> PluginKernel:
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "desktop_pet"
-        shutil.copytree(PLUGIN_DIR, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel

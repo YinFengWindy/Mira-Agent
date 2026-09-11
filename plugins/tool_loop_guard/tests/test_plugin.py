@@ -1,11 +1,11 @@
 import asyncio
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.looping.core import AgentLoop
 from agent.looping.ports import (
@@ -196,7 +196,7 @@ def _tool_loop_guard_hooks(
 ) -> list[ToolHook]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "tool_loop_guard"
-        shutil.copytree(PLUGIN_DIR, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(

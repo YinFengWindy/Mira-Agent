@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +14,7 @@ import zipfile
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 UV = str(Path(sys.executable).with_name("uv.exe" if os.name == "nt" else "uv"))
@@ -75,31 +75,6 @@ def build_wheel(source: Path, destination: Path, log: Path) -> Path:
     prefix = metadata["project"]["name"].replace("-", "_") + "-"
     return next(
         path for path in destination.glob("*.whl") if path.name.startswith(prefix)
-    )
-
-
-def copy_plugin(source: Path, target: Path) -> None:
-    """Copies a package and its tests without local state, generated builds, or dependencies."""
-    shutil.copytree(
-        source,
-        target,
-        ignore=shutil.ignore_patterns(
-            ".venv",
-            ".venv-*",
-            ".ruff_cache",
-            "__pycache__",
-            "*.pyc",
-            "*.egg-info",
-            "node_modules",
-            "dist",
-            "build",
-            ".pytest_cache",
-            ".kv.json",
-            "plugin.disabled",
-            "plugin_config.json",
-            "config.local.toml",
-            ".git",
-        ),
     )
 
 
@@ -336,7 +311,7 @@ def main() -> None:
     copies, wheels = {}, {}
     for plugin_id in sorted(dependencies):
         copies[plugin_id] = artifact_root / "sources" / plugin_id
-        copy_plugin(REPOSITORY / "plugins" / plugin_id, copies[plugin_id])
+        stage_plugin_package(REPOSITORY / "plugins" / plugin_id, copies[plugin_id])
         wheels[plugin_id] = build_wheel(
             copies[plugin_id], wheelhouse, artifact_root / f"build-{plugin_id}.log"
         )

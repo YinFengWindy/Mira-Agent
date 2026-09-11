@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sqlite3
 import tempfile
 import threading
@@ -14,6 +13,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 import numpy as np
 
 from agent.plugin_host import HostServices, PluginKernel
@@ -1397,7 +1397,7 @@ def test_undo_removes_akasha_turn_state_after_session_delete(tmp_path: Path) -> 
 def _load_akasha_kernel(*, memory_engine: object, workspace: Path) -> Any:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "akasha"
-        shutil.copytree(_AKASHA_PLUGIN_ROOT, plugin_dir)
+        stage_plugin_package(_AKASHA_PLUGIN_ROOT, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(

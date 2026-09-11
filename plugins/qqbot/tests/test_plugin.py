@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
+from shiori_plugin_testkit.packages import stage_plugin_package
 
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
@@ -20,7 +20,7 @@ def _load_qqbot_channels(
 ) -> list[Any]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "qqbot"
-        shutil.copytree(PLUGIN_DIR, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(
@@ -73,7 +73,7 @@ async def test_qqbot_setup_raises_on_invalid_config_and_kernel_rolls_back() -> N
     """配置校验失败时插件加载失败并回滚，行为对齐旧 _load_plugin_config。"""
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "qqbot"
-        shutil.copytree(PLUGIN_DIR, plugin_dir)
+        stage_plugin_package(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(
