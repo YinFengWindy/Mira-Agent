@@ -1,3 +1,4 @@
+import type React from "react";
 import { ImageFormPanel } from "./ImageFormPanel";
 import type { ImageStudioFormState } from "./types";
 import { PromptLibraryIcon } from "../../../apps/desktop/renderer/src/shared/icons";
@@ -5,6 +6,9 @@ import { cx, secondarySidebarSurfaceClass, sidebarNavItemClass } from "../../../
 
 type ImageStudioSidebarProps = {
   bridgeReady: boolean;
+  collapsed: boolean;
+  animating: boolean;
+  width: number;
   form: ImageStudioFormState;
   nsfwEnabled: boolean;
   addQualityTags: boolean;
@@ -13,6 +17,7 @@ type ImageStudioSidebarProps = {
   submitting: boolean;
   validationError: string;
   onOpenPromptTagLibrary: () => void;
+  onBeginResize: (event: React.PointerEvent<HTMLDivElement>) => void;
   onChange: (next: Partial<ImageStudioFormState>) => void;
   onPickBaseImage: () => void;
   onSubmit: () => void;
@@ -21,9 +26,18 @@ type ImageStudioSidebarProps = {
   onChangeUndesiredContentPreset: (value: number) => void;
 };
 
-/** Renders the image studio workspace sidebar with generation parameters. */
+/**
+ * Renders the image studio workspace sidebar with generation parameters,
+ * into the host's resizable sidebar track (issue #226 gap A) — the
+ * `collapsed`/`animating`/`width`/`onBeginResize` props and the resize
+ * handle mirror `RoleSidebar`/`SettingsSidebar` exactly, restoring the
+ * drag-resize this sidebar had before the #180 nav.page migration.
+ */
 export function ImageStudioSidebar({
   bridgeReady,
+  collapsed,
+  animating,
+  width,
   form,
   nsfwEnabled,
   addQualityTags,
@@ -32,6 +46,7 @@ export function ImageStudioSidebar({
   submitting,
   validationError,
   onOpenPromptTagLibrary,
+  onBeginResize,
   onChange,
   onPickBaseImage,
   onSubmit,
@@ -47,9 +62,13 @@ export function ImageStudioSidebar({
   return (
     <aside
       className={cx(
-        "image-studio-sidebar grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] py-3 pl-[10px] pr-[6px]",
+        "image-studio-sidebar relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] py-3",
         secondarySidebarSurfaceClass,
+        animating && "transition-[opacity,transform] duration-[480ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+        collapsed ? "pointer-events-none -translate-x-4 px-0 opacity-0" : "translate-x-0 pl-[10px] pr-[6px] opacity-100",
       )}
+      aria-hidden={collapsed}
+      style={{ width }}
     >
       <button
         data-testid="open-prompt-tag-library-button"
@@ -78,6 +97,16 @@ export function ImageStudioSidebar({
           onChangeUndesiredContentPreset={onChangeUndesiredContentPreset}
         />
       </div>
+      <div
+        className={cx(
+          "sidebar-resize-handle absolute bottom-0 right-0 top-0 cursor-col-resize bg-transparent",
+          collapsed ? "w-0" : "w-2",
+        )}
+        role="separator"
+        aria-label="调整侧边栏宽度"
+        aria-orientation="vertical"
+        onPointerDown={onBeginResize}
+      />
     </aside>
   );
 }

@@ -2,17 +2,18 @@ import type React from "react";
 import { ChatImageLightbox } from "../chat/ChatImageLightbox";
 import { ChatSurface } from "../chat/ChatSurface";
 import type { ChatMessageNavigationScroller } from "../chat/useChatScrollController";
+import { guardedNavPageSelect } from "../plugins/pluginUiRegistry";
 import { ConfirmDialog } from "../roles/ConfirmDialog";
 import { RoleAssetsPage } from "../roles/RoleAssetsPage";
 import { RoleCreatePage } from "../roles/RoleCreatePage";
 import { RoleDetailPage } from "../roles/RoleDetailPage";
 import { RoleManagementPage } from "../roles/RoleManagementPage";
 import { RoleSearchDialog } from "../roles/RoleSearchDialog";
-import { RoleSidebar } from "../roles/RoleSidebar";
-import { RoleWorkspaceSidebar, type RoleWorkspaceSectionId } from "../roles/RoleWorkspaceSidebar";
+import type { RoleWorkspaceSectionId } from "../roles/RoleWorkspaceSidebar";
+import { SidebarTrackContent, type SidebarViewState } from "./SidebarTrackContent";
 import { usePluginUiVisibility } from "./usePluginUiVisibility";
 import { SettingsPage } from "../settings/SettingsPage";
-import { SettingsSidebar, type SettingsSectionId } from "../settings/SettingsSidebar";
+import { type SettingsSectionId } from "../settings/SettingsSidebar";
 import { cx } from "../shared/styles";
 import { NavRail, pluginNavRailViewId, type NavRailViewId } from "../shell/NavRail";
 import type {
@@ -28,14 +29,6 @@ import type {
 import type { RoleCardImportState } from "./roleCardImportState";
 import { TitleBar } from "../shell/TitleBar";
 import type { WorkspaceFeedback } from "./appState";
-
-type SidebarViewState = {
-  collapsed: boolean;
-  width: number;
-  animating: boolean;
-  resizing: boolean;
-  onBeginResize: (event: React.PointerEvent<HTMLDivElement>) => void;
-};
 
 type RightSidebarViewState = {
   collapsed: boolean;
@@ -351,7 +344,7 @@ export function DesktopAppFrame({
             pageId: page.id,
             label: page.label,
             icon: page.icon,
-            onSelect: () => onOpenPluginPage(page.id),
+            onSelect: guardedNavPageSelect(page, () => onOpenPluginPage(page.id)),
           }))}
           onOpenSearch={onOpenSearch}
           onBackToChat={onBackToChat}
@@ -366,38 +359,22 @@ export function DesktopAppFrame({
           )}
           style={{ width: sidebarState.collapsed ? 0 : sidebarState.width }}
         >
-          {mainView.kind === "settings" ? (
-            <SettingsSidebar
-              sections={settingsSidebarSections}
-              activeSection={settingsSection}
-              animating={sidebarState.animating && !sidebarState.resizing}
-              collapsed={sidebarState.collapsed}
-              width={sidebarState.width}
-              onOpenSection={onOpenSettingsSection}
-              onBeginResize={sidebarState.onBeginResize}
-            />
-          ) : roleWorkspaceViewActive ? (
-            <RoleWorkspaceSidebar
-              activeSection={roleWorkspaceSection}
-              animating={sidebarState.animating && !sidebarState.resizing}
-              collapsed={sidebarState.collapsed}
-              width={sidebarState.width}
-              onOpenSection={onOpenRoleWorkspaceSection}
-              onBeginResize={sidebarState.onBeginResize}
-            />
-          ) : (
-            <RoleSidebar
-              roles={roles}
-              activeRoleId={activeRoleId}
-              unreadCounts={unreadCounts}
-              animating={sidebarState.animating && !sidebarState.resizing}
-              bridgeReady={bridgeReady}
-              collapsed={sidebarState.collapsed}
-              width={sidebarState.width}
-              onOpenRole={onOpenRole}
-              onBeginResize={sidebarState.onBeginResize}
-            />
-          )}
+          <SidebarTrackContent
+            mainView={mainView}
+            sidebarState={sidebarState}
+            settingsSection={settingsSection}
+            settingsSidebarSections={settingsSidebarSections}
+            onOpenSettingsSection={onOpenSettingsSection}
+            roleWorkspaceViewActive={roleWorkspaceViewActive}
+            roleWorkspaceSection={roleWorkspaceSection}
+            onOpenRoleWorkspaceSection={onOpenRoleWorkspaceSection}
+            roles={roles}
+            activeRoleId={activeRoleId}
+            unreadCounts={unreadCounts}
+            bridgeReady={bridgeReady}
+            onOpenRole={onOpenRole}
+            activePluginNavPage={activePluginNavPage}
+          />
         </div>
         <main className="chat-pane relative grid min-h-0 grid-cols-[minmax(0,1fr)] overflow-hidden rounded-l-lg border-b border-l border-t border-line-soft bg-[var(--chat-bg)] shadow-soft">
           {sidebarState.collapsed ? (

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { PluginUiRegistry, type NavPageEntry, type StandaloneSettingsSectionEntry } from "./pluginUiRegistry.js";
+import { guardedNavPageSelect, PluginUiRegistry, type NavPageEntry, type StandaloneSettingsSectionEntry } from "./pluginUiRegistry.js";
 
 function standaloneSection(id: string, pluginId?: string): StandaloneSettingsSectionEntry {
   return {
@@ -61,5 +61,28 @@ describe("PluginUiRegistry", () => {
     assert.equal(registry.getSettingsSection("section-a"), undefined);
     assert.equal(registry.getNavPage("page-a"), undefined);
     assert.notEqual(registry.getNavPage("page-b"), undefined);
+  });
+});
+
+describe("guardedNavPageSelect (issue #226 gap B)", () => {
+  it("calls onSelect when the entry has no canSelect guard at all", () => {
+    let selected = false;
+    const handler = guardedNavPageSelect({}, () => { selected = true; });
+    handler();
+    assert.equal(selected, true);
+  });
+
+  it("calls onSelect when canSelect returns true", () => {
+    let selected = false;
+    const handler = guardedNavPageSelect({ canSelect: () => true }, () => { selected = true; });
+    handler();
+    assert.equal(selected, true);
+  });
+
+  it("silently refuses to call onSelect when canSelect returns false", () => {
+    let selected = false;
+    const handler = guardedNavPageSelect({ canSelect: () => false }, () => { selected = true; });
+    handler();
+    assert.equal(selected, false);
   });
 });

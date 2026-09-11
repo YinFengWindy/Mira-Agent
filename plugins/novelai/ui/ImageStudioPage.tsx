@@ -21,10 +21,11 @@ type ImageStudioPageProps = {
 
 /**
  * Renders the image studio preview workspace and the collapsible history
- * drawer. The drawer is fixed-width (no drag-resize) — this plugin page owns
- * its own layout instead of the app shell's shared, resizable sidebar track,
- * so the resize-drag affordance from before the migration to nav.page is not
- * reproduced; the collapse toggle is kept since it affects layout, not chrome.
+ * drawer. The drawer is fixed-width (no drag-resize): it is this page's own
+ * secondary panel, not the generation-form sidebar (`ImageStudioSidebar`,
+ * rendered separately into the host's resizable `sidebar-track` — issue
+ * #226 gap A), so it never had drag-resize before the #180 migration either.
+ * The collapse toggle is kept since it affects layout, not chrome.
  */
 export function ImageStudioPage({
   activeRecord,

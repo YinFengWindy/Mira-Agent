@@ -59,6 +59,28 @@ export type PluginNavPageProps = {
   activeRoleId?: string;
 };
 
+/**
+ * Props injected into a plugin-contributed sidebar that renders into the
+ * host's resizable `sidebar-track` while this page is active (issue #226
+ * gap A). Deliberately the same shape `RoleSidebar`/`SettingsSidebar`
+ * already receive from `DesktopAppFrame` — `animating`/`collapsed`/`width`
+ * so the occupant can match the host's collapse/resize transitions, and
+ * `onBeginResize` so it can wire the same drag handle those sidebars
+ * render themselves. `activeRoleId` is intentionally not included here:
+ * unlike `PluginNavPageProps`, this is a second, separate mount point the
+ * host renders as a sibling of the page component, not a child of it, and
+ * `usePluginUiVisibility`/`DesktopAppFrame` have no reason to know a
+ * plugin's sidebar wants ambient role context a plugin-owned store
+ * (see novelai's `novelAiPageStore.ts`) can relay just as well.
+ */
+export type PluginNavPageSidebarProps = {
+  pageId: string;
+  animating: boolean;
+  collapsed: boolean;
+  width: number;
+  onBeginResize: (event: React.PointerEvent<HTMLDivElement>) => void;
+};
+
 export type NavPageEntry = {
   slot: "nav.page";
   id: string;
@@ -66,7 +88,37 @@ export type NavPageEntry = {
   icon?: React.ComponentType<{ className?: string }>;
   pluginId?: string;
   Component: React.ComponentType<PluginNavPageProps>;
+  /**
+   * Optional (issue #226 gap A): when present, `DesktopAppFrame` renders it
+   * into the host's resizable sidebar track instead of falling back to
+   * `RoleSidebar` while this page is active. Absent for every entry that
+   * doesn't need one — most nav.page occupants have no sidebar at all.
+   */
+  Sidebar?: React.ComponentType<PluginNavPageSidebarProps>;
+  /**
+   * Optional (issue #226 gap B): called synchronously when the nav rail
+   * entry is clicked; returning `false` silently blocks the navigation
+   * (no host-owned feedback UI — see novelai's `canSelectNovelAiPage` for
+   * why this stays silent). Absent means always selectable, today's
+   * behaviour.
+   */
+  canSelect?: () => boolean;
 };
+
+/**
+ * Builds a nav-rail entry's click handler around its optional `canSelect`
+ * guard (issue #226 gap B): if `canSelect` is present and currently returns
+ * `false`, the click is silently absorbed instead of calling `onSelect` —
+ * no host-owned feedback UI, matching the pre-migration behaviour this
+ * restores (see novelai's `canSelectNovelAiPage`). An entry with no
+ * `canSelect` is always selectable, today's behaviour.
+ */
+export function guardedNavPageSelect(entry: Pick<NavPageEntry, "canSelect">, onSelect: () => void): () => void {
+  return () => {
+    if (entry.canSelect && !entry.canSelect()) return;
+    onSelect();
+  };
+}
 
 type Origin = "builtin" | "plugin";
 
