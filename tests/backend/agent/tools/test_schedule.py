@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 from agent.scheduler import LatencyTracker, SchedulerService
 from agent.tools.schedule import CancelScheduleTool, ListSchedulesTool, ScheduleTool
-from conftest import make_job
+from tests.support.scheduler import make_job
 
 _NOW = datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 _NOW_FN = lambda: _NOW  # noqa: E731
@@ -125,7 +125,9 @@ async def test_schedule_tool_defaults_to_shanghai_timezone(
     assert job.timezone == "Asia/Shanghai"
 
 
-async def test_schedule_persists_role_execution_identity(tmp_path, mock_push, mock_loop):
+async def test_schedule_persists_role_execution_identity(
+    tmp_path, mock_push, mock_loop
+):
     svc = make_svc(tmp_path, mock_push, mock_loop)
     tool = ScheduleTool(svc, default_tz="UTC")
 

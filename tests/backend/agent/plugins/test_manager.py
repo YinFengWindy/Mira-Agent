@@ -4,6 +4,8 @@ import json
 import shlex
 import shutil
 import tempfile
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,13 +15,17 @@ import pytest
 
 # 预热 agent.core 导入链，避免 agent.lifecycle.types 触发循环导入
 from agent.core.passive_turn import ContextStore as _  # noqa: F401
-from agent.lifecycle.types import AfterStepCtx, AfterToolResultCtx, BeforeToolCallCtx, BeforeTurnCtx
+from agent.lifecycle.types import (
+    AfterStepCtx,
+    AfterToolResultCtx,
+    BeforeToolCallCtx,
+    BeforeTurnCtx,
+)
 from agent.plugins.manager import PluginManager
 from agent.plugins.registry import plugin_registry
 from agent.tool_hooks import ToolHook
 from agent.tools.registry import ToolRegistry
 from bus.event_bus import EventBus
-
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -39,8 +45,12 @@ def _clean_registry():
     plugin_registry._instances.clear()
 
 
-def _make_manager(plugin_dirs: list[Path], *, event_bus: EventBus, tools: ToolRegistry | None = None) -> PluginManager:
-    return PluginManager(plugin_dirs=plugin_dirs, event_bus=event_bus, tool_registry=tools)
+def _make_manager(
+    plugin_dirs: list[Path], *, event_bus: EventBus, tools: ToolRegistry | None = None
+) -> PluginManager:
+    return PluginManager(
+        plugin_dirs=plugin_dirs, event_bus=event_bus, tool_registry=tools
+    )
 
 
 def _before_turn_ctx(**overrides: object) -> BeforeTurnCtx:
@@ -97,8 +107,12 @@ async def test_generation_namespace_keeps_previous_plugin_instances_alive(tmp_pa
         "from agent.plugins import Plugin\nclass Hello(Plugin):\n    name = 'hello'\n",
         encoding="utf-8",
     )
-    old = PluginManager([plugin_dir.parent], event_bus=EventBus(), namespace="old", strict=True)
-    new = PluginManager([plugin_dir.parent], event_bus=EventBus(), namespace="new", strict=True)
+    old = PluginManager(
+        [plugin_dir.parent], event_bus=EventBus(), namespace="old", strict=True
+    )
+    new = PluginManager(
+        [plugin_dir.parent], event_bus=EventBus(), namespace="new", strict=True
+    )
     await old.load_all()
     old_path = old.discover()[0]["import_path"]
     old_instance = plugin_registry.get_instance(old_path)
@@ -119,7 +133,9 @@ async def test_strict_candidate_rejects_plugin_initialization_failure(tmp_path):
         "from agent.plugins import Plugin\nclass Broken(Plugin):\n    name = 'broken'\n    async def initialize(self):\n        raise RuntimeError('candidate failure')\n",
         encoding="utf-8",
     )
-    manager = PluginManager([tmp_path], event_bus=EventBus(), namespace="candidate", strict=True)
+    manager = PluginManager(
+        [tmp_path], event_bus=EventBus(), namespace="candidate", strict=True
+    )
     with pytest.raises(RuntimeError, match="candidate failure"):
         await manager.load_all()
     assert manager.loaded_count == 0
@@ -159,8 +175,10 @@ async def test_after_step_tap_hook_fires():
 
     # 从已加载的 hello 模块取 after_step_calls，断言 handler 真实执行
     import sys
+
     hello_mod = next(
-        m for k, m in sys.modules.items()
+        m
+        for k, m in sys.modules.items()
         if k.startswith("akasic_plugin_") and k.endswith("_hello")
     )
     hello_mod.after_step_calls.clear()
@@ -497,9 +515,9 @@ async def test_plugin_config_json_overrides_defaults():
         await mgr.load_all()
         instance = _get_instance("configured")
         assert instance.context.config is not None
-        assert instance.context.config.api_key == "override-key"   # overridden
-        assert instance.context.config.max_results == 10            # still default
-        assert instance.context.config.enabled is False             # overridden
+        assert instance.context.config.api_key == "override-key"  # overridden
+        assert instance.context.config.max_results == 10  # still default
+        assert instance.context.config.enabled is False  # overridden
 
 
 @pytest.mark.asyncio
@@ -526,7 +544,7 @@ async def test_no_plugin_config_json_keeps_original_defaults():
         await mgr.load_all()
         instance = _get_instance("configured")
         assert instance.context.config is not None
-        assert instance.context.config.api_key == "test-key"       # from schema default
+        assert instance.context.config.api_key == "test-key"  # from schema default
         assert instance.context.config.max_results == 10
         assert instance.context.config.enabled is True
 
@@ -586,7 +604,9 @@ async def test_on_tool_result_fires_after_tool_execution():
         instance = _get_instance("audit")
         instance.after_tool_results.clear()  # type: ignore[union-attr]
 
-        await bus.fanout(_after_tool_result_ctx(tool_name="get_weather", status="success"))
+        await bus.fanout(
+            _after_tool_result_ctx(tool_name="get_weather", status="success")
+        )
         assert ("get_weather", "success") in instance.after_tool_results  # type: ignore[union-attr]
 
 
@@ -609,12 +629,18 @@ async def test_tool_hooks_fire_through_real_reasoner():
     class FakeProvider:
         _call = 0
 
-        async def chat(self, messages, tools, model, max_tokens, **kwargs) -> LLMResponse:
+        async def chat(
+            self, messages, tools, model, max_tokens, **kwargs
+        ) -> LLMResponse:
             self._call += 1
             if self._call == 1:
                 return LLMResponse(
                     content=None,
-                    tool_calls=[ToolCall(id="c1", name="get_weather", arguments={"city": "Tokyo"})],
+                    tool_calls=[
+                        ToolCall(
+                            id="c1", name="get_weather", arguments={"city": "Tokyo"}
+                        )
+                    ],
                 )
             return LLMResponse(content="Tokyo is sunny.")
 
@@ -672,6 +698,7 @@ async def test_on_tool_pre_rewrites_rm_to_mv():
 
         from agent.tool_hooks.executor import ToolExecutor
         from agent.tool_hooks.types import ToolExecutionRequest
+
         executor = ToolExecutor(mgr.tool_hooks)
 
         captured: dict[str, Any] = {}
@@ -711,6 +738,7 @@ async def test_on_tool_pre_skips_non_shell_tool():
 
         from agent.tool_hooks.executor import ToolExecutor
         from agent.tool_hooks.types import ToolExecutionRequest
+
         executor = ToolExecutor(mgr.tool_hooks)
 
         captured: dict[str, Any] = {}
@@ -741,6 +769,7 @@ async def test_on_tool_pre_skips_non_rm_command():
 
         from agent.tool_hooks.executor import ToolExecutor
         from agent.tool_hooks.types import ToolExecutionRequest
+
         executor = ToolExecutor(mgr.tool_hooks)
 
         captured: dict[str, Any] = {}
@@ -771,6 +800,7 @@ async def test_on_tool_pre_rewrites_rm_rf():
 
         from agent.tool_hooks.executor import ToolExecutor
         from agent.tool_hooks.types import ToolExecutionRequest
+
         executor = ToolExecutor(mgr.tool_hooks)
 
         captured: dict[str, Any] = {}
@@ -802,6 +832,7 @@ async def test_on_tool_pre_rewrites_sudo_rm():
 
         from agent.tool_hooks.executor import ToolExecutor
         from agent.tool_hooks.types import ToolExecutionRequest
+
         executor = ToolExecutor(mgr.tool_hooks)
 
         captured: dict[str, Any] = {}
@@ -834,12 +865,20 @@ async def test_on_tool_pre_fires_through_real_reasoner():
     class FakeProvider:
         _called = False
 
-        async def chat(self, messages, tools, model, max_tokens, **kwargs) -> LLMResponse:
+        async def chat(
+            self, messages, tools, model, max_tokens, **kwargs
+        ) -> LLMResponse:
             if not self._called:
                 self._called = True
                 return LLMResponse(
                     content=None,
-                    tool_calls=[ToolCall(id="c1", name="shell", arguments={"command": "rm /tmp/a.txt"})],
+                    tool_calls=[
+                        ToolCall(
+                            id="c1",
+                            name="shell",
+                            arguments={"command": "rm /tmp/a.txt"},
+                        )
+                    ],
                 )
             return LLMResponse(content="done")
 
@@ -852,7 +891,11 @@ async def test_on_tool_pre_fires_through_real_reasoner():
     class FakeShell(AgentTool):
         name = "shell"
         description = "fake shell"
-        parameters = {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}
+        parameters = {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+        }
 
         async def execute(self, **kwargs: Any) -> str:
             captured_commands.append(str(kwargs.get("command", "")))
@@ -1045,3 +1088,19 @@ async def test_core_runtime_start_wires_plugin_tool_hooks_to_loop_and_spawn():
     assert loop.received_after_turn == plugin_manager.after_turn_modules
     assert loop.received_hooks == plugin_manager.tool_hooks
     assert spawn_tool.received_hooks == plugin_manager.tool_hooks
+
+
+def test_manager_can_be_imported_before_public_kernel_in_fresh_interpreter() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            "from agent.plugins.manager import PluginManager; from agent.plugin_host import PluginKernel; assert PluginManager and PluginKernel",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -11,10 +11,12 @@ from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from plugins.setup_helper.backend.plugin import ChatIdCommandModule
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
-def _state(content: str, *, chat_id: str = "42", channel: str = "telegram") -> SimpleNamespace:
+def _state(
+    content: str, *, chat_id: str = "42", channel: str = "telegram"
+) -> SimpleNamespace:
     return SimpleNamespace(
         session_key=f"{channel}:{chat_id}",
         msg=SimpleNamespace(
@@ -70,7 +72,7 @@ async def test_setup_contributes_before_turn_module_and_bot_command_via_kernel(
     """
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(REPO_ROOT / "plugins" / "setup_helper", root / "setup_helper")
+    shutil.copytree(PLUGIN_DIR, root / "setup_helper")
     kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
     await kernel.load_all()
 

@@ -7,6 +7,9 @@ import pytest
 
 from bootstrap.paths import (
     REPOSITORY_ROOT,
+    builtin_skills_path,
+    common_emojis_path,
+    plugin_roots,
     ensure_repository_root_importable,
     resource_root,
 )
@@ -50,3 +53,22 @@ def test_ensure_repository_root_importable_leaves_frozen_runs_alone(
     ensure_repository_root_importable()
 
     assert str(REPOSITORY_ROOT) not in sys.path
+
+
+def test_source_resources_contain_real_skills_and_emojis() -> None:
+    assert (
+        next(builtin_skills_path().glob("*/SKILL.md"))
+        .read_text(encoding="utf-8")
+        .strip()
+    )
+    assert common_emojis_path().is_file()
+    assert plugin_roots() == [REPOSITORY_ROOT / "plugins"]
+
+
+def test_frozen_resources_share_the_bundle_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert builtin_skills_path() == tmp_path / "skills"
+    assert common_emojis_path() == tmp_path / "common_emojis.json"
+    assert plugin_roots() == [tmp_path / "plugins"]

@@ -16,7 +16,7 @@ import pytest
 
 from agent.config import load_config_text
 from bootstrap.app import AppRuntime, RuntimeFeatures
-from conftest import stage_plugin_fixture
+from tests.support.plugin_fixtures import stage_plugin_fixture
 from core.roles.store import RoleStore
 from desktop_bridge.runtime.service import ReloadableDesktopService
 
@@ -44,7 +44,9 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # 而「无配置模型返回 schema=None」这类断言在插件缺席时同样成立，测试会假绿。
     _ = stage_plugin_fixture("hello", root)
     _ = stage_plugin_fixture("nullable_config", root)
-    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
+    monkeypatch.setattr(
+        "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root]
+    )
 
 
 async def _start_service(
@@ -90,9 +92,10 @@ async def test_get_returns_schema_and_default_backed_values(tmp_path, monkeypatc
         await app.shutdown()
 
 
-
 @pytest.mark.asyncio
-async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(tmp_path, monkeypatch):
+async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, _, app = await _start_service(tmp_path)
     try:
@@ -111,15 +114,23 @@ async def test_get_reports_null_schema_for_a_plugin_without_a_config_model(tmp_p
 
 
 @pytest.mark.asyncio
-async def test_set_rejects_a_plugin_without_a_config_model_and_writes_nothing(tmp_path, monkeypatch):
+async def test_set_rejects_a_plugin_without_a_config_model_and_writes_nothing(
+    tmp_path, monkeypatch
+):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
         before = path.read_text(encoding="utf-8")
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "hello", "operation_id": "op-unsupported", "values": {"anything": 1},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "hello",
+                "operation_id": "op-unsupported",
+                "values": {"anything": 1},
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_config_unsupported"
@@ -136,10 +147,15 @@ async def test_set_rejects_invalid_values_and_writes_nothing(tmp_path, monkeypat
     try:
         before = path.read_text(encoding="utf-8")
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-invalid",
-            "values": {"allow_from": 123},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-invalid",
+                "values": {"allow_from": 123},
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_config_invalid"
@@ -155,10 +171,15 @@ async def test_set_validates_commits_and_survives_a_restart(tmp_path, monkeypatc
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, path, app = await _start_service(tmp_path)
     try:
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-valid",
-            "values": {"app_id": "app-123", "client_secret": "secret-xyz"},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-valid",
+                "values": {"app_id": "app-123", "client_secret": "secret-xyz"},
+            },
+        )
 
         assert response.error is None, response.error
         assert response.payload["plugin_id"] == "qqbot"
@@ -188,14 +209,19 @@ async def test_set_validates_commits_and_survives_a_restart(tmp_path, monkeypatc
     # 用同一份配置文件重新构建一个全新的 AppRuntime + ReloadableDesktopService，
     # 模拟进程重启后重新启动桥接。
     restarted_app = AppRuntime(
-        restarted, tmp_path,
+        restarted,
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await restarted_app.start()
-    restarted_service = ReloadableDesktopService(restarted_app, path, RoleStore(tmp_path))
+    restarted_service = ReloadableDesktopService(
+        restarted_app, path, RoleStore(tmp_path)
+    )
     try:
         response_after_restart = await _request(
-            restarted_service, "plugin.config.get", {"plugin_id": "qqbot"},
+            restarted_service,
+            "plugin.config.get",
+            {"plugin_id": "qqbot"},
         )
         assert response_after_restart.error is None, response_after_restart.error
         assert response_after_restart.payload["values"]["app_id"] == "app-123"
@@ -218,10 +244,15 @@ async def test_set_refuses_a_value_toml_cannot_represent(tmp_path, monkeypatch):
     try:
         before = path.read_text(encoding="utf-8")
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "nullable_config", "operation_id": "op-null",
-            "values": {"label": None},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "nullable_config",
+                "operation_id": "op-null",
+                "values": {"label": None},
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_config_unrepresentable"
@@ -232,7 +263,9 @@ async def test_set_refuses_a_value_toml_cannot_represent(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_set_rejects_a_merge_that_corrupts_an_unrelated_table(tmp_path, monkeypatch):
+async def test_set_rejects_a_merge_that_corrupts_an_unrelated_table(
+    tmp_path, monkeypatch
+):
     """整份文档回读守卫：目标表之外的任何键值变化都必须整体拒绝。
 
     之前的守卫只重新校验目标插件自己的那张表，对合并逻辑意外改动了别的表
@@ -254,13 +287,20 @@ async def test_set_rejects_a_merge_that_corrupts_an_unrelated_table(tmp_path, mo
             return merged.replace('profile = "quiet"', 'profile = "loud"')
 
         monkeypatch.setattr(
-            plugin_config_module, "merge_plugin_table", _merge_but_corrupt_an_unrelated_table,
+            plugin_config_module,
+            "merge_plugin_table",
+            _merge_but_corrupt_an_unrelated_table,
         )
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-corrupt",
-            "values": {"app_id": "app-1", "client_secret": "secret-1"},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-corrupt",
+                "values": {"app_id": "app-1", "client_secret": "secret-1"},
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_config_unrepresentable"
@@ -279,12 +319,22 @@ async def test_set_requires_plugin_id_and_operation_id(tmp_path, monkeypatch):
     try:
         before = path.read_text(encoding="utf-8")
 
-        missing_plugin_id = await _request(service, "plugin.config.set", {
-            "operation_id": "op-1", "values": {},
-        })
-        missing_operation_id = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "values": {},
-        })
+        missing_plugin_id = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "operation_id": "op-1",
+                "values": {},
+            },
+        )
+        missing_operation_id = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "values": {},
+            },
+        )
 
         assert missing_plugin_id.error.code == "runtime_invalid_request"
         assert missing_operation_id.error.code == "runtime_invalid_request"
@@ -306,7 +356,9 @@ async def test_get_returns_json_safe_defaults(tmp_path, monkeypatch):
     service, _, app = await _start_service(tmp_path)
     try:
         response = await _request(
-            service, "plugin.config.get", {"plugin_id": "nullable_config"},
+            service,
+            "plugin.config.get",
+            {"plugin_id": "nullable_config"},
         )
 
         assert response.error is None, response.error
@@ -344,10 +396,15 @@ async def test_set_survives_the_kernel_generation_being_replaced(tmp_path, monke
             service.plugin_config._settings, "apply", _apply_with_disposed_kernel
         )
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-stale",
-            "values": {"app_id": "app-1", "client_secret": "s-1"},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-stale",
+                "values": {"app_id": "app-1", "client_secret": "s-1"},
+            },
+        )
 
         assert response.error is None, response.error
         assert response.payload["values"]["app_id"] == "app-1"
@@ -370,7 +427,8 @@ async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
     service, path, app = await _start_service(tmp_path)
     try:
         payload = {
-            "plugin_id": "qqbot", "operation_id": "op-retry",
+            "plugin_id": "qqbot",
+            "operation_id": "op-retry",
             "values": {"app_id": "app-1", "client_secret": "s-1"},
         }
         first = await _request(service, "plugin.config.set", payload)
@@ -378,7 +436,7 @@ async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
 
         # 无关设置发生变化：直接改动已提交的配置文本
         service.settings.config_text = service.settings.config_text + (
-            '\n[plugins.unrelated]\nflag = true\n'
+            "\n[plugins.unrelated]\nflag = true\n"
         )
 
         retry = await _request(service, "plugin.config.set", dict(payload))
@@ -392,7 +450,8 @@ async def test_identical_retry_is_idempotent_after_unrelated_config_changes(
 
 @pytest.mark.asyncio
 async def test_identical_retry_hits_memo_even_when_re_deriving_would_now_fail_the_guard(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """原样重试必须直接命中幂等 memo，不能重新触发合并与整份文档回读守卫。
 
@@ -406,7 +465,8 @@ async def test_identical_retry_hits_memo_even_when_re_deriving_would_now_fail_th
     service, path, app = await _start_service(tmp_path)
     try:
         payload = {
-            "plugin_id": "qqbot", "operation_id": "op-retry-guard",
+            "plugin_id": "qqbot",
+            "operation_id": "op-retry-guard",
             "values": {"app_id": "app-1", "client_secret": "s-1"},
         }
         first = await _request(service, "plugin.config.set", payload)
@@ -447,10 +507,15 @@ async def test_set_rejects_a_dotted_key_form_it_cannot_locate(tmp_path, monkeypa
             before + '\n[plugins]\nqqbot.app_id = "existing"\n'
         )
 
-        response = await _request(service, "plugin.config.set", {
-            "plugin_id": "qqbot", "operation_id": "op-dotted",
-            "values": {"app_id": "app-1", "client_secret": "secret-1"},
-        })
+        response = await _request(
+            service,
+            "plugin.config.set",
+            {
+                "plugin_id": "qqbot",
+                "operation_id": "op-dotted",
+                "values": {"app_id": "app-1", "client_secret": "secret-1"},
+            },
+        )
 
         assert response.error is not None
         assert response.error.code == "plugin_config_unrepresentable"

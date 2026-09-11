@@ -3,7 +3,7 @@
 import pytest
 
 from agent.config import load_config_text
-from conftest import plugin_bridge_request
+from shiori_plugin_testkit.bridge import plugin_bridge_request
 
 
 @pytest.mark.asyncio

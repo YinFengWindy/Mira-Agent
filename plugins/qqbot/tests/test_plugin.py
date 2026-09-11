@@ -12,13 +12,15 @@ from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 from plugins.qqbot.backend.plugin import QQBotConfigModel
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
-def _load_qqbot_channels(plugin_configs: dict[str, dict[str, Any]] | None = None) -> list[Any]:
+def _load_qqbot_channels(
+    plugin_configs: dict[str, dict[str, Any]] | None = None,
+) -> list[Any]:
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "qqbot"
-        shutil.copytree(_REPO_ROOT / "plugins" / "qqbot", plugin_dir)
+        shutil.copytree(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(
@@ -58,7 +60,9 @@ def test_qqbot_plugin_skips_channel_when_only_app_id_present() -> None:
 
 def test_qqbot_config_model_validates_directly() -> None:
     """QQBotConfigModel 的校验/别名规则单独测试，不依赖内核装配。"""
-    config = QQBotConfigModel.model_validate({"app_id": "${APP_ID}", "client_secret": "s"})
+    config = QQBotConfigModel.model_validate(
+        {"app_id": "${APP_ID}", "client_secret": "s"}
+    )
 
     assert config.app_id == ""
     assert config.client_secret == "s"
@@ -69,7 +73,7 @@ async def test_qqbot_setup_raises_on_invalid_config_and_kernel_rolls_back() -> N
     """配置校验失败时插件加载失败并回滚，行为对齐旧 _load_plugin_config。"""
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "qqbot"
-        shutil.copytree(_REPO_ROOT / "plugins" / "qqbot", plugin_dir)
+        shutil.copytree(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(

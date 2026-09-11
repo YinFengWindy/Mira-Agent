@@ -17,7 +17,7 @@ from plugins.default_memory.backend.plugin import (
     _DefaultMemoryRecorder,
 )
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _before_turn_ctx(**overrides: object) -> BeforeTurnCtx:
@@ -38,7 +38,11 @@ def _before_turn_ctx(**overrides: object) -> BeforeTurnCtx:
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 # ── _DefaultMemoryRecorder / ContextPrepareRecordModule 单元行为 ──────────────
@@ -81,7 +85,9 @@ async def test_context_prepare_module_delegates_to_recorder(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_recall_memory_recorded_only_for_matching_tool_when_active(tmp_path: Path) -> None:
+async def test_recall_memory_recorded_only_for_matching_tool_when_active(
+    tmp_path: Path,
+) -> None:
     data_path = tmp_path / "trace.jsonl"
     recorder = _DefaultMemoryRecorder(active=True, data_path=data_path)
 
@@ -123,9 +129,7 @@ def _load_default_memory_kernel(
 ) -> tuple[PluginKernel, EventBus]:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(
-        _REPO_ROOT / "plugins" / "default_memory", root / "default_memory"
-    )
+    shutil.copytree(PLUGIN_DIR, root / "default_memory")
     bus = EventBus()
     kernel = PluginKernel(
         [root],
@@ -137,7 +141,9 @@ def _load_default_memory_kernel(
 
 
 @pytest.mark.asyncio
-async def test_setup_wires_before_turn_module_and_tool_result_event(tmp_path: Path) -> None:
+async def test_setup_wires_before_turn_module_and_tool_result_event(
+    tmp_path: Path,
+) -> None:
     """setup(ctx) 必须与旧 DefaultMemoryInspector 等价：贡献 before_turn 模块，
     并把 recall_memory 工具结果记录经 AFTER_TOOL_RESULT 事件接线。"""
     workspace = tmp_path / "workspace"

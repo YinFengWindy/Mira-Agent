@@ -21,7 +21,7 @@ from bus.events_lifecycle import SceneObservationCommitted
 from core.roles.store import RoleStore
 from session.manager import SessionManager
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 _PLUGIN_CONFIG = {"novelai": {"enabled": True, "token": "novel-token"}}
 
 
@@ -40,7 +40,7 @@ def _load_novelai_plugin(
     """
     with tempfile.TemporaryDirectory() as tmp:
         plugin_dir = Path(tmp) / "novelai"
-        shutil.copytree(_REPO_ROOT / "plugins" / "novelai", plugin_dir)
+        shutil.copytree(PLUGIN_DIR, plugin_dir)
         kernel = PluginKernel([Path(tmp)], services=services)
         asyncio.run(kernel.load_all())
         return kernel

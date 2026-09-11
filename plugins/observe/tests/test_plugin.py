@@ -14,7 +14,7 @@ from bus.event_bus import EventBus
 from bus.events_lifecycle import TurnCommitted
 from core.memory.events import MemoryWritten, RetrievalCompleted, RetrievalHitSummary
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_observe_kernel(
@@ -22,9 +22,11 @@ def _load_observe_kernel(
 ) -> tuple[PluginKernel, EventBus]:
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(_REPO_ROOT / "plugins" / "observe", root / "observe")
+    shutil.copytree(PLUGIN_DIR, root / "observe")
     bus = EventBus()
-    kernel = PluginKernel([root], services=HostServices(event_bus=bus, workspace=workspace))
+    kernel = PluginKernel(
+        [root], services=HostServices(event_bus=bus, workspace=workspace)
+    )
     return kernel, bus
 
 
@@ -86,7 +88,9 @@ async def _wait_for_turn_row(db_path: Path, *, timeout: float = 5.0) -> int:
     return await _wait_for_table_count(db_path, "turns", timeout=timeout)
 
 
-async def _wait_for_table_count(db_path: Path, table: str, *, timeout: float = 5.0) -> int:
+async def _wait_for_table_count(
+    db_path: Path, table: str, *, timeout: float = 5.0
+) -> int:
     """Polls observe.db until the async writer task has committed a row into ``table``."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
@@ -112,7 +116,9 @@ async def test_setup_skips_without_workspace(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_turn_committed_event_reaches_writer_and_is_persisted(tmp_path: Path) -> None:
+async def test_turn_committed_event_reaches_writer_and_is_persisted(
+    tmp_path: Path,
+) -> None:
     """setup() 必须与旧 ObservePlugin.initialize() 等价：TurnCommitted 经事件订阅
     真正写入 observe.db（而不仅仅是"没抛异常"）。"""
     workspace = tmp_path / "workspace"
@@ -129,7 +135,9 @@ async def test_turn_committed_event_reaches_writer_and_is_persisted(tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_retrieval_completed_event_translated_and_persisted(tmp_path: Path) -> None:
+async def test_retrieval_completed_event_translated_and_persisted(
+    tmp_path: Path,
+) -> None:
     """RetrievalCompleted 订阅必须真正落库，且经 _to_rag_query_log 翻译
     （截断 summary 到 120 字符、映射 hits_json）——不是只订阅了事件却没接对
     翻译函数。"""
@@ -151,8 +159,15 @@ async def test_retrieval_completed_event_translated_and_persisted(tmp_path: Path
         ).fetchone()
 
     (
-        caller, session_key, query, orig_query, aux_queries_json,
-        hits_json, injected_count, route_decision, error,
+        caller,
+        session_key,
+        query,
+        orig_query,
+        aux_queries_json,
+        hits_json,
+        injected_count,
+        route_decision,
+        error,
     ) = row
     assert caller == "passive"
     assert session_key == "cli:1"
@@ -196,7 +211,16 @@ async def test_memory_written_event_translated_and_persisted(tmp_path: Path) -> 
                FROM memory_writes"""
         ).fetchone()
 
-    session_key, source_ref, action, memory_type, item_id, summary, superseded_ids_json, error = row
+    (
+        session_key,
+        source_ref,
+        action,
+        memory_type,
+        item_id,
+        summary,
+        superseded_ids_json,
+        error,
+    ) = row
     assert session_key == "cli:1"
     assert source_ref == "cli:1@post_response"
     assert action == "supersede"

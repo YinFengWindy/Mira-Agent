@@ -11,7 +11,7 @@ from agent.plugin_host import HostServices, PluginKernel
 from agent.tool_hooks import ToolExecutionRequest, ToolExecutor
 from bus.event_bus import EventBus
 
-PLUGIN_DIR = Path(__file__).resolve().parents[3] / "plugins" / "shell_restore"
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 async def _invoke(tool_name: str, arguments: dict[str, Any]) -> Any:
@@ -50,10 +50,14 @@ def test_shell_restore_hook_name_matches_legacy_convention(tmp_path: Path) -> No
     """hook 名由 ToolHooksCapability 统一生成，须与旧系统
     f"plugin:{instance.name}:{md.handler_name}" 逐字一致（#182 评审）。"""
     bus = EventBus()
-    kernel = PluginKernel([_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus))
+    kernel = PluginKernel(
+        [_make_plugin_root(tmp_path)], services=HostServices(event_bus=bus)
+    )
     _run(kernel.load_all())
 
-    assert [h.name for h in kernel.tool_hooks] == ["plugin:shell_restore:rewrite_rm_to_mv"]
+    assert [h.name for h in kernel.tool_hooks] == [
+        "plugin:shell_restore:rewrite_rm_to_mv"
+    ]
 
 
 def test_shell_rm_hook_rewrites_rm_and_creates_restore_dir(tmp_path: Path) -> None:

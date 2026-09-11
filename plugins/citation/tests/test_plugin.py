@@ -16,11 +16,11 @@ from agent.lifecycle.types import AfterReasoningCtx, PromptRenderCtx
 from agent.plugin_host import HostServices, PluginKernel
 from bus.event_bus import EventBus
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
 
 
 def _load_citation_plugin_module() -> Any:
-    path = REPO_ROOT / "plugins" / "citation" / "backend" / "plugin.py"
+    path = PLUGIN_DIR / "backend" / "plugin.py"
     spec = importlib.util.spec_from_file_location("test_citation_plugin", path)
     if spec is None or spec.loader is None:
         raise ImportError(str(path))
@@ -87,9 +87,7 @@ def test_citation_extracts_before_trailing_protocol_tag() -> None:
 
 
 def test_citation_keeps_multiple_trailing_protocol_tags() -> None:
-    clean, ids = extract_cited_ids(
-        "答复正文\n§cited:[mem_1]§ <meme:shy> <foo:bar>"
-    )
+    clean, ids = extract_cited_ids("答复正文\n§cited:[mem_1]§ <meme:shy> <foo:bar>")
 
     assert clean == "答复正文 <meme:shy> <foo:bar>"
     assert ids == ["mem_1"]
@@ -184,7 +182,7 @@ async def test_citation_setup_contributes_expected_phase_modules_via_kernel(
     """
     root = tmp_path / "plugins"
     root.mkdir()
-    shutil.copytree(REPO_ROOT / "plugins" / "citation", root / "citation")
+    shutil.copytree(PLUGIN_DIR, root / "citation")
     kernel = PluginKernel([root], services=HostServices(event_bus=EventBus()))
     await kernel.load_all()
 

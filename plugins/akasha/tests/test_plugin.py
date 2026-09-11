@@ -39,15 +39,17 @@ from plugins.akasha.backend.core import (
     reinforce_boost_from_payload,
 )
 from plugins.akasha.backend.plugin import render_last_query
-from plugins.akasha.backend.replay import AkashaReplayRuntime, ReplayMessage, _turn_messages
+from plugins.akasha.backend.replay import (
+    AkashaReplayRuntime,
+    ReplayMessage,
+    _turn_messages,
+)
 from plugins.akasha.backend.store import (
     ActivationEventRow,
     AkashaStore,
     EdgeUpdate,
     SourceMessage,
 )
-from scripts.build_akasha_db import _iter_replay_turns, _load_embeddings_from_cache, _skip_message
-
 
 QUERY_TS = datetime.fromtimestamp(1_700_000_000.0, timezone.utc)
 _AKASHA_PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -55,8 +57,7 @@ _AKASHA_PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 
 def _init_sessions_db(path: Path) -> None:
     with closing(sqlite3.connect(str(path))) as db:
-        db.execute(
-            """
+        db.execute("""
             CREATE TABLE messages (
                 id TEXT PRIMARY KEY,
                 session_key TEXT NOT NULL,
@@ -65,19 +66,48 @@ def _init_sessions_db(path: Path) -> None:
                 content TEXT,
                 ts TEXT NOT NULL
             )
-            """
-        )
+            """)
         db.executemany(
             "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)",
             [
-                ("s:0", "s", 0, "user", "第一条用户消息需要完整展示", "2026-01-01T00:00:00+00:00"),
-                ("s:1", "s", 1, "assistant", "第一条助手回复会被截断展示并保留引用", "2026-01-01T00:00:01+00:00"),
-                ("s:2", "s", 2, "user", "第二条用户消息只在联想块", "2026-01-01T00:00:02+00:00"),
-                ("s:3", "s", 3, "assistant", "第二条助手回复也会被截断", "2026-01-01T00:00:03+00:00"),
+                (
+                    "s:0",
+                    "s",
+                    0,
+                    "user",
+                    "第一条用户消息需要完整展示",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+                (
+                    "s:1",
+                    "s",
+                    1,
+                    "assistant",
+                    "第一条助手回复会被截断展示并保留引用",
+                    "2026-01-01T00:00:01+00:00",
+                ),
+                (
+                    "s:2",
+                    "s",
+                    2,
+                    "user",
+                    "第二条用户消息只在联想块",
+                    "2026-01-01T00:00:02+00:00",
+                ),
+                (
+                    "s:3",
+                    "s",
+                    3,
+                    "assistant",
+                    "第二条助手回复也会被截断",
+                    "2026-01-01T00:00:03+00:00",
+                ),
             ],
         )
         db.execute("CREATE VIRTUAL TABLE messages_fts USING fts5(content)")
-        db.execute("INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages")
+        db.execute(
+            "INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages"
+        )
         db.commit()
 
 
@@ -243,11 +273,13 @@ def test_dense_message_candidates_vectorized_preserves_turn_ranking() -> None:
 
     assert [item.key for item in loop_result] == ["s:0", "s:2", "s:4"]
     assert [item.key for item in indexed_result] == [item.key for item in loop_result]
-    assert [item.score for item in loop_result] == pytest.approx([
-        1.0,
-        0.9 / ((0.9 ** 2 + 0.1 ** 2) ** 0.5),
-        0.0,
-    ])
+    assert [item.score for item in loop_result] == pytest.approx(
+        [
+            1.0,
+            0.9 / ((0.9**2 + 0.1**2) ** 0.5),
+            0.0,
+        ]
+    )
     assert [item.score for item in indexed_result] == pytest.approx(
         [item.score for item in loop_result]
     )
@@ -257,11 +289,15 @@ def test_store_merges_user_and_assistant_into_turn_node(tmp_path: Path) -> None:
     store = AkashaStore(tmp_path / "akasha.db")
     try:
         store.upsert_message_node(
-            SourceMessage("s:0", "s", 0, "user", "用户消息", "2026-01-01T00:00:00+00:00"),
+            SourceMessage(
+                "s:0", "s", 0, "user", "用户消息", "2026-01-01T00:00:00+00:00"
+            ),
             [1.0, 0.0],
         )
         store.upsert_message_node(
-            SourceMessage("s:1", "s", 1, "assistant", "助手消息", "2026-01-01T00:00:01+00:00"),
+            SourceMessage(
+                "s:1", "s", 1, "assistant", "助手消息", "2026-01-01T00:00:01+00:00"
+            ),
             [0.0, 1.0],
         )
 
@@ -307,8 +343,7 @@ def test_store_migrates_legacy_role_sessions_before_creating_role_indexes(
 ) -> None:
     db_path = tmp_path / "akasha.db"
     with closing(sqlite3.connect(str(db_path))) as db:
-        db.executescript(
-            """
+        db.executescript("""
             CREATE TABLE akasha_query_log (
                 query_id TEXT PRIMARY KEY,
                 session_key TEXT NOT NULL,
@@ -329,8 +364,7 @@ def test_store_migrates_legacy_role_sessions_before_creating_role_indexes(
             INSERT INTO akasha_nodes VALUES ('role:mira:0', 'role:mira', 0);
             INSERT INTO akasha_query_log VALUES ('role:mira:0:context', 'role:mira', 0, 'now');
             INSERT INTO akasha_embedding_cache VALUES ('role:mira:0', 'hash', 'm');
-            """
-        )
+            """)
         db.commit()
 
     store = AkashaStore(db_path)
@@ -428,7 +462,9 @@ async def test_role_session_query_requires_matching_role_scope() -> None:
 
 
 @pytest.mark.asyncio
-async def test_role_deleted_event_purges_only_that_roles_akasha_state(tmp_path: Path) -> None:
+async def test_role_deleted_event_purges_only_that_roles_akasha_state(
+    tmp_path: Path,
+) -> None:
     store = AkashaStore(tmp_path / "akasha.db")
     try:
         for role_id, vector in (("mira", [1.0, 0.0]), ("luna", [0.0, 1.0])):
@@ -487,8 +523,12 @@ async def test_role_deleted_event_purges_only_that_roles_akasha_state(tmp_path: 
         await event_bus.observe(RoleDeleted("mira"))
 
         nodes = {node.key for node in store.list_nodes()}
-        mira_logs = store.list_query_logs(session_key="role:mira", page=1, page_size=10)[1]
-        luna_logs = store.list_query_logs(session_key="role:luna", page=1, page_size=10)[1]
+        mira_logs = store.list_query_logs(
+            session_key="role:mira", page=1, page_size=10
+        )[1]
+        luna_logs = store.list_query_logs(
+            session_key="role:luna", page=1, page_size=10
+        )[1]
     finally:
         store.close()
 
@@ -521,34 +561,6 @@ def test_reset_schema_keeps_embedding_cache(tmp_path: Path) -> None:
 
     assert cached == [1.0, 2.0]
     assert nodes == []
-
-
-def test_load_embeddings_from_cache_counts_hits_and_misses(
-    tmp_path: Path,
-) -> None:
-    store = AkashaStore(tmp_path / "akasha.db")
-    messages = [
-        SourceMessage("s:0", "s", 0, "user", "已缓存", "2026-01-01T00:00:00+00:00"),
-        SourceMessage("s:1", "s", 1, "assistant", "新消息", "2026-01-01T00:00:01+00:00"),
-    ]
-    try:
-        store.upsert_cached_embedding(
-            message=messages[0],
-            model="m",
-            embedding=[1.0, 0.0],
-        )
-
-        embeddings, hits, misses = _load_embeddings_from_cache(
-            store=store,
-            model="m",
-            messages=messages,
-        )
-    finally:
-        store.close()
-
-    assert hits == 1
-    assert misses == 1
-    assert embeddings == {"s:0": [1.0, 0.0]}
 
 
 def test_replay_and_runtime_use_same_directional_stdp_edges(tmp_path: Path) -> None:
@@ -623,8 +635,22 @@ def test_replay_writes_query_log_with_activation_items(
     monkeypatch.setattr("plugins.akasha.backend.core.get_jieba_keywords", lambda _: "")
     replay_store = AkashaStore(tmp_path / "replay.db")
     old_messages = [
-        SourceMessage("s:0", "s", 0, "user", "第一条用户消息需要完整展示", "2026-01-01T00:00:00+00:00"),
-        SourceMessage("s:2", "s", 2, "user", "第二条用户消息只在联想块", "2026-01-01T00:00:02+00:00"),
+        SourceMessage(
+            "s:0",
+            "s",
+            0,
+            "user",
+            "第一条用户消息需要完整展示",
+            "2026-01-01T00:00:00+00:00",
+        ),
+        SourceMessage(
+            "s:2",
+            "s",
+            2,
+            "user",
+            "第二条用户消息只在联想块",
+            "2026-01-01T00:00:02+00:00",
+        ),
     ]
     try:
         replay_store.upsert_message_node(old_messages[0], [1.0, 0.0])
@@ -632,7 +658,9 @@ def test_replay_writes_query_log_with_activation_items(
         with closing(sqlite3.connect(str(db_path))) as source_db:
             replay = AkashaReplayRuntime(
                 store=replay_store,
-                config=AkashaConfig(dense_seed_threshold=0.1, nearby_dense_threshold=0.0),
+                config=AkashaConfig(
+                    dense_seed_threshold=0.1, nearby_dense_threshold=0.0
+                ),
                 source_db_path=db_path,
                 source_cursor=source_db.cursor(),
                 message_embeddings={
@@ -641,14 +669,20 @@ def test_replay_writes_query_log_with_activation_items(
                 },
                 message_turn_keys={"s:0": "s:0", "s:2": "s:2"},
             )
-            result = replay.replay_turn([
-                ReplayMessage(
-                    SourceMessage("s:4", "s", 4, "user", "第一条", QUERY_TS.isoformat()),
-                    [1.0, 0.0],
-                )
-            ])
+            result = replay.replay_turn(
+                [
+                    ReplayMessage(
+                        SourceMessage(
+                            "s:4", "s", 4, "user", "第一条", QUERY_TS.isoformat()
+                        ),
+                        [1.0, 0.0],
+                    )
+                ]
+            )
 
-        rows, total = replay_store.list_query_logs(session_key="s", page=1, page_size=10)
+        rows, total = replay_store.list_query_logs(
+            session_key="s", page=1, page_size=10
+        )
         assert total == 1
         raw = replay_store.get_query_log(str(rows[0]["query_id"]))
         assert raw is not None
@@ -672,38 +706,58 @@ def test_replay_writes_query_log_with_activation_items(
         replay_store.close()
 
 
-def test_replay_empty_query_commits_without_activation_or_query_log(tmp_path: Path) -> None:
+def test_replay_empty_query_commits_without_activation_or_query_log(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "sessions.db"
     _init_sessions_db(db_path)
     replay_store = AkashaStore(tmp_path / "replay.db")
     replay_store.upsert_message_node(
-        SourceMessage("s:0", "s", 0, "user", "第一条用户消息需要完整展示", "2026-01-01T00:00:00+00:00"),
+        SourceMessage(
+            "s:0",
+            "s",
+            0,
+            "user",
+            "第一条用户消息需要完整展示",
+            "2026-01-01T00:00:00+00:00",
+        ),
         [1.0, 0.0],
     )
     try:
         with closing(sqlite3.connect(str(db_path))) as source_db:
             replay = AkashaReplayRuntime(
                 store=replay_store,
-                config=AkashaConfig(dense_seed_threshold=0.1, nearby_dense_threshold=0.0),
+                config=AkashaConfig(
+                    dense_seed_threshold=0.1, nearby_dense_threshold=0.0
+                ),
                 source_db_path=db_path,
                 source_cursor=source_db.cursor(),
                 message_embeddings={"s:0": np.array([1.0, 0.0], dtype=np.float32)},
                 message_turn_keys={"s:0": "s:0"},
             )
-            result = replay.replay_turn([
-                ReplayMessage(
-                    SourceMessage("s:4", "s", 4, "user", "", QUERY_TS.isoformat()),
-                    [0.0, 0.0],
-                )
-            ])
+            result = replay.replay_turn(
+                [
+                    ReplayMessage(
+                        SourceMessage("s:4", "s", 4, "user", "", QUERY_TS.isoformat()),
+                        [0.0, 0.0],
+                    )
+                ]
+            )
 
-        rows, total = replay_store.list_query_logs(session_key="s", page=1, page_size=10)
+        rows, total = replay_store.list_query_logs(
+            session_key="s", page=1, page_size=10
+        )
         assert result.current_key == "s:4"
         assert result.activation_items == []
         assert total == 0
         assert rows == []
         with closing(sqlite3.connect(str(tmp_path / "replay.db"))) as db:
-            assert db.execute("SELECT COUNT(*) FROM akasha_activation_events").fetchone()[0] == 0
+            assert (
+                db.execute("SELECT COUNT(*) FROM akasha_activation_events").fetchone()[
+                    0
+                ]
+                == 0
+            )
     finally:
         replay_store.close()
 
@@ -711,8 +765,7 @@ def test_replay_empty_query_commits_without_activation_or_query_log(tmp_path: Pa
 def test_query_log_content_loader_allows_empty_user_message(tmp_path: Path) -> None:
     db_path = tmp_path / "sessions.db"
     with closing(sqlite3.connect(str(db_path))) as db:
-        db.execute(
-            """
+        db.execute("""
             CREATE TABLE messages (
                 id TEXT PRIMARY KEY,
                 session_key TEXT NOT NULL,
@@ -721,8 +774,7 @@ def test_query_log_content_loader_allows_empty_user_message(tmp_path: Path) -> N
                 content TEXT,
                 ts TEXT NOT NULL
             )
-            """
-        )
+            """)
         db.executemany(
             "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)",
             [
@@ -741,36 +793,17 @@ def test_query_log_content_loader_allows_empty_user_message(tmp_path: Path) -> N
     assert assistant_preview == "assistant..."
 
 
-def test_akasha_rebuild_skips_scheduler_messages() -> None:
-    scheduler_user = SourceMessage(
-        "scheduler:job:0",
-        "scheduler:job",
-        0,
-        "user",
-        "查询北京天气",
-        "2026-01-01T00:00:00+00:00",
-    )
-    normal_user = SourceMessage(
-        "telegram:1:0",
-        "telegram:1",
-        0,
-        "user",
-        "今天聊 Akasha",
-        "2026-01-01T00:00:01+00:00",
-    )
-
-    assert _skip_message(scheduler_user, set()) is True
-    assert _skip_message(normal_user, set()) is False
-    assert list(_iter_replay_turns([scheduler_user, normal_user], set())) == [[normal_user]]
-
-
 @pytest.mark.asyncio
-async def test_runtime_skips_scheduler_turn_even_without_extra_flag(tmp_path: Path) -> None:
+async def test_runtime_skips_scheduler_turn_even_without_extra_flag(
+    tmp_path: Path,
+) -> None:
     db_path = tmp_path / "sessions.db"
     _init_sessions_db(db_path)
     engine = cast(Any, AkashaMemoryEngine.__new__(AkashaMemoryEngine))
     engine._session_db_path = db_path
-    engine._embedder = SimpleNamespace(embed_batch=AsyncMock(side_effect=AssertionError("should skip")))
+    engine._embedder = SimpleNamespace(
+        embed_batch=AsyncMock(side_effect=AssertionError("should skip"))
+    )
 
     await engine._on_turn_committed(
         TurnCommitted(
@@ -819,50 +852,52 @@ async def test_query_places_overlap_in_dense_and_ripple_only_in_ripple(
     engine._session_db_path = db_path
     engine._embedder = FakeEmbedder()
     engine._remember_pending_activation = lambda *_, **__: None
-    engine._retrieve = lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
-        dense_items=[
-            AkashaCandidate(
-                key="s:0",
-                source="Dense",
-                ripple=0.0,
-                direct=0.9,
-                state=0.0,
-                edge=0.0,
-                long=0.0,
-                resource=1.0,
-                fan=0,
-                score=0.9,
-            )
-        ],
-        ripple_items=[
-            AkashaCandidate(
-                key="s:0",
-                source="Dense",
-                ripple=0.6,
-                direct=0.9,
-                state=1.0,
-                edge=0.0,
-                long=0.0,
-                resource=1.0,
-                fan=0,
-                score=0.8,
-            ),
-            AkashaCandidate(
-                key="s:2",
-                source="Graph",
-                ripple=0.5,
-                direct=0.4,
-                state=0.8,
-                edge=0.2,
-                long=0.0,
-                resource=1.0,
-                fan=1,
-                score=0.7,
-            ),
-        ],
-        activation_items=[],
-        trace=ActivationTrace(seed_count=1, pool_count=2),
-        seq=4,
+    engine._retrieve = (
+        lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
+            dense_items=[
+                AkashaCandidate(
+                    key="s:0",
+                    source="Dense",
+                    ripple=0.0,
+                    direct=0.9,
+                    state=0.0,
+                    edge=0.0,
+                    long=0.0,
+                    resource=1.0,
+                    fan=0,
+                    score=0.9,
+                )
+            ],
+            ripple_items=[
+                AkashaCandidate(
+                    key="s:0",
+                    source="Dense",
+                    ripple=0.6,
+                    direct=0.9,
+                    state=1.0,
+                    edge=0.0,
+                    long=0.0,
+                    resource=1.0,
+                    fan=0,
+                    score=0.8,
+                ),
+                AkashaCandidate(
+                    key="s:2",
+                    source="Graph",
+                    ripple=0.5,
+                    direct=0.4,
+                    state=0.8,
+                    edge=0.2,
+                    long=0.0,
+                    resource=1.0,
+                    fan=1,
+                    score=0.7,
+                ),
+            ],
+            activation_items=[],
+            trace=ActivationTrace(seed_count=1, pool_count=2),
+            seq=4,
+        )
     )
 
     result = await engine.query(
@@ -880,7 +915,9 @@ async def test_query_places_overlap_in_dense_and_ripple_only_in_ripple(
     assert '- user="第一条用户消息需要完整展示" assistant=' in result.text_block
     assert " t=01-01 source_ref=" in result.text_block
     assert " score=" not in result.text_block
-    dense_block, ripple_block = result.text_block.split("## 右脑联想：潜意识第一反应", 1)
+    dense_block, ripple_block = result.text_block.split(
+        "## 右脑联想：潜意识第一反应", 1
+    )
     assert 'source_ref=["s:0", "s:1"]' in dense_block
     assert 'source_ref=["s:0", "s:1"]' not in ripple_block
     assert 'source_ref=["s:2", "s:3"]' in ripple_block
@@ -910,12 +947,14 @@ async def test_context_block_sorts_injected_cards_by_time_desc(tmp_path: Path) -
     engine._session_db_path = db_path
     engine._embedder = FakeEmbedder()
     engine._remember_pending_activation = lambda *_, **__: None
-    engine._retrieve = lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
-        dense_items=[candidate("s:0", 0.9), candidate("s:2", 0.8)],
-        ripple_items=[],
-        activation_items=[],
-        trace=ActivationTrace(seed_count=1, pool_count=2),
-        seq=4,
+    engine._retrieve = (
+        lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
+            dense_items=[candidate("s:0", 0.9), candidate("s:2", 0.8)],
+            ripple_items=[],
+            activation_items=[],
+            trace=ActivationTrace(seed_count=1, pool_count=2),
+            seq=4,
+        )
     )
 
     result = await engine.query(
@@ -927,16 +966,15 @@ async def test_context_block_sorts_injected_cards_by_time_desc(tmp_path: Path) -
         )
     )
 
-    assert result.text_block.index('source_ref=["s:2", "s:3"]') < result.text_block.index(
-        'source_ref=["s:0", "s:1"]'
-    )
+    assert result.text_block.index(
+        'source_ref=["s:2", "s:3"]'
+    ) < result.text_block.index('source_ref=["s:0", "s:1"]')
 
 
 def test_cards_from_keys_deduplicates_same_user_assistant_pair(tmp_path: Path) -> None:
     db_path = tmp_path / "sessions.db"
     with closing(sqlite3.connect(str(db_path))) as db:
-        db.execute(
-            """
+        db.execute("""
             CREATE TABLE messages (
                 id TEXT PRIMARY KEY,
                 session_key TEXT NOT NULL,
@@ -945,15 +983,42 @@ def test_cards_from_keys_deduplicates_same_user_assistant_pair(tmp_path: Path) -
                 content TEXT,
                 ts TEXT NOT NULL
             )
-            """
-        )
+            """)
         db.executemany(
             "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)",
             [
-                ("s:0", "s", 0, "user", "我现在健康状态怎么样呢", "2026-01-01T00:00:00+00:00"),
-                ("s:1", "s", 1, "assistant", "健康状态的话……我这边真的没有更多信息", "2026-01-01T00:00:01+00:00"),
-                ("s:2", "s", 2, "user", "我现在健康状态怎么样呢", "2026-01-01T00:00:02+00:00"),
-                ("s:3", "s", 3, "assistant", "健康状态的话……我这边真的没有更多信息", "2026-01-01T00:00:03+00:00"),
+                (
+                    "s:0",
+                    "s",
+                    0,
+                    "user",
+                    "我现在健康状态怎么样呢",
+                    "2026-01-01T00:00:00+00:00",
+                ),
+                (
+                    "s:1",
+                    "s",
+                    1,
+                    "assistant",
+                    "健康状态的话……我这边真的没有更多信息",
+                    "2026-01-01T00:00:01+00:00",
+                ),
+                (
+                    "s:2",
+                    "s",
+                    2,
+                    "user",
+                    "我现在健康状态怎么样呢",
+                    "2026-01-01T00:00:02+00:00",
+                ),
+                (
+                    "s:3",
+                    "s",
+                    3,
+                    "assistant",
+                    "健康状态的话……我这边真的没有更多信息",
+                    "2026-01-01T00:00:03+00:00",
+                ),
                 ("s:4", "s", 4, "user", "另一个问题", "2026-01-01T00:00:04+00:00"),
                 ("s:5", "s", 5, "assistant", "第三次回复", "2026-01-01T00:00:05+00:00"),
             ],
@@ -985,8 +1050,7 @@ async def test_context_query_uses_akasha_top_k_over_default_query_limit(
 ) -> None:
     db_path = tmp_path / "sessions.db"
     with closing(sqlite3.connect(str(db_path))) as db:
-        db.execute(
-            """
+        db.execute("""
             CREATE TABLE messages (
                 id TEXT PRIMARY KEY,
                 session_key TEXT NOT NULL,
@@ -995,13 +1059,30 @@ async def test_context_query_uses_akasha_top_k_over_default_query_limit(
                 content TEXT,
                 ts TEXT NOT NULL
             )
-            """
-        )
+            """)
         rows = []
         for turn in range(24):
             user_seq = turn * 2
-            rows.append((f"s:{user_seq}", "s", user_seq, "user", f"用户消息{turn}", "2026-01-01T00:00:00+00:00"))
-            rows.append((f"s:{user_seq + 1}", "s", user_seq + 1, "assistant", f"助手回复{turn}", "2026-01-01T00:00:01+00:00"))
+            rows.append(
+                (
+                    f"s:{user_seq}",
+                    "s",
+                    user_seq,
+                    "user",
+                    f"用户消息{turn}",
+                    "2026-01-01T00:00:00+00:00",
+                )
+            )
+            rows.append(
+                (
+                    f"s:{user_seq + 1}",
+                    "s",
+                    user_seq + 1,
+                    "assistant",
+                    f"助手回复{turn}",
+                    "2026-01-01T00:00:01+00:00",
+                )
+            )
         db.executemany("INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)", rows)
         db.commit()
 
@@ -1020,16 +1101,24 @@ async def test_context_query_uses_akasha_top_k_over_default_query_limit(
         )
 
     engine = cast(Any, AkashaMemoryEngine.__new__(AkashaMemoryEngine))
-    engine._akasha_config = AkashaConfig(dense_top_k=10, ripple_top_k=10, inject_max_chars=20000)
+    engine._akasha_config = AkashaConfig(
+        dense_top_k=10, ripple_top_k=10, inject_max_chars=20000
+    )
     engine._session_db_path = db_path
     engine._embedder = FakeEmbedder()
     engine._remember_pending_activation = lambda *_, **__: None
-    engine._retrieve = lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
-        dense_items=[candidate(f"s:{turn * 2}", 1.0 - turn * 0.01) for turn in range(12)],
-        ripple_items=[candidate(f"s:{24 + turn * 2}", 0.8 - turn * 0.01) for turn in range(12)],
-        activation_items=[],
-        trace=ActivationTrace(seed_count=1, pool_count=24),
-        seq=48,
+    engine._retrieve = (
+        lambda query, query_vec, request, *, now_ts, update_state: _AkashaRetrieval(
+            dense_items=[
+                candidate(f"s:{turn * 2}", 1.0 - turn * 0.01) for turn in range(12)
+            ],
+            ripple_items=[
+                candidate(f"s:{24 + turn * 2}", 0.8 - turn * 0.01) for turn in range(12)
+            ],
+            activation_items=[],
+            trace=ActivationTrace(seed_count=1, pool_count=24),
+            seq=48,
+        )
     )
 
     result = await engine.query(
@@ -1047,7 +1136,9 @@ async def test_context_query_uses_akasha_top_k_over_default_query_limit(
     assert result.text_block.count("source_ref=") == 20
 
 
-def test_compute_candidates_uses_activation_limit_for_stateful_replay(tmp_path: Path) -> None:
+def test_compute_candidates_uses_activation_limit_for_stateful_replay(
+    tmp_path: Path,
+) -> None:
     store = AkashaStore(tmp_path / "akasha.db")
     try:
         for seq in range(30):
@@ -1097,7 +1188,10 @@ def test_query_log_keeps_context_and_answer_for_same_seq(tmp_path: Path) -> None
         seq=10,
     )
     try:
-        cases: list[tuple[MemoryQueryIntent, str]] = [("context", "注入文本"), ("answer", "")]
+        cases: list[tuple[MemoryQueryIntent, str]] = [
+            ("context", "注入文本"),
+            ("answer", ""),
+        ]
         for intent, text_block in cases:
             engine._write_query_log(
                 request=MemoryQuery(
@@ -1152,7 +1246,9 @@ async def test_read_only_query_skips_akasha_state_effects(tmp_path: Path) -> Non
         )
 
     engine._retrieve = fake_retrieve
-    engine._remember_pending_activation = lambda *_, **__: side_effects.append("pending")
+    engine._remember_pending_activation = lambda *_, **__: side_effects.append(
+        "pending"
+    )
     engine._write_query_log = lambda *_, **__: side_effects.append("query_log")
 
     result = await engine.query(
@@ -1177,33 +1273,60 @@ def test_undo_removes_akasha_turn_state_after_session_delete(tmp_path: Path) -> 
     store = AkashaStore(tmp_path / "akasha.db")
     try:
         messages = [
-            SourceMessage("s:0", "s", 0, "user", "第一条用户消息需要完整展示", "2026-01-01T00:00:00+00:00"),
-            SourceMessage("s:1", "s", 1, "assistant", "第一条助手回复会被截断展示并保留引用", "2026-01-01T00:00:01+00:00"),
-            SourceMessage("s:2", "s", 2, "user", "第二条用户消息只在联想块", "2026-01-01T00:00:02+00:00"),
+            SourceMessage(
+                "s:0",
+                "s",
+                0,
+                "user",
+                "第一条用户消息需要完整展示",
+                "2026-01-01T00:00:00+00:00",
+            ),
+            SourceMessage(
+                "s:1",
+                "s",
+                1,
+                "assistant",
+                "第一条助手回复会被截断展示并保留引用",
+                "2026-01-01T00:00:01+00:00",
+            ),
+            SourceMessage(
+                "s:2",
+                "s",
+                2,
+                "user",
+                "第二条用户消息只在联想块",
+                "2026-01-01T00:00:02+00:00",
+            ),
         ]
         for index, message in enumerate(messages):
             embedding = [1.0, 0.0] if index < 2 else [0.0, 1.0]
-            store.upsert_cached_embedding(message=message, model="m", embedding=embedding)
-            _ = store.upsert_message_node(message, embedding)
-        store.upsert_edges([
-            EdgeUpdate("s:0", "s:2", 1.0, 0),
-            EdgeUpdate("s:2", "s:0", 1.0, 0),
-        ])
-        store.insert_activation_events([
-            ActivationEventRow(
-                seq=0,
-                query_id="s:0",
-                activated_key="s:2",
-                source="Dense",
-                score=0.8,
-                direct_score=0.8,
-                state_score=0.0,
-                edge_score=0.0,
-                long_score=0.0,
-                resource=1.0,
-                fan=0,
+            store.upsert_cached_embedding(
+                message=message, model="m", embedding=embedding
             )
-        ])
+            _ = store.upsert_message_node(message, embedding)
+        store.upsert_edges(
+            [
+                EdgeUpdate("s:0", "s:2", 1.0, 0),
+                EdgeUpdate("s:2", "s:0", 1.0, 0),
+            ]
+        )
+        store.insert_activation_events(
+            [
+                ActivationEventRow(
+                    seq=0,
+                    query_id="s:0",
+                    activated_key="s:2",
+                    source="Dense",
+                    score=0.8,
+                    direct_score=0.8,
+                    state_score=0.0,
+                    edge_score=0.0,
+                    long_score=0.0,
+                    resource=1.0,
+                    fan=0,
+                )
+            ]
+        )
         store.insert_query_log(
             query_id="s:0:context:abc",
             session_key="s",
@@ -1255,8 +1378,12 @@ def test_undo_removes_akasha_turn_state_after_session_delete(tmp_path: Path) -> 
         assert store.load_edges() == {}
         assert store.list_query_logs(page=1, page_size=10)[1] == 0
         with closing(sqlite3.connect(str(store.db_path))) as db:
-            event_count = db.execute("SELECT COUNT(1) FROM akasha_activation_events").fetchone()[0]
-            cache_count = db.execute("SELECT COUNT(1) FROM akasha_embedding_cache").fetchone()[0]
+            event_count = db.execute(
+                "SELECT COUNT(1) FROM akasha_activation_events"
+            ).fetchone()[0]
+            cache_count = db.execute(
+                "SELECT COUNT(1) FROM akasha_embedding_cache"
+            ).fetchone()[0]
         assert event_count == 0
         assert cache_count == 1
         assert "s:0" not in engine._nodes
@@ -1274,7 +1401,9 @@ def _load_akasha_kernel(*, memory_engine: object, workspace: Path) -> Any:
         kernel = PluginKernel(
             [Path(tmp)],
             services=HostServices(
-                event_bus=EventBus(), workspace=workspace, memory_engine=memory_engine,
+                event_bus=EventBus(),
+                workspace=workspace,
+                memory_engine=memory_engine,
             ),
         )
         asyncio.run(kernel.load_all())
@@ -1301,37 +1430,46 @@ def test_akashalast_command_only_registers_for_akasha_engine(tmp_path: Path) -> 
 def test_akashalast_renders_latest_query_log(tmp_path: Path) -> None:
     store = AkashaStore(tmp_path / "memory" / "akasha.db")
     try:
-        activation_items = json.dumps([
-            {
-                "user_message": "这个是他转的别人的帖子而已",
-                "assistant_preview": "啊你说得对，那个是转推",
-                "score": 0.501,
-                "source": "Dense",
-                "path_type": "direct",
-            }
-        ], ensure_ascii=False)
-        dense_items = json.dumps([
-            {
-                "user_message": "这个是他转的别人的帖子而已",
-                "assistant_preview": "啊你说得对，那个是转推",
-                "score": 0.703,
-                "source": "Dense",
-            }
-        ], ensure_ascii=False)
-        ripple_items = json.dumps([
-            {
-                "user_message": "我纠正过你几次有关汪远哲这个名字",
-                "assistant_preview": "花月哥哥，这个错误我真是犯过",
-                "score": 0.247,
-                "source": "FTS",
-                "path_type": "direct",
-                "direct": 0.41,
-                "state": 0.18,
-                "edge": 0.08,
-                "resource": 1.0,
-                "fan": 32,
-            }
-        ], ensure_ascii=False)
+        activation_items = json.dumps(
+            [
+                {
+                    "user_message": "这个是他转的别人的帖子而已",
+                    "assistant_preview": "啊你说得对，那个是转推",
+                    "score": 0.501,
+                    "source": "Dense",
+                    "path_type": "direct",
+                }
+            ],
+            ensure_ascii=False,
+        )
+        dense_items = json.dumps(
+            [
+                {
+                    "user_message": "这个是他转的别人的帖子而已",
+                    "assistant_preview": "啊你说得对，那个是转推",
+                    "score": 0.703,
+                    "source": "Dense",
+                }
+            ],
+            ensure_ascii=False,
+        )
+        ripple_items = json.dumps(
+            [
+                {
+                    "user_message": "我纠正过你几次有关汪远哲这个名字",
+                    "assistant_preview": "花月哥哥，这个错误我真是犯过",
+                    "score": 0.247,
+                    "source": "FTS",
+                    "path_type": "direct",
+                    "direct": 0.41,
+                    "state": 0.18,
+                    "edge": 0.08,
+                    "resource": 1.0,
+                    "fan": 32,
+                }
+            ],
+            ensure_ascii=False,
+        )
         store.insert_query_log(
             query_id="s:2:context:abc",
             session_key="s",
