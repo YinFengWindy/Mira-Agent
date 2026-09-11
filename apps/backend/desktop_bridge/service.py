@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from agent.plugin_host.bridge_events import PluginBridgeEvent, PluginRpcError
+
 from contextlib import ExitStack
 from core.common.cleanup import run_cleanup_steps
 
@@ -36,13 +38,10 @@ from desktop_bridge.role_requests import DesktopRoleRequestHandler
 from desktop_bridge.role_card_import_service import DesktopRoleCardImportService
 from agent.screen_observation.service import ScreenObservationService
 from desktop_bridge.role_presenter import DesktopRolePresenter
-from desktop_bridge.role_difference_service import RoleDifferenceGenerationService
 from desktop_bridge.role_task_service import RoleTaskService
 from desktop_bridge.session_task_requests import DesktopSessionTaskRequestHandler
 from desktop_bridge.session_presenter import DesktopSessionPresenter
 from desktop_bridge.voice.voice_handler import DesktopVoiceHandler
-from desktop_bridge.story_simulation_handler import StorySimulationHandler
-from story_simulation.errors import StorySimulationError
 from agent.voice_config import VoiceConfig
 from desktop_bridge.voice.voice_service import VoiceService, VoiceServiceError
 from session.manager import Session, SessionManager
@@ -91,8 +90,6 @@ class DesktopBridgeService:
         observation_service: ScreenObservationService | None = None,
         voice_service: VoiceService | None = None,
         role_runtime_registry: RoleRuntimeRegistry | None = None,
-        story_director: Any | None = None,
-        image_tool: Any | None = None,
         memory_engine: Any | None = None,
         card_import_service: Any | None = None,
         activate_transport: bool = True,
@@ -104,6 +101,9 @@ class DesktopBridgeService:
         self.session_manager = session_manager
         self.agent_loop = agent_loop
         self.event_bus = event_bus
+        self._plugin_event_listener = self._on_plugin_event
+        self._plugin_event_registry = plugin_rpc_registry
+        self.event_bus.on(PluginBridgeEvent, self._plugin_event_listener)
         self._turn_committed_listener = self._on_turn_committed
         self._proactive_message_listener = self._on_proactive_message_committed
         self.event_bus.on(TurnCommitted, self._turn_committed_listener)
@@ -191,27 +191,12 @@ class DesktopBridgeService:
             ),
         )
         self.voice_assets = self.voice_handler.assets
-        # 生图能力（服务层、工具、桥接方法）在 issue #180 全量归位为 novelai 插件；
-        # 角色差分生成改经 generate_image 工具调用，不再直接持有 NovelAI 服务。
-        self.role_difference_service = RoleDifferenceGenerationService(
-            role_store=self.role_store,
-            image_tool=image_tool,
-            workspace=self.workspace,
-        )
-        self.story_simulation = StorySimulationHandler(
-            workspace=workspace,
-            role_store=role_store,
-            director=story_director,
-            role_runtime_registry=role_runtime_registry,
-            image_tool=image_tool,
-        )
         self.observation_service = observation_service
         self.plugin_rpc_registry = plugin_rpc_registry
         self.request_router = DesktopBridgeRequestRouter(
             roles=DesktopRoleRequestHandler(
                 role_service=self.role_service,
                 role_store=role_store,
-                role_differences=self.role_difference_service,
                 role_presenter=self.role_presenter,
                 voice_handler=self.voice_handler,
                 card_import_service=self.role_card_import_service,
@@ -235,7 +220,6 @@ class DesktopBridgeService:
                 sanitize_voice_metrics=_sanitize_voice_metrics,
             ),
             voice=self.voice_handler,
-            stories=self.story_simulation,
             observation=observation_service,
             plugins=DesktopPluginRequestHandler(plugin_rpc_registry),
         )
@@ -325,15 +309,28 @@ class DesktopBridgeService:
             self._proactive_message_listener,
         )
         self.role_service.remove_role_deleted_listener(self._role_deleted_listener)
+        self.event_bus.off(PluginBridgeEvent, self._plugin_event_listener)
         self._event_listeners.clear()
         steps = [
             ("desktop.chat.close", self.chat_service.aclose),
             ("desktop.voice.close", self.voice_handler.aclose),
-            ("desktop.story.close", self.story_simulation.aclose),
         ]
         if self.model_resolver is not None and self._owns_model_resolver:
             steps.append(("desktop.models.close", self.model_resolver.aclose))
         await run_cleanup_steps(*steps)
+
+    async def _on_plugin_event(self, event: PluginBridgeEvent) -> None:
+        # Retiring and current generations can share a bus; only the owning transport forwards it.
+        if event.registry is not self._plugin_event_registry:
+            return
+        await self._broadcast_event(
+            {
+                "id": event.method,
+                "type": "event",
+                "method": event.method,
+                "payload": event.payload,
+            }
+        )
 
     def start_background_tasks(self) -> None:
         """Starts bridge-owned background maintenance after an event loop exists."""
@@ -657,7 +654,7 @@ class DesktopBridgeService:
             return self._error(request_id, method, "invalid_request", str(exc))
         except ChatTurnBusyError as exc:
             return self._error(request_id, method, "chat_busy", str(exc))
-        except StorySimulationError as exc:
+        except PluginRpcError as exc:
             return self._error(request_id, method, exc.code, str(exc))
         except Exception as exc:
             return self._error(request_id, method, "internal_error", str(exc))

@@ -63,6 +63,8 @@ export type SettingsSectionEntry = EditorSettingsSectionEntry | StandaloneSettin
  * threaded to any other plugin surface (settings.section, DesktopSurface).
  */
 export type PluginNavPageProps = {
+  /** Returns from a full-window plugin page to the chat workspace. */
+  onExit?: () => void;
   pageId: string;
   activeRoleId?: string;
 };
@@ -138,6 +140,8 @@ export type NavPageEntry = {
   icon?: React.ComponentType<{ className?: string }>;
   pluginId?: string;
   Component: React.ComponentType<PluginNavPageProps>;
+  /** Full-window contributions own their surrounding presentation and exit control. */
+  presentation?: "workspace" | "fullscreen";
   /**
    * Optional (issue #226 gap A): when present, `DesktopAppFrame` renders it
    * into the host's resizable sidebar track instead of falling back to

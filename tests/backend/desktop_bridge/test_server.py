@@ -101,24 +101,6 @@ async def test_serve_stdio_forces_utf8_for_all_bridge_streams(
     }
 
 
-def test_server_forwards_the_role_runtime_registry_to_story(
-    tmp_path: Path, stub_core_runtime
-) -> None:
-    session_manager = SessionManager(tmp_path)
-    role_runtime_registry = SimpleNamespace(repository=None, model_resolver=None)
-    runtime = stub_core_runtime(
-        session_manager=SimpleNamespace(
-            workspace=tmp_path,
-            open_role_session=session_manager.open_role_session,
-        ),
-        loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
-        event_bus=EventBus(),
-        role_runtime_registry=role_runtime_registry,
-    )
-
-    server = DesktopBridgeServer(runtime)
-
-    assert server.service.story_simulation._role_runtime_registry is role_runtime_registry
 
 
 def test_desktop_server_reuses_core_screen_observation_service(
@@ -243,7 +225,7 @@ async def test_health_response_is_not_blocked_by_slow_mutation(
     async def _handle(request, emit_event):
         del emit_event
         method = str(request["method"])
-        if method == "novelai.generate":
+        if method == "plugin.demo.slow":
             mutation_started.set()
             await release_mutation.wait()
         return BridgeResponse(
@@ -259,7 +241,7 @@ async def test_health_response_is_not_blocked_by_slow_mutation(
             health_written.set()
 
     server.service.handle = _handle
-    await lines.put(json.dumps({"id": "slow", "method": "novelai.generate"}))
+    await lines.put(json.dumps({"id": "slow", "method": "plugin.demo.slow"}))
     await lines.put(json.dumps({"id": "health", "method": "health"}))
     serve_task = asyncio.create_task(
         server.serve_streams(read_line=lines.get, write_payload=_write)
@@ -314,7 +296,7 @@ async def test_server_eof_cancels_and_awaits_in_flight_request(
 ) -> None:
     server = _build_server(tmp_path, stub_core_runtime)
     lines = iter(
-        [json.dumps({"id": "slow", "method": "novelai.generate"}), None]
+        [json.dumps({"id": "slow", "method": "plugin.demo.slow"}), None]
     )
     cancelled = asyncio.Event()
 

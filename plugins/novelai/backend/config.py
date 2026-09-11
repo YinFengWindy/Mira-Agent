@@ -12,7 +12,7 @@ class NovelAIConfig(BaseModel):
     second, drift-prone copy of the defaults.
     """
 
-    enabled: bool = False
+    # enabled 属于宿主插件管理；配置表单只声明生图参数，避免覆盖启停状态。
     token: str = Field(default="", description="NovelAI API token")
     base_url: str = "https://image.novelai.net"
     default_model: str = "nai-diffusion-4-5-curated"

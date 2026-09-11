@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
+from collections.abc import Awaitable, Callable
 
 from agent.plugin_host.capabilities import PluginContributions
 from agent.plugin_host.effects import EffectScope
@@ -22,6 +23,7 @@ class PluginState(Enum):
     UNLOADING = auto()
     DISPOSED = auto()
     FAILED = auto()
+    BLOCKED = auto()
 
 
 @dataclass
@@ -44,6 +46,7 @@ class PluginHandle:
     effects: EffectScope = field(default_factory=lambda: EffectScope("unbound"))
     contributions: PluginContributions = field(default_factory=PluginContributions)
     instance: Any = None
+    drainers: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
     error: Exception | None = None
 
     @property

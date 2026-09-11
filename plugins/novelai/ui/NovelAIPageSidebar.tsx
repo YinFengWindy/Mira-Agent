@@ -1,3 +1,4 @@
+import { usePluginHostServices } from "../../../apps/desktop/renderer/src/plugins/PluginHostServicesProvider";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { usePluginConfigController } from "../../../apps/desktop/renderer/src/plugins/usePluginConfigController";
@@ -67,6 +68,7 @@ function parsePositiveInteger(value: string): number | null {
  * `NovelAIPage` displays.
  */
 export function NovelAIPageSidebar({ animating, collapsed, width, onBeginResize, client }: NovelAIPageSidebarProps) {
+  const host = usePluginHostServices();
   const store = useNovelAiPageStore();
   const [form, setForm] = useState<ImageStudioFormState>(initialForm);
   const config = usePluginConfigController("novelai");
@@ -116,7 +118,7 @@ export function NovelAIPageSidebar({ animating, collapsed, width, onBeginResize,
   }, [form.baseImagePath, form.customHeight, form.customWidth, form.sizePreset, resolvedMode]);
 
   async function handlePickBaseImage(): Promise<void> {
-    const files = await window.miraDesktop.pickImages({ multiple: false });
+    const files = await host.pickImages({ multiple: false });
     if (!files[0]) return;
     setForm((current) => ({ ...current, baseImagePath: files[0] }));
   }

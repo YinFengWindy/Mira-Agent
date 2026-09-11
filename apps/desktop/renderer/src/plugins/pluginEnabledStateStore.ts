@@ -42,15 +42,8 @@ function notify() {
 }
 
 /** Replaces the cached enabled flags wholesale (after a full `plugins.list` fetch). */
-export function setPluginEnabledSnapshot(plugins: Pick<PluginSummary, "id" | "enabled">[]): void {
-  cache = new Map(plugins.map((item) => [item.id, item.enabled]));
-  notify();
-}
-
-/** Optimistically updates one plugin's flag immediately after a successful toggle. */
-export function setPluginEnabledCache(pluginId: string, enabled: boolean): void {
-  cache = new Map(cache ?? []);
-  cache.set(pluginId, enabled);
+export function setPluginEnabledSnapshot(plugins: (Pick<PluginSummary, "id" | "enabled"> & Partial<Pick<PluginSummary, "state">>)[]): void {
+  cache = new Map(plugins.map((item) => [item.id, item.enabled && (item.state === undefined || item.state === "ACTIVE")]));
   notify();
 }
 

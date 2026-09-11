@@ -7,19 +7,22 @@ from typing import Any
 from core.roles import RoleAggregateService, RoleStore
 
 from .role_presenter import DesktopRolePresenter
-from .role_difference_service import RoleDifferenceGenerationService
 from .voice.voice_handler import DesktopVoiceHandler
 
 
 class DesktopRoleRequestHandler:
-    """Handles role and role-owned pet bridge requests."""
+    """Handles role bridge requests.
+
+    No longer "role-owned pet" or role differences: both moved to the plugins
+    that own them (#181-D and #236 respectively), each leaving this router to
+    answer `None` so the plugin RPC dispatcher downstream picks the method up.
+    """
 
     def __init__(
         self,
         *,
         role_service: RoleAggregateService,
         role_store: RoleStore,
-        role_differences: RoleDifferenceGenerationService,
         role_presenter: DesktopRolePresenter,
         voice_handler: DesktopVoiceHandler,
         card_import_service: Any | None = None,
@@ -27,7 +30,6 @@ class DesktopRoleRequestHandler:
     ) -> None:
         self._role_service = role_service
         self._role_store = role_store
-        self._role_differences = role_differences
         self._role_presenter = role_presenter
         self._voice_handler = voice_handler
         self._card_import_service = card_import_service
@@ -141,19 +143,6 @@ class DesktopRoleRequestHandler:
                 aggregate.role.runtime_config,
             )
             return {"role": self._role_presenter.serialize(aggregate.role)}
-        if method == "roles.differences.generate":
-            result = await self._role_differences.generate(
-                role_id=str(payload.get("role_id") or ""),
-                base_asset=str(payload.get("base_asset") or ""),
-                emit_progress=self._emit_difference_progress,
-            )
-            self._role_service.sessions.open_by_role(result["role"])
-            return {
-                "job_id": result["job_id"],
-                "category_id": result["category_id"],
-                "category_name": result["category_name"],
-                "role": self._role_presenter.serialize(result["role"]),
-            }
         if method == "roles.delete":
             role_id = str(payload.get("role_id") or "").strip()
             role = self._role_service.repository.get_required(role_id)
@@ -168,15 +157,6 @@ class DesktopRoleRequestHandler:
         # only reach its own namespace anyway.
         return None
 
-    async def _emit_difference_progress(self, payload: dict[str, Any]) -> None:
-        await self._publish_event(
-            {
-                "id": str(payload.get("job_id") or "role-differences"),
-                "type": "event",
-                "method": "roles.differences.progress",
-                "payload": payload,
-            }
-        )
 
     @staticmethod
     def _dict_payload(payload: dict[str, Any], key: str) -> dict[str, Any] | None:

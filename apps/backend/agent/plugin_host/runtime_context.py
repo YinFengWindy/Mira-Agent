@@ -28,12 +28,20 @@ class PluginRuntimeContext:
         manifest: PluginManifest,
         effects: EffectScope,
         capabilities: dict[str, Any],
+        publish_api: Any = None,
     ) -> None:
         self.plugin_id = plugin_id
         self.plugin_dir = plugin_dir
         self.manifest = manifest
         self._effects = effects
         self._capabilities = capabilities
+        self._publish_api = publish_api
+
+    def expose(self, api: object) -> None:
+        """Publishes this plugin's API for declared dependents in the same generation."""
+        if self._publish_api is None:
+            raise RuntimeError("插件导出接口不可用")
+        self._publish_api(api)
 
     @property
     def granted(self) -> tuple[str, ...]:

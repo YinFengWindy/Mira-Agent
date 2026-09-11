@@ -10,7 +10,6 @@ from .plugin_requests import DesktopPluginRequestHandler
 from .role_requests import DesktopRoleRequestHandler
 from .session_task_requests import DesktopSessionTaskRequestHandler
 from .voice.voice_handler import DesktopVoiceHandler
-from .story_simulation_handler import StorySimulationHandler
 
 EventEmitter = Callable[[dict[str, Any]], Awaitable[None] | None]
 
@@ -25,7 +24,6 @@ class DesktopBridgeRequestRouter:
         sessions_and_tasks: DesktopSessionTaskRequestHandler,
         chat: DesktopChatRequestHandler,
         voice: DesktopVoiceHandler,
-        stories: StorySimulationHandler,
         observation: ScreenObservationService | None,
         plugins: DesktopPluginRequestHandler,
     ) -> None:
@@ -33,7 +31,6 @@ class DesktopBridgeRequestRouter:
         self._sessions_and_tasks = sessions_and_tasks
         self._chat = chat
         self._voice = voice
-        self._stories = stories
         self._observation = observation
         self._plugins = plugins
 
@@ -51,14 +48,6 @@ class DesktopBridgeRequestRouter:
             if method == "observation.analyze":
                 return await self._observation.analyze(payload)
             return await self._observation.remember(payload)
-        story_result = await self._stories.handle(
-            method,
-            payload,
-            request_id=request_id,
-            emit_event=emit_event,
-        )
-        if story_result is not None:
-            return story_result
         if method == "health":
             return {"ok": True}
         plugin_result = await self._plugins.handle(method, payload)

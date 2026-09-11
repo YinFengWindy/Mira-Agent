@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -21,18 +20,6 @@ def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     image.save(path)
 
 
-class FakeImageTool:
-    """Fakes the shared ``generate_image`` tool's JSON-string contract."""
-
-    def __init__(self, output_dir: Path) -> None:
-        self.output_dir = output_dir
-        self.index = 0
-
-    async def execute(self, **_kwargs) -> str:
-        self.index += 1
-        output = self.output_dir / f"generated-{self.index}.png"
-        _write_image(output, (210, 80, 110))
-        return json.dumps({"output_paths": [str(output)]})
 
 
 @pytest.mark.asyncio
@@ -41,7 +28,6 @@ async def test_role_card_preview_forwards_the_full_payload_to_its_service() -> N
     handler = DesktopRoleRequestHandler(
         role_service=SimpleNamespace(),
         role_store=SimpleNamespace(),
-        role_differences=SimpleNamespace(),
         role_presenter=SimpleNamespace(),
         voice_handler=SimpleNamespace(),
         card_import_service=card_import,
@@ -140,60 +126,6 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
     assert character["response_constraints"] == "Use short paragraphs."
     assert character["profile"] == "A meticulous archivist."
     await service.aclose()
-
-
-@pytest.mark.asyncio
-async def test_role_difference_rpc_publishes_progress_and_returns_updated_role(
-    tmp_path: Path,
-) -> None:
-    base = tmp_path / "base.png"
-    _write_image(base, (57, 120, 200))
-    role_store = RoleStore(tmp_path)
-    role = role_store.create_role(
-        role_id="mira",
-        name="Mira",
-        system_prompt="You are Mira.",
-        illustration_sources=[base],
-    )
-    generated_dir = tmp_path / "generated"
-    generated_dir.mkdir()
-    session_manager = SessionManager(tmp_path)
-    service = DesktopBridgeService(
-        workspace=tmp_path,
-        role_store=role_store,
-        session_manager=session_manager,
-        agent_loop=SimpleNamespace(process_direct=AsyncMock()),
-        event_bus=EventBus(),
-        image_tool=FakeImageTool(generated_dir),
-    )
-    events: list[dict] = []
-    service.add_event_listener(events.append)
-
-    response = await service.handle(
-        {
-            "id": "difference-job-1",
-            "method": "roles.differences.generate",
-            "payload": {"role_id": role.id, "base_asset": role.illustrations[0]},
-        },
-        emit_event=lambda _payload: None,
-    )
-
-    assert response.error is None
-    assert response.payload["role"]["asset_categories"][-1]["name"] == "AI 差分"
-    assert [event["method"] for event in events].count(
-        "roles.differences.progress"
-    ) == 12
-    assert events[-1]["payload"]["phase"] == "finished"
-    session_config = session_manager.get_or_create("role:mira").metadata[
-        "role_runtime_config"
-    ]
-    assert session_config["mood_catalog"] == ["平静", "开心", "惊讶", "生气", "悲伤"]
-    assert set(session_config["mood_illustration_bindings"]) == set(
-        session_config["mood_catalog"]
-    )
-    await service.aclose()
-
-
 @pytest.mark.asyncio
 async def test_the_core_bridge_no_longer_answers_pet_package_methods() -> None:
     """#181-D: pet package management belongs to the plugin that owns it.
@@ -206,7 +138,6 @@ async def test_the_core_bridge_no_longer_answers_pet_package_methods() -> None:
     handler = DesktopRoleRequestHandler(
         role_service=SimpleNamespace(),
         role_store=SimpleNamespace(),
-        role_differences=SimpleNamespace(),
         role_presenter=SimpleNamespace(),
         voice_handler=SimpleNamespace(),
         card_import_service=SimpleNamespace(),

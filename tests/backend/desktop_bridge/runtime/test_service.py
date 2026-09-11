@@ -31,9 +31,10 @@ async def test_reloading_rejects_new_work_without_queuing_a_late_chat():
 @pytest.mark.asyncio
 async def test_retirement_releases_generation_even_if_handler_cleanup_fails():
     handler = SimpleNamespace(chat_service=SimpleNamespace(drain=AsyncMock()),
-                              story_simulation=SimpleNamespace(drain=AsyncMock()),
                               aclose=AsyncMock(side_effect=OSError("close failed")))
-    lease = SimpleNamespace(release=AsyncMock())
+    lease = SimpleNamespace(
+        release=AsyncMock(), core=SimpleNamespace(plugin_manager=None)
+    )
     entry = _ServiceGeneration(handler, lease)
     service = object.__new__(ReloadableDesktopService)
     service._entries = [entry]

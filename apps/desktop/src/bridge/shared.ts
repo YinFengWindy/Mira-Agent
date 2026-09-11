@@ -2,6 +2,8 @@ export type BridgeRequest = {
   id: string;
   method: string;
   payload: Record<string, unknown>;
+  /** Optional caller-owned deadline, consumed locally by the bridge transport. */
+  timeoutMs?: number;
 };
 
 /** Where a surface's body ended up after the host clamped and settled it. */

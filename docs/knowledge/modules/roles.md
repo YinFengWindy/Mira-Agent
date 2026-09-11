@@ -15,9 +15,7 @@ source_paths:
   - apps/backend/core/roles/role_runtime.py
   - apps/backend/core/roles/relationship_runtime/
   - apps/backend/core/roles/scene_followup_runtime.py
-  - apps/backend/desktop_bridge/role_difference_service.py
   - apps/desktop/src/bridge/bridgeClient.ts
-  - apps/desktop/renderer/src/roles/useRoleDifferenceGeneration.ts
   - apps/desktop/renderer/src/roles/RoleAssetCategoryGroups.tsx
 related:
   - conversations-and-sessions.md
@@ -33,6 +31,8 @@ related:
 
 角色能力包含基本设定、渠道绑定、工作区、素材、心情相关配置和运行时关系状态。角色素材既被桌面管理页使用，也可能进入提示词、场景和图片生成流程。
 
+素材页只管理已有素材与手动心情绑定；一键生成差分及其 RPC 已移除。自动场景 CG 偏好由 NovelAI 插件的角色设置扩展管理，停用时隐藏控件并保留配置。
+
 ## 关系与场景
 
 `apps/backend/core/roles/relationship_runtime/` 负责关系快照、持久化、寂寞计算和维护循环。`SceneFollowupRuntime` 负责场景追问状态。它们为 Proactive、Drift 和自动 CG 提供上下文，但不直接拥有 Agent 回合。
@@ -43,8 +43,6 @@ related:
 - 修改角色删除：检查会话、对话线程、关系状态、记忆、调度任务、工作区和素材清理。
 - 修改心情或关系：检查主动触发条件、提示词装配、场景判断和桌面展示。
 - 修改素材分类：检查角色素材页、选择器、图片提示词与本地资源传输。
-- 修改自动差分生成或 bridge 等待策略：同步检查五张差分的最终角色快照、素材分组刷新和图片生成请求超时。
-- 自动生成角色差分：五张带纯白背景的差分图串行生成并持久化到 `AI 差分` 分类后，bridge 会同步角色会话的运行时配置，再返回最终角色快照；`roles.differences.generate` 使用图片生成长超时，renderer 依靠最终快照刷新素材分组。
 - 导入桌宠素材包：`pet.json` 的预览图字段兼容可选；提供 `previewPath` 时仍校验并保存预览图。
 
 ## 不变量

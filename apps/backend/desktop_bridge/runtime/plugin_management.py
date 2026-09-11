@@ -57,17 +57,21 @@ class RuntimePluginManagement:
         for record in kernel.discover():
             plugin_id = record.manifest.id
             state = states.get(plugin_id)
-            plugins.append({
-                "id": plugin_id,
-                "name": record.name,
-                "version": record.manifest.version or "",
-                "description": record.manifest.desc or "",
-                "enabled": self._enabled(plugin_id),
-                "state": state["state"] if state else "DISCOVERED",
-                "error": state["error"] if state else "",
-                # __contains__ 已随 #177 的死代码清理移除，改用 schema_for 判定
-                "has_config_schema": kernel.config_schemas.schema_for(plugin_id) is not None,
-            })
+            plugins.append(
+                {
+                    "id": plugin_id,
+                    "name": record.name,
+                    "version": record.manifest.version or "",
+                    "description": record.manifest.desc or "",
+                    "enabled": self._enabled(plugin_id),
+                    "dependencies": list(record.manifest.dependencies),
+                    "state": state["state"] if state else "DISCOVERED",
+                    "error": state["error"] if state else "",
+                    # __contains__ 已随 #177 的死代码清理移除，改用 schema_for 判定
+                    "has_config_schema": kernel.config_schemas.schema_for(plugin_id)
+                    is not None,
+                }
+            )
         return {"plugins": plugins}
 
     async def set_enabled(

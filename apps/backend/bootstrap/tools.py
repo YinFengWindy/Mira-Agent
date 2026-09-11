@@ -525,6 +525,17 @@ def build_core_runtime(
             plugin_configs=config.plugins,
             relationship_runtime=relationship_runtime,
             legacy_plugin_root=_legacy_plugin_root(),
+            role_runtime_registry=role_runtime_registry,
+            is_reload=shared is not None,
+            previously_active_plugins=(
+                frozenset(
+                    row["id"]
+                    for row in shared.plugin_manager.states()
+                    if row["state"] == "ACTIVE"
+                )
+                if shared is not None and shared.plugin_manager is not None
+                else frozenset()
+            ),
         ),
         namespace=uuid4().hex,
         strict=shared is not None,

@@ -1,4 +1,6 @@
+import type { PluginHostServices } from "../../../apps/desktop/renderer/src/plugins/pluginHostServices";
 import { useSyncExternalStore } from "react";
+import { novelAiGenerationTimeoutMs } from "./rpcPolicy";
 import type { PluginRpcClient } from "../../../apps/desktop/renderer/src/plugins/pluginBridgeClient";
 import type { RoleRecord } from "../../../apps/desktop/renderer/src/shared/types";
 import type { PromptTagWorkspaceSectionId } from "./PromptTagWorkspaceSidebar";
@@ -135,23 +137,19 @@ export function clearError(): void {
   commit({ ...state, error: "" });
 }
 
+/** Surfaces a failed host request at the plugin page boundary. */
+export function setPageError(error: unknown): void {
+  commit({ ...state, error: error instanceof Error ? error.message : String(error) });
+}
+
 let rolesInflight: Promise<void> | null = null;
 
-/**
- * Fetches the role roster via the host bridge (not the plugin's own `client`
- * — `roles.list` is a host method, matching the pre-existing exception
- * documented on `NovelAIPage`). Always re-fetches (this plugin page's data
- * can go stale while the page is closed), but concurrent callers within one
- * in-flight request share it instead of issuing duplicate calls.
- */
-export async function refreshRoles(): Promise<void> {
+/** Fetches roles through injected host services, sharing concurrent requests across sidebar and page. */
+export async function refreshRoles(host: PluginHostServices): Promise<void> {
   if (rolesInflight) return rolesInflight;
   rolesInflight = (async () => {
     try {
-      const response = await window.miraDesktop.invoke({ method: "roles.list", payload: {} });
-      const roles = !response.error && Array.isArray(response.payload?.roles)
-        ? (response.payload.roles as RoleRecord[])
-        : state.roles;
+      const roles = await host.listRoles();
       commit({ ...state, roles, rolesLoaded: true });
     } finally {
       rolesInflight = null;
@@ -179,8 +177,10 @@ const ZERO_ROLES_BLOCKED_REASON = "请先创建至少一个角色，再进入生
  * zero-role user in once on a cold first click is a harmless one-time
  * flash of that empty state, not a real regression.
  */
-export function selectBlockedReasonForNovelAiPage(): string | null {
-  void refreshRoles();
+export function selectBlockedReasonForNovelAiPage(host: PluginHostServices): string | null {
+  void refreshRoles(host).catch((error: unknown) => {
+    commit({ ...state, error: error instanceof Error ? error.message : String(error) });
+  });
   if (!state.rolesLoaded || state.roles.length > 0) return null;
   return ZERO_ROLES_BLOCKED_REASON;
 }
@@ -205,7 +205,7 @@ export async function loadHistory(client: PluginRpcClient, roleId: string): Prom
 export async function submitGenerate(client: PluginRpcClient, payload: Record<string, unknown>): Promise<void> {
   commit({ ...state, submitting: true, error: "" });
   try {
-    const response = await client.call<{ result: ImageGenerateResult }>("generate", payload);
+    const response = await client.call<{ result: ImageGenerateResult }>("generate", payload, { timeoutMs: novelAiGenerationTimeoutMs });
     const result = response.result;
     commit({ ...state, submitting: false, latestResult: result });
     await loadHistory(client, String(payload.role_id ?? ""));

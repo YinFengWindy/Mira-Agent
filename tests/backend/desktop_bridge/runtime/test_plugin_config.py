@@ -47,11 +47,16 @@ def _stage_plugin_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda workspace: [root])
 
 
-async def _start_service(tmp_path: Path) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
+async def _start_service(
+    tmp_path: Path,
+    config_text: str | None = None,
+) -> tuple[ReloadableDesktopService, Path, AppRuntime]:
+    config_text = config_text if config_text is not None else _config()
     path = tmp_path / "config.toml"
-    path.write_text(_config(), encoding="utf-8")
+    path.write_text(config_text, encoding="utf-8")
     app = AppRuntime(
-        load_config_text(_config()), tmp_path,
+        load_config_text(config_text),
+        tmp_path,
         features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
     )
     await app.start()
@@ -83,6 +88,7 @@ async def test_get_returns_schema_and_default_backed_values(tmp_path, monkeypatc
     finally:
         await service.aclose()
         await app.shutdown()
+
 
 
 @pytest.mark.asyncio

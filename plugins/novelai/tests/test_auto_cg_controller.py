@@ -10,7 +10,6 @@ from agent.plugins.context import PluginKVStore
 from agent.tools.message_push import MessagePushTool
 from agent.tools.registry import ToolRegistry
 from bus.events_lifecycle import SceneObservationCommitted
-from plugins.novelai.backend.models import NovelAISettings
 from plugins.novelai.backend.auto_cg import AutoCgPolicy
 from plugins.novelai.backend.auto_cg_controller import AutoCgController
 from bootstrap.runtime.generations import RuntimeCandidate
@@ -36,7 +35,6 @@ def _observation(**overrides: Any) -> SceneObservationCommitted:
 @pytest.mark.asyncio
 async def test_cg_task_holds_generation_until_image_work_finishes(tmp_path):
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="old-token"),
         role_store=SimpleNamespace(get_role=lambda _: SimpleNamespace(runtime_config={"auto_scene_cg_enabled": True})),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
         session_manager=SimpleNamespace(get_or_create=lambda _: SimpleNamespace(metadata={})),
@@ -72,7 +70,6 @@ def test_controller_advances_cooldown_for_passive_observations(tmp_path: Path) -
     policy.advance_turn(session_key)
     policy.record_success(session_key, "rain")
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="novel-token"),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, None),
@@ -89,7 +86,6 @@ def test_controller_advances_cooldown_for_passive_observations(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_new_observation_cancels_stale_in_flight_task(tmp_path: Path) -> None:
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="novel-token"),
         role_store=cast(Any, None),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
         session_manager=cast(Any, None),
@@ -131,7 +127,6 @@ async def test_controller_records_state_only_after_image_push_succeeds(
             return '{"output_paths": ["cg.png"]}'
 
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="novel-token"),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, None),
@@ -176,7 +171,6 @@ async def test_controller_retries_generation_once_and_pushes_one_image(
 
     generate_tool = GenerateTool()
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="novel-token"),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, SimpleNamespace()),
@@ -213,7 +207,6 @@ async def test_controller_abandons_after_one_generation_retry(
 
     generate_tool = GenerateTool()
     controller = AutoCgController(
-        settings=NovelAISettings(enabled=True, token="novel-token"),
         role_store=cast(Any, None),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
         session_manager=cast(Any, None),
