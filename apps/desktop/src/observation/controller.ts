@@ -2,6 +2,16 @@ import type { ObservationStatus, PetObservationPayload } from "./types.js";
 import { ObservationBubbleController } from "./bubble.js";
 
 type DesktopObservationControllerOptions = {
+  /**
+   * The pet, as far as observation is concerned.
+   *
+   * Since #181-C nothing in the host owns a pet object: `isRunning` is read off
+   * the DesktopSurface host and `publishObservation` becomes a bridge event the
+   * pet plugin subscribes to (see `pluginCoupling/desktopPet.ts`). The shape
+   * survives because it was already the whole of what observation needed, and
+   * #220 replaces it outright by making observation a plugin that talks to the
+   * pet over plugin-to-plugin messaging.
+   */
   pet: {
     readonly isRunning: boolean;
     publishObservation(payload: PetObservationPayload): void;

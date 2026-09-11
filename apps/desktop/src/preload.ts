@@ -1,15 +1,23 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { PreloadLocalAssetCache } from "./assets/preloadLocalAssetCache.js";
 import { localAssetScheme } from "./assets/localAssetContract.js";
-import { surfaceMessageChannel, surfacePositionChannel, surfaceStateChannel } from "./surface/host.js";
+import {
+  surfaceMessageChannel,
+  surfacePositionChannel,
+  surfaceSettledChannel,
+  surfaceStateChannel,
+} from "./surface/host.js";
 import { surfaceChannels } from "./surface/ipc.js";
+import { pluginDataChannels } from "./plugins/ipc.js";
 import type {
   BridgeEvent,
   BridgeResponse,
   DesktopApi,
   LocalAssetTransport,
   RendererDiagnosticPayload,
+  SurfaceCreateResultPayload,
   SurfacePlacementPayload,
+  SurfaceSettledPayload,
   WindowControlAction,
   WindowState,
   VoiceInputDevice,
@@ -40,6 +48,24 @@ function isFiniteRect(value: unknown): boolean {
   if (!isFinitePoint(value)) return false;
   const { width, height } = value as Record<string, unknown>;
   return Number.isFinite(width) && Number.isFinite(height);
+}
+
+/**
+ * Guards a settle push before it reaches a plugin's background code.
+ *
+ * Same reasoning as `isSurfacePlacement`, with a longer fuse: a background
+ * module *persists* these coordinates and replays them on the next launch, so a
+ * NaN slipping through would not fail visibly now — it would open a window
+ * somewhere impossible days later.
+ */
+function isSurfaceSettled(value: unknown): value is SurfaceSettledPayload {
+  if (value === null || typeof value !== "object") return false;
+  const { pluginId, surfaceId, placement, reason, displayId } = value as Record<string, unknown>;
+  return typeof pluginId === "string" && Boolean(pluginId)
+    && typeof surfaceId === "string" && Boolean(surfaceId)
+    && typeof reason === "string"
+    && typeof displayId === "string"
+    && isSurfacePlacement(placement);
 }
 
 const localAssets = new PreloadLocalAssetCache();
@@ -152,7 +178,7 @@ const api: DesktopApi = {
     create(pluginId, surfaceId, spec, anchor) {
       return ipcRenderer.invoke(surfaceChannels.create, {
         pluginId, surfaceId, spec, x: anchor.x, y: anchor.y,
-      }) as Promise<{ x: number; y: number }>;
+      }) as Promise<SurfaceCreateResultPayload>;
     },
     destroy(pluginId, surfaceId) {
       return ipcRenderer.invoke(surfaceChannels.destroy, { pluginId, surfaceId }) as Promise<void>;
@@ -223,6 +249,21 @@ const api: DesktopApi = {
     },
     activateMainWindow() {
       ipcRenderer.send(surfaceChannels.activateMainWindow, {});
+    },
+  },
+  onSurfaceSettled(listener) {
+    const wrapped = (_event: unknown, payload: unknown) => {
+      if (isSurfaceSettled(payload)) listener(payload);
+    };
+    ipcRenderer.on(surfaceSettledChannel, wrapped);
+    return () => ipcRenderer.off(surfaceSettledChannel, wrapped);
+  },
+  pluginData: {
+    read(pluginId) {
+      return ipcRenderer.invoke(pluginDataChannels.read, { pluginId }) as Promise<unknown>;
+    },
+    write(pluginId, value) {
+      return ipcRenderer.invoke(pluginDataChannels.write, { pluginId, value }) as Promise<void>;
     },
   },
   onVoiceCaptureCommand(listener) {

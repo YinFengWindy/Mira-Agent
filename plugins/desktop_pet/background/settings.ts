@@ -1,13 +1,17 @@
-import { readFileSync } from "node:fs";
-import { writeFile, mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
-import { defaultDesktopPetSettings, type DesktopPetBinding, type DesktopPetSettings } from "./types.js";
+import type { DesktopPetBinding, DesktopPetSettings } from "./types";
 
 function asFiniteCoordinate(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/** Parses persisted desktop-pet data and normalizes unusable enable states. */
+/**
+ * Parses persisted desktop-pet data and normalizes unusable enable states.
+ *
+ * The file I/O this used to sit next to is gone: since #181-C the pet's
+ * settings live in `ctx.store`, which the host reads and writes on the
+ * plugin's behalf. What is left here is pure, which is also what makes it
+ * testable without a filesystem.
+ */
 export function normalizeDesktopPetSettings(value: unknown): DesktopPetSettings {
   const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const roleId = typeof source.roleId === "string" && source.roleId.trim() ? source.roleId.trim() : null;
@@ -23,6 +27,8 @@ export function normalizeDesktopPetSettings(value: unknown): DesktopPetSettings 
     }
   }
   return {
+    // A stored `visible` only counts when there is something to show: a role
+    // whose package was deleted must not come back as a blank pet window.
     visible: Boolean(source.visible ?? source.enabled) && Boolean(roleId && packageId),
     roleId,
     packageId,
@@ -42,23 +48,4 @@ export function bindDesktopPetSettings(
     roleId: binding.roleId,
     packageId: binding.package.id,
   };
-}
-
-/** Loads the local desktop-pet configuration without treating a missing file as an error. */
-export function loadDesktopPetSettings(path: string): DesktopPetSettings {
-  try {
-    return normalizeDesktopPetSettings(JSON.parse(readFileSync(path, "utf-8")));
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || error instanceof SyntaxError) return defaultDesktopPetSettings;
-    throw error;
-  }
-}
-
-/** Atomically persists the already-normalized desktop-pet configuration. */
-export async function saveDesktopPetSettings(path: string, settings: DesktopPetSettings): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.tmp`;
-  await writeFile(temporaryPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
-  await writeFile(path, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
 }

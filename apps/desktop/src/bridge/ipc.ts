@@ -8,6 +8,8 @@ import {
   type SurfaceIpcHost,
 } from "../surface/ipc.js";
 import type { DesktopSurfaceHost } from "../surface/host.js";
+import { registerPluginDataIpc } from "../plugins/ipc.js";
+import type { PluginDataStore } from "../plugins/dataStore.js";
 import {
   registerDesktopIpcHandlers,
   type DesktopIpcHost,
@@ -41,6 +43,14 @@ const electronSurfaceHost: SurfaceIpcHost = {
 /** Registers all IPC handlers exposed through the desktop preload bridge. */
 export function registerDesktopIpc(options: RegisterDesktopIpcOptions): void {
   registerDesktopIpcHandlers(electronHost, options);
+}
+
+/** Registers the per-plugin data store's channels (#181-C). */
+export function registerDesktopPluginDataIpc(store: PluginDataStore): void {
+  registerPluginDataIpc(
+    { handle: (channel, listener) => { ipcMain.handle(channel, listener); } },
+    store,
+  );
 }
 
 /** Registers the DesktopSurface capability's channels (#181). */

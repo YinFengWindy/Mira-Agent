@@ -14,8 +14,8 @@ import { importLocalAssets } from "../assets/localAssetImport.js";
 import type { LocalAssetRegistry } from "../assets/localAssetRegistry.js";
 import { maxLocalAssetBytes } from "../assets/localAssetContract.js";
 import { applyRuntimeSettings, readRuntimeSettings } from "../settingsRuntime.js";
-import type { DesktopPetController } from "../pet/controller.js";
 import type { DesktopObservationController } from "../observation/controller.js";
+import type { DesktopPetCommand } from "../pluginCoupling/desktopPet.js";
 import type { BrowserVoiceRecorder } from "../voice/recorder.js";
 import type { DesktopVoiceController } from "../voice/controller.js";
 import type { BrowserVoicePlayback } from "../voice/playback.js";
@@ -56,13 +56,15 @@ export type RegisterDesktopIpcOptions = {
   localAssets: LocalAssetRegistry;
   localAssetImportsRoot: string;
   openLocalAttachment: (value: string) => Promise<LocalAssetOpenResult>;
-  desktopPet: DesktopPetController;
+  /** Issues one pet lifecycle command to the plugin that owns the pet. See `pluginCoupling/desktopPet.ts`. */
+  requestDesktopPetCommand: (command: DesktopPetCommand) => void;
+  /** Whether a sending window is the pet's surface, supplied by `main.ts`. */
+  isPetWindow: (window: { readonly id: number } | null) => boolean;
   desktopObservation: DesktopObservationController;
   voiceRecorder: BrowserVoiceRecorder;
   voiceController: DesktopVoiceController;
   voicePlayback: BrowserVoicePlayback;
   onVoiceSettingsChanged?: () => void;
-  onPetVisibilityChanged?: () => void;
 };
 
 function assetTransport<T>(value: T, assets: LocalAssetReference[]): LocalAssetTransport<T> {
@@ -129,13 +131,13 @@ export function registerDesktopIpcHandlers(
     localAssets,
     localAssetImportsRoot,
     openLocalAttachment,
-    desktopPet,
+    requestDesktopPetCommand,
+    isPetWindow,
     desktopObservation,
     voiceRecorder,
     voiceController,
     voicePlayback,
     onVoiceSettingsChanged,
-    onPetVisibilityChanged,
   }: RegisterDesktopIpcOptions,
 ): void {
   const applicationSessionId = randomUUID();
@@ -264,14 +266,20 @@ export function registerDesktopIpcHandlers(
     });
     return assetTransport(stagedPaths, assets);
   });
-  host.handle("desktop:pet-sync", async (_event, forceVisible?: unknown) => {
-    await desktopPet.sync(typeof forceVisible === "boolean" ? forceVisible : undefined);
-    await desktopObservation.restore();
-    onPetVisibilityChanged?.();
+  // Fire-and-forget since #181-C: the pet's controller lives in the plugin
+  // host renderer, so this can no longer await the sync and then refresh the
+  // tray. The refresh happens instead when the plugin writes its settings back
+  // — see `main.ts`'s `pluginData.onChanged`, which is also what makes the
+  // tray correct after a change the pet made on its own.
+  host.handle("desktop:pet-sync", (_event, forceVisible?: unknown) => {
+    requestDesktopPetCommand({
+      kind: "sync",
+      forceVisible: typeof forceVisible === "boolean" ? forceVisible : undefined,
+    });
   });
-  host.handle("desktop:pet-observation-dismiss", async (event) => {
+  host.handle("desktop:pet-observation-dismiss", (event) => {
     const petWindow = host.windowFromWebContents(event.sender);
-    if (!desktopPet.isPetWindow(petWindow)) return;
+    if (!isPetWindow(petWindow)) return;
     desktopObservation.dismissBubble();
   });
   // The pet's ready / bubble-height / drag / open / context-menu channels are
@@ -279,7 +287,7 @@ export function registerDesktopIpcHandlers(
   // the generic DesktopSurface channels in `src/surface/ipc.ts`, where the host
   // attributes them by the sending window's identity rather than by a
   // pet-specific check here.
-  host.registerVoiceIpc({ desktopPet, voiceRecorder, voiceController, voicePlayback });
+  host.registerVoiceIpc({ isPetWindow, voiceRecorder, voiceController, voicePlayback });
   host.handle("desktop:pick-chat-attachments", async (_event, options?: { multiple?: boolean }) => {
     const result = await host.showOpenDialog({
       properties: options?.multiple ? ["openFile", "multiSelections"] : ["openFile"],

@@ -5,8 +5,8 @@ import { localAssetSchemePrivileges, registerLocalAssetProtocol } from "./assets
 import { DesktopBridgeClient } from "./bridge/bridgeClient.js";
 import { startBridge, wireBridgeEvents } from "./bridge/bridgeLifecycle.js";
 import { logDesktopDiagnostic } from "./diagnostics.js";
-import { registerDesktopIpc, registerDesktopSurfaceIpc } from "./bridge/ipc.js";
-import { DesktopSurfaceHost } from "./surface/host.js";
+import { registerDesktopIpc, registerDesktopPluginDataIpc, registerDesktopSurfaceIpc } from "./bridge/ipc.js";
+import { DesktopSurfaceHost, surfaceSettledChannel } from "./surface/host.js";
 import {
   createDesktopSurfaceWindow,
   cursorScreenPoint,
@@ -26,9 +26,18 @@ import {
   shouldHideDesktopWindowOnClose as shouldHideDesktopWindowOnClosePolicy,
 } from "./windowLifecycle.js";
 import { registerDesktopContentSecurityPolicy } from "./windowSecurity.js";
-import { DesktopPetController, desktopPetSurfaceKey } from "./pet/controller.js";
-import { loadDesktopPetSettings, saveDesktopPetSettings } from "./pet/settings.js";
-import type { DesktopPetActionState, DesktopPetBinding, DesktopPetSettings } from "./pet/types.js";
+import { PluginDataStore } from "./plugins/dataStore.js";
+import {
+  desktopPetCommandMethod,
+  desktopPetObservationMethod,
+  desktopPetPluginId,
+  desktopPetSurfaceKey,
+  isDesktopPetWindow,
+  noDesktopPetPresence,
+  readDesktopPetPresence,
+  type DesktopPetCommand,
+  type DesktopPetPresence,
+} from "./pluginCoupling/desktopPet.js";
 import { DesktopObservationController } from "./observation/controller.js";
 import { wireRoleReplyBubbles } from "./observation/roleBubble.js";
 import { createVoiceCaptureWindow } from "./voice/window.js";
@@ -39,7 +48,13 @@ import { BrowserVoicePlayback } from "./voice/playback.js";
 import { cancelVoiceTurn, createVoicePlaybackCallbacks, handleVoiceBridgeEvent, selectVoiceTurn } from "./voice/bridgeEvents.js";
 import { applyVoiceAvailability, isVoiceHotkeyAvailable } from "./voice/availability.js";
 import { configureSettingsConfigPath, loadSettingsData } from "./settings.js";
-import type { SettingsFormData, VoiceStatePayload } from "./bridge/shared.js";
+import type {
+  BridgeEvent,
+  LocalAssetTransport,
+  SettingsFormData,
+  SurfaceSettledPayload,
+  VoiceStatePayload,
+} from "./bridge/shared.js";
 
 // Voice replies are played from a trusted hidden renderer without a DOM user gesture.
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -56,8 +71,9 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let desktopWindow: BrowserWindow | null = null;
 let pluginHostWindow: BrowserWindow | null = null;
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
-let desktopPetSettings: DesktopPetSettings;
-let desktopPet: DesktopPetController | null = null;
+let desktopSurfaces: DesktopSurfaceHost | null = null;
+/** The pet's state as the host sees it; refreshed whenever the plugin writes. */
+let desktopPetPresence: DesktopPetPresence = noDesktopPetPresence;
 let desktopObservation: DesktopObservationController | null = null;
 let voiceRecorder: BrowserVoiceRecorder | null = null;
 let voiceController: DesktopVoiceController | null = null;
@@ -145,47 +161,45 @@ async function openLocalAttachment(value: string) {
   return result;
 }
 
-function desktopPetSettingsPath(): string {
+/**
+ * Where the pet's data lived before plugins had a store.
+ *
+ * Handed to `PluginDataStore` as a one-off migration source so an existing
+ * installation keeps its remembered positions and its visible/hidden choice
+ * when the pet's settings move into `plugin-data/desktop_pet.json` (#181-C).
+ * Nothing else in the host reads this path.
+ */
+function legacyPluginDataPath(pluginId: string): string | null {
+  if (pluginId !== desktopPetPluginId) return null;
   return resolve(app.getPath("userData"), "desktop-pet.json");
 }
 
-async function resolveDesktopPetBinding(roleId?: string): Promise<DesktopPetBinding | null> {
-  const response = await bridge.invoke({ method: "roles.list", payload: {} });
-  const roles = response.payload.roles;
-  if (!Array.isArray(roles)) return null;
-  const role = roles.find((item) => item && typeof item === "object" && (roleId ? (item as { id?: unknown }).id === roleId : (item as { desktop_pet_enabled?: unknown }).desktop_pet_enabled === true)) as { id?: unknown; pet_packages?: unknown; selected_pet_package_id?: unknown } | undefined;
-  if (!role) return null;
-  const packages = role?.pet_packages;
-  if (!Array.isArray(packages)) return null;
-  const packageId = typeof role?.selected_pet_package_id === "string" ? role.selected_pet_package_id : "";
-  const packageValue = packages.find((item) => item && typeof item === "object" && (item as { id?: unknown }).id === packageId) as { id?: unknown; display_name?: unknown; spritesheet_abs?: unknown; actions?: unknown } | undefined;
-  if (!packageValue || typeof packageValue.id !== "string" || typeof packageValue.display_name !== "string" || typeof packageValue.spritesheet_abs !== "string") return null;
-  const reference = localAssets.grantPath(packageValue.spritesheet_abs);
-  if (!reference) return null;
-  if (typeof role.id !== "string") return null;
-  return {
-    roleId: role.id,
-    package: { id: packageValue.id, displayName: packageValue.display_name, spritesheetUrl: reference.url },
-    actions: desktopPetActions(packageValue.actions),
+/**
+ * Publishes a host-originated event into the same stream backend events use.
+ *
+ * This is how the host still reaches the pet's background code (the tray entry,
+ * `desktop:pet-sync`, observation) now that no pet object exists in this
+ * process. Deliberately the *same* envelope `wireBridgeEvents` sends, so a
+ * plugin receives it on the ordinary `ctx.events.on` with no second mechanism
+ * to learn. See `pluginCoupling/desktopPet.ts` for what removes each caller.
+ */
+function publishDesktopEvent(method: string, payload: Record<string, unknown>): void {
+  const transport: LocalAssetTransport<BridgeEvent> = {
+    value: { id: `host-${method}-${Date.now()}`, type: "event", method, payload },
+    assets: [],
   };
-}
-
-function desktopPetActions(value: unknown): Record<string, DesktopPetActionState> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const result: Record<string, DesktopPetActionState> = {};
-  for (const [name, state] of Object.entries(value)) {
-    if (typeof state === "string" && isDesktopPetActionState(state)) result[name] = state;
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send("desktop:event", transport);
   }
-  return result;
 }
 
-function isDesktopPetActionState(value: string): value is DesktopPetActionState {
-  return ["idle", "running-right", "running-left", "waving", "jumping"].includes(value);
+function requestDesktopPetCommand(command: DesktopPetCommand): void {
+  publishDesktopEvent(desktopPetCommandMethod, { ...command });
 }
 
-async function persistDesktopPetSettings(settings: DesktopPetSettings): Promise<void> {
-  desktopPetSettings = settings;
-  await saveDesktopPetSettings(desktopPetSettingsPath(), settings);
+/** Whether the pet's surface window currently exists, asked of the capability that owns it. */
+function isDesktopPetRunning(): boolean {
+  return Boolean(desktopSurfaces?.has(desktopPetSurfaceKey));
 }
 
 function requestAppQuit(): void {
@@ -204,8 +218,8 @@ function syncVoiceAvailability(cancelCurrentTurn = true): void {
   if (!hotkey) return;
   const available = isVoiceHotkeyAvailable({
     voiceEnabled: Boolean(voiceSettings?.enabled),
-    petRunning: Boolean(desktopPet?.isRunning),
-    petVisible: desktopPetSettings.visible,
+    petRunning: isDesktopPetRunning(),
+    petVisible: desktopPetPresence.visible,
   });
   applyVoiceAvailability(available, cancelCurrentTurn, {
     start: () => hotkey.start(),
@@ -227,23 +241,29 @@ function reloadVoiceSettings(): void {
   syncVoiceAvailability(false);
 }
 
-async function hideDesktopPet(): Promise<void> {
-  await desktopPet?.hide();
+/**
+ * Reacts to the pet plugin having written its settings.
+ *
+ * Since #181-C the host cannot await a pet operation — it publishes a command
+ * and the plugin acts on it. This is the other half: the plugin's store write
+ * is what tells the host the pet started or stopped, and it lands *after* the
+ * surface was created or destroyed, so `isDesktopPetRunning()` is already
+ * correct by the time anything here reads it. It also covers changes the host
+ * never asked for, which the old `await pet.hide()` path did not.
+ */
+function handleDesktopPetSettingsChanged(stored: unknown): void {
+  desktopPetPresence = readDesktopPetPresence(stored);
   syncDesktopPetRuntimeState();
-  await desktopObservation?.restore();
-}
-
-async function showDesktopPet(): Promise<void> {
-  await desktopPet?.show();
-  syncDesktopPetRuntimeState();
-  await desktopObservation?.restore();
+  void desktopObservation?.restore().catch((error) => {
+    logDesktopDiagnostic({ scope: "main", event: "desktop-observation.restore.failed", payload: { error } });
+  });
 }
 
 function shouldHideDesktopWindowOnClose(): boolean {
   return shouldHideDesktopWindowOnClosePolicy({
     isQuitting,
     trayLifecycleEnabled,
-    desktopPetRunning: Boolean(desktopPet?.isRunning || desktopPetSettings?.visible),
+    desktopPetRunning: isDesktopPetRunning() || desktopPetPresence.visible,
   });
 }
 
@@ -275,12 +295,26 @@ function showOrCreateDesktopWindow(): BrowserWindow {
   return window;
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   ensureDesktopRuntimeConfig(runtimePaths);
   configureSettingsConfigPath(runtimePaths.configPath);
   reloadVoiceSettings();
   process.env.SHIORI_DESKTOP_USER_DATA_DIR = app.getPath("userData");
-  desktopPetSettings = loadDesktopPetSettings(desktopPetSettingsPath());
+  // Per-plugin persisted state (#181-C). Read before the tray exists so its
+  // "显示桌宠/隐藏桌宠" entry is right on the first paint rather than after the
+  // pet plugin's first write.
+  const activePluginData = new PluginDataStore({
+    directory: resolve(app.getPath("userData"), "plugin-data"),
+    legacyPathFor: legacyPluginDataPath,
+    onError: (pluginId, operation, error) => {
+      logDesktopDiagnostic({ scope: "main", event: "plugin-data.failed", payload: { pluginId, operation, error } });
+    },
+  });
+  activePluginData.onChanged((pluginId, value) => {
+    if (pluginId === desktopPetPluginId) handleDesktopPetSettingsChanged(value);
+  });
+  registerDesktopPluginDataIpc(activePluginData);
+  desktopPetPresence = readDesktopPetPresence(await activePluginData.read(desktopPetPluginId));
   const activeVoiceRecorder = new BrowserVoiceRecorder(createVoiceCaptureWindow);
   voiceRecorder = activeVoiceRecorder;
   const privateWorkspaceRoot = runtimePaths.workspacePath;
@@ -296,23 +330,35 @@ void app.whenReady().then(() => {
   registerDesktopUpdates(app.isPackaged, currentVersion, (error) => {
     logDesktopDiagnostic({ scope: "main", event: "updater.check.failed", payload: { error } });
   });
-  // DesktopSurface (#181). Constructed before the pet controller because the
-  // pet is now one of its clients: since #181-B the pet owns no window code of
-  // its own, it drives a surface. `DesktopPetController` keeps only the pet's
-  // domain state until 181-C/D move that into the plugin too.
-  const desktopSurfaces = new DesktopSurfaceHost({
+  // DesktopSurface (#181). No pet-specific code remains on this side: since
+  // #181-C the pet's controller lives in `plugins/desktop_pet/background/` and
+  // reaches these primitives over IPC like any other plugin would.
+  const activeDesktopSurfaces = new DesktopSurfaceHost({
     createWindow: (key, spec) => createDesktopSurfaceWindow(key, spec, { openLocalAttachment }),
     workAreaFor: workAreaForSurface,
     displayIdFor: displayIdForSurface,
     cursorScreenPoint,
     showContextMenu: showSurfaceContextMenu,
     activateMainWindow: showOrCreateDesktopWindow,
+    // Forwarded to the plugin-host renderer rather than handled here: the code
+    // that decides whether a settle is worth remembering belongs to whichever
+    // plugin owns the surface. Only that window is sent it — it is the only one
+    // running `app.background` code, and the surface's own renderer already
+    // gets its placement on `surfacePositionChannel`.
     onSettled: (key, placement, reason) => {
-      if (key.pluginId !== desktopPetSurfaceKey.pluginId) return;
-      desktopPet?.handleSettled(reason, placement.anchor);
+      if (!pluginHostWindow || pluginHostWindow.isDestroyed()) return;
+      const payload: SurfaceSettledPayload = {
+        pluginId: key.pluginId,
+        surfaceId: key.surfaceId,
+        placement,
+        reason,
+        displayId: activeDesktopSurfaces.displayId(key),
+      };
+      pluginHostWindow.webContents.send(surfaceSettledChannel, payload);
     },
   });
-  registerDesktopSurfaceIpc(desktopSurfaces);
+  desktopSurfaces = activeDesktopSurfaces;
+  registerDesktopSurfaceIpc(activeDesktopSurfaces);
   // Dedicated hidden window for plugin `app.background` code (#226 item 1).
   // Created once here, after the surface IPC it depends on is registered but
   // before any plugin could possibly need it; destroyed in `before-quit`.
@@ -330,26 +376,23 @@ void app.whenReady().then(() => {
   // deliberately left as-is rather than fixed; if Linux/macOS packaging
   // ever happens, this is the first place to revisit.
   pluginHostWindow = createPluginHostWindow();
-  desktopPet = new DesktopPetController({
-    getSettings: () => desktopPetSettings,
-    saveSettings: persistDesktopPetSettings,
-    resolveBinding: resolveDesktopPetBinding,
-    surfaces: desktopSurfaces,
-  });
   desktopObservation = new DesktopObservationController({
-    pet: desktopPet,
-    getRoleId: () => desktopPetSettings.roleId,
+    pet: {
+      get isRunning() { return isDesktopPetRunning(); },
+      publishObservation: (payload) => publishDesktopEvent(desktopPetObservationMethod, { ...payload }),
+    },
+    getRoleId: () => desktopPetPresence.roleId,
   });
   const activeVoiceController = new DesktopVoiceController({
     recorder: activeVoiceRecorder,
     bridge,
     isEnabled: () => Boolean(
       voiceSettings?.enabled
-      && desktopPet?.isRunning
-      && desktopPetSettings.visible
+      && isDesktopPetRunning()
+      && desktopPetPresence.visible
       && !activeVoiceRecorder.isBusy
     ),
-    roleId: () => desktopPetSettings?.roleId ?? null,
+    roleId: () => desktopPetPresence.roleId,
     microphoneDeviceId: () => voiceSettings?.microphoneDeviceId ?? "",
     publishState: publishVoiceState,
     onNewInput: (previousTurnId, nextTurnId) => {
@@ -386,11 +429,10 @@ void app.whenReady().then(() => {
     });
     voiceHotkey.setHotkey(voiceSettings.hotkey);
   }
+  // `desktop.pet.action` is no longer intercepted here: since #181-C the pet
+  // subscribes to it itself through `ctx.events.on`, and `wireBridgeEvents`
+  // already broadcasts every backend event to the plugin-host window.
   wireBridgeEvents(bridge, localAssets, (event) => {
-    if (event.method === "desktop.pet.action") {
-      desktopPet?.handleAgentAction(event.payload);
-      return;
-    }
     if (handleVoiceBridgeEvent(event, activeVoiceController, activeVoicePlayback)) return;
   });
   wireRoleReplyBubbles(bridge, desktopObservation);
@@ -409,13 +451,13 @@ void app.whenReady().then(() => {
     localAssets,
     localAssetImportsRoot,
     openLocalAttachment,
-    desktopPet,
+    requestDesktopPetCommand,
+    isPetWindow: (window) => isDesktopPetWindow(activeDesktopSurfaces, window),
     desktopObservation,
     voiceRecorder: activeVoiceRecorder,
     voiceController: activeVoiceController,
     voicePlayback: activeVoicePlayback,
     onVoiceSettingsChanged: reloadVoiceSettings,
-    onPetVisibilityChanged: syncDesktopPetRuntimeState,
   });
   getOrCreateDesktopWindow();
   if (trayLifecycleEnabled) {
@@ -425,24 +467,21 @@ void app.whenReady().then(() => {
       },
       onQuitRequested: requestAppQuit,
       getDesktopPetState: () => ({
-        visible: desktopPetSettings.visible,
-        available: Boolean(desktopPetSettings.roleId && desktopPetSettings.packageId),
+        visible: desktopPetPresence.visible,
+        available: desktopPetPresence.available,
       }),
+      // Fire-and-forget: the toggle is a request to the pet plugin, not a call
+      // into an object this process owns. The menu label catches up when the
+      // plugin writes its settings back (`handleDesktopPetSettingsChanged`),
+      // which the tray's own `refresh` after this promise settles also picks
+      // up on the next open.
       onToggleDesktopPet: async () => {
-        if (!desktopPet) return;
-        try {
-          await (desktopPetSettings.visible ? hideDesktopPet() : showDesktopPet());
-        } catch (error) {
-          logDesktopDiagnostic({ scope: "main", event: "desktop-pet.toggle.failed", payload: { error } });
-        }
+        requestDesktopPetCommand({ kind: desktopPetPresence.visible ? "hide" : "show" });
       },
     });
-    void desktopPet.restore().then(async () => {
-      syncDesktopPetRuntimeState();
-      await desktopObservation?.restore();
-    }).catch((error) => {
-      logDesktopDiagnostic({ scope: "main", event: "desktop-pet.restore.failed", payload: { error } });
-    });
+    // No `restore()` call here any more: the pet restores itself in its
+    // `setup(ctx)` when the plugin host starts it, and tells the host what it
+    // decided through its settings write.
   }
   app.on("activate", () => {
     showOrCreateDesktopWindow();

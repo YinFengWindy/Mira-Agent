@@ -121,6 +121,16 @@ export const surfacePositionChannel = "desktop:surface-position";
 export const surfaceMessageChannel = "desktop:surface-message";
 /** Channel carrying a surface's retained state, replayed whenever it reports ready. */
 export const surfaceStateChannel = "desktop:surface-state";
+/**
+ * Channel carrying a settle to the plugin-host renderer (#181-C).
+ *
+ * Distinct from `surfacePositionChannel`, which goes to the surface's *own*
+ * window so it can lay itself out. This one goes to the window running the
+ * owning plugin's `app.background` code, which is what actually decides
+ * whether a settle is worth persisting — `surfaceSettleReason` is only
+ * meaningful there, and the surface renderer never needed it.
+ */
+export const surfaceSettledChannel = "desktop:surface-settled";
 
 export class DesktopSurfaceError extends Error {}
 
