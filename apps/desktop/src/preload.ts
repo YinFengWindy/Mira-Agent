@@ -9,6 +9,7 @@ import {
 } from "./surface/host.js";
 import { surfaceChannels } from "./surface/ipc.js";
 import { pluginDataChannels } from "./plugins/ipc.js";
+import { trayChannels } from "./tray/ipc.js";
 import type {
   BridgeEvent,
   BridgeResponse,
@@ -18,6 +19,7 @@ import type {
   SurfaceCreateResultPayload,
   SurfacePlacementPayload,
   SurfaceSettledPayload,
+  TrayEntryClickedPayload,
   WindowControlAction,
   WindowState,
   VoiceInputDevice,
@@ -48,6 +50,20 @@ function isFiniteRect(value: unknown): boolean {
   if (!isFinitePoint(value)) return false;
   const { width, height } = value as Record<string, unknown>;
   return Number.isFinite(width) && Number.isFinite(height);
+}
+
+/**
+ * Guards a tray click before it reaches a plugin's background code.
+ *
+ * A click carries no numbers to corrupt, but it does carry whose handler runs:
+ * an empty or non-string id would silently match no plugin, turning a menu item
+ * the user just clicked into a no-op with nothing logged anywhere.
+ */
+function isTrayEntryClicked(value: unknown): value is TrayEntryClickedPayload {
+  if (value === null || typeof value !== "object") return false;
+  const { pluginId, entryId } = value as Record<string, unknown>;
+  return typeof pluginId === "string" && Boolean(pluginId)
+    && typeof entryId === "string" && Boolean(entryId);
 }
 
 /**
@@ -257,6 +273,24 @@ const api: DesktopApi = {
     };
     ipcRenderer.on(surfaceSettledChannel, wrapped);
     return () => ipcRenderer.off(surfaceSettledChannel, wrapped);
+  },
+  tray: {
+    setEntry(pluginId, entryId, entry) {
+      ipcRenderer.send(trayChannels.setEntry, { pluginId, entryId, ...entry });
+    },
+    removeEntry(pluginId, entryId) {
+      ipcRenderer.send(trayChannels.removeEntry, { pluginId, entryId });
+    },
+    removeAllEntries(pluginId) {
+      ipcRenderer.send(trayChannels.removeAllEntries, { pluginId });
+    },
+    onEntryClicked(listener) {
+      const wrapped = (_event: unknown, payload: unknown) => {
+        if (isTrayEntryClicked(payload)) listener(payload);
+      };
+      ipcRenderer.on(trayChannels.entryClicked, wrapped);
+      return () => ipcRenderer.off(trayChannels.entryClicked, wrapped);
+    },
   },
   pluginData: {
     read(pluginId) {

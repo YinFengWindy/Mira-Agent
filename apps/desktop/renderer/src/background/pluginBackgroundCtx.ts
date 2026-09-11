@@ -13,7 +13,16 @@ import type {
   PluginBackgroundAssets,
   PluginBackgroundStore,
   PluginBackgroundSurfaces,
+  PluginBackgroundTray,
 } from "./pluginBackgroundRegistry";
+
+/** Subscribes to every tray click this window is told about. */
+export type TrayClickSource = (
+  listener: (payload: { pluginId: string; entryId: string }) => void,
+) => () => void;
+
+/** The host tray API, before it is bound to one plugin. */
+export type TrayApi = DesktopApi["tray"];
 
 /** Subscribes to every surface settle this window is told about. */
 export type SurfaceSettledSource = (
@@ -82,6 +91,69 @@ function createPluginBackgroundAssets(localAssetUrl: (path: string) => string): 
 }
 
 /**
+ * Binds the host tray to one plugin id, and owns reclaiming its entries.
+ *
+ * Two different disposal phases are in play and the difference matters (#227):
+ * the click subscription is an *event* effect, so it is cut before anything
+ * else on teardown — a click arriving mid-teardown must not reach a plugin that
+ * is being disposed. Removing the entries themselves is an ordinary effect, so
+ * it runs after. Both are registered on the first `setEntry`, once, however
+ * many entries the plugin goes on to contribute or how often it rewrites them.
+ */
+function createPluginBackgroundTray(
+  pluginId: string,
+  tray: TrayApi,
+  onTrayEntryClicked: TrayClickSource,
+  scope: BackgroundEffectScope,
+): PluginBackgroundTray {
+  const handlers = new Map<string, () => void>();
+  let registered = false;
+  let disposed = false;
+
+  const register = () => {
+    if (registered) return;
+    registered = true;
+    const unsubscribe = onTrayEntryClicked((payload) => {
+      if (payload.pluginId !== pluginId) return;
+      handlers.get(payload.entryId)?.();
+    });
+    scope.addEventEffect("tray:clicks", unsubscribe);
+    // One host-side call rather than replaying `removeEntry` per id: the host
+    // owns the menu, so this reclaims everything the plugin contributed even if
+    // this side's bookkeeping has drifted — and the host can make the same call
+    // itself when a plugin's renderer dies without running any teardown.
+    scope.addEffect("tray:entries", () => {
+      disposed = true;
+      handlers.clear();
+      tray.removeAllEntries(pluginId);
+    });
+  };
+
+  return {
+    setEntry(entryId, entry) {
+      // Silently ignored after teardown rather than trusted not to happen. A
+      // plugin can have an `await` in flight across being disabled — the pet
+      // persists its position outside its own operation queue, so a store
+      // write can return after `disposeAll()` and drive one more `setEntry`.
+      // Without this the entry is written straight back into the host's
+      // registry, with its click subscription already cut: a menu item that
+      // outlives its plugin and does nothing when clicked, until the next
+      // launch. Keeping the invariant inside the capability means no plugin
+      // has to be careful for it to hold.
+      if (disposed) return;
+      register();
+      handlers.set(entryId, entry.onClick);
+      tray.setEntry(pluginId, entryId, { label: entry.label, enabled: entry.enabled });
+    },
+    removeEntry(entryId) {
+      if (disposed) return;
+      handlers.delete(entryId);
+      tray.removeEntry(pluginId, entryId);
+    },
+  };
+}
+
+/**
  * Builds the `ctx` handed to one plugin's `background/index.ts` `setup(ctx)`.
  *
  * `onEvent` is the raw, unfiltered `desktop:event` stream (see
@@ -101,10 +173,15 @@ export function createBackgroundCtx(options: {
   onEvent: (listener: (event: BridgeEvent) => void) => () => void;
   onSurfaceSettled: SurfaceSettledSource;
   pluginData: DesktopApi["pluginData"];
+  tray: TrayApi;
+  onTrayEntryClicked: TrayClickSource;
   localAssetUrl: (path: string) => string;
   scope: BackgroundEffectScope;
 }): BackgroundCtx {
-  const { pluginId, surfaces, invoke, onEvent, onSurfaceSettled, pluginData, localAssetUrl, scope } = options;
+  const {
+    pluginId, surfaces, invoke, onEvent, onSurfaceSettled,
+    pluginData, tray, onTrayEntryClicked, localAssetUrl, scope,
+  } = options;
   return {
     surfaces: createPluginBackgroundSurfaces(pluginId, surfaces, onSurfaceSettled, scope),
     rpc: createPluginRpcClient(pluginId, invoke),
@@ -118,6 +195,7 @@ export function createBackgroundCtx(options: {
     },
     store: createPluginBackgroundStore(pluginId, pluginData),
     assets: createPluginBackgroundAssets(localAssetUrl),
+    tray: createPluginBackgroundTray(pluginId, tray, onTrayEntryClicked, scope),
     effect(label, dispose) {
       scope.addEffect(label, dispose);
     },

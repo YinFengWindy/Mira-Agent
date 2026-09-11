@@ -13,8 +13,13 @@ import type { SurfaceKey } from "../surface/host.js";
  * | What the host needs | Who needs it | Removed by |
  * | --- | --- | --- |
  * | the pet's surface key | voice IPC, observation dismiss | #221 / #220 |
- * | a way to start/stop the pet | the tray entry, `desktop:pet-sync` | #181-D |
- * | the pet's visible/bound state | tray label, voice admission, close policy | #181-D, #221 |
+ * | a way to start the pet | `desktop:pet-sync` from the role form | #181-D backend |
+ * | whether the pet is showing, and whose | voice admission, observation | #221 / #220 |
+ *
+ * #181-D took two rows off this table. The tray entry is the pet's own now
+ * (`ctx.tray`), so the host no longer needs to know what the item should say or
+ * whether it can be clicked; and the main window's close policy asks "does any
+ * plugin still own a surface" instead of "is the pet running".
  *
  * What the *main process* no longer knows: roles, packages, sprite states,
  * positions, window geometry. That is the part of #181's "宿主不感知桌宠领域"
@@ -56,28 +61,34 @@ export const desktopPetSurfaceKey: SurfaceKey = { pluginId: desktopPetPluginId, 
 export const desktopPetCommandMethod = "desktop.pet.command";
 export const desktopPetObservationMethod = "desktop.pet.observation";
 
-/** One host-issued pet lifecycle command. */
-export type DesktopPetCommand =
-  | { kind: "show" }
-  | { kind: "hide" }
-  | { kind: "sync"; forceVisible?: boolean };
+/**
+ * One host-issued pet lifecycle command.
+ *
+ * Only `sync` is left. `show` and `hide` existed for the tray entry, whose
+ * only producer was the host's own menu builder — since #181-D the pet owns
+ * that item and calls its controller directly, with no round trip through the
+ * main process. `sync` survives because its caller is the *main window's*
+ * role form, and there is still no route from there to a plugin's background
+ * code; it goes when #181-D's backend work turns it into a plugin RPC.
+ */
+export type DesktopPetCommand = { kind: "sync"; forceVisible?: boolean };
 
 /**
  * The pet's state as far as the host is concerned.
  *
- * `available` answers "can the tray entry be clicked", `visible` answers "what
- * should it say", and `roleId` is who voice input and observation belong to.
+ * Two facts, both for features that are not plugins yet: `visible` gates voice
+ * admission (`voice/availability.ts`) and `roleId` says whose turn a voice
+ * press or an observation reply belongs to. `available` used to be here too,
+ * for the tray item's enabled state — that left with #181-D.
  */
 export type DesktopPetPresence = {
   visible: boolean;
   roleId: string | null;
-  available: boolean;
 };
 
 export const noDesktopPetPresence: DesktopPetPresence = {
   visible: false,
   roleId: null,
-  available: false,
 };
 
 /**
@@ -95,11 +106,14 @@ export function readDesktopPetPresence(stored: unknown): DesktopPetPresence {
   if (!stored || typeof stored !== "object") return noDesktopPetPresence;
   const source = stored as { visible?: unknown; roleId?: unknown; packageId?: unknown };
   const roleId = typeof source.roleId === "string" && source.roleId ? source.roleId : null;
-  const available = Boolean(roleId && typeof source.packageId === "string" && source.packageId);
+  // A stored `visible` only counts when there is something to show. The plugin
+  // normalizes this too, but the host reads the file the plugin wrote, and a
+  // hand-edited one would otherwise admit voice input for a pet that cannot
+  // exist.
+  const bound = Boolean(roleId && typeof source.packageId === "string" && source.packageId);
   return {
-    visible: source.visible === true && available,
+    visible: source.visible === true && bound,
     roleId,
-    available,
   };
 }
 
@@ -117,9 +131,7 @@ export function desktopPetPresenceChanged(
   before: DesktopPetPresence,
   after: DesktopPetPresence,
 ): boolean {
-  return before.visible !== after.visible
-    || before.roleId !== after.roleId
-    || before.available !== after.available;
+  return before.visible !== after.visible || before.roleId !== after.roleId;
 }
 
 /** Whether an IPC sender's window is the pet's surface. */

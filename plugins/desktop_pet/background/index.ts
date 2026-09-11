@@ -12,9 +12,10 @@ import { normalizeDesktopPetSettings } from "./settings";
  * through `ctx.events.on` with no extra plugin-facing API. They exist because
  * three host features still hold the pet's leash while #174 finishes:
  *
- * - `desktop.pet.command` — the tray entry and the role detail form's "sync"
- *   (`desktop:pet-sync`). The tray moves onto a `ctx.tray` capability in
- *   #181-D; the sync call becomes a plugin RPC with it.
+ * - `desktop.pet.command` — the role detail form's "sync" (`desktop:pet-sync`).
+ *   The tray entry no longer comes through here: since #181-D the pet owns its
+ *   own menu item via `ctx.tray`. The sync call becomes a plugin RPC with
+ *   #181-D's backend work, at which point this event can go too.
  * - `desktop.pet.observation` — screen observation, which becomes a plugin of
  *   its own in #220 and will then talk to the pet over plugin-to-plugin
  *   messaging (#218).
@@ -29,6 +30,9 @@ export const desktopPetCommandMethod = "desktop.pet.command";
 export const desktopPetObservationMethod = "desktop.pet.observation";
 /** The backend event carrying one already-authorized `pet_action` tool call. */
 export const desktopPetActionMethod = "desktop.pet.action";
+
+/** Identifies the pet's own item in the host tray menu. */
+export const desktopPetTrayEntryId = "toggle";
 
 function reportError(operation: string, error: unknown): void {
   // Routed to the host's diagnostic log rather than to this window's console,
@@ -61,19 +65,45 @@ export default {
         (path) => ctx.assets.url(path),
       ),
       onError: reportError,
+      onChanged: () => refreshTrayEntry(),
     });
+
+    /**
+     * Keeps the tray item in step with the pet.
+     *
+     * The label and the enabled state are both pet domain facts — is it
+     * showing, and is there a role with a package to show — which is exactly
+     * why this moved out of the host in #181-D. The host used to read them out
+     * of the pet's settings blob and build the item itself.
+     */
+    const refreshTrayEntry = () => {
+      const settings = controller.currentSettings;
+      const available = Boolean(settings.roleId && settings.packageId);
+      ctx.tray.setEntry(desktopPetTrayEntryId, {
+        label: settings.visible ? "隐藏桌宠" : "显示桌宠",
+        enabled: available,
+        onClick: () => {
+          const operation = settings.visible ? "hide" : "show";
+          void (settings.visible ? controller.hide() : controller.show())
+            .catch((error) => reportError(operation, error));
+        },
+      });
+    };
+    // Contributed once up front, so the item exists from the moment the plugin
+    // is enabled rather than only after the pet's first state change.
+    refreshTrayEntry();
 
     ctx.effect("desktop_pet_controller", () => controller.terminate());
     ctx.surfaces.onSettled(desktopPetSurfaceId, (settled) => controller.handleSettled(settled));
     ctx.events.on(desktopPetActionMethod, (payload) => controller.handleAgentAction(payload));
     ctx.events.on(desktopPetCommandMethod, (payload) => {
-      const kind = payload.kind;
-      if (kind === "show") void controller.show().catch((error) => reportError("show", error));
-      else if (kind === "hide") void controller.hide().catch((error) => reportError("hide", error));
-      else if (kind === "sync") {
-        const forceVisible = typeof payload.forceVisible === "boolean" ? payload.forceVisible : undefined;
-        void controller.sync(forceVisible).catch((error) => reportError("sync", error));
-      }
+      // `sync` is the only kind the host sends. The tray used to send show and
+      // hide; it now calls this controller directly (see `refreshTrayEntry`),
+      // so those branches went with their producer rather than sitting here as
+      // an unreachable API nobody could exercise.
+      if (payload.kind !== "sync") return;
+      const forceVisible = typeof payload.forceVisible === "boolean" ? payload.forceVisible : undefined;
+      void controller.sync(forceVisible).catch((error) => reportError("sync", error));
     });
     ctx.events.on(desktopPetObservationMethod, (payload) => controller.publishObservation(payload));
 

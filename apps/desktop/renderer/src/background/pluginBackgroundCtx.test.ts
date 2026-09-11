@@ -5,11 +5,16 @@ import type {
   DesktopApi,
   DesktopSurfacesApi,
   SurfaceSettledPayload,
+  TrayEntryClickedPayload,
 } from "../../../src/bridge/shared";
 import { unavailableLocalAssetUrl } from "../../../src/assets/localAssetContract";
 import type { DesktopInvoke } from "../shared/bridgeInvoke";
 import { BackgroundEffectScope } from "./backgroundEffectScope";
-import { createBackgroundCtx, type SurfaceSettledSource } from "./pluginBackgroundCtx";
+import {
+  createBackgroundCtx,
+  type SurfaceSettledSource,
+  type TrayClickSource,
+} from "./pluginBackgroundCtx";
 
 function fakeSurfaces(): DesktopSurfacesApi & { calls: unknown[][] } {
   const calls: unknown[][] = [];
@@ -64,6 +69,27 @@ function fakePluginData(): DesktopApi["pluginData"] & { calls: unknown[][]; stor
   };
 }
 
+/** A fake host tray that records calls and lets a test push clicks back. */
+function fakeTray() {
+  const calls: unknown[][] = [];
+  const listeners = new Set<(payload: TrayEntryClickedPayload) => void>();
+  return {
+    calls,
+    listenerCount: () => listeners.size,
+    emit: (payload: TrayEntryClickedPayload) => { for (const listener of listeners) listener(payload); },
+    api: {
+      setEntry: (...args: unknown[]) => { calls.push(["setEntry", ...args]); },
+      removeEntry: (...args: unknown[]) => { calls.push(["removeEntry", ...args]); },
+      removeAllEntries: (...args: unknown[]) => { calls.push(["removeAllEntries", ...args]); },
+      onEntryClicked: () => () => {},
+    } as unknown as DesktopApi["tray"],
+    onTrayEntryClicked: ((listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }) as TrayClickSource,
+  };
+}
+
 const failingInvoke = (() => Promise.reject(new Error("unused"))) as DesktopInvoke;
 
 function makeCtx(overrides: Partial<Parameters<typeof createBackgroundCtx>[0]> = {}) {
@@ -75,6 +101,8 @@ function makeCtx(overrides: Partial<Parameters<typeof createBackgroundCtx>[0]> =
     onEvent: () => () => {},
     onSurfaceSettled: () => () => {},
     pluginData: fakePluginData(),
+    tray: fakeTray().api,
+    onTrayEntryClicked: () => () => {},
     localAssetUrl: () => unavailableLocalAssetUrl,
     ...overrides,
     scope,
@@ -234,4 +262,126 @@ test("ctx.assets.url answers null for a path the host never granted", () => {
   // show a package must not mistake it for one.
   assert.equal(ctx.assets.url("C:/roles/mira/missing.webp"), null);
   assert.equal(ctx.assets.url(""), null);
+});
+
+test("ctx.tray binds the plugin id and routes clicks to the right handler", () => {
+  const tray = fakeTray();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked });
+
+  const clicked: string[] = [];
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => clicked.push("toggle") });
+  ctx.tray.setEntry("settings", { label: "桌宠设置", enabled: false, onClick: () => clicked.push("settings") });
+
+  assert.deepEqual(tray.calls, [
+    ["setEntry", "demo", "toggle", { label: "显示桌宠", enabled: undefined }],
+    ["setEntry", "demo", "settings", { label: "桌宠设置", enabled: false }],
+  ]);
+
+  tray.emit({ pluginId: "demo", entryId: "settings" });
+  // Another plugin's click on an id this plugin also uses must not run this
+  // plugin's handler.
+  tray.emit({ pluginId: "rival", entryId: "toggle" });
+  tray.emit({ pluginId: "demo", entryId: "toggle" });
+
+  assert.deepEqual(clicked, ["settings", "toggle"]);
+});
+
+test("rewriting an entry replaces its handler rather than stacking another", () => {
+  const tray = fakeTray();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked });
+
+  const clicked: string[] = [];
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => clicked.push("show") });
+  ctx.tray.setEntry("toggle", { label: "隐藏桌宠", onClick: () => clicked.push("hide") });
+
+  tray.emit({ pluginId: "demo", entryId: "toggle" });
+
+  // The pet rewrites this item on every show/hide; an accumulating handler
+  // list would make one click do both.
+  assert.deepEqual(clicked, ["hide"]);
+  assert.equal(tray.listenerCount(), 1, "one click subscription, however many setEntry calls");
+});
+
+test("ctx.tray subscribes to clicks only once, and only when the plugin uses it", () => {
+  const tray = fakeTray();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked });
+
+  assert.equal(tray.listenerCount(), 0, "a plugin with no tray item must not subscribe");
+
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => {} });
+  ctx.tray.setEntry("settings", { label: "桌宠设置", onClick: () => {} });
+
+  assert.equal(tray.listenerCount(), 1);
+});
+
+test("teardown cuts tray clicks before reclaiming the entries, and reclaims them host-side", async () => {
+  // One ordered log for both steps. Recording them in separate arrays would
+  // assert that each happened but never that the unsubscribe came first —
+  // which is the whole point, and is exactly what a single-phase scope would
+  // get wrong (LIFO would reclaim the entries first).
+  const order: string[] = [];
+  const tray = fakeTray();
+  const observed: TrayClickSource = (listener) => {
+    const unsubscribe = tray.onTrayEntryClicked(listener);
+    return () => { order.push("unsubscribe"); unsubscribe(); };
+  };
+  const scope = new BackgroundEffectScope();
+  const ctx = makeCtx({
+    tray: {
+      ...tray.api,
+      removeAllEntries: (pluginId: string) => {
+        order.push(`removeAllEntries:${pluginId}`);
+        tray.api.removeAllEntries(pluginId);
+      },
+    },
+    onTrayEntryClicked: observed,
+    scope,
+  });
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => order.push("clicked") });
+  tray.calls.length = 0;
+
+  await scope.disposeAll();
+
+  // #227's phase rule applied to the tray: a click landing mid-teardown must
+  // not reach a plugin that is being disposed, so the subscription is cut
+  // before the entries it drives are reclaimed.
+  assert.deepEqual(order, ["unsubscribe", "removeAllEntries:demo"]);
+  assert.equal(tray.listenerCount(), 0);
+  // One host-side call, not a replay of removeEntry per id: the host owns the
+  // menu, so this reclaims everything even if this side's bookkeeping drifted.
+  assert.deepEqual(tray.calls, [["removeAllEntries", "demo"]]);
+});
+
+test("removeEntry drops the handler, so a stale click does nothing", () => {
+  const tray = fakeTray();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked });
+  const clicked: string[] = [];
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => clicked.push("toggle") });
+
+  ctx.tray.removeEntry("toggle");
+  tray.emit({ pluginId: "demo", entryId: "toggle" });
+
+  assert.deepEqual(clicked, []);
+  assert.deepEqual(tray.calls.at(-1), ["removeEntry", "demo", "toggle"]);
+});
+
+test("a setEntry that lands after teardown does not put the item back", async () => {
+  const tray = fakeTray();
+  const scope = new BackgroundEffectScope();
+  const ctx = makeCtx({ tray: tray.api, onTrayEntryClicked: tray.onTrayEntryClicked, scope });
+  ctx.tray.setEntry("toggle", { label: "显示桌宠", onClick: () => {} });
+
+  await scope.disposeAll();
+  tray.calls.length = 0;
+
+  // A plugin can have an await in flight across being disabled — the pet
+  // persists its position outside its own operation queue, so a store write
+  // can return after teardown and drive one more refresh. Writing the entry
+  // back would leave a menu item whose click subscription is already cut:
+  // it outlives its plugin and does nothing when clicked, until the next
+  // launch.
+  ctx.tray.setEntry("toggle", { label: "隐藏桌宠", onClick: () => {} });
+  ctx.tray.removeEntry("toggle");
+
+  assert.deepEqual(tray.calls, []);
 });

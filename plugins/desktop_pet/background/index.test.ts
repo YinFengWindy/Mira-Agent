@@ -8,6 +8,7 @@ import petBackground, {
   desktopPetActionMethod,
   desktopPetCommandMethod,
   desktopPetObservationMethod,
+  desktopPetTrayEntryId,
 } from "./index";
 import { desktopPetSurfaceId } from "./controller";
 
@@ -38,6 +39,8 @@ type Recorder = {
   settled: Map<string, (settled: PluginBackgroundSettled) => void>;
   surfaceCalls: string[][];
   rpcCalls: string[];
+  trayEntries: Map<string, { label: string; enabled: boolean }>;
+  trayHandlers: Map<string, () => void>;
   state: RecorderState;
 };
 
@@ -47,6 +50,8 @@ function recorder(overrides: Partial<RecorderState> = {}): Recorder {
   const settled = new Map<string, (settled: PluginBackgroundSettled) => void>();
   const surfaceCalls: string[][] = [];
   const rpcCalls: string[] = [];
+  const trayEntries = new Map<string, { label: string; enabled: boolean }>();
+  const trayHandlers = new Map<string, () => void>();
   const state: RecorderState = {
     stored: overrides.stored ?? null,
     bindingAnswer: overrides.bindingAnswer ?? (() => ({
@@ -63,6 +68,8 @@ function recorder(overrides: Partial<RecorderState> = {}): Recorder {
     settled,
     surfaceCalls,
     rpcCalls,
+    trayEntries,
+    trayHandlers,
     state,
     ctx: {
       surfaces: {
@@ -92,6 +99,13 @@ function recorder(overrides: Partial<RecorderState> = {}): Recorder {
         write: (value) => { state.stored = value; return Promise.resolve(); },
       },
       assets: { url: (path) => (path ? `shiori-asset://local/${path}` : null) },
+      tray: {
+        setEntry: (entryId, entry) => {
+          trayEntries.set(entryId, { label: entry.label, enabled: entry.enabled !== false });
+          trayHandlers.set(entryId, entry.onClick);
+        },
+        removeEntry: (entryId) => { trayEntries.delete(entryId); trayHandlers.delete(entryId); },
+      },
       effect: (label) => { effects.push(label); },
     },
   };
@@ -150,23 +164,6 @@ test("a failed restore is reported, not rethrown, so the contribution stays aliv
   assert.deepEqual([...fake.events.keys()].length, 3);
 });
 
-test("a show command puts the pet on screen and a hide command takes it off", async () => {
-  const fake = recorder();
-  await petBackground.setup(fake.ctx);
-  await flush();
-  const command = fake.events.get(desktopPetCommandMethod);
-  assert.ok(command);
-
-  command({ kind: "show" });
-  await flush();
-  assert.ok(fake.surfaceCalls.some(([call]) => call === "create"));
-
-  command({ kind: "hide" });
-  await flush();
-  assert.ok(fake.surfaceCalls.some(([call]) => call === "destroy"));
-  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
-});
-
 test("a sync command carries forceVisible through, and only when it is a boolean", async () => {
   const fake = recorder({ stored: { visible: true, roleId: "mira", packageId: "pet-1", positions: {} } });
   await petBackground.setup(fake.ctx);
@@ -191,13 +188,18 @@ test("a sync command carries forceVisible through, and only when it is a boolean
   assert.equal((fake.state.stored as { visible: boolean }).visible, false);
 });
 
-test("a command the host does not send is ignored rather than guessed at", async () => {
+test("a command kind the host does not send is ignored rather than guessed at", async () => {
   const fake = recorder();
   await petBackground.setup(fake.ctx);
   await flush();
   const before = fake.surfaceCalls.length;
 
-  fake.events.get(desktopPetCommandMethod)?.({ kind: "explode" });
+  // `show` and `hide` used to be real kinds; the tray was their only producer
+  // and it now calls the controller directly, so they are gone with it. An
+  // unknown kind must not be guessed into one of the surviving ones.
+  for (const kind of ["explode", "show", "hide", undefined]) {
+    fake.events.get(desktopPetCommandMethod)?.({ kind });
+  }
   await flush();
 
   assert.equal(fake.surfaceCalls.length, before);
@@ -238,4 +240,59 @@ test("a settle for the pet's surface reaches the controller", async () => {
     (fake.state.stored as { positions: Record<string, unknown> }).positions,
     { "mira:display-1": { x: 12, y: 34 } },
   );
+});
+
+test("the pet contributes its tray item as soon as it is enabled", async () => {
+  const fake = recorder({ stored: { visible: false, roleId: "mira", packageId: "pet-1", positions: {} } });
+
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  // The host used to build this item out of the pet's settings blob; since
+  // #181-D the label and the enabled state are the plugin's to decide.
+  assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "显示桌宠", enabled: true });
+});
+
+test("the tray item follows the pet, saying hide once it is showing", async () => {
+  const fake = recorder({ stored: { visible: false, roleId: "mira", packageId: "pet-1", positions: {} } });
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
+  await flush();
+  assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "隐藏桌宠", enabled: true });
+
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
+  await flush();
+  assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "显示桌宠", enabled: true });
+});
+
+test("the tray item is disabled while no role has a pet package", async () => {
+  const fake = recorder({
+    stored: null,
+    bindingAnswer: () => ({ binding: null }),
+  });
+
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  // What the host's `available` used to mean, now decided by the only code
+  // that knows: a click here could not do anything.
+  assert.deepEqual(fake.trayEntries.get(desktopPetTrayEntryId), { label: "显示桌宠", enabled: false });
+});
+
+test("clicking the tray item toggles the pet", async () => {
+  const fake = recorder({ stored: { visible: false, roleId: "mira", packageId: "pet-1", positions: {} } });
+  await petBackground.setup(fake.ctx);
+  await flush();
+
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
+  await flush();
+  assert.ok(fake.surfaceCalls.some(([call]) => call === "create"), "show should put the pet on screen");
+  assert.equal((fake.state.stored as { visible: boolean }).visible, true);
+
+  fake.trayHandlers.get(desktopPetTrayEntryId)?.();
+  await flush();
+  assert.ok(fake.surfaceCalls.some(([call]) => call === "destroy"));
+  assert.equal((fake.state.stored as { visible: boolean }).visible, false);
 });

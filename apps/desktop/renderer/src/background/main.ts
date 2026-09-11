@@ -49,6 +49,8 @@ const host = new PluginBackgroundHost({
       onEvent,
       onSurfaceSettled: window.miraDesktop.onSurfaceSettled,
       pluginData: window.miraDesktop.pluginData,
+      tray: window.miraDesktop.tray,
+      onTrayEntryClicked: window.miraDesktop.tray.onEntryClicked,
       localAssetUrl: (path) => window.miraDesktop.localAssetUrl(path),
       scope,
     });

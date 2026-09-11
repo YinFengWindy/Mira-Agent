@@ -14,7 +14,7 @@ import {
  *
  * `trayLifecycleEnabled = process.platform === "win32"`, and
  * `shouldHideDesktopWindowOnClose` is
- * `!isQuitting && (trayLifecycleEnabled || desktopPetRunning)`. On Windows
+ * `!isQuitting && (trayLifecycleEnabled || pluginSurfacesAlive)`. On Windows
  * closing the main window only hides it — its renderer survives to app
  * quit — but on macOS (`trayLifecycleEnabled` false) closing it actually
  * destroys the renderer, while `window-all-closed` does not quit the app on

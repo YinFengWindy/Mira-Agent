@@ -306,6 +306,8 @@ export type RendererDiagnosticPayload = {
   details?: Record<string, unknown>;
 };
 
+export type TrayEntryClickedPayload = import("../tray/ipc.js").TrayEntryClickedPayload;
+
 export type DesktopApi = {
   /** Reads and controls the Electron application update lifecycle. */
   updates: import("../updateContract.js").DesktopUpdateApi;
@@ -374,6 +376,21 @@ export type DesktopApi = {
    * filters by `pluginId`/`surfaceId`. See `surfaceSettledChannel`.
    */
   onSurfaceSettled(listener: (settled: SurfaceSettledPayload) => void): () => void;
+  /**
+   * Plugin-contributed tray menu items (#181-D).
+   *
+   * A `Tray` is main-process-only, so a plugin's background code cannot build
+   * one; it contributes an item and is told when the user picks it. Items are
+   * accepted even on platforms with no tray and even before the tray exists —
+   * see `tray/registry.ts`.
+   */
+  tray: {
+    setEntry(pluginId: string, entryId: string, entry: { label: string; enabled?: boolean }): void;
+    removeEntry(pluginId: string, entryId: string): void;
+    /** Drops every item one plugin contributed, in one call. See `tray/registry.ts`. */
+    removeAllEntries(pluginId: string): void;
+    onEntryClicked(listener: (payload: TrayEntryClickedPayload) => void): () => void;
+  };
   /**
    * Per-plugin persisted JSON, for background code that has no filesystem.
    *

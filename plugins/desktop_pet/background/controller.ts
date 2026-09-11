@@ -47,6 +47,15 @@ export type DesktopPetControllerOptions = {
   resolveBinding: () => Promise<DesktopPetBinding | null>;
   /** Reports a failure from a fire-and-forget path that has no caller to throw at. */
   onError?: (operation: string, error: unknown) => void;
+  /**
+   * Called after anything that changes what the pet's tray item should say.
+   *
+   * The pet is the only thing that knows whether it is showing and whether it
+   * has a binding to show, and since #181-D it owns the menu item that reports
+   * both. Position writes call this too — they are cheap to ignore, and the
+   * alternative is this class deciding what its consumer considers a change.
+   */
+  onChanged?: () => void;
 };
 
 /**
@@ -306,6 +315,7 @@ export class DesktopPetController {
     // a binding it has already replaced.
     this.settings = { ...this.settings, ...patch };
     await this.options.saveSettings(this.settings);
+    this.options.onChanged?.();
   }
 
   private persistPosition(roleId: string, position: DesktopPetPosition): void {

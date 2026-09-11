@@ -10,6 +10,8 @@ import {
 import type { DesktopSurfaceHost } from "../surface/host.js";
 import { registerPluginDataIpc } from "../plugins/ipc.js";
 import type { PluginDataStore } from "../plugins/dataStore.js";
+import { registerTrayIpc } from "../tray/ipc.js";
+import type { PluginTrayRegistry } from "../tray/registry.js";
 import {
   registerDesktopIpcHandlers,
   type DesktopIpcHost,
@@ -50,6 +52,21 @@ export function registerDesktopPluginDataIpc(store: PluginDataStore): void {
   registerPluginDataIpc(
     { handle: (channel, listener) => { ipcMain.handle(channel, listener); } },
     store,
+  );
+}
+
+/** Registers the plugin tray capability's channels (#181-D). */
+export function registerDesktopTrayIpc(registry: PluginTrayRegistry): void {
+  registerTrayIpc(
+    {
+      on: (channel, listener) => { ipcMain.on(channel, listener); },
+      onError: (channel, error) => logDesktopDiagnostic({
+        scope: "main",
+        event: "tray-request-failed",
+        payload: { channel, error: error instanceof Error ? error.message : String(error) },
+      }),
+    },
+    registry,
   );
 }
 

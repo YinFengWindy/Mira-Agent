@@ -90,10 +90,11 @@ export type DesktopSurfaceHostOptions = {
   /**
    * Notified in-process whenever a surface comes to rest.
    *
-   * Deliberately not an IPC message: this is how main-process code that owns a
-   * surface (today the pet controller, until 181-C/D move it into the plugin)
-   * learns a drag or glide finished, without the renderer having to report a
-   * position it was never told. Never called from a drag, glide or tween frame.
+   * Deliberately not an IPC message at this level: `main.ts` is the one
+   * observer, and it forwards each settle to the plugin-host renderer on
+   * `surfaceSettledChannel` so the owning plugin's `app.background` code can
+   * decide whether the new position is worth remembering (#181-C). Never
+   * called from a drag, glide or tween frame.
    */
   onSettled?(key: SurfaceKey, placement: SurfacePlacementInfo, reason: SurfaceSettleReason): void;
   /** Opens a native context menu over a surface; resolves the chosen id, or null. */
@@ -225,6 +226,22 @@ export class DesktopSurfaceHost {
     const applied = this.applyAnchor(record, anchor);
     this.notifyPlacement(record, "create");
     return applied;
+  }
+
+  /**
+   * Whether any plugin still has a live surface.
+   *
+   * The main window's close policy uses this: closing the shell must not quit
+   * the app while a plugin still owns a desktop window the user can see. It
+   * used to ask "is the desktop pet running", which meant the policy had to
+   * know what a pet was — and would have been wrong for the second plugin to
+   * own a surface.
+   */
+  hasAny(): boolean {
+    for (const record of this.surfaces.values()) {
+      if (!record.window.isDestroyed()) return true;
+    }
+    return false;
   }
 
   /** Returns whether the plugin's surface exists and is still alive. */

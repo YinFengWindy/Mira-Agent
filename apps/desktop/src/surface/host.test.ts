@@ -558,3 +558,45 @@ test("activating the main window is forwarded, and tolerated when unsupported", 
   const { host: bare } = setup();
   bare.activateMainWindow();
 });
+
+test("hasAny reports whether the app still owns a desktop window", () => {
+  const { host } = setup();
+  assert.equal(host.hasAny(), false, "nothing created yet");
+
+  host.create({ pluginId: "demo", surfaceId: "one" }, spec, { x: 0, y: 0 });
+  host.create({ pluginId: "other", surfaceId: "two" }, spec, { x: 0, y: 0 });
+  assert.equal(host.hasAny(), true);
+
+  // The main window's close policy reads this: one plugin going away must not
+  // make the shell closable while another still has a window on screen.
+  host.destroy({ pluginId: "demo", surfaceId: "one" });
+  assert.equal(host.hasAny(), true);
+
+  host.destroy({ pluginId: "other", surfaceId: "two" });
+  assert.equal(host.hasAny(), false);
+});
+
+test("a window destroyed behind the host's back does not count as alive", () => {
+  const { host, windows } = setup();
+  host.create({ pluginId: "demo", surfaceId: "one" }, spec, { x: 0, y: 0 });
+
+  // Set directly, without the `onClosed` notification the host normally learns
+  // from, so this checks the answer itself rather than the bookkeeping.
+  windows[0].destroyed = true;
+
+  assert.equal(host.hasAny(), false);
+});
+
+test("destroyAll reclaims every plugin's surface, whoever owns it", () => {
+  const { host, windows } = setup();
+  host.create({ pluginId: "demo", surfaceId: "one" }, spec, { x: 0, y: 0 });
+  host.create({ pluginId: "other", surfaceId: "two" }, spec, { x: 0, y: 0 });
+
+  // What the host does when the renderer driving all of them has died: every
+  // surface is frameless and always-on-top, so leaving one is a window the
+  // user cannot dismiss.
+  host.destroyAll();
+
+  assert.equal(host.hasAny(), false);
+  assert.deepEqual(windows.map((window) => window.destroyed), [true, true]);
+});

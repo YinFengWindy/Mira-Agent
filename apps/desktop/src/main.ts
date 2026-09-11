@@ -5,7 +5,12 @@ import { localAssetSchemePrivileges, registerLocalAssetProtocol } from "./assets
 import { DesktopBridgeClient } from "./bridge/bridgeClient.js";
 import { startBridge, wireBridgeEvents } from "./bridge/bridgeLifecycle.js";
 import { logDesktopDiagnostic } from "./diagnostics.js";
-import { registerDesktopIpc, registerDesktopPluginDataIpc, registerDesktopSurfaceIpc } from "./bridge/ipc.js";
+import {
+  registerDesktopIpc,
+  registerDesktopPluginDataIpc,
+  registerDesktopSurfaceIpc,
+  registerDesktopTrayIpc,
+} from "./bridge/ipc.js";
 import { DesktopSurfaceHost, surfaceSettledChannel } from "./surface/host.js";
 import {
   createDesktopSurfaceWindow,
@@ -19,7 +24,9 @@ import { openGrantedLocalAsset } from "./assets/localAssetOpen.js";
 import { LocalAssetRegistry, localAssetScheme } from "./assets/localAssetRegistry.js";
 import { ensureDesktopRuntimeConfig, resolveDesktopRuntimePaths } from "./runtimePaths.js";
 import { registerDesktopUpdates } from "./updater.js";
-import { createDesktopTray } from "./tray.js";
+import { createDesktopTray } from "./tray/menu.js";
+import { PluginTrayRegistry } from "./tray/registry.js";
+import { trayChannels } from "./tray/ipc.js";
 import { createDesktopWindow, showDesktopWindow } from "./window.js";
 import {
   attachDesktopWindowLifecycle,
@@ -72,6 +79,15 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let desktopWindow: BrowserWindow | null = null;
 let pluginHostWindow: BrowserWindow | null = null;
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
+/**
+ * Tray items contributed by plugins (#181-D).
+ *
+ * Module scope, and created eagerly, because a plugin can contribute an item
+ * from its `setup(ctx)` long before the tray itself exists — the plugin-host
+ * window is created earlier in `whenReady` than the tray is, and on platforms
+ * without a tray lifecycle no `Tray` is ever constructed at all.
+ */
+const pluginTray = new PluginTrayRegistry();
 let desktopSurfaces: DesktopSurfaceHost | null = null;
 /** The pet's state as the host sees it; refreshed whenever the plugin writes. */
 let desktopPetPresence: DesktopPetPresence = noDesktopPetPresence;
@@ -230,11 +246,6 @@ function syncVoiceAvailability(cancelCurrentTurn = true): void {
   });
 }
 
-function syncDesktopPetRuntimeState(): void {
-  desktopTray?.refresh();
-  syncVoiceAvailability();
-}
-
 function reloadVoiceSettings(): void {
   voiceSettings = loadSettingsData().formData.voice;
   voiceHotkey?.setHotkey(voiceSettings.hotkey);
@@ -257,16 +268,25 @@ function reloadVoiceSettings(): void {
  * glide, per role-requested move — and `DesktopObservationController.restore()`
  * republishes observation state with an empty bubble. Without this guard,
  * dragging the pet while a reply bubble was up would wipe the bubble, and every
- * settle would also rebuild the tray menu and re-evaluate voice admission.
- * `DesktopPetPresence` is exactly the part of the blob the host reacts to, so
- * comparing it is the same question as "is there anything to do here".
+ * settle would re-evaluate voice admission. `DesktopPetPresence` is exactly the
+ * part of the blob the host reacts to, so comparing it is the same question as
+ * "is there anything to do here".
+ *
+ * The tray is no longer one of those consumers and is not protected by this
+ * guard: since #181-D it follows `PluginTrayRegistry`, which the pet drives
+ * from its own side. That path has its own no-change check, in
+ * `PluginTrayRegistry.setEntry`.
  */
 function handleDesktopPetSettingsChanged(stored: unknown): void {
   const next = readDesktopPetPresence(stored);
   const changed = desktopPetPresenceChanged(desktopPetPresence, next);
   desktopPetPresence = next;
   if (!changed) return;
-  syncDesktopPetRuntimeState();
+  // The tray is not refreshed here any more: since #181-D the pet contributes
+  // its own item through `ctx.tray` and rewrites its own label, so the menu
+  // follows the plugin rather than this mirror. What is left is voice, which
+  // still rides on the pet until #221.
+  syncVoiceAvailability();
   void desktopObservation?.restore().catch((error) => {
     logDesktopDiagnostic({ scope: "main", event: "desktop-observation.restore.failed", payload: { error } });
   });
@@ -276,7 +296,9 @@ function shouldHideDesktopWindowOnClose(): boolean {
   return shouldHideDesktopWindowOnClosePolicy({
     isQuitting,
     trayLifecycleEnabled,
-    desktopPetRunning: isDesktopPetRunning() || desktopPetPresence.visible,
+    // Any plugin's surface, not the pet's specifically: closing the shell must
+    // not strand a desktop window the user can still see, whoever owns it.
+    pluginSurfacesAlive: Boolean(desktopSurfaces?.hasAny()),
   });
 }
 
@@ -324,6 +346,7 @@ void app.whenReady().then(async () => {
     },
   });
   registerDesktopPluginDataIpc(activePluginData);
+  registerDesktopTrayIpc(pluginTray);
   // Read first, subscribe second. A first-run migration writes through `read`,
   // which would otherwise fire `handleDesktopPetSettingsChanged` before the
   // tray, the hotkey controller and observation exist. They are all null-safe
@@ -403,8 +426,12 @@ void app.whenReady().then(async () => {
       // would mean restarting the window and every `setup(ctx)`, which is a
       // bigger change than this one should carry.
       activeDesktopSurfaces.destroyAll();
+      // Same reasoning for the tray: every item's click handler lives in that
+      // renderer, so leaving them would give the user menu entries that do
+      // nothing when clicked.
+      pluginTray.clear();
       desktopPetPresence = noDesktopPetPresence;
-      syncDesktopPetRuntimeState();
+      syncVoiceAvailability();
     },
   });
   desktopObservation = new DesktopObservationController({
@@ -497,19 +524,17 @@ void app.whenReady().then(async () => {
         showOrCreateDesktopWindow();
       },
       onQuitRequested: requestAppQuit,
-      getDesktopPetState: () => ({
-        visible: desktopPetPresence.visible,
-        available: desktopPetPresence.available,
-      }),
-      // Fire-and-forget: the toggle is a request to the pet plugin, not a call
-      // into an object this process owns. The menu label catches up when the
-      // plugin writes its settings back (`handleDesktopPetSettingsChanged`),
-      // which the tray's own `refresh` after this promise settles also picks
-      // up on the next open.
-      onToggleDesktopPet: async () => {
-        requestDesktopPetCommand({ kind: desktopPetPresence.visible ? "hide" : "show" });
+      pluginEntries: () => pluginTray.list(),
+      onPluginEntryClick: (pluginId, entryId) => {
+        if (!pluginHostWindow || pluginHostWindow.isDestroyed()) return;
+        pluginHostWindow.webContents.send(trayChannels.entryClicked, { pluginId, entryId });
       },
     });
+    // The menu follows the registry rather than being rebuilt after a click:
+    // what the item should read is the contributing plugin's business, and it
+    // may change without anyone touching the tray (the pet hides itself when
+    // its binding disappears).
+    pluginTray.onChanged(() => desktopTray?.refresh());
     // No `restore()` call here any more: the pet restores itself in its
     // `setup(ctx)` when the plugin host starts it, and tells the host what it
     // decided through its settings write.
@@ -547,6 +572,10 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   isQuitting = true;
   desktopTray?.destroy();
+  // Nulled, not just destroyed: `pluginTray.onChanged` is never unsubscribed,
+  // so a late `setEntry` would otherwise call `setContextMenu` on a destroyed
+  // Tray and turn a benign race into a reported failure.
+  desktopTray = null;
   if (pluginHostWindow && !pluginHostWindow.isDestroyed()) {
     pluginHostWindow.destroy();
   }
