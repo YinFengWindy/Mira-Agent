@@ -133,6 +133,28 @@ function renderPluginSection(name: string, value: Record<string, unknown>): stri
   return lines.join("\n");
 }
 
+function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || typeof value === "boolean") return value;
+  throw new Error(`${field} 必须是布尔值`);
+}
+
+function loadProactiveStrategies(values: Record<string, unknown>): SettingsFormData["proactiveStrategies"] {
+  const sceneFollowup = optionalBoolean(values.scene_followup, "agent.proactive_strategies.scene_followup");
+  const relationship = optionalBoolean(values.relationship, "agent.proactive_strategies.relationship");
+  // Absence is meaningful: the backend may still need to migrate a legacy disabled marker.
+  return {
+    ...(sceneFollowup === undefined ? {} : { sceneFollowup }),
+    ...(relationship === undefined ? {} : { relationship }),
+  };
+}
+
+function renderProactiveStrategies(values: SettingsFormData["proactiveStrategies"]): string[] {
+  const lines: string[] = [];
+  if (values.sceneFollowup !== undefined) lines.push(`scene_followup = ${values.sceneFollowup}`);
+  if (values.relationship !== undefined) lines.push(`relationship = ${values.relationship}`);
+  return lines.length ? ["[agent.proactive_strategies]", ...lines, ""] : [];
+}
+
 function loadModelRegistrations(llm: Record<string, unknown>): ModelRegistrationFormData[] {
   const raw = Array.isArray(llm.registrations) ? llm.registrations : [];
   return raw.map((value) => {
@@ -163,6 +185,7 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   const agentContext = asRecord(agent.context);
   const agentTools = asRecord(agent.tools);
   const agentMaintenance = asRecord(agent.maintenance);
+  const proactiveStrategies = asRecord(agent.proactive_strategies);
   const voice = asRecord(parsed.voice);
   const voiceAsr = asRecord(voice.asr);
   const voiceTts = asRecord(voice.tts);
@@ -170,6 +193,7 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
   return {
     configPath: configuredPath,
     formData: {
+      proactiveStrategies: loadProactiveStrategies(proactiveStrategies),
       models: {
         registrations: loadModelRegistrations(llm),
       },
@@ -263,6 +287,7 @@ function renderSettingsToml(formData: SettingsFormData): string {
     "[desktop.chat]",
     `streaming_enabled = ${formData.advanced.streamingEnabled ? "true" : "false"}`,
     "",
+    ...renderProactiveStrategies(formData.proactiveStrategies),
     "[agent.context]",
     `memory_window = ${formData.advanced.memoryWindow}`,
     "",

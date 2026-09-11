@@ -92,3 +92,68 @@ describe("desktop settings config path", () => {
     assert.equal(result.ok, true);
   });
 });
+
+
+describe("core proactive strategy settings round-trip", () => {
+  const cases = [
+    {
+      name: "keeps marker-migrated disabled preferences after an unrelated save",
+      source: "[agent.proactive_strategies]\nscene_followup = false\nrelationship = false\n",
+      preferences: { sceneFollowup: false, relationship: false },
+      expectedLines: ["scene_followup = false", "relationship = false"],
+      absentLines: [],
+    },
+    {
+      name: "keeps explicit core enablement above an old disabled plugin preference",
+      source: "[plugins.relationship_proactive]\nenabled = false\n[agent.proactive_strategies]\nscene_followup = true\nrelationship = true\n",
+      preferences: { sceneFollowup: true, relationship: true },
+      expectedLines: ["scene_followup = true", "relationship = true", "[plugins.relationship_proactive]\nenabled = false"],
+      absentLines: [],
+    },
+    {
+      name: "leaves absent core preferences to backend defaults and marker migration",
+      source: "[agent]\nmax_tokens = 4096\n",
+      preferences: {},
+      expectedLines: [],
+      absentLines: ["[agent.proactive_strategies]", "scene_followup =", "relationship ="],
+    },
+    {
+      name: "preserves unmigrated plugin disablement without forcing core defaults",
+      source: "[plugins.relationship_proactive]\nenabled = false\n",
+      preferences: {},
+      expectedLines: ["[plugins.relationship_proactive]\nenabled = false"],
+      absentLines: ["[agent.proactive_strategies]", "scene_followup =", "relationship ="],
+    },
+    {
+      name: "keeps per-key core precedence and legacy fallback for a missing key",
+      source: "[plugins.relationship_proactive]\nenabled = false\n[agent.proactive_strategies]\nscene_followup = true\n",
+      preferences: { sceneFollowup: true },
+      expectedLines: ["scene_followup = true", "[plugins.relationship_proactive]\nenabled = false"],
+      absentLines: ["relationship ="],
+    },
+  ];
+
+  for (const scenario of cases) {
+    it(scenario.name, async () => {
+      configureSettingsConfigPath(join(tmpdir(), "unused-proactive-settings.toml"));
+      const draft = loadSettingsData(scenario.source).formData;
+      assert.deepEqual(draft.proactiveStrategies, scenario.preferences);
+      draft.advanced.maxTokens += 1;
+      let applyCalls = 0;
+      const result = await saveSettings(draft, async (request) => {
+        applyCalls += 1;
+        for (const line of scenario.expectedLines) assert.ok(request.config_toml.includes(line), line);
+        for (const line of scenario.absentLines) assert.ok(!request.config_toml.includes(line), line);
+        assert.deepEqual(loadSettingsData(request.config_toml).formData.proactiveStrategies, scenario.preferences);
+        return { ok: true, generation: 2, changed: true };
+      });
+      assert.equal(result.ok, true);
+      assert.equal(applyCalls, 1);
+    });
+  }
+
+  it("rejects invalid core switches rather than replacing them with a default", () => {
+    configureSettingsConfigPath(join(tmpdir(), "unused-proactive-settings.toml"));
+    assert.throws(() => loadSettingsData('[agent.proactive_strategies]\nrelationship = "false"\n'), /必须是布尔值/);
+  });
+});

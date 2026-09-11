@@ -3,6 +3,7 @@ import type { SettingsFormData } from "../../../src/bridge/shared.js";
 /** Builds independent complete settings drafts for transaction tests. */
 export function createSettingsDraft(): SettingsFormData {
   return {
+    proactiveStrategies: {},
     models: { registrations: [] },
     channels: { telegramToken: "", qqBotUin: "" },
     memory: { enabled: false, engine: "default", embeddingModel: "", embeddingApiKey: "", embeddingBaseUrl: "", outputDimensionality: "" },
