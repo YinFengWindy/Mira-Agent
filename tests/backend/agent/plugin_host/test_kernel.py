@@ -30,7 +30,6 @@ _EXPECTED_TOP_LEVEL_PLUGINS = {
     "observe",
     "plugin_undo",
     "qqbot",
-    "relationship_proactive",
     "scene_awareness",
     "setup_helper",
     "shell_restore",

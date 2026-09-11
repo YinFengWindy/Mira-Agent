@@ -23,8 +23,7 @@ from agent.core.proactive_turn.gates import (
     ProactiveGateDecision,
     ProactiveMode,
 )
-from plugins.relationship_proactive.backend.plugin import RelationshipLonelinessGate
-
+from agent.core.proactive_turn.strategies import RelationshipStrategy
 
 # ── FakeStateStore ────────────────────────────────────────────────────────
 
@@ -247,8 +246,8 @@ def relationship_gate_chain(
     gates: list[ProactiveGateAdapter] = [_SceneGate()]
     if loneliness_evaluate is not None:
         runtime = SimpleNamespace(should_trigger_proactive=loneliness_evaluate)
-        gates.append(RelationshipLonelinessGate(cast(Any, runtime)))
-    return ProactiveGateChain(gates)
+        gates.append(RelationshipStrategy(cast(Any, runtime)))
+    return ProactiveGateChain(motives=gates)
 
 def make_proactive_pipeline(
     *,

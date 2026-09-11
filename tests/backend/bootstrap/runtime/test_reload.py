@@ -91,3 +91,78 @@ async def test_partial_candidate_construction_closes_new_provider_and_preserves_
         assert not original.event_bus._closed
     finally:
         await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_core_motives_follow_generation_publication_and_rollback(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import MagicMock
+    from bus.events_lifecycle import SceneObservationCommitted
+    from proactive_v2.config import ProactiveStrategiesConfig
+
+    monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [])
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
+    await app.start()
+    lease = app.acquire()
+    original = lease.core
+    apply = MagicMock()
+    monkeypatch.setattr(original.relationship_runtime, "apply_scene_decision", apply)
+    event = SceneObservationCommitted(
+        session_key="role:mira",
+        channel="desktop",
+        chat_id="role:mira",
+        role_id="mira",
+        source="passive",
+        transition="started",
+        scene_key="rain",
+        should_generate=False,
+        prompt="",
+    )
+    try:
+        assert [strategy.name for strategy in original.proactive_motives] == [
+            "relationship.scene_followup",
+            "relationship.loneliness",
+        ]
+        prepared = await app.prepare(replace(config, max_tokens=2048))
+        await prepared.core.event_bus.fanout(event)
+        apply.assert_not_called()
+        await original.event_bus.fanout(event)
+        assert apply.call_count == 1
+        await app.publish(prepared)
+        await prepared.core.event_bus.fanout(event)
+        assert apply.call_count == 2
+        await original.event_bus.fanout(event)
+        assert apply.call_count == 3
+        await lease.release()
+        await original.event_bus.fanout(event)
+        assert apply.call_count == 3
+        failed = await app.prepare(replace(prepared.config, max_tokens=4096))
+        await app.discard(failed)
+        await failed.core.event_bus.fanout(event)
+        assert apply.call_count == 3
+        disabled = await app.prepare(
+            replace(
+                prepared.config,
+                proactive_strategies=ProactiveStrategiesConfig(False, False),
+            )
+        )
+        assert disabled.core.proactive_motives == []
+        assert disabled.core.scene_followup_subscription is None
+        await app.publish(disabled)
+        await disabled.core.event_bus.fanout(event)
+        assert apply.call_count == 3
+    finally:
+        await lease.release()
+        await app.shutdown()

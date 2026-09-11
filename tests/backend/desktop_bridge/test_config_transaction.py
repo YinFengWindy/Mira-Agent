@@ -21,7 +21,7 @@ def test_commit_preserves_utf8_and_updates_both_files(tmp_path):
 def test_role_file_failure_restores_configuration_and_roles(tmp_path, monkeypatch):
     transaction = ConfigTransaction(tmp_path / "config.toml", tmp_path)
     transaction.commit("old config", {"roles": []})
-    original = config_transaction._replace_text
+    original = config_transaction.atomic_save_text
     failed = False
 
     def fail_roles_once(path, content):
@@ -31,7 +31,7 @@ def test_role_file_failure_restores_configuration_and_roles(tmp_path, monkeypatc
             raise OSError("disk write failed")
         original(path, content)
 
-    monkeypatch.setattr(config_transaction, "_replace_text", fail_roles_once)
+    monkeypatch.setattr(config_transaction, "atomic_save_text", fail_roles_once)
     with pytest.raises(OSError, match="disk write failed"):
         transaction.commit("new config", {"roles": [{"id": "new"}]})
     assert transaction.config_path.read_text(encoding="utf-8") == "old config"

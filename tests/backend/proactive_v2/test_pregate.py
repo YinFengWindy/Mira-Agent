@@ -238,11 +238,13 @@ async def test_multi_channel_delivery_cancels_retry_when_user_replies():
 
 
 @pytest.mark.asyncio
-async def test_loneliness_gate_blocks_when_threshold_not_reached():
+async def test_loneliness_miss_with_no_candidates_skips_without_model_call():
     state = FakeStateStore()
     gate_calls: list[tuple[str, datetime]] = []
+    llm = FakeLLM([])
     tick = make_proactive_pipeline(
         state_store=state,
+        llm_fn=llm,
         proactive_gates=relationship_gate_chain(
             loneliness_evaluate=lambda session_key, now_utc: (
                 gate_calls.append((session_key, now_utc)) or False,
@@ -251,15 +253,19 @@ async def test_loneliness_gate_blocks_when_threshold_not_reached():
         ),
     )
     result = await tick.run()
-    assert result is None
+    assert result == 0.0
     assert len(gate_calls) == 1
     assert gate_calls[0][0] == "test_session"
-    assert state.tick_log_finishes[0]["gate_exit"] == "loneliness"
-    assert state.tick_log_finishes[0]["gate_name"] == "relationship.loneliness"
+    assert llm.calls == []
+    assert tick.last_ctx.skip_reason == "no_content"
+    trace = tick.last_ctx.gate_trace[-1]
+    assert trace.gate_name == "relationship.loneliness"
+    assert trace.decision == "continue"
+    assert trace.reason == "below_threshold"
+    assert trace.metadata == {"reason": "below_threshold"}
+    assert state.tick_log_finishes[0]["gate_exit"] is None
     assert state.tick_log_finishes[0]["gate_reason"] == "below_threshold"
-    assert state.tick_log_finishes[0]["gate_metadata"] == {
-        "reason": "below_threshold"
-    }
+    assert state.tick_log_finishes[0]["gate_metadata"] == {"reason": "below_threshold"}
 
 
 @pytest.mark.asyncio
@@ -405,8 +411,9 @@ async def test_pending_scene_that_is_not_due_still_uses_loneliness_gate():
 
     result = await tick.run()
 
-    assert result is None
-    assert state.tick_log_finishes[0]["gate_exit"] == "loneliness"
+    assert result == 0.0
+    assert tick.last_ctx.skip_reason == "no_content"
+    assert tick.last_ctx.gate_trace[-1].reason == "below_threshold"
 
 
 @pytest.mark.asyncio
@@ -564,3 +571,49 @@ async def test_all_gates_pass_returns_non_none():
     )
     result = await tick.run()
     assert result is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["below_threshold", "cooldown"])
+@pytest.mark.parametrize("source", ["alert", "feed"])
+async def test_relationship_miss_does_not_block_external_candidates(reason, source):
+    from proactive_v2.gateway import GatewayDeps
+
+    callback = AsyncMock(
+        return_value=[{"id": "news-1", "ack_server": "feed", "title": "新消息"}]
+    )
+    llm = FakeLLM([("finish_turn", {"decision": "skip", "reason": "not_relevant"})])
+    tick = make_proactive_pipeline(
+        llm_fn=llm,
+        gateway_deps=GatewayDeps(**{f"{source}_fn": callback}),
+        proactive_gates=relationship_gate_chain(
+            loneliness_evaluate=lambda *_: (False, {"reason": reason})
+        ),
+    )
+    await tick.run()
+    callback.assert_awaited_once()
+    assert llm.calls
+    assert tick.last_ctx.active_gate is None
+    assert tick.last_ctx.gate_trace[-1].reason == reason
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entered", [True, False])
+@pytest.mark.parametrize("reason", ["below_threshold", "cooldown"])
+async def test_relationship_miss_allows_drift_and_no_empty_turn_if_unavailable(
+    entered, reason
+):
+    llm = FakeLLM([])
+    drift = MagicMock(run=AsyncMock(return_value=entered))
+    tick = make_proactive_pipeline(
+        cfg=cfg_with(drift_enabled=True),
+        llm_fn=llm,
+        drift_pipeline=drift,
+        proactive_gates=relationship_gate_chain(
+            loneliness_evaluate=lambda *_: (False, {"reason": reason})
+        ),
+    )
+    await tick.run()
+    drift.run.assert_awaited_once()
+    assert llm.calls == []
+    assert tick.last_ctx.active_gate is None

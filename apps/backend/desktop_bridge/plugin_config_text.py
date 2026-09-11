@@ -75,12 +75,36 @@ def merge_plugin_table(config_toml: str, plugin_id: str, values: dict[str, Any])
     document under a form this function cannot locate (see module docstring).
     """
 
+    return merge_table(config_toml, ["plugins", plugin_id], values, plugin_id=plugin_id)
+
+
+def merge_table(
+    config_toml: str,
+    path_segments: list[str],
+    values: dict[str, Any],
+    *,
+    plugin_id: str | None = None,
+) -> str:
+    """Replaces one table using the shared statement-aware span editor."""
     lines = config_toml.splitlines(keepends=True)
-    prefix_segments = ["plugins", plugin_id]
-    spans = _locate_owned_spans(lines, prefix_segments)
-    block = _render_table(plugin_id, values)
+    spans = _locate_owned_spans(lines, path_segments)
+    nested: dict[str, Any] = values
+    for segment in reversed(path_segments):
+        nested = {segment: nested}
+    block = (
+        _render_table(plugin_id, values)
+        if plugin_id is not None
+        else toml.dumps(nested)
+    )
     if not spans:
-        _reject_if_owned_by_an_unlocatable_form(config_toml, plugin_id)
+        if plugin_id is not None:
+            _reject_if_owned_by_an_unlocatable_form(config_toml, plugin_id)
+        else:
+            current: Any = tomllib.loads(config_toml)
+            for segment in path_segments:
+                current = current.get(segment) if isinstance(current, dict) else None
+            if current is not None:
+                raise ValueError(f"Cannot locate table {'.'.join(path_segments)}")
         return _append_table(config_toml, block)
     # 新表整体写在第一段的位置，其余归属本插件的表段（可能被无关表隔开）一并移除；
     # 只处理第一段会把后面的旧子表留下，生成重复表声明，整份文档随即无法解析。

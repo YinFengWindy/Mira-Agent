@@ -57,6 +57,9 @@ def load_config(path: str | Path = "config.toml") -> Config:
     resolved_path = Path(path)
     data = _load_config_data(resolved_path)
     data = _migrate_legacy_novelai_config(resolved_path, data)
+    from agent.proactive_preferences import migrate_proactive_preferences
+
+    data = migrate_proactive_preferences(resolved_path, data)
     return load_config_data(data)
 
 
@@ -76,6 +79,9 @@ def load_config_data(data: dict[str, Any]) -> Config:
     agent_maintenance = _as_dict(agent_cfg.get("maintenance"))
     channels = _load_channels_config(data)
     proactive = _load_proactive_config(data)
+    from agent.proactive_preferences import load_proactive_preferences
+
+    proactive_strategies = load_proactive_preferences(data)
     memory = _load_memory_config(data)
     voice = _load_voice_config(data)
     wiring = _load_wiring_config(data)
@@ -95,9 +101,14 @@ def load_config_data(data: dict[str, Any]) -> Config:
             agent_context.get("memory_window", data.get("memory_window", 40))
         ),
         base_url=primary_registration.base_url if primary_registration else None,
-        extra_body=_effort_extra_body(primary_registration.effort) if primary_registration else {},
+        extra_body=(
+            _effort_extra_body(primary_registration.effort)
+            if primary_registration
+            else {}
+        ),
         channels=channels,
         proactive=proactive,
+        proactive_strategies=proactive_strategies,
         memory_optimizer_enabled=bool(
             agent_maintenance.get(
                 "memory_optimizer_enabled",
@@ -114,16 +125,12 @@ def load_config_data(data: dict[str, Any]) -> Config:
         light_api_key=_resolve(
             str(llm_fast.get("api_key") or data.get("light_api_key", ""))
         ),
-        light_base_url=str(
-            llm_fast.get("base_url") or data.get("light_base_url", "")
-        ),
+        light_base_url=str(llm_fast.get("base_url") or data.get("light_base_url", "")),
         agent_model=str(llm_agent.get("model") or data.get("agent_model", "")),
         agent_api_key=_resolve(
             str(llm_agent.get("api_key") or data.get("agent_api_key", ""))
         ),
-        agent_base_url=str(
-            llm_agent.get("base_url") or data.get("agent_base_url", "")
-        ),
+        agent_base_url=str(llm_agent.get("base_url") or data.get("agent_base_url", "")),
         memory=memory,
         tool_search_enabled=bool(
             agent_tools.get("search_enabled", data.get("tool_search_enabled", False))
