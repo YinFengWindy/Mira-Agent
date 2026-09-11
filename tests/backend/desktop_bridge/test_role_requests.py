@@ -41,7 +41,6 @@ async def test_role_card_preview_forwards_the_full_payload_to_its_service() -> N
     handler = DesktopRoleRequestHandler(
         role_service=SimpleNamespace(),
         role_store=SimpleNamespace(),
-        pet_packages=SimpleNamespace(),
         role_differences=SimpleNamespace(),
         role_presenter=SimpleNamespace(),
         voice_handler=SimpleNamespace(),
@@ -193,3 +192,26 @@ async def test_role_difference_rpc_publishes_progress_and_returns_updated_role(
         session_config["mood_catalog"]
     )
     await service.aclose()
+
+
+@pytest.mark.asyncio
+async def test_the_core_bridge_no_longer_answers_pet_package_methods() -> None:
+    """#181-D: pet package management belongs to the plugin that owns it.
+
+    `handle` returning `None` is how this router says "not mine", which lets
+    the plugin RPC dispatcher downstream pick the method up as
+    `plugin.desktop_pet.pets.*`. If these branches came back, the core bridge
+    would answer first and the plugin's copy would silently never run.
+    """
+    handler = DesktopRoleRequestHandler(
+        role_service=SimpleNamespace(),
+        role_store=SimpleNamespace(),
+        role_differences=SimpleNamespace(),
+        role_presenter=SimpleNamespace(),
+        voice_handler=SimpleNamespace(),
+        card_import_service=SimpleNamespace(),
+        publish_event=AsyncMock(),
+    )
+
+    for method in ("roles.pets.import", "roles.pets.remove", "roles.pets.select"):
+        assert await handler.handle(method, {"role_id": "mira", "package_id": "pet-1"}) is None

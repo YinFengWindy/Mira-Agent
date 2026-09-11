@@ -31,18 +31,16 @@ class DesktopRolePresenter:
             for relative_path in illustrations
             if isinstance(relative_path, str) and relative_path
         ]
-        payload["pet_packages"] = [
-            {
-                **package.to_dict(),
-                "spritesheet_abs": str((self._role_store.roles_dir / package.spritesheet_path).resolve()),
-                "preview_abs": (
-                    str((self._role_store.roles_dir / package.preview_path).resolve())
-                    if package.preview_path
-                    else None
-                ),
-            }
-            for package in role.pet_packages
-        ]
+        # Pet packages are no longer enriched here (#181-D). The two absolute
+        # paths this used to add — `spritesheet_abs` / `preview_abs` — are how
+        # the desktop grants `shiori-asset://` URLs, and the only consumer left
+        # is the pet's own package manager, which gets them from
+        # `plugin.desktop_pet.pets.list`. Emitting them on every role payload
+        # meant every `roles.list` leaked pet asset paths to a renderer that had
+        # no use for them.
+        #
+        # `role.to_dict()` still carries the raw `pet_packages` field; it goes
+        # when the pet's data leaves `RoleRecord` altogether.
         if self._relationship_runtime is not None:
             snapshot = self._relationship_runtime.read_snapshot(role.id)
             runtime = self._relationship_runtime.current_loneliness_runtime(role.id)
