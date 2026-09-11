@@ -74,6 +74,8 @@ class PluginManifest:
     capabilities: tuple[str, ...] = ()
     config_model: str | None = None
     dependencies: tuple[str, ...] = ()
+    # Optional APIs never cause provider activation or dependent teardown.
+    optional_dependencies: tuple[str, ...] = ()
     api: int = 1
     metadata: dict[str, object] = field(default_factory=dict)
 
@@ -100,6 +102,12 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
     api = int(str(raw.get("api", 1)))
     plugin_id = str(raw.get("id") or raw.get("name") or plugin_dir.name)
     capabilities = _parse_capabilities(raw, manifest_path, required=api >= 2)
+    dependencies = _parse_dependencies(raw, "dependencies")
+    optional_dependencies = _parse_dependencies(raw, "optional_dependencies")
+    if set(dependencies) & set(optional_dependencies):
+        raise ManifestError(
+            "插件依赖不能同时声明为 dependencies 和 optional_dependencies"
+        )
     return PluginManifest(
         id=plugin_id,
         version=_optional_str(raw.get("version")),
@@ -108,7 +116,8 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
         entry=str(raw.get("entry") or DEFAULT_ENTRY),
         capabilities=capabilities,
         config_model=_optional_str(raw.get("config_model")),
-        dependencies=_parse_dependencies(raw),
+        dependencies=dependencies,
+        optional_dependencies=optional_dependencies,
         api=api,
         metadata={k: v for k, v in raw.items() if isinstance(k, str)},
     )
@@ -147,10 +156,10 @@ def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
 
 
-def _parse_dependencies(raw: dict[str, object]) -> tuple[str, ...]:
-    value = raw.get("dependencies", [])
+def _parse_dependencies(raw: dict[str, object], field: str) -> tuple[str, ...]:
+    value = raw.get(field, [])
     if not isinstance(value, list) or any(
         not isinstance(item, str) or not item.strip() for item in value
     ):
-        raise ManifestError("dependencies 必须是非空插件 ID 的列表")
+        raise ManifestError(f"{field} 必须是非空插件 ID 的列表")
     return tuple(dict.fromkeys(value))

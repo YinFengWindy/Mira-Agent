@@ -385,7 +385,9 @@ class PluginKernel:
                 self.rpc, handle.effects, handle.plugin_id, services.event_bus
             ),
             "dependencies": lambda: PluginDependencies(
-                handle.record.manifest.dependencies, self._dependency_api
+                handle.record.manifest.dependencies,
+                self._dependency_api,
+                optional_declared=handle.record.manifest.optional_dependencies,
             ),
             "runtime": lambda: PluginRuntimeLifecycle(
                 services.is_reload,
@@ -449,12 +451,14 @@ class PluginKernel:
         if errors:
             raise ExceptionGroup("Plugin cleanup failed", errors)
 
-    def _dependency_api(self, plugin_id: str) -> Any:
+    def _dependency_api(self, plugin_id: str, optional: bool = False) -> Any:
         for handle in self._active_handles():
-            if handle.plugin_id == plugin_id:
-                if handle.instance is None:
+            if handle.plugin_id == plugin_id and handle.state is PluginState.ACTIVE:
+                if handle.instance is None and not optional:
                     raise PluginDependencyError(f"插件 {plugin_id} 未导出接口")
                 return handle.instance
+        if optional:
+            return None
         raise PluginDependencyError(f"插件 {plugin_id} 不可用")
 
     async def drain(self) -> None:
