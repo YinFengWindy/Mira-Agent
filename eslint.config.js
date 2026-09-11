@@ -21,4 +21,6 @@ export default desktopEslintConfig([
   "plugins/*/ui/**/*.tsx",
   "plugins/*/surface/**/*.ts",
   "plugins/*/surface/**/*.tsx",
+  "plugins/*/background/**/*.ts",
+  "plugins/*/background/**/*.tsx",
 ]);

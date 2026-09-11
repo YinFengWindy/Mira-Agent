@@ -14,6 +14,7 @@ import {
   showSurfaceContextMenu,
   workAreaForSurface,
 } from "./surface/window.js";
+import { createPluginHostWindow } from "./pluginHost/window.js";
 import { openGrantedLocalAsset } from "./assets/localAssetOpen.js";
 import { LocalAssetRegistry, localAssetScheme } from "./assets/localAssetRegistry.js";
 import { ensureDesktopRuntimeConfig, resolveDesktopRuntimePaths } from "./runtimePaths.js";
@@ -53,6 +54,7 @@ const localAssets = new LocalAssetRegistry();
 const trayLifecycleEnabled = process.platform === "win32";
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 let desktopWindow: BrowserWindow | null = null;
+let pluginHostWindow: BrowserWindow | null = null;
 let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let desktopPetSettings: DesktopPetSettings;
 let desktopPet: DesktopPetController | null = null;
@@ -311,6 +313,23 @@ void app.whenReady().then(() => {
     },
   });
   registerDesktopSurfaceIpc(desktopSurfaces);
+  // Dedicated hidden window for plugin `app.background` code (#226 item 1).
+  // Created once here, after the surface IPC it depends on is registered but
+  // before any plugin could possibly need it; destroyed in `before-quit`.
+  //
+  // Side effect worth knowing before touching `window-all-closed` below:
+  // because this window is always alive from here to quit, Electron's
+  // `window-all-closed` event (which fires only once *every* BrowserWindow
+  // is gone) can no longer fire from the main window closing alone — there
+  // is always at least this one left. On Windows that is invisible:
+  // `trayLifecycleEnabled` is `true`, so the handler below already returns
+  // early before checking window count. It would matter on Linux, where
+  // `trayLifecycleEnabled` is `false` and that handler currently calls
+  // `app.quit()` on this event — closing the main window would no longer
+  // quit the app there. The repo only packages Windows today, so this is
+  // deliberately left as-is rather than fixed; if Linux/macOS packaging
+  // ever happens, this is the first place to revisit.
+  pluginHostWindow = createPluginHostWindow();
   desktopPet = new DesktopPetController({
     getSettings: () => desktopPetSettings,
     saveSettings: persistDesktopPetSettings,
@@ -439,6 +458,13 @@ void app.whenReady().then(() => {
   app.exit(1);
 });
 
+// Since #226 this fires far less than it reads: the plugin-host window is
+// created at startup and lives until quit, so "all windows closed" is no
+// longer true merely because the user closed the main window. On Windows that
+// is invisible — `trayLifecycleEnabled` is true, so this handler already
+// returned early there. On Linux, where the tray lifecycle is off, closing the
+// main window would previously have quit the app through here and now will not.
+// Nothing packages Linux today; see `createPluginHostWindow`'s call site.
 app.on("window-all-closed", () => {
   if (!isQuitting && trayLifecycleEnabled) {
     return;
@@ -451,6 +477,10 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   isQuitting = true;
   desktopTray?.destroy();
+  if (pluginHostWindow && !pluginHostWindow.isDestroyed()) {
+    pluginHostWindow.destroy();
+  }
+  pluginHostWindow = null;
   voiceHotkey?.stop();
   voiceController?.dispose();
   voicePlayback?.dispose();

@@ -175,6 +175,58 @@ async def test_disabling_a_plugin_makes_its_rpc_method_immediately_uncallable(tm
 
 
 @pytest.mark.asyncio
+async def test_set_enabled_publishes_runtime_applied(tmp_path, monkeypatch):
+    """#226: the headless plugin-host window has no `pluginEnabledStateStore`
+    of its own and learns its roster changed only through `runtime.applied`.
+
+    Before this test existed, `plugins.setEnabled` was dispatched through the
+    PLUGIN_MANAGEMENT branch of `ReloadableDesktopService.handle`, a
+    different branch from the one that publishes `runtime.applied` (SETTINGS,
+    gated on `method == "runtime.apply"`) — even though `set_enabled` performs
+    the exact same kind of settings apply and returns the same
+    `{generation, changed}` shape. The toggle succeeded and persisted, but no
+    event ever told another window about it, so a disabled plugin's
+    `app.background` contribution kept running until an unrelated settings
+    save happened to fire `runtime.apply`, or the app restarted.
+    """
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, _, app = await _start_service(tmp_path)
+    published: list[dict] = []
+    service.add_event_listener(lambda event: published.append(event))
+    try:
+        response = await _request(service, "plugins.setEnabled", {
+            "plugin_id": "hello", "enabled": False, "operation_id": "op-disable",
+        })
+        assert response.error is None, response.error
+
+        applied = [event for event in published if event.get("method") == "runtime.applied"]
+        assert len(applied) == 1, f"expected exactly one runtime.applied, got {published}"
+        # The published payload is the exact response payload (plugin_id,
+        # enabled, generation, changed) — the same object `set_enabled`
+        # returned to the caller, not a re-derived subset of it.
+        assert applied[0]["payload"] == response.payload
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_list_does_not_publish_runtime_applied(tmp_path, monkeypatch):
+    """`plugins.list` is a read; it must not fire the "something changed" event."""
+    _stage_plugin_dirs(tmp_path, monkeypatch)
+    service, _, app = await _start_service(tmp_path)
+    published: list[dict] = []
+    service.add_event_listener(lambda event: published.append(event))
+    try:
+        response = await _request(service, "plugins.list")
+        assert response.error is None, response.error
+        assert published == []
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_set_enabled_re_enables_a_previously_disabled_plugin(tmp_path, monkeypatch):
     _stage_plugin_dirs(tmp_path, monkeypatch)
     service, _, app = await _start_service(tmp_path)

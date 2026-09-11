@@ -10,11 +10,11 @@ const repoRoot = resolve(desktopRoot, "..", "..");
 /**
  * Renderer code owned by plugins rather than by the host.
  *
- * A plugin's `ui/` and `surface/` directories are compiled into the renderer
- * bundle (#174, #181) but live outside `apps/desktop/`, so their colocated
- * tests are invisible to a fixed list of desktop test roots. Discovering them
- * here is what keeps moving renderer code into a plugin from silently dropping
- * its coverage.
+ * A plugin's `ui/`, `surface/` and `background/` directories are compiled
+ * into the renderer bundle (#174, #181, #226) but live outside
+ * `apps/desktop/`, so their colocated tests are invisible to a fixed list of
+ * desktop test roots. Discovering them here is what keeps moving renderer
+ * code into a plugin from silently dropping its coverage.
  */
 async function pluginTestRoots() {
   const pluginsRoot = resolve(repoRoot, "plugins");
@@ -27,7 +27,7 @@ async function pluginTestRoots() {
   const roots = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    for (const area of ["ui", "surface"]) {
+    for (const area of ["ui", "surface", "background"]) {
       const candidate = join(pluginsRoot, entry.name, area);
       try {
         if ((await stat(candidate)).isDirectory()) roots.push(candidate);

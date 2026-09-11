@@ -32,6 +32,13 @@ export default defineConfig({
         // `pet.html` was the last one, and it is gone.
         surface: resolvePath(here, "surface.html"),
         voice: resolvePath(here, "voice.html"),
+        // Dedicated hidden renderer window that owns every plugin's
+        // always-resident `app.background` code (#226 item 1). Separate from
+        // `surface` for the same reason `surface` is separate from `main`: a
+        // plugin's background code must not carry the main window's settings
+        // UI or a surface component's React tree into a window with no DOM
+        // to render either into.
+        pluginHost: resolvePath(here, "plugin-host.html"),
       },
       output: {
         manualChunks(id) {

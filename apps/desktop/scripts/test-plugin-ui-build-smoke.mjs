@@ -1,24 +1,26 @@
 #!/usr/bin/env node
 /**
- * Reproducible build smoke check for the two plugin globs:
- * `renderer/src/plugins/pluginUiModules.ts` (main-window slots) and
+ * Reproducible build smoke check for the three plugin globs:
+ * `renderer/src/plugins/pluginUiModules.ts` (main-window slots),
  * `renderer/src/surface/pluginSurfaceModules.ts` (plugin-owned desktop
- * windows, #181).
+ * windows, #181) and `renderer/src/background/pluginBackgroundModules.ts`
+ * (headless always-resident background code, #226 item 1).
  *
- * The repo ships no `plugins/<id>/ui/` or `plugins/<id>/surface/` directory,
- * so both `import.meta.glob` patterns (one wildcard segment for `<id>`, then a
- * fixed suffix) match zero files, and a plain `pnpm run build:renderer`
- * succeeding proves nothing about whether either glob resolves to the right
- * place. This script creates a throwaway plugin under the real top-level
- * `plugins/` tree carrying both entry points, each with its own recognizable
- * marker, runs a real renderer build against it, asserts both markers made it
- * into the bundled output, and removes the throwaway plugin directory
- * afterwards (on success or failure) so it is safe to re-run repeatedly on a
- * clean checkout.
+ * The repo ships no `plugins/<id>/ui/`, `plugins/<id>/surface/` or
+ * `plugins/<id>/background/` directory, so all three `import.meta.glob`
+ * patterns (one wildcard segment for `<id>`, then a fixed suffix) match zero
+ * files, and a plain `pnpm run build:renderer` succeeding proves nothing
+ * about whether any of them resolves to the right place. This script creates
+ * a throwaway plugin under the real top-level `plugins/` tree carrying all
+ * three entry points, each with its own recognizable marker, runs a real
+ * renderer build against it, asserts all three markers made it into the
+ * bundled output, and removes the throwaway plugin directory afterwards (on
+ * success or failure) so it is safe to re-run repeatedly on a clean checkout.
  *
- * The two markers are checked separately on purpose: the surface entry lands
- * in a *different* rollup entry (`surface.html`) from the UI one, so a single
- * combined check would let a broken surface glob hide behind a working UI one.
+ * The three markers are checked separately on purpose: the surface entry
+ * lands in a *different* rollup entry (`surface.html`) from the UI one, and
+ * the background entry in yet another (`plugin-host.html`), so a single
+ * combined check would let a broken glob hide behind the other two working.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -34,10 +36,12 @@ const repoRoot = resolve(desktopRoot, "..", "..");
 const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
 const marker = `PLUGIN_UI_BUILD_SMOKE_${suffix}`;
 const surfaceMarker = `PLUGIN_SURFACE_BUILD_SMOKE_${suffix}`;
+const backgroundMarker = `PLUGIN_BACKGROUND_BUILD_SMOKE_${suffix}`;
 const pluginId = `plugin_ui_build_smoke_${suffix}`;
 const pluginDir = join(repoRoot, "plugins", pluginId);
 const uiDir = join(pluginDir, "ui");
 const surfaceDir = join(pluginDir, "surface");
+const backgroundDir = join(pluginDir, "background");
 
 /** Recursively searches built JS output for the marker string. */
 async function bundleContainsMarker(dir, needle) {
@@ -89,6 +93,22 @@ async function main() {
     "utf-8",
   );
 
+  await mkdir(backgroundDir, { recursive: true });
+  await writeFile(
+    join(backgroundDir, "index.ts"),
+    [
+      "// Throwaway fixture written by test-plugin-ui-build-smoke.mjs; not meant to be committed.",
+      `const MARKER = ${JSON.stringify(backgroundMarker)};`,
+      "",
+      "export default {",
+      `  pluginId: ${JSON.stringify(pluginId)},`,
+      "  setup() { return MARKER; },",
+      "};",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+
   const outDir = await mkdtemp(join(tmpdir(), "plugin-ui-build-smoke-"));
   try {
     await viteBuild({
@@ -100,6 +120,7 @@ async function main() {
     const checks = [
       { marker, glob: "plugins/<id>/ui/index.tsx", source: "pluginUiModules.ts" },
       { marker: surfaceMarker, glob: "plugins/<id>/surface/index.tsx", source: "pluginSurfaceModules.ts" },
+      { marker: backgroundMarker, glob: "plugins/<id>/background/index.ts", source: "pluginBackgroundModules.ts" },
     ];
     for (const check of checks) {
       if (!(await bundleContainsMarker(outDir, check.marker))) {
@@ -109,7 +130,7 @@ async function main() {
         );
       }
     }
-    console.log(`[plugin-ui-build-smoke] passed: ui and surface markers for ${pluginId} found in the built bundle.`);
+    console.log(`[plugin-ui-build-smoke] passed: ui, surface and background markers for ${pluginId} found in the built bundle.`);
   } finally {
     await rm(outDir, { recursive: true, force: true });
   }
