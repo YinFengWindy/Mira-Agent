@@ -29,6 +29,8 @@ from agent.plugin_host.config_schema import (
     resolve_config_model,
 )
 from agent.plugin_host.effects import EffectScope
+from agent.plugin_host.dependencies import PluginDependencies, PluginDependencyError
+from agent.plugin_host.runtime_lifecycle import PluginRuntimeLifecycle
 from agent.plugin_host.events import ScopedEventBus
 from agent.plugin_host.handle import PluginHandle, PluginRecord, PluginState
 from agent.plugin_host.legacy import LegacyPluginError, load_legacy_plugin
@@ -73,6 +75,9 @@ class HostServices:
     # 本地状态（.kv.json / plugin.disabled）不会随目录重命名搬走，需要从这里
     # 一次性迁移；打包形态下该目录不存在，字段为 None 即可。
     legacy_plugin_root: Path | None = None
+    role_runtime_registry: Any = None
+    is_reload: bool = False
+    previously_active_plugins: frozenset[str] = frozenset()
 
 
 class PluginKernel:
@@ -154,14 +159,67 @@ class PluginKernel:
     # ── 加载 ──────────────────────────────────────────────────────────────
 
     async def load_all(self) -> None:
+        records = self._records_by_id()
+        for record in records.values():
+            await self._load_dependencies(record, records, ())
+
+    def _records_by_id(self) -> dict[str, PluginRecord]:
+        records: dict[str, PluginRecord] = {}
         for record in self.discover():
-            await self._load_one(record)
+            if record.manifest.id in records:
+                raise ManifestError(f"插件 ID 重复: {record.manifest.id}")
+            records[record.manifest.id] = record
+        return records
+
+    async def _load_dependencies(
+        self,
+        record: PluginRecord,
+        records: dict[str, PluginRecord],
+        trail: tuple[str, ...],
+    ) -> None:
+        existing = self._handles.get(record.name)
+        if existing is not None and existing.state in {
+            PluginState.ACTIVE,
+            PluginState.DISABLED,
+            PluginState.BLOCKED,
+        }:
+            return
+        plugin_id = record.manifest.id
+        if plugin_id in trail:
+            raise PluginDependencyError(
+                "插件循环依赖: " + " -> ".join((*trail, plugin_id))
+            )
+        # A disabled plugin must not load its dependencies as a side effect.
+        if (
+            self._config_enabled(plugin_id)
+            and not (record.plugin_dir / DISABLED_MARKER).exists()
+        ):
+            try:
+                for dependency in record.manifest.dependencies:
+                    target = records.get(dependency)
+                    if target is None:
+                        raise PluginDependencyError(
+                            f"插件 {plugin_id} 缺少依赖 {dependency}"
+                        )
+                    await self._load_dependencies(target, records, (*trail, plugin_id))
+                    loaded = self._handles.get(target.name)
+                    if loaded is None or loaded.state is not PluginState.ACTIVE:
+                        raise PluginDependencyError(
+                            f"插件 {plugin_id} 的依赖 {dependency} 未启用或加载失败"
+                        )
+            except PluginDependencyError as exc:
+                self._handles[record.name] = PluginHandle(
+                    record=record, state=PluginState.BLOCKED, error=exc
+                )
+                return
+        await self._load_one(record)
 
     async def load(self, name: str) -> bool:
         """按目录名加载单个已发现插件；已激活时幂等返回 True。"""
-        for record in self.discover():
+        records = self._records_by_id()
+        for record in records.values():
             if record.name == name:
-                await self._load_one(record)
+                await self._load_dependencies(record, records, ())
                 handle = self._handles.get(name)
                 return handle is not None and handle.state is PluginState.ACTIVE
         return False
@@ -266,6 +324,7 @@ class PluginKernel:
             manifest=handle.record.manifest,
             effects=handle.effects,
             capabilities=self._build_capabilities(handle),
+            publish_api=lambda api: setattr(handle, "instance", api),
         )
         await setup_fn(context)
 
@@ -308,7 +367,18 @@ class PluginKernel:
             "bot_commands": lambda: BotCommandsCapability(
                 handle.contributions, handle.effects
             ),
-            "rpc": lambda: RpcCapability(self.rpc, handle.effects, handle.plugin_id),
+            "rpc": lambda: RpcCapability(
+                self.rpc, handle.effects, handle.plugin_id, services.event_bus
+            ),
+            "dependencies": lambda: PluginDependencies(
+                handle.record.manifest.dependencies, self._dependency_api
+            ),
+            "runtime": lambda: PluginRuntimeLifecycle(
+                services.is_reload,
+                handle.drainers,
+                was_active=handle.plugin_id in services.previously_active_plugins,
+            ),
+            "role_runtime_registry": lambda: services.role_runtime_registry,
             # 直传引用，无需 effect 包装：宿主拥有这些服务的生命周期，插件只读，
             # 卸载时无需撤销任何登记（对齐 legacy PluginContext 的同名字段）。
             "workspace": lambda: services.workspace,
@@ -336,12 +406,16 @@ class PluginKernel:
     # ── 卸载 ──────────────────────────────────────────────────────────────
 
     async def unload(self, name: str) -> list[Exception]:
-        """卸载单个插件：逆序处置其全部 effect，其他插件不受影响。"""
+        """先卸载依赖此插件的使用方，再逆序处置提供方的 effect。"""
         handle = self._handles.get(name)
         if handle is None or handle.state is not PluginState.ACTIVE:
             return []
+        errors: list[Exception] = []
+        for dependent in reversed(self._active_handles()):
+            if handle.plugin_id in dependent.record.manifest.dependencies:
+                errors.extend(await self.unload(dependent.record.name))
         handle.state = PluginState.UNLOADING
-        errors = await handle.effects.dispose_all()
+        errors.extend(await handle.effects.dispose_all())
         handle.contributions = type(handle.contributions)()
         handle.instance = None
         handle.state = PluginState.DISPOSED
@@ -359,6 +433,20 @@ class PluginKernel:
         self._handles.clear()
         if errors:
             raise ExceptionGroup("Plugin cleanup failed", errors)
+
+    def _dependency_api(self, plugin_id: str) -> Any:
+        for handle in self._active_handles():
+            if handle.plugin_id == plugin_id:
+                if handle.instance is None:
+                    raise PluginDependencyError(f"插件 {plugin_id} 未导出接口")
+                return handle.instance
+        raise PluginDependencyError(f"插件 {plugin_id} 不可用")
+
+    async def drain(self) -> None:
+        """Waits for plugin-owned work while the retiring transport remains attached."""
+        for handle in reversed(self._active_handles()):
+            for callback in handle.drainers:
+                await callback()
 
     # ── 聚合面（与旧 PluginManager 同构，供 bootstrap 接线） ────────────────
 

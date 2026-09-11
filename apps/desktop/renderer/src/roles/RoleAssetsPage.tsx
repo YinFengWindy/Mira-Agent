@@ -8,8 +8,6 @@ import { applyMoodToIllustration, getMoodForIllustration } from "./roleMoodBindi
 import { RoleMoodBindingsPanel } from "./RoleMoodBindingsPanel";
 import { RoleAssetCategoryGroups } from "./RoleAssetCategoryGroups";
 import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
-import { RoleDifferenceGenerationPanel } from "./RoleDifferenceGenerationPanel";
-import type { RoleDifferenceGenerationState } from "./roleDifferenceGeneration";
 
 type RoleAssetsPageProps = {
   activeRole: RoleRecord | null;
@@ -33,8 +31,6 @@ type RoleAssetsPageProps = {
     removedIllustrations?: string[],
   ) => Promise<boolean>;
   onSaveSelections: (nextSelection?: { avatarAsset?: string; chatBackground?: string; moodIllustrationBindings?: Record<string, string> }) => void;
-  differenceGeneration: RoleDifferenceGenerationState;
-  onGenerateDifferences: (baseAsset: string) => void;
 };
 
 export function RoleAssetsPage({
@@ -55,8 +51,6 @@ export function RoleAssetsPage({
   onUpdateRoleForm,
   onUpdateAssetOrganization,
   onSaveSelections,
-  differenceGeneration,
-  onGenerateDifferences,
 }: RoleAssetsPageProps) {
   const assetPairs = (activeRole?.illustrations ?? []).map((relPath, index) => ({
     relPath,
@@ -232,12 +226,6 @@ export function RoleAssetsPage({
                 </div>
                 {selectionMode === "mood-binding" ? (
                   <div className="flex min-h-0 flex-1 flex-col">
-                    <RoleDifferenceGenerationPanel
-                      baseAssetPath={selectedMoodAssetPath}
-                      bridgeReady={bridgeReady}
-                      state={differenceGeneration}
-                      onGenerate={() => onGenerateDifferences(selectedMoodAssetPath)}
-                    />
                     <RoleMoodBindingsPanel
                       selectedAssetPath={selectedMoodAssetPath}
                       selectedAssetAbsPath={selectedMoodAssetPair?.absPath ? toFileUrl(selectedMoodAssetPair.absPath) : ""}

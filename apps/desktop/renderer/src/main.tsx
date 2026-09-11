@@ -1,5 +1,6 @@
+import { PluginChatImageActions } from "./plugins/PluginChatImageActions";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DesktopAppFrame } from "./app/DesktopAppFrame";
 import {
@@ -29,7 +30,6 @@ import { useRoleSearch } from "./app/roleSearch";
 import { navigateToRoleSearchResult } from "./app/roleSearchNavigation";
 import { buildDesktopViewModel } from "./app/desktopSelectors";
 import { useRolePresentation } from "./app/useRolePresentation";
-import { useStoryWorkspacePresentation } from "./app/useStoryWorkspacePresentation";
 import type { RoleSessionCache } from "./chat/roleSessionCache";
 import type { ChatMessageNavigationScroller } from "./chat/useChatScrollController";
 import { DesktopErrorBoundary } from "./diagnostics/DesktopErrorBoundary";
@@ -37,17 +37,13 @@ import { registerRendererGlobalDiagnostics } from "./diagnostics/rendererGlobalD
 // Registers every plugin's compiled-in settings.section/nav.page contributions
 // into pluginUiRegistry before any component (nav rail, settings sidebar) reads it.
 import "./plugins/pluginUiModules";
-import { createRoleFormFromRole, syncRoleFormMoodConfig } from "./roles/roleFormState";
-import { useRoleDifferenceGeneration } from "./roles/useRoleDifferenceGeneration";
+import { createRoleFormFromRole } from "./roles/roleFormState";
 import { type RoleWorkspaceSectionId } from "./roles/RoleWorkspaceSidebar";
 import { useRoleFormAdapters } from "./roles/useRoleFormAdapters";
 import { type SettingsSectionId } from "./settings/SettingsSidebar";
 import { useLatestRef } from "./shared/useLatestRef";
 import { useLeftSidebarState } from "./shared/useLeftSidebarState";
 import { useRightSidebarState } from "./shared/useRightSidebarState";
-import { createStoryBridgeClient } from "./story/storyBridgeClient";
-import { useStoryController } from "./story/useStoryController";
-import { StoryAppSurface } from "./story/StoryAppSurface";
 import type {
   AppMainView,
   PendingRoleCardAction,
@@ -58,25 +54,6 @@ import type {
 import "./styles.css";
 import { useOnboardingController } from "./onboarding/useOnboardingController";
 import { OnboardingPage } from "./onboarding/OnboardingPage";
-
-type StoryRouteProps = {
-  roles: RoleRecord[];
-  onExit: () => void;
-};
-
-/** Mounts Story bridge and presentation state only while its route is active. */
-function StoryRoute({ roles, onExit }: StoryRouteProps): React.ReactElement {
-  const storyBridgeClient = useMemo(() => createStoryBridgeClient(), []);
-  const storyController = useStoryController(storyBridgeClient);
-  const storyPresentation = useStoryWorkspacePresentation({
-    roles,
-    client: storyBridgeClient,
-    controller: storyController,
-    onExit,
-  });
-
-  return <StoryAppSurface>{storyPresentation.content}</StoryAppSurface>;
-}
 
 function App(): React.ReactElement {
   const [health, setHealth] = useState("connecting");
@@ -237,7 +214,6 @@ function App(): React.ReactElement {
     buildNavigationEntry,
     replaceNavigationEntry,
     openChatView,
-    openStoryWorkspace,
     openSettingsWorkspace,
     openRoleWorkspace,
     openPluginPage,
@@ -424,8 +400,7 @@ function App(): React.ReactElement {
     closeSelectedChatImageLightbox,
     locateSelectedChatImageMessage,
     addSelectedChatImageToAssetLibrary,
-    regenerateSelectedChatImage,
-    regeneratingSelectedChatImage,
+    applyPluginImageUpdate,
     selectPreviousChatImage,
     selectNextChatImage,
   } = useChatImageState({
@@ -508,18 +483,6 @@ function App(): React.ReactElement {
     roleAssetSaveRequestIdRef,
   });
 
-  const roleDifferenceGeneration = useRoleDifferenceGeneration({
-    roleId: detailRoleId,
-    onRoleUpdated: (updated) => {
-      setRoles((current) => current.map((role) => role.id === updated.id ? updated : role));
-      if (updated.id === detailRoleId) {
-        updateRoleForm((current) => syncRoleFormMoodConfig(current, updated));
-        applyRoleSnapshot(updated);
-        setNotice("角色差分已生成并加入素材库。");
-      }
-    },
-  });
-
   const {
     openRoleDetail,
     openRoleAssets,
@@ -571,9 +534,6 @@ function App(): React.ReactElement {
     return <OnboardingPage controller={onboarding} windowMaximized={windowMaximized} />;
   }
 
-  if (mainView.kind === "story") {
-    return <StoryRoute roles={roles} onExit={() => openChatView()} />;
-  }
 
   return (
     <DesktopAppFrame
@@ -614,7 +574,6 @@ function App(): React.ReactElement {
       bridgeReady={bridgeReady}
       onOpenSearch={() => setShowSearchDialog(true)}
       onOpenRolesWorkspace={() => openRoleWorkspace({ kind: "roles-list" })}
-      onOpenStory={() => openStoryWorkspace()}
       onOpenPluginPage={(pageId) => openPluginPage(pageId)}
       navBlockedMessage={navBlockedMessage}
       onNavigationBlocked={(message) => setNavBlockedMessage(message)}
@@ -688,8 +647,6 @@ function App(): React.ReactElement {
       onSelectAvatarAsset={setSelectedAvatarAsset}
       onSelectChatBackground={setSelectedChatBackground}
       onSaveRoleAssets={(nextSelection) => void saveRoleAssets(nextSelection)}
-      differenceGeneration={roleDifferenceGeneration.state}
-      onGenerateDifferences={(baseAsset) => void roleDifferenceGeneration.generate(baseAsset)}
       showSearchDialog={showSearchDialog}
       searchQuery={searchQuery}
       searchingSessions={searchingSessions}
@@ -728,15 +685,16 @@ function App(): React.ReactElement {
       canAddToAssetLibrary={Boolean(activeRoleId && resolvedChatImagePath)}
       canGoToNextLightboxImage={selectedChatImageIndex >= 0 && selectedChatImageIndex < chatImageHistory.length - 1}
       canGoToPreviousLightboxImage={selectedChatImageIndex > 0}
+      chatImageActions={selectedChatImageEntry ? <PluginChatImageActions
+        target={{ ...selectedChatImageEntry, sessionKey: activeSessionKey }}
+        onSessionUpdate={applyPluginImageUpdate} onError={setError} onNotice={setNotice}
+      /> : null}
       canLocateLightboxMessage={Boolean(activeRoleId && selectedChatImageEntry?.messageId)}
-      canRegenerateLightboxImage={Boolean(activeSessionKey && selectedChatImageEntry?.messageId)}
       addingChatImageToAssetLibrary={addingChatImageToAssetLibrary}
-      regeneratingSelectedChatImage={regeneratingSelectedChatImage}
       chatImageLightboxOpen={chatImageLightboxOpen}
       onAddSelectedChatImageToAssetLibrary={() => void addSelectedChatImageToAssetLibrary()}
       onCloseSelectedChatImageLightbox={closeSelectedChatImageLightbox}
       onLocateSelectedChatImageMessage={locateSelectedChatImageMessage}
-      onRegenerateSelectedChatImage={() => void regenerateSelectedChatImage()}
     />
   );
 }

@@ -81,6 +81,31 @@ async def _request(service: ReloadableDesktopService, method: str, payload=None)
     )
 
 
+
+@pytest.mark.asyncio
+async def test_plugin_events_are_forwarded_only_by_their_owning_generation(
+    tmp_path, monkeypatch
+):
+    from agent.plugin_host.bridge_events import PluginBridgeEvent
+
+    _stage_plugin_dirs(tmp_path, monkeypatch, with_rpc_demo=True)
+    service, _, app = await _start_service(tmp_path)
+    events = []
+    service.add_event_listener(events.append)
+    try:
+        kernel = app.core.plugin_manager
+        await app.core.event_bus.emit(
+            PluginBridgeEvent("plugin.rpc_demo.changed", {"value": 1}, kernel.rpc)
+        )
+        await app.core.event_bus.emit(
+            PluginBridgeEvent("plugin.rpc_demo.changed", {"value": 2}, object())
+        )
+        assert [event["payload"] for event in events] == [{"value": 1}]
+    finally:
+        await service.aclose()
+        await app.shutdown()
+
+
 @pytest.mark.asyncio
 async def test_list_reports_every_discovered_plugin_enabled_by_default(tmp_path, monkeypatch):
     _stage_plugin_dirs(tmp_path, monkeypatch)

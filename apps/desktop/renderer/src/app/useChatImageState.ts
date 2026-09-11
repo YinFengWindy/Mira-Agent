@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ChatImageHistoryEntry } from "../chat/chatImageHistory";
 import type { RoleRecord, SessionPayload } from "../shared/types";
-import { useChatImageRegeneration } from "./useChatImageRegeneration";
+import { applySessionMessageUpdate } from "../chat/applySessionMessageUpdate";
+import type { SessionMessageUpdatePayload } from "../shared/types";
 
 type UseChatImageStateArgs = {
   activeRoleId: string;
@@ -50,16 +51,11 @@ export function useChatImageState({
   setNotice,
 }: UseChatImageStateArgs) {
   const latestChatImageRef = useRef<{ sessionKey: string; latestKey: string }>({ sessionKey: "", latestKey: "" });
-  const {
-    regenerateSelectedChatImage,
-    regeneratingSelectedChatImage,
-  } = useChatImageRegeneration({
-    activeSessionKey,
-    selectedChatImageEntry,
-    updateCommittedActiveSession,
-    setError,
-    setNotice,
-  });
+  function applyPluginImageUpdate(sessionKey: string, update: SessionMessageUpdatePayload): void {
+    if (!update.message || update.session.key !== sessionKey) return;
+    const message = update.message;
+    updateCommittedActiveSession((current) => applySessionMessageUpdate(current, sessionKey, update.session, message));
+  }
 
   function openChatImagePreview(target: { historyKey: string }): void {
     const nextHistoryKey = target.historyKey.trim();
@@ -157,13 +153,12 @@ export function useChatImageState({
   }, [chatImageLightboxOpen, resolvedChatImagePath, setChatImageLightboxOpen]);
 
   return {
+    applyPluginImageUpdate,
     openChatImagePreview,
     openSelectedChatImageLightbox,
     closeSelectedChatImageLightbox,
     locateSelectedChatImageMessage,
     addSelectedChatImageToAssetLibrary,
-    regenerateSelectedChatImage,
-    regeneratingSelectedChatImage,
     selectPreviousChatImage,
     selectNextChatImage,
   };

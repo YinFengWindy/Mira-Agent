@@ -26,6 +26,7 @@ _EXPECTED_TOP_LEVEL_PLUGINS = {
     "desktop_pet",
     "meme",
     "novelai",
+    "story",
     "observe",
     "plugin_undo",
     "qqbot",
@@ -90,6 +91,52 @@ def _write_v2_plugin(root: Path) -> Path:
     (plugin_dir / "backend" / "plugin.py").write_text(_V2_PLUGIN, encoding="utf-8")
     (plugin_dir / "manifest.yaml").write_text(_V2_MANIFEST, encoding="utf-8")
     return plugin_dir
+
+
+@pytest.mark.asyncio
+async def test_declared_dependency_loads_first_and_its_api_is_scoped(tmp_path):
+    for name, dependencies, body in (
+        (
+            "a_consumer",
+            "[z_provider]",
+            "assert ctx.dependencies.require('z_provider') == {'ready': True}",
+        ),
+        ("z_provider", "[]", "ctx.expose({'ready': True})"),
+    ):
+        package = tmp_path / name
+        (package / "backend").mkdir(parents=True)
+        (package / "manifest.yaml").write_text(
+            f"api: 2\nid: {name}\ncapabilities: [dependencies]\ndependencies: {dependencies}\n",
+            encoding="utf-8",
+        )
+        (package / "backend/plugin.py").write_text(
+            f"async def setup(ctx):\n    {body}\n", encoding="utf-8"
+        )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    assert [row["id"] for row in kernel.states()] == ["z_provider", "a_consumer"]
+    assert all(row["state"] == "ACTIVE" for row in kernel.states())
+    await kernel.unload("z_provider")
+    assert kernel.loaded_count == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dependencies", ["[missing]", "[blocked]"])
+async def test_missing_or_cyclic_dependency_blocks_setup(tmp_path, dependencies):
+    package = tmp_path / "blocked"
+    (package / "backend").mkdir(parents=True)
+    (package / "manifest.yaml").write_text(
+        f"api: 2\nid: blocked\ncapabilities: []\ndependencies: {dependencies}\n",
+        encoding="utf-8",
+    )
+    (package / "backend/plugin.py").write_text(
+        "async def setup(ctx):\n    raise AssertionError('must not run')\n",
+        encoding="utf-8",
+    )
+    kernel = make_kernel([tmp_path], event_bus=EventBus())
+    await kernel.load_all()
+    assert kernel.states()[0]["state"] == "BLOCKED"
+    assert kernel.states()[0]["error"]
 
 
 @pytest.mark.asyncio

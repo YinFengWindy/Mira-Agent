@@ -39,8 +39,8 @@ export type PluginSetEnabledResult = {
   generation: number;
 };
 
-function invokePluginPayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>): Promise<T> {
-  return invokeBridgePayload<T>(invoke, method, payload, PluginBridgeError);
+function invokePluginPayload<T>(invoke: DesktopInvoke, method: string, payload: Record<string, unknown>, options?: { timeoutMs?: number }): Promise<T> {
+  return invokeBridgePayload<T>(invoke, method, payload, PluginBridgeError, options);
 }
 
 /** Calls the `plugin.config.*` and `plugins.*` management bridge contracts. */
@@ -113,7 +113,7 @@ export function createPluginBridgeClient(invoke?: DesktopInvoke): PluginBridgeCl
  * component cannot address another plugin's methods even by mistake.
  */
 export type PluginRpcClient = {
-  call<T>(method: string, payload?: Record<string, unknown>): Promise<T>;
+  call<T>(method: string, payload?: Record<string, unknown>, options?: { timeoutMs?: number }): Promise<T>;
 };
 
 /**
@@ -125,8 +125,8 @@ export type PluginRpcClient = {
  */
 export function createPluginRpcClient(pluginId: string, invoke?: DesktopInvoke): PluginRpcClient {
   return {
-    async call<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
-      return invokePluginPayload<T>(invoke ?? window.miraDesktop.invoke, `plugin.${pluginId}.${method}`, payload);
+    async call<T>(method: string, payload: Record<string, unknown> = {}, options?: { timeoutMs?: number }): Promise<T> {
+      return invokePluginPayload<T>(invoke ?? window.miraDesktop.invoke, `plugin.${pluginId}.${method}`, payload, options);
     },
   };
 }

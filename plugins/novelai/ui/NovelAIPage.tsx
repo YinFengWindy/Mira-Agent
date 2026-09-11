@@ -1,3 +1,4 @@
+import { usePluginHostServices } from "../../../apps/desktop/renderer/src/plugins/PluginHostServicesProvider";
 import { useEffect } from "react";
 import type { PluginRpcClient } from "../../../apps/desktop/renderer/src/plugins/pluginBridgeClient";
 import { ImageStudioPage } from "./ImageStudioPage";
@@ -8,6 +9,7 @@ import {
   selectActiveHistoryRecord,
   selectRecord,
   setActiveRoleId,
+  setPageError,
   useNovelAiPageStore,
 } from "./novelAiPageStore";
 
@@ -25,10 +27,7 @@ type NovelAIPageProps = {
  * (issue #226 gap A) instead of inline here; the two mount points share
  * state through `novelAiPageStore` (see that file's docstring for why).
  *
- * The role picker reads `roles.list` directly through the desktop bridge
- * (not the injected `client`, which is scoped to `plugin.novelai.*` only):
- * there is currently no generic mechanism for a nav.page to receive host
- * lists like this as a prop, and building one is out of scope here.
+ * Role lookup and image selection use the injected host service contract.
  *
  * Zero-role guard: the nav rail now refuses to navigate here at all while
  * no role exists, and shows why (`selectBlockedReasonForNovelAiPage`, issue
@@ -41,6 +40,7 @@ type NovelAIPageProps = {
  * The empty-state guard below stays as the real backstop for both cases.
  */
 export function NovelAIPage({ client, activeRoleId }: NovelAIPageProps) {
+  const host = usePluginHostServices();
   const store = useNovelAiPageStore();
 
   useEffect(() => {
@@ -48,8 +48,8 @@ export function NovelAIPage({ client, activeRoleId }: NovelAIPageProps) {
   }, [activeRoleId]);
 
   useEffect(() => {
-    void refreshRoles();
-  }, []);
+    void refreshRoles(host).catch((error: unknown) => setPageError(error));
+  }, [host]);
 
   if (store.rolesLoaded && store.roles.length === 0) {
     return (

@@ -119,6 +119,8 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
         service,
         context_provider=ctx.tools.get_context,
     )
+    # Dependent plugins receive this generation's NovelAI API, never a host image-provider abstraction.
+    ctx.expose(tool)
     ctx.tools.register(
         tool,
         risk="external-side-effect",
@@ -128,7 +130,6 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
 
     auto_cg = AutoCgPolicy(ctx.kv)
     auto_cg_controller = AutoCgController(
-        settings=settings,
         role_store=role_store,
         policy=auto_cg,
         session_manager=ctx.session_manager,

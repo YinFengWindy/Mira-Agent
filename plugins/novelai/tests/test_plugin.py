@@ -109,6 +109,23 @@ def test_plugin_registers_tool_and_rpc_and_both_disappear_on_unload(
     assert kernel.tool_hooks == []
 
 
+def test_host_disabled_plugin_registers_no_generation_capabilities(
+    tmp_path: Path,
+) -> None:
+    services = _services(
+        tmp_path,
+        plugin_configs={"novelai": {"enabled": False, "token": "novel-token"}},
+    )
+    kernel = _load_novelai_plugin(services=services)
+
+    assert kernel.states()[0]["state"] == "DISABLED"
+    assert services.tool_registry is not None
+    assert services.tool_registry.has_tool("generate_image") is False
+    assert kernel.rpc.resolve("plugin.novelai.generate") is None
+    assert kernel.rpc.resolve("plugin.novelai.regenerateMessageMedia") is None
+    assert kernel.tool_hooks == []
+
+
 def test_plugin_attaches_media_produced_before_after_reasoning(tmp_path: Path) -> None:
     services = _services(tmp_path)
     _load_novelai_plugin(services=services)

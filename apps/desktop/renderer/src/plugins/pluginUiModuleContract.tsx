@@ -1,4 +1,7 @@
+import { PluginHostServicesProvider } from "./PluginHostServicesProvider";
+import { desktopPluginHostServices, type PluginHostServices } from "./pluginHostServices";
 import type React from "react";
+import { pluginChatImageActionsRegistry, pluginRoleSettingsRegistry, type PluginChatImageActionProps, type PluginRoleSettingsContribution } from "./pluginFeatureRegistry";
 import type { SettingsSubsection, StandaloneSettingsSectionProps } from "../settings/settingsPageTypes";
 import { createPluginSchemaSettingsSection } from "./PluginSchemaSettingsSection";
 import { createPluginRpcClient, type PluginRpcClient } from "./pluginBridgeClient";
@@ -37,10 +40,11 @@ export type PluginNavPageContribution = {
   label: string;
   icon?: React.ComponentType<{ className?: string }>;
   component: React.ComponentType<PluginNavPageComponentProps>;
+  presentation?: "workspace" | "fullscreen";
   /** Optional (issue #226 gap A) — see `NavPageEntry.Sidebar`. */
   sidebar?: React.ComponentType<PluginNavPageSidebarComponentProps>;
   /** Optional (issue #226 gap B) — see `NavPageEntry.selectBlockedReason`. */
-  selectBlockedReason?: () => string | null;
+  selectBlockedReason?: (services: PluginHostServices) => string | null;
 };
 
 /**
@@ -54,6 +58,8 @@ export type PluginUiModule = {
   pluginId: string;
   settingsSection?: PluginSettingsSectionContribution;
   navPage?: PluginNavPageContribution;
+  roleSettings?: PluginRoleSettingsContribution;
+  chatImageActions?: React.ComponentType<PluginChatImageActionProps>;
 };
 
 /** Narrows an unknown default export down to a well-formed PluginUiModule, without an unsafe cast. */
@@ -75,7 +81,9 @@ function bindPluginClient<TBaseProps extends object>(
 ): React.ComponentType<TBaseProps> {
   const client = createPluginRpcClient(pluginId);
   return function PluginClientBoundComponent(props: TBaseProps) {
-    return <Component {...props} client={client} />;
+    return <PluginHostServicesProvider services={desktopPluginHostServices}>
+      <Component {...props} client={client} />
+    </PluginHostServicesProvider>;
   };
 }
 
@@ -96,6 +104,10 @@ export function applyPluginUiModules(
       continue;
     }
     const { pluginId, settingsSection, navPage } = uiModule;
+    if (uiModule.roleSettings) pluginRoleSettingsRegistry.register({ pluginId, ...uiModule.roleSettings });
+    if (uiModule.chatImageActions) pluginChatImageActionsRegistry.register({
+      pluginId, client: createPluginRpcClient(pluginId), Component: uiModule.chatImageActions,
+    });
     if (settingsSection) {
       const id = pluginId;
       registry.registerSettingsSection({
@@ -115,11 +127,12 @@ export function applyPluginUiModules(
         slot: "nav.page",
         id: pluginId,
         label: navPage.label,
+        presentation: navPage.presentation,
         icon: navPage.icon,
         pluginId,
         Component: bindPluginClient(pluginId, navPage.component),
         Sidebar: navPage.sidebar ? bindPluginClient(pluginId, navPage.sidebar) : undefined,
-        selectBlockedReason: navPage.selectBlockedReason,
+        selectBlockedReason: navPage.selectBlockedReason ? () => navPage.selectBlockedReason!(desktopPluginHostServices) : undefined,
       });
     }
   }

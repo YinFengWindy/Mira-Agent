@@ -5,7 +5,6 @@ import {
   getPluginEnabledPredicate,
   isPluginEnabled,
   resetPluginEnabledStateForTests,
-  setPluginEnabledCache,
   setPluginEnabledSnapshot,
   subscribePluginEnabledState,
 } from "./pluginEnabledStateStore.js";
@@ -26,7 +25,7 @@ describe("pluginEnabledStateStore", () => {
     const before = getPluginEnabledPredicate();
     setPluginEnabledSnapshot([{ id: "demo", enabled: true }]);
     const afterSnapshot = getPluginEnabledPredicate();
-    setPluginEnabledCache("demo", false);
+    setPluginEnabledSnapshot([{ id: "demo", enabled: false, state: "DISABLED" }]);
     const afterToggle = getPluginEnabledPredicate();
 
     assert.notEqual(before, afterSnapshot);
@@ -71,7 +70,7 @@ describe("pluginEnabledStateStore", () => {
 
     setPluginEnabledSnapshot([{ id: "demo", enabled: true }]);
     assert.equal(isPluginEnabled("demo"), true);
-    setPluginEnabledCache("demo", false);
+    setPluginEnabledSnapshot([{ id: "demo", enabled: false, state: "DISABLED" }]);
     assert.equal(isPluginEnabled("demo"), false);
 
     assert.equal(notifications, 2);

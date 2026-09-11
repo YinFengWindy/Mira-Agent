@@ -232,7 +232,6 @@ class ReloadableDesktopService:
 
     def _prepare(self, core):
         service = build_desktop_service(core, self.roles, activate_transport=False)
-        service.story_simulation.skip_startup_recovery()
         return service
 
     def _publish(self, service):
@@ -248,7 +247,9 @@ class ReloadableDesktopService:
         if entry.requests:
             await entry.idle.wait()
         await entry.service.chat_service.drain()
-        await entry.service.story_simulation.drain()
+        kernel = entry.lease.core.plugin_manager
+        if kernel is not None:
+            await kernel.drain()
         try:
             await run_cleanup_steps(("desktop.service.close", entry.service.aclose),
                                     ("desktop.runtime.release", entry.lease.release))

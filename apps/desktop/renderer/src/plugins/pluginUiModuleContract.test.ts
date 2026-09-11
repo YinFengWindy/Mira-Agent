@@ -1,3 +1,4 @@
+import { isValidElement, type ReactElement } from "react";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { applyPluginUiModules, type PluginUiModule } from "./pluginUiModuleContract.js";
@@ -14,7 +15,10 @@ function renderElement<TProps>(
   Component: (props: TProps) => { type: unknown; props: Record<string, unknown> },
   props: TProps,
 ): { type: unknown; props: Record<string, unknown> } {
-  return Component(props);
+  const wrapped = Component(props);
+  const child = wrapped.props.children;
+  assert.ok(isValidElement(child), "plugin subtree must receive host services");
+  return child as ReactElement<Record<string, unknown>>;
 }
 
 describe("applyPluginUiModules", () => {
@@ -143,7 +147,7 @@ describe("applyPluginUiModules", () => {
     assert.ok(entry?.Sidebar, "expected a Sidebar on the nav.page entry");
     assert.notEqual(entry?.Sidebar, Sidebar, "Sidebar must be client-bound, not the bare component");
     // selectBlockedReason has no client/props to inject, so it is threaded through as-is.
-    assert.equal(entry?.selectBlockedReason, selectBlockedReason);
+    assert.equal(entry?.selectBlockedReason?.(), "not now");
 
     const sidebarElement = renderElement(entry!.Sidebar as never, {
       pageId: "demo",

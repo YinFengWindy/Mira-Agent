@@ -22,6 +22,9 @@ KNOWN_CAPABILITIES = frozenset(
         "background",
         "bot_commands",
         "rpc",
+        "dependencies",
+        "runtime",
+        "role_runtime_registry",
         # 批 B（#183）新增：直传宿主服务引用，供渠道/事件/记忆壳插件读取。这些
         # 字段本身没有装配/回滚语义（不像 tools/kv 等需要 effect 包装），
         # 因此不各建一个 Capability 类，直接在 kernel._build_capabilities 里
@@ -59,6 +62,7 @@ class PluginManifest:
     entry: str = DEFAULT_ENTRY
     capabilities: tuple[str, ...] = ()
     config_model: str | None = None
+    dependencies: tuple[str, ...] = ()
     api: int = 1
     metadata: dict[str, object] = field(default_factory=dict)
 
@@ -93,6 +97,7 @@ def load_manifest(plugin_dir: Path) -> PluginManifest | None:
         entry=str(raw.get("entry") or DEFAULT_ENTRY),
         capabilities=capabilities,
         config_model=_optional_str(raw.get("config_model")),
+        dependencies=_parse_dependencies(raw),
         api=api,
         metadata={k: v for k, v in raw.items() if isinstance(k, str)},
     )
@@ -129,3 +134,12 @@ def _parse_capabilities(
 
 def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _parse_dependencies(raw: dict[str, object]) -> tuple[str, ...]:
+    value = raw.get("dependencies", [])
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise ManifestError("dependencies 必须是非空插件 ID 的列表")
+    return tuple(dict.fromkeys(value))

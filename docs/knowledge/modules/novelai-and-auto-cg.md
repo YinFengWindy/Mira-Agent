@@ -2,11 +2,13 @@
 title: NovelAI 与自动 CG
 kind: 领域说明
 status: 当前有效
-last_verified_commit: 0a94bd42
+last_verified_commit: 966af779
 source_paths:
-  - apps/backend/core/integrations/novelai/
   - plugins/scene_awareness/
   - plugins/novelai/
+  - plugins/story/
+  - apps/backend/agent/plugin_host/
+  - apps/desktop/renderer/src/plugins/
   - apps/backend/bus/events_lifecycle.py
 related:
   - roles.md
@@ -18,12 +20,32 @@ related:
 
 ## NovelAI 基础能力
 
-`apps/backend/core/integrations/novelai/` 拥有设置、请求模型、提示词标签、持久化和 `NovelAIService.generate()`。手动 `generate_image` 工具和自动 CG 都应复用该服务，避免各自实现请求与错误处理。
+`plugins/novelai/backend/` 拥有设置、请求模型、HTTP 客户端、提示词标签、持久化、`NovelAIService.generate()`、生图工具、自动 CG 与 RPC。`plugins/novelai/ui/` 拥有 Image Studio、提示词标签库与历史界面，经 `nav.page` / `settings.section` 注册页面与设置。
+
+手动 `generate_image` 工具和自动 CG 都应复用该服务，避免各自实现请求与错误处理。生成文件与元数据由插件写入 workspace 下的 `private_runtime/novelai/`；运行数据不应随插件停用或包升级删除。
+
+启停只由宿主管理的 `[plugins.novelai].enabled` 决定，插件配置表单与运行时设置不再声明第二个 `enabled`。插件停用后，宿主撤销工具、RPC 与事件订阅。服务仍检查 Token，角色自动 CG 偏好仍独立生效。
+
+## 插件边界（2026-09-11）
+
+NovelAI 的业务代码、Logo、设置、聊天图片重生成和角色自动 CG 开关均由 `plugins/novelai/` 持有。宿主通过通用角色设置与聊天图片操作扩展位挂载 UI；插件不可用时撤下对应操作。角色表单通过插件的 read/write 适配器保存既有 `auto_scene_cg_enabled`，停用插件不会擦除偏好。长耗时 RPC 由插件显式传入 `timeoutMs`，宿主只验证通用截止时间，不识别供应商或生图方法名。
+
+故事模式归于 `plugins/story/`，manifest 显式声明 `dependencies: [novelai]`，通过 `ctx.dependencies.require("novelai")` 获取 NovelAI 导出的 `GenerateImageTool`。故事的模型与提示词策略属于故事插件。宿主没有通用生图接口，也不装配故事业务；故事页面注册为全屏插件导航，RPC 与事件使用 `plugin.story.*` 命名空间。
+
+插件内核按依赖顺序加载、按反向依赖顺序卸载。缺失、禁用或失败的依赖使故事插件进入 `BLOCKED`，其页面和 RPC 不可用；恢复 NovelAI 后重新装配可恢复故事入口。运行时替换先等待旧插件接受的后台任务完成，桥接事件按所属注册表隔离，避免跨代重复转发。首次启用故事时恢复被中断的持久化任务；已有活跃前代时保留其执行权。
+
+素材页的一键生成差分及 `roles.differences.generate` 已移除。已有差分、素材分类和手动心情绑定保持可用。故事数据仍存于 workspace 的 `stories/`，NovelAI 运行数据仍存于 `private_runtime/novelai/`，启停不删除这些数据。
+
+`_migrate_legacy_novelai_config()` 仍由宿主在加载插件前升级旧配置。共享场景事件、角色存储、会话呈现与资产服务是宿主契约，插件可以复用；本次归位不等同于将全部宿主服务封装为独立 SDK。UI 通过注入的宿主服务访问角色列表、文件选择与事件，不直接使用 Electron 全局对象。
+
+NovelAI 与故事的业务回归分别随 `plugins/novelai/tests/`、`plugins/story/tests/` 保存，前端单测与各自 `ui/` 源文件并列；包括配置往返、依赖启停等通过宿主执行的集成用例。根 `conftest.py` 只共享不含插件业务断言的启动工具。
+
+验收覆盖真实插件配置读写、依赖缺失与循环阻断、NovelAI 启停导致的故事入口/RPC变化、既有数据保留、跨代事件隔离、角色偏好保存及图片重生成的会话归属。
 
 ## 自动 CG 生命周期
 
 1. Scene Awareness 插件在 `BeforeTurn` 捕获被动回合上下文，并在 `AfterTurn` 对非空回复调度场景判断；主动消息则从 `ProactiveMessageCommitted` 接入同一判断链。
-2. `plugins/scene_awareness/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
+2. `plugins/scene_awareness/backend/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
 3. Scene Awareness 对函数参数执行协议和语义校验；有效结果才会持久化这两个键并发布 `SceneObservationCommitted`。`scene_key` 供场景追问保持连续性，`visual_key` 供图片生成判断重复。
 4. NovelAI 插件订阅场景观察事件，`AutoCgController` 根据视觉定格、冷却和手动生成抑制规则决定是否生成。
 5. 成功图片通过消息推送发送，并同步回权威角色会话。

@@ -1,3 +1,4 @@
+import { readPluginRoleSettings, pluginRoleSettingsDirty } from "../plugins/pluginRoleSettings";
 import type { RoleFormState, RoleRecord } from "../shared/types";
 import { readRoleMoodConfig, roleMoodConfigEqual } from "./roleMoodConfig";
 import { readRoleVoiceConfig, roleVoiceConfigEqual } from "./roleVoiceConfig";
@@ -25,7 +26,7 @@ export function createRoleFormFromRole(role: RoleRecord): RoleFormState {
     systemPrompt: role.system_prompt,
     profile: role.profile,
     nsfwMemoryEnabled: Boolean(role.runtime_config?.nsfw_memory_enabled),
-    autoSceneCgEnabled: Boolean(role.runtime_config?.auto_scene_cg_enabled),
+    pluginSettings: readPluginRoleSettings(role.runtime_config),
     channelBindings: role.channel_bindings ?? [],
     ...readRoleProactiveForm(role),
     avatarSource: "",
@@ -46,20 +47,6 @@ export function createRoleFormFromRole(role: RoleRecord): RoleFormState {
   };
 }
 
-/** Applies persisted mood settings without discarding unrelated in-progress form edits. */
-export function syncRoleFormMoodConfig(
-  roleForm: RoleFormState,
-  role: Pick<RoleRecord, "runtime_config">,
-): RoleFormState {
-  const moodConfig = readRoleMoodConfig(role);
-  return {
-    ...roleForm,
-    moodCatalog: moodConfig.moodCatalog,
-    defaultMood: moodConfig.defaultMood,
-    moodIllustrationBindings: moodConfig.moodIllustrationBindings,
-  };
-}
-
 /** Checks whether the editable role form has diverged from the persisted role snapshot. */
 export function isRoleFormDirty(roleForm: RoleFormState, role: RoleRecord | null): boolean {
   const persistedMoodConfig = readRoleMoodConfig(role);
@@ -72,7 +59,7 @@ export function isRoleFormDirty(roleForm: RoleFormState, role: RoleRecord | null
         || roleForm.systemPrompt !== role.system_prompt
         || JSON.stringify(roleForm.profile ?? {}) !== JSON.stringify(role.profile ?? {})
         || roleForm.nsfwMemoryEnabled !== Boolean(role.runtime_config?.nsfw_memory_enabled)
-        || roleForm.autoSceneCgEnabled !== Boolean(role.runtime_config?.auto_scene_cg_enabled)
+        || pluginRoleSettingsDirty(roleForm.pluginSettings, role.runtime_config)
         || JSON.stringify(roleForm.channelBindings ?? []) !== JSON.stringify(role.channel_bindings ?? [])
         || !roleProactiveConfigEqual(roleForm, role)
         || !roleMoodConfigEqual(roleForm, persistedMoodConfig)

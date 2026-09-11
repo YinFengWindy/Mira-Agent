@@ -1,4 +1,5 @@
-import { Brain, ImageSquare, Monitor } from "@phosphor-icons/react";
+import { PluginRoleSettingsSlot } from "../plugins/PluginRoleSettingsSlot";
+import { Brain, Monitor } from "@phosphor-icons/react";
 import { SettingsToggleCard } from "../settings/SettingsToggleCard";
 import { cx } from "../shared/styles";
 import type { RoleFormState, RoleRecord } from "../shared/types";
@@ -78,15 +79,8 @@ export function RoleCapabilitiesPanel({ activeRole, bridgeReady, roleForm, onUpd
             checked={roleForm.nsfwMemoryEnabled}
             onChange={(checked) => onUpdate((current) => ({ ...current, nsfwMemoryEnabled: checked }))}
           />
-          <CapabilityTile
-            icon={ImageSquare}
-            tintClass="bg-[#F4F1FB]"
-            iconClass="text-[#7A5EC2]"
-            label="自动场景 CG"
-            description="在合适的剧情节点生成场景画面。"
-            checked={roleForm.autoSceneCgEnabled}
-            onChange={(checked) => onUpdate((current) => ({ ...current, autoSceneCgEnabled: checked }))}
-          />
+          <PluginRoleSettingsSlot drafts={roleForm.pluginSettings}
+            onChange={(pluginSettings) => onUpdate((current) => ({ ...current, pluginSettings }))} />
           <CapabilityTile
             icon={Monitor}
             tintClass="bg-[#FBF5EB]"

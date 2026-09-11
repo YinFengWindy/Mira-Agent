@@ -29,8 +29,9 @@ export async function invokeBridgePayload<T>(
   method: string,
   payload: Record<string, unknown>,
   errorClass: new (message: string, code: string, details?: Record<string, unknown>) => Error = BridgeError,
+  options?: { timeoutMs?: number },
 ): Promise<T> {
-  const response = await invoke({ method, payload });
+  const response = await invoke({ method, payload, ...options });
   if (response.error) throw new errorClass(response.error.message, response.error.code, response.error.details);
   return response.payload as T;
 }

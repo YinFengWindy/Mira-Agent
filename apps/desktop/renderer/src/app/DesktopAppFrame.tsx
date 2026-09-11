@@ -66,7 +66,6 @@ type DesktopAppFrameProps = {
   bridgeReady: boolean;
   onOpenSearch: () => void;
   onOpenRolesWorkspace: () => void;
-  onOpenStory: () => void;
   onOpenPluginPage: (pageId: string) => void;
   onOpenRole: (roleId: string) => void;
   workspaceFeedback: WorkspaceFeedback | null;
@@ -145,8 +144,6 @@ type DesktopAppFrameProps = {
   onSelectAvatarAsset: (path: string) => void;
   onSelectChatBackground: (path: string) => void;
   onSaveRoleAssets: (nextSelection?: { avatarAsset?: string; chatBackground?: string; moodIllustrationBindings?: Record<string, string> }) => void;
-  differenceGeneration: import("../roles/roleDifferenceGeneration").RoleDifferenceGenerationState;
-  onGenerateDifferences: (baseAsset: string) => void;
   showSearchDialog: boolean;
   searchQuery: string;
   searchingSessions: boolean;
@@ -162,14 +159,12 @@ type DesktopAppFrameProps = {
   canGoToNextLightboxImage: boolean;
   canGoToPreviousLightboxImage: boolean;
   canLocateLightboxMessage: boolean;
-  canRegenerateLightboxImage: boolean;
+  chatImageActions: React.ReactNode;
   addingChatImageToAssetLibrary: boolean;
-  regeneratingSelectedChatImage: boolean;
   chatImageLightboxOpen: boolean;
   onAddSelectedChatImageToAssetLibrary: () => void;
   onCloseSelectedChatImageLightbox: () => void;
   onLocateSelectedChatImageMessage: () => void;
-  onRegenerateSelectedChatImage: () => void;
 };
 
 /** Renders the desktop shell around the already-prepared application state. */
@@ -199,7 +194,6 @@ export function DesktopAppFrame({
   bridgeReady,
   onOpenSearch,
   onOpenRolesWorkspace,
-  onOpenStory,
   onOpenPluginPage,
   onOpenRole,
   workspaceFeedback,
@@ -273,8 +267,6 @@ export function DesktopAppFrame({
   onSelectAvatarAsset,
   onSelectChatBackground,
   onSaveRoleAssets,
-  differenceGeneration,
-  onGenerateDifferences,
   showSearchDialog,
   searchQuery,
   searchingSessions,
@@ -290,22 +282,18 @@ export function DesktopAppFrame({
   canGoToNextLightboxImage,
   canGoToPreviousLightboxImage,
   canLocateLightboxMessage,
-  canRegenerateLightboxImage,
+  chatImageActions,
   addingChatImageToAssetLibrary,
-  regeneratingSelectedChatImage,
   chatImageLightboxOpen,
   onAddSelectedChatImageToAssetLibrary,
   onCloseSelectedChatImageLightbox,
   onLocateSelectedChatImageMessage,
-  onRegenerateSelectedChatImage,
 }: DesktopAppFrameProps) {
   const navRailActiveView: NavRailViewId | null = mainView.kind === "chat"
     ? "messages"
     : roleWorkspaceViewActive
       ? "roles"
-      : mainView.kind === "story"
-        ? "story"
-        : mainView.kind === "settings"
+      : mainView.kind === "settings"
           ? "settings"
           : mainView.kind === "plugin-page"
             ? pluginNavRailViewId(mainView.pageId)
@@ -320,6 +308,10 @@ export function DesktopAppFrame({
   const activePluginNavPage = mainView.kind === "plugin-page"
     ? resolveVisibleNavPage(mainView.pageId)
     : undefined;
+
+  if (activePluginNavPage?.presentation === "fullscreen") {
+    return <activePluginNavPage.Component pageId={activePluginNavPage.id} activeRoleId={activeRoleId} onExit={onBackToChat} />;
+  }
 
   return (
     <div className="app-frame grid h-screen grid-rows-app overflow-hidden bg-transparent">
@@ -355,7 +347,6 @@ export function DesktopAppFrame({
           onOpenSearch={onOpenSearch}
           onBackToChat={onBackToChat}
           onOpenRolesWorkspace={onOpenRolesWorkspace}
-          onOpenStory={onOpenStory}
           onOpenSettings={onOpenSettings}
         />
         <div
@@ -501,8 +492,6 @@ export function DesktopAppFrame({
               onSelectChatBackground={onSelectChatBackground}
               onUpdateRoleForm={onUpdateRoleForm}
               onSaveSelections={onSaveRoleAssets}
-              differenceGeneration={differenceGeneration}
-              onGenerateDifferences={onGenerateDifferences}
             />
           ) : null}
           {mainView.kind === "settings" ? (
@@ -540,17 +529,15 @@ export function DesktopAppFrame({
         canGoToNext={canGoToNextLightboxImage}
         canGoToPrevious={canGoToPreviousLightboxImage}
         canLocateMessage={canLocateLightboxMessage}
-        canRegenerate={canRegenerateLightboxImage}
+        pluginActions={chatImageActions}
         imagePath={chatLatestImagePath}
         addingToAssetLibrary={addingChatImageToAssetLibrary}
-        regenerating={regeneratingSelectedChatImage}
         open={chatImageLightboxOpen}
         onAddToAssetLibrary={onAddSelectedChatImageToAssetLibrary}
         onClose={onCloseSelectedChatImageLightbox}
         onGoToNext={onGoToNextChatImage}
         onGoToPrevious={onGoToPreviousChatImage}
         onLocateMessage={onLocateSelectedChatImageMessage}
-        onRegenerate={onRegenerateSelectedChatImage}
       />
     </div>
   );

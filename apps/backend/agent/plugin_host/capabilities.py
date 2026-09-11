@@ -260,10 +260,24 @@ class RpcCapability:
         registry: "PluginRpcRegistry",
         effects: EffectScope,
         plugin_id: str,
+        event_bus: Any = None,
     ) -> None:
         self._registry = registry
         self._effects = effects
         self._plugin_id = plugin_id
+        self._event_bus = event_bus
+
+    async def emit(self, name: str, payload: dict[str, Any]) -> None:
+        """Publishes one namespaced event through the host's transport boundary."""
+        from agent.plugin_host.bridge_events import PluginBridgeEvent
+
+        if self._event_bus is None:
+            raise RuntimeError("插件事件传输不可用")
+        await self._event_bus.emit(
+            PluginBridgeEvent(
+                f"plugin.{self._plugin_id}.{name}", payload, self._registry
+            )
+        )
 
     def register(
         self,

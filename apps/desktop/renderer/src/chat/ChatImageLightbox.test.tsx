@@ -5,37 +5,32 @@ import { describe, it } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatImageLightbox } from "./ChatImageLightbox";
 
-function renderLightbox(regenerating: boolean): string {
+function renderLightbox(withPluginAction: boolean): string {
   return renderToStaticMarkup(
     <ChatImageLightbox
       canAddToAssetLibrary
       canGoToNext={false}
       canGoToPrevious={false}
       canLocateMessage
-      canRegenerate
       imagePath="D:\\images\\scene.png"
       addingToAssetLibrary={false}
-      regenerating={regenerating}
+      pluginActions={withPluginAction ? <button aria-label="插件图片操作" /> : null}
       open
       onAddToAssetLibrary={() => undefined}
       onClose={() => undefined}
       onGoToNext={() => undefined}
       onGoToPrevious={() => undefined}
       onLocateMessage={() => undefined}
-      onRegenerate={() => undefined}
     />,
   );
 }
 
 describe("ChatImageLightbox", () => {
-  it("exposes desktop image regeneration from the enlarged preview", () => {
-    assert.match(renderLightbox(false), /aria-label="重新生成图片"/);
+  it("renders a plugin-owned image action when contributed", () => {
+    assert.match(renderLightbox(true), /aria-label="插件图片操作"/);
   });
-
-  it("disables and animates regeneration while the selected image is running", () => {
-    const markup = renderLightbox(true);
-
-    assert.match(markup, /aria-label="重新生成图片"[^>]*disabled/);
-    assert.match(markup, /animate-spin/);
+  it("has no generation control when no plugin contributes one", () => {
+    assert.doesNotMatch(renderLightbox(false), /插件图片操作|重新生成图片/);
+    assert.match(renderLightbox(false), /定位到对应消息/);
   });
 });

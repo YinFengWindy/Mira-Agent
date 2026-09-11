@@ -7,20 +7,19 @@ from desktop_bridge.plugin_requests import DesktopPluginRequestHandler
 from desktop_bridge.request_router import DesktopBridgeRequestRouter
 
 
-def _router(*, role_result=None, story_result=None):
+def _router(*, role_result=None):
     return DesktopBridgeRequestRouter(
         roles=SimpleNamespace(handle=AsyncMock(return_value=role_result)),
         sessions_and_tasks=SimpleNamespace(handle=AsyncMock(return_value=None)),
         chat=SimpleNamespace(handle=AsyncMock(return_value=None)),
         voice=SimpleNamespace(handle=AsyncMock(return_value=None)),
-        stories=SimpleNamespace(handle=AsyncMock(return_value=story_result)),
         observation=None,
         plugins=DesktopPluginRequestHandler(None),
     )
 
 
 @pytest.mark.asyncio
-async def test_request_router_routes_health_without_a_story_handler_match() -> None:
+async def test_request_router_routes_health_without_domain_handlers() -> None:
     router = _router()
 
     result = await router.dispatch(
@@ -31,7 +30,6 @@ async def test_request_router_routes_health_without_a_story_handler_match() -> N
     )
 
     assert result == {"ok": True}
-    router._stories.handle.assert_awaited_once()
     router._voice.handle.assert_not_awaited()
 
 
@@ -53,15 +51,14 @@ async def test_request_router_stops_after_the_owning_handler_matches() -> None:
 
 
 @pytest.mark.asyncio
-async def test_request_router_stops_after_story_handler_matches() -> None:
-    router = _router(story_result={"stories": []})
+async def test_unregistered_domain_route_is_not_handled() -> None:
+    router = _router()
 
     result = await router.dispatch(
-        "stories.list",
+        "unknown.list",
         {},
         request_id="request-3",
         emit_event=Mock(),
     )
 
-    assert result == {"stories": []}
-    router._stories.handle.assert_awaited_once()
+    assert result is None

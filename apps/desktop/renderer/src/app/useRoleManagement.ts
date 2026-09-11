@@ -1,3 +1,4 @@
+import { writePluginRoleSettings } from "../plugins/pluginRoleSettings";
 import type React from "react";
 import { waitForMinimumRoleCardBusy } from "./appState";
 import type { RoleAssetCategory, RoleRecord, RoleFormState, PendingRoleCardAction, SessionPayload } from "../shared/types";
@@ -118,9 +119,8 @@ export function useRoleManagement({
         runtime_config: writeRoleVoiceConfigToRuntimeConfig(
           writeRoleMoodConfigToRuntimeConfig(
             {
-              ...(detailRole?.runtime_config ?? {}),
+              ...writePluginRoleSettings(detailRole?.runtime_config ?? {}, nextRoleForm.pluginSettings),
               nsfw_memory_enabled: nextRoleForm.nsfwMemoryEnabled,
-              auto_scene_cg_enabled: nextRoleForm.autoSceneCgEnabled,
             },
             nextRoleForm,
           ),
@@ -200,9 +200,8 @@ export function useRoleManagement({
         runtime_config: nextMoodIllustrationBindings
           ? writeRoleMoodConfigToRuntimeConfig(
             {
-              ...(detailRole?.runtime_config ?? {}),
+              ...writePluginRoleSettings(detailRole?.runtime_config ?? {}, roleFormRef.current.pluginSettings),
               nsfw_memory_enabled: roleFormRef.current.nsfwMemoryEnabled,
-              auto_scene_cg_enabled: roleFormRef.current.autoSceneCgEnabled,
             },
             {
               ...roleFormRef.current,

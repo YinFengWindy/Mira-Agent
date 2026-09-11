@@ -20,7 +20,6 @@
     "apps/backend/proactive_v2",
     "apps/backend/prompts",
     "apps/backend/session",
-    "apps/backend/story_simulation",
     "apps/backend/utils"
   ],
   "exclude": [

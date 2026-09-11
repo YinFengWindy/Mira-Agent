@@ -95,8 +95,8 @@ export class DesktopBridgeClient extends EventEmitter {
     session.pending.clear();
   }
 
-  private invokeTimeoutMs(method: string): number | null {
-    return bridgeRequestTimeoutMs(method);
+  private invokeTimeoutMs(method: string, requestedTimeoutMs?: number): number | null {
+    return bridgeRequestTimeoutMs(method, requestedTimeoutMs);
   }
 
   private gracefulStopTimeoutMs(): number {
@@ -326,6 +326,7 @@ export class DesktopBridgeClient extends EventEmitter {
       );
     }
 
+    const timeoutMs = this.invokeTimeoutMs(request.method, request.timeoutMs);
     const id = randomUUID();
     const payload: BridgeRequest = { id, method: request.method, payload: request.payload };
     const text = JSON.stringify(payload) + "\n";
@@ -344,7 +345,6 @@ export class DesktopBridgeClient extends EventEmitter {
         resolvePromise(response);
       };
       session.pending.set(id, { id, method: request.method, resolve: resolveOnce });
-      const timeoutMs = this.invokeTimeoutMs(request.method);
       // A settings transaction can wait for existing work to drain. Its actual
       // response or process exit settles the operation without a false timeout.
       if (timeoutMs !== null) {

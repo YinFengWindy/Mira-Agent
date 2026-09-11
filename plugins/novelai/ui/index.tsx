@@ -3,8 +3,11 @@ import { NovelAIPage } from "./NovelAIPage";
 import { NovelAIPageSidebar } from "./NovelAIPageSidebar";
 import { selectBlockedReasonForNovelAiPage } from "./novelAiPageStore";
 
+import { novelAiRoleSettings } from "./roleSettings";
+import { NovelAiChatImageActions } from "./ChatImageActions";
+
 const novelAiLogoDark = new URL(
-  "../../../apps/desktop/renderer/src/assets/novelai-logo-dark.svg",
+  "./assets/novelai-logo-dark.svg",
   import.meta.url,
 ).href;
 
@@ -29,6 +32,8 @@ function NovelAIIcon({ className }: { className?: string }) {
  */
 const novelAiUiModule: PluginUiModule = {
   pluginId: "novelai",
+  roleSettings: novelAiRoleSettings,
+  chatImageActions: NovelAiChatImageActions,
   navPage: {
     label: "生图",
     icon: NovelAIIcon,
