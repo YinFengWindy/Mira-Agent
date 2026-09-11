@@ -13,7 +13,6 @@ function renderRail(overrides?: Partial<Parameters<typeof NavRail>[0]>) {
       onOpenSearch={() => undefined}
       onBackToChat={() => undefined}
       onOpenRolesWorkspace={() => undefined}
-      onOpenStory={() => undefined}
       onOpenSettings={() => undefined}
       {...overrides}
     />,
@@ -21,9 +20,9 @@ function renderRail(overrides?: Partial<Parameters<typeof NavRail>[0]>) {
 }
 
 describe("NavRail", () => {
-  it("renders the five primary navigation entries in order", () => {
+  it("renders only the built-in navigation entries", () => {
     const markup = renderRail();
-    const labels = ["搜索", "消息", "角色", "故事", "设置"];
+    const labels = ["搜索", "消息", "角色", "设置"];
 
     for (const label of labels) {
       assert.match(markup, new RegExp(`aria-label="${label}"`));
@@ -40,7 +39,7 @@ describe("NavRail", () => {
     assert.match(unreadMarkup, /bg-danger/);
   });
 
-  it("renders a plugin nav.page entry between story and settings, active when selected", () => {
+  it("renders a plugin nav.page entry alongside the built-in navigation, active when selected", () => {
     const markup = renderRail({
       activeView: pluginNavRailViewId("demo"),
       pluginEntries: [{ pageId: "demo", label: "Demo 页面", onSelect: () => undefined }],

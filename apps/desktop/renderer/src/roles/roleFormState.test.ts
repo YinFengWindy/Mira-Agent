@@ -7,7 +7,6 @@ import {
   buildRoleProactiveConfig,
   createRoleFormFromRole,
   isRoleFormDirty,
-  syncRoleFormMoodConfig,
 } from "./roleFormState";
 import { roleProactiveDefaults } from "./roleProactiveDefaults";
 
@@ -42,27 +41,6 @@ function createRole(runtime_config: Record<string, unknown> = {}): RoleRecord {
 }
 
 describe("roleFormState", () => {
-  it("defaults automatic scene CG to disabled and reads the role setting", () => {
-    assert.equal(createRoleFormFromRole(createRole()).autoSceneCgEnabled, false);
-    assert.equal(
-      createRoleFormFromRole(
-        createRole({ auto_scene_cg_enabled: true }),
-      ).autoSceneCgEnabled,
-      true,
-    );
-  });
-
-  it("marks only the automatic scene CG setting as dirty when it changes", () => {
-    const role = createRole();
-    const form = createRoleFormFromRole(role);
-
-    assert.equal(isRoleFormDirty(form, role), false);
-    assert.equal(
-      isRoleFormDirty({ ...form, autoSceneCgEnabled: true }, role),
-      true,
-    );
-  });
-
   it("keeps the structured profile in the detail draft and tracks its edits", () => {
     const role = {
       ...createRole(),
@@ -140,28 +118,5 @@ describe("roleFormState", () => {
     assert.equal(form.proactiveDriftMaxSteps, roleProactiveDefaults.driftMaxSteps);
     assert.equal(form.proactiveDriftMinIntervalHours, roleProactiveDefaults.driftMinIntervalHours);
     assert.equal(isRoleFormDirty(form, role), false);
-  });
-
-  it("syncs generated mood bindings without discarding unrelated form edits", () => {
-    const form = {
-      ...createRoleFormFromRole(createRole()),
-      name: "Unsaved Mira",
-    };
-
-    const synced = syncRoleFormMoodConfig(form, createRole({
-      default_mood: "开心",
-      mood_illustration_bindings: {
-        平静: "illustrations/calm.png",
-        开心: "illustrations/happy.png",
-      },
-    }));
-
-    assert.equal(synced.name, "Unsaved Mira");
-    assert.equal(synced.defaultMood, "开心");
-    assert.deepEqual(synced.moodCatalog, ["平静", "开心"]);
-    assert.deepEqual(synced.moodIllustrationBindings, {
-      平静: "illustrations/calm.png",
-      开心: "illustrations/happy.png",
-    });
   });
 });

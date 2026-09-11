@@ -118,17 +118,6 @@ export function useNavigationHistory({
     }
   }
 
-  /** Opens the independent Story workspace without selecting a chat session. */
-  function openStoryWorkspace(options?: { recordHistory?: boolean }): void {
-    const nextView: AppMainView = { kind: "story" };
-    setSidebarAnimating(true);
-    setSidebarCollapsed(false);
-    setMainView(nextView);
-    if (options?.recordHistory !== false) {
-      pushNavigationEntry(buildNavigationEntry(nextView));
-    }
-  }
-
   /** Opens a plugin-contributed nav.page full-page surface by its registry id. */
   function openPluginPage(pageId: string, options?: { recordHistory?: boolean }): void {
     const nextView: AppMainView = { kind: "plugin-page", pageId };
@@ -174,10 +163,6 @@ export function useNavigationHistory({
     setSettingsSection(nextEntry.settingsSection);
     if (nextEntry.view.kind === "settings") {
       openSettingsView(nextEntry.settingsSection);
-      return;
-    }
-    if (nextEntry.view.kind === "story") {
-      openStoryWorkspace({ recordHistory: false });
       return;
     }
     if (nextEntry.view.kind === "plugin-page") {
@@ -227,7 +212,6 @@ export function useNavigationHistory({
     buildNavigationEntry,
     replaceNavigationEntry,
     openChatView,
-    openStoryWorkspace,
     openSettingsWorkspace,
     openRoleWorkspace,
     openPluginPage,

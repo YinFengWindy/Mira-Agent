@@ -31,7 +31,7 @@ function createRoleForm(overrides: Partial<RoleFormState> = {}): RoleFormState {
     description: overrides.description ?? "",
     systemPrompt: overrides.systemPrompt ?? "prompt",
     nsfwMemoryEnabled: overrides.nsfwMemoryEnabled ?? false,
-    autoSceneCgEnabled: overrides.autoSceneCgEnabled ?? false,
+    pluginSettings: overrides.pluginSettings ?? {},
     desktopPetEnabled: overrides.desktopPetEnabled ?? false,
     avatarSource: overrides.avatarSource ?? "",
     illustrationSources: overrides.illustrationSources ?? [],

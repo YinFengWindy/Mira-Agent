@@ -268,7 +268,8 @@ export type RoleFormState = {
   systemPrompt: string;
   profile?: RoleProfileDraft;
   nsfwMemoryEnabled: boolean;
-  autoSceneCgEnabled: boolean;
+  /** Draft values owned by registered role-setting plugins. */
+  pluginSettings: import("../plugins/pluginRoleSettings").PluginRoleSettingsDraft;
   channelBindings?: RoleChannelBinding[];
   proactiveEnabled?: boolean;
   proactiveTargetChannel?: string;
@@ -403,7 +404,6 @@ export type RoleSearchResult = {
 /** Main content mode for the desktop shell. */
 export type AppMainView =
   | { kind: "chat" }
-  | { kind: "story" }
   | { kind: "roles-list" }
   | { kind: "role-create" }
   | { kind: "role-detail"; roleId: string }

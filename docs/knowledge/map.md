@@ -36,7 +36,7 @@ related:
 | 调度任务 | `apps/backend/agent/scheduler.py`、`apps/backend/agent/tools/schedule.py`、`apps/backend/desktop_bridge/schedule_role_task_service.py` | 主动触发、角色任务、桌面展示 |
 | 桌面桥接 | `apps/backend/desktop_bridge/` | Electron 主进程、React renderer、后端服务 |
 | 桌面界面 | `apps/desktop/src/`、`apps/desktop/renderer/src/` | 角色管理、聊天、设置、图片、任务 |
-| 单角色剧情 | `apps/backend/story_simulation/`、`apps/backend/desktop_bridge/story_simulation_handler.py`、`apps/desktop/renderer/src/story/` | 剧情事实、角色/玩家快照、提交事件、固定故事日期与“清晨/上午/下午/夜晚/深夜”五段时段时钟、桌面剧情界面 |
+| 单角色剧情 | `plugins/story/backend/`、`plugins/story/ui/`（依赖 NovelAI 插件） | 剧情事实、角色/玩家快照、提交事件、固定故事日期与“清晨/上午/下午/夜晚/深夜”五段时段时钟、桌面剧情界面 |
 | 桌宠语音 | `apps/desktop/src/voice/`、`apps/desktop/renderer/src/voice/`、`apps/backend/desktop_bridge/voice/voice_service.py`、`apps/backend/desktop_bridge/voice/tts_coordinator.py` | 录音、ASR、角色 Loop、按句 TTS、播放与中断 |
 
 ```mermaid

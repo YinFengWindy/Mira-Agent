@@ -6,9 +6,9 @@ last_verified_commit: 966af779
 source_paths:
   - plugins/scene_awareness/
   - plugins/novelai/
-  - apps/backend/desktop_bridge/role_difference_service.py
-  - apps/backend/desktop_bridge/story_image_generator.py
-  - apps/desktop/renderer/src/app/useChatImageRegeneration.ts
+  - plugins/story/
+  - apps/backend/agent/plugin_host/
+  - apps/desktop/renderer/src/plugins/
   - apps/backend/bus/events_lifecycle.py
 related:
   - roles.md
@@ -26,22 +26,19 @@ related:
 
 启停只由宿主管理的 `[plugins.novelai].enabled` 决定，插件配置表单与运行时设置不再声明第二个 `enabled`。插件停用后，宿主撤销工具、RPC 与事件订阅。服务仍检查 Token，角色自动 CG 偏好仍独立生效。
 
-## 插件归属核查（2026-09-11）
+## 插件边界（2026-09-11）
 
-结论：核心生图实现已归位，但还不是完全可摘出的插件。以下为本轮源码核查发现，除重复 Enabled 状态外，本轮未修改这些边界。
+NovelAI 的业务代码、Logo、设置、聊天图片重生成和角色自动 CG 开关均由 `plugins/novelai/` 持有。宿主通过通用角色设置与聊天图片操作扩展位挂载 UI；插件不可用时撤下对应操作。角色表单通过插件的 read/write 适配器保存既有 `auto_scene_cg_enabled`，停用插件不会擦除偏好。长耗时 RPC 由插件显式传入 `timeoutMs`，宿主只验证通用截止时间，不识别供应商或生图方法名。
 
-| 残留 | 证据 | 影响 |
-| --- | --- | --- |
-| 聊天图片重生成由宿主编排 | `apps/desktop/renderer/src/app/useChatImageRegeneration.ts` 直接创建 `createPluginRpcClient("novelai")`；`main.tsx` 的 `canRegenerateLightboxImage` 只判断会话与消息 ID | 停用插件后，重生成按钮仍可能可点击；宿主尚无按插件能力注册的图片操作入口 |
-| RPC 超时策略识别 NovelAI 方法名 | `apps/desktop/src/bridge/bridgeTimeoutPolicy.ts` 写死两个 `plugin.novelai.*` 方法的 5 分钟超时 | 新增插件长耗时 RPC 仍需修改宿主策略 |
-| 故事与角色差分调用方持有供应商细节 | `story_image_generator.py` 固定 `nai-diffusion-4-5-full`；`story_simulation/director.py` 要求 NovelAI V4.5 标签；`role_difference_service.py` 固定 sampler、steps、strength 等参数 | 已通过工具调用而非直接导入插件服务，但供应商参数策略仍分散在宿主 |
-| 角色自动 CG 开关属于核心角色表单 | `RoleCapabilitiesPanel.tsx`、`roleFormState.ts`、`appState.ts`、`useRoleManagement.ts` 与共享 `RoleForm` 持有 `autoSceneCgEnabled` | 停用插件不会撤下这项角色配置；尚无插件角色设置扩展位 |
-| 品牌资源尚未共置 | `plugins/novelai/ui/index.tsx` 引用宿主 `assets/novelai-logo-dark.svg` | 插件包仍依赖宿主存放自己的 Logo |
-| 插件仍直接调用部分宿主内部接口 | UI 使用 `window.miraDesktop.invoke("roles.list")`、`pickImages`；后端导入私有 `_resolve_path`、`DesktopSessionPresenter` 并直接创建 `RoleStore` | 共置不等于稳定 SDK 隔离；共享样式和通用类型复用本身不算归位遗漏 |
+故事模式归于 `plugins/story/`，manifest 显式声明 `dependencies: [novelai]`，通过 `ctx.dependencies.require("novelai")` 获取 NovelAI 导出的 `GenerateImageTool`。故事的模型与提示词策略属于故事插件。宿主没有通用生图接口，也不装配故事业务；故事页面注册为全屏插件导航，RPC 与事件使用 `plugin.story.*` 命名空间。
 
-宿主中的 `_migrate_legacy_novelai_config()` 是升级旧 `[integrations.novelai]` 配置的一次性迁移，需要在插件加载前运行，不应仅为了清空关键字引用而移除。`SceneObservationCommitted` 是 Scene Awareness 与 NovelAI 共享的事件契约，也无需搬入 NovelAI 私有实现。角色差分和故事业务可以保留在各自模块，但供应商专属策略应逐步交回生图提供方。
+插件内核按依赖顺序加载、按反向依赖顺序卸载。缺失、禁用或失败的依赖使故事插件进入 `BLOCKED`，其页面和 RPC 不可用；恢复 NovelAI 后重新装配可恢复故事入口。运行时替换先等待旧插件接受的后台任务完成，桥接事件按所属注册表隔离，避免跨代重复转发。首次启用故事时恢复被中断的持久化任务；已有活跃前代时保留其执行权。
 
-本轮通过真实插件配置通道验证：表单不再暴露 Enabled，修改 NSFW 设置可保存并读回，显式启用与省略启用字段均保持插件 ACTIVE。插件测试另验证宿主禁用时不注册生图工具/RPC，以及卸载清理和自动 CG 任务释放。
+素材页的一键生成差分及 `roles.differences.generate` 已移除。已有差分、素材分类和手动心情绑定保持可用。故事数据仍存于 workspace 的 `stories/`，NovelAI 运行数据仍存于 `private_runtime/novelai/`，启停不删除这些数据。
+
+`_migrate_legacy_novelai_config()` 仍由宿主在加载插件前升级旧配置。共享场景事件、角色存储、会话呈现与资产服务是宿主契约，插件可以复用；本次归位不等同于将全部宿主服务封装为独立 SDK。UI 通过注入的宿主服务访问角色列表、文件选择与事件，不直接使用 Electron 全局对象。
+
+验收覆盖真实插件配置读写、依赖缺失与循环阻断、NovelAI 启停导致的故事入口/RPC变化、既有数据保留、跨代事件隔离、角色偏好保存及图片重生成的会话归属。
 
 ## 自动 CG 生命周期
 

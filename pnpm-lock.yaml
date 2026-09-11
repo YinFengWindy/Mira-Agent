@@ -20,6 +20,9 @@ importers:
       eslint:
         specifier: ^10.2.1
         version: 10.5.0(jiti@2.7.0)
+      motion:
+        specifier: ^12.43.0
+        version: 12.43.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       playwright:
         specifier: 1.63.0
         version: 1.63.0

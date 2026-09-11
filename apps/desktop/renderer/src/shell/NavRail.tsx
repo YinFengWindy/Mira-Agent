@@ -1,9 +1,9 @@
 import type React from "react";
-import { BookOpenText, Chats, GearSix, MagnifyingGlass, Users } from "@phosphor-icons/react";
+import { Chats, GearSix, MagnifyingGlass, Users } from "@phosphor-icons/react";
 import { cx } from "../shared/styles";
 
 /** The rail's fixed built-in workspace targets (excludes the "search" action button, which never becomes an active view). */
-export type BuiltinNavRailViewId = "messages" | "roles" | "story" | "settings";
+export type BuiltinNavRailViewId = "messages" | "roles" | "settings";
 
 /**
  * Identifies the workspace a rail entry points to; null when no view entry
@@ -46,7 +46,6 @@ type NavRailProps = {
   onOpenSearch: () => void;
   onBackToChat: () => void;
   onOpenRolesWorkspace: () => void;
-  onOpenStory: () => void;
   onOpenSettings: () => void;
 };
 
@@ -61,14 +60,12 @@ export function NavRail({
   onOpenSearch,
   onBackToChat,
   onOpenRolesWorkspace,
-  onOpenStory,
   onOpenSettings,
 }: NavRailProps) {
   const entries: NavRailEntry[] = [
     { id: "search", label: "搜索", icon: MagnifyingGlass, onSelect: onOpenSearch },
     { id: "messages", label: "消息", icon: Chats, onSelect: onBackToChat, showUnreadBadge: true },
     { id: "roles", label: "角色", icon: Users, onSelect: onOpenRolesWorkspace },
-    { id: "story", label: "故事", icon: BookOpenText, onSelect: onOpenStory },
     ...pluginEntries.map((entry) => ({
       id: pluginNavRailViewId(entry.pageId),
       label: entry.label,

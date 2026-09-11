@@ -1,3 +1,4 @@
+import { usePluginHostServices } from "../../../apps/desktop/renderer/src/plugins/PluginHostServicesProvider";
 import { Select } from "../../../apps/desktop/renderer/src/shared/ui/Select";
 import { SettingsToggleCard } from "../../../apps/desktop/renderer/src/settings/SettingsToggleCard";
 import { toFileUrl } from "../../../apps/desktop/renderer/src/shared/format";
@@ -35,8 +36,9 @@ export function PromptTagEntryEditor({
   onReset,
   dirty,
 }: PromptTagEntryEditorProps) {
+  const host = usePluginHostServices();
   async function pickReferenceImage(): Promise<void> {
-    const [imagePath] = await window.miraDesktop.pickImages({ multiple: false });
+    const [imagePath] = await host.pickImages({ multiple: false });
     if (imagePath) onChange({ ...draft, image_path: imagePath });
   }
 

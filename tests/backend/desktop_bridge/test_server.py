@@ -101,24 +101,6 @@ async def test_serve_stdio_forces_utf8_for_all_bridge_streams(
     }
 
 
-def test_server_forwards_the_role_runtime_registry_to_story(
-    tmp_path: Path, stub_core_runtime
-) -> None:
-    session_manager = SessionManager(tmp_path)
-    role_runtime_registry = SimpleNamespace(repository=None, model_resolver=None)
-    runtime = stub_core_runtime(
-        session_manager=SimpleNamespace(
-            workspace=tmp_path,
-            open_role_session=session_manager.open_role_session,
-        ),
-        loop=SimpleNamespace(process_direct=AsyncMock(return_value="ok")),
-        event_bus=EventBus(),
-        role_runtime_registry=role_runtime_registry,
-    )
-
-    server = DesktopBridgeServer(runtime)
-
-    assert server.service.story_simulation._role_runtime_registry is role_runtime_registry
 
 
 def test_desktop_server_reuses_core_screen_observation_service(

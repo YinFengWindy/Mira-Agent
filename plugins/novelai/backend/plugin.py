@@ -119,6 +119,8 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
         service,
         context_provider=ctx.tools.get_context,
     )
+    # Dependent plugins receive this generation's NovelAI API, never a host image-provider abstraction.
+    ctx.expose(tool)
     ctx.tools.register(
         tool,
         risk="external-side-effect",

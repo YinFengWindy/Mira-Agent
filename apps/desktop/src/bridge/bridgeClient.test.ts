@@ -38,7 +38,7 @@ type MutableBridgeClient = {
   session: TestSession | null;
   createSession(child: ChildProcessWithoutNullStreams): TestSession;
   attachSessionListeners(session: TestSession): void;
-  invokeTimeoutMs(method: string): number | null;
+  invokeTimeoutMs(method: string, requestedTimeoutMs?: number): number | null;
   gracefulStopTimeoutMs(): number;
   forcedStopTimeoutMs(): number;
   killProcessTree(pid: number): void;
@@ -129,12 +129,12 @@ describe("DesktopBridgeClient", () => {
     assert.equal(client.invokeTimeoutMs("roles.list"), 30_000);
     assert.equal(client.invokeTimeoutMs("voice.transcribe"), 30_000);
     assert.equal(client.invokeTimeoutMs("voice.synthesize"), 30_000);
-    assert.equal(client.invokeTimeoutMs("plugin.novelai.generate"), 5 * 60_000);
+    assert.equal(client.invokeTimeoutMs("plugin.sample.slow", 300_000), 5 * 60_000);
     assert.equal(
-      client.invokeTimeoutMs("plugin.novelai.regenerateMessageMedia"),
+      client.invokeTimeoutMs("plugin.sample.other", 300_000),
       5 * 60_000,
     );
-    assert.equal(client.invokeTimeoutMs("roles.differences.generate"), 5 * 60_000);
+    assert.equal(client.invokeTimeoutMs("plugin.sample.default"), 30_000);
   });
 
   it("resolves a response and removes its generation-local pending entry", async () => {

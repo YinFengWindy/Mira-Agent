@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPluginBridgeClient, type PluginSummary } from "./pluginBridgeClient";
-import { setPluginEnabledCache, setPluginEnabledSnapshot } from "./pluginEnabledStateStore";
+import { setPluginEnabledSnapshot } from "./pluginEnabledStateStore";
 
 /**
  * Loads the plugin roster and lets the caller hot toggle one plugin at a
@@ -31,7 +31,6 @@ export function usePluginManagementController() {
     setPendingIds((current) => new Set(current).add(pluginId));
     try {
       await client.setEnabled(pluginId, enabled, { operationId: crypto.randomUUID() });
-      setPluginEnabledCache(pluginId, enabled);
       await reload();
     } catch (toggleError) {
       setError(toggleError instanceof Error ? toggleError.message : String(toggleError));

@@ -1,3 +1,4 @@
+import { readPluginRoleSettings } from "../plugins/pluginRoleSettings";
 import type { SettingsSectionId } from "../settings/SettingsSidebar";
 import type {
   AppMainView,
@@ -109,7 +110,7 @@ export function createEmptyRoleForm(): RoleFormState {
     systemPrompt: "",
     profile: createEmptyRoleProfile(),
     nsfwMemoryEnabled: false,
-    autoSceneCgEnabled: false,
+    pluginSettings: readPluginRoleSettings(),
     desktopPetEnabled: false,
     channelBindings: [],
     ...createDefaultRoleProactiveForm(),

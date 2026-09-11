@@ -49,14 +49,14 @@ describe("appState", () => {
 
   it("treats the Story workspace as a distinct history destination", () => {
     const storyEntry: NavigationEntry = {
-      view: { kind: "story" },
+      view: { kind: "plugin-page", pageId: "sample" },
       activeRoleId: "mira",
       settingsSection: "models",
     };
 
-    assert.equal(navigationEntriesEqual(storyEntry, { ...storyEntry, view: { kind: "story" } }), true);
+    assert.equal(navigationEntriesEqual(storyEntry, { ...storyEntry, view: { kind: "plugin-page", pageId: "sample" } }), true);
     assert.equal(navigationEntriesEqual(storyEntry, { ...storyEntry, view: { kind: "chat" } }), false);
-    assert.deepEqual(cloneView(storyEntry.view), { kind: "story" });
+    assert.deepEqual(cloneView(storyEntry.view), { kind: "plugin-page", pageId: "sample" });
     assert.equal(viewsEqual(storyEntry.view, { kind: "chat" }), false);
   });
 
