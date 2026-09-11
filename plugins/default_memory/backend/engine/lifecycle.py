@@ -28,7 +28,10 @@ from memory2.post_response_worker import PostResponseMemoryWorker
 from memory2.procedure_tagger import ProcedureTagger
 from memory2.retriever import Retriever
 from memory2.store import VEC_DIM, MemoryStore2
-from plugins.default_memory.backend.config import DefaultMemoryConfig, resolve_memory_db_path
+from plugins.default_memory.backend.config import (
+    DefaultMemoryConfig,
+    resolve_memory_db_path,
+)
 from bootstrap.runtime.construction import track_build_resource
 
 from .admin import _AdminMixin
@@ -225,7 +228,12 @@ class DefaultMemoryEngine(
             for entry, emotional_weight in event.history_entry_payloads
         ]
         if save_coros:
-            await asyncio.gather(*save_coros)
+            # A failed save must not leave siblings writing after the session owner
+            # releases its commit lock. Collect every outcome before propagating it.
+            results = await asyncio.gather(*save_coros, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException):
+                    raise result
         implicit_result = await self._extract_implicit_long_term(
             conversation=event.conversation,
             existing_profile=self._existing_long_term_memory(event.role_id),

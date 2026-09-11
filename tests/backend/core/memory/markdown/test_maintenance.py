@@ -1,6 +1,7 @@
 """Real Markdown commits stay consistent with concurrent Session undo."""
 
 import asyncio
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,6 +10,7 @@ import pytest
 
 from agent.provider import LLMProvider
 from agent.looping.core import AgentLoop
+import agent.looping.core as loop_core
 from agent.looping.ports import SessionServices
 from bus.event_bus import EventBus
 from core.memory.events import ConsolidationCommitted
@@ -229,4 +231,99 @@ async def test_successful_consolidation_persists_cursor_without_caller_save(
         assert len(reloaded.messages) == 6
         assert reloaded.last_consolidated == (0 if archive_all else 6)
     finally:
+        await event_bus.aclose()
+
+
+@pytest.mark.asyncio
+async def test_manual_timeout_keeps_lock_until_threaded_markdown_commit_finishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    manager, session, maintenance, event_bus = _setup(tmp_path)
+    entered, finished = asyncio.Event(), asyncio.Event()
+    release = threading.Event()
+    event_loop = asyncio.get_running_loop()
+    maintenance_task: asyncio.Task[Any] | None = None
+    memory_store = MemoryStore2(tmp_path / "memory2.db")
+    engine = DefaultMemoryEngine.__new__(DefaultMemoryEngine)
+    engine._v2_store = memory_store
+    item_ids: list[str] = []
+    original_append = MarkdownMemoryStore.append_history_once
+
+    def delayed_append(
+        store: MarkdownMemoryStore,
+        entry: str,
+        *,
+        source_ref: str,
+        kind: str = "history_entry",
+    ):
+        event_loop.call_soon_threadsafe(entered.set)
+        if not release.wait(timeout=5):
+            raise TimeoutError("test did not release Markdown writer")
+        result = original_append(store, entry, source_ref=source_ref, kind=kind)
+        event_loop.call_soon_threadsafe(finished.set)
+        return result
+
+    async def prepare(source: Session, **_kwargs: Any):
+        nonlocal maintenance_task
+        maintenance_task = asyncio.current_task()
+        return _draft(source)
+
+    def save_source(event: ConsolidationCommitted):
+        result = memory_store.upsert_item(
+            memory_type="event",
+            summary="committed memory",
+            embedding=[0.1, 0.2],
+            source_ref=event.source_ref,
+        )
+        item_ids.append(result.split(":", 1)[1])
+
+    async def wait_for_cancellation():
+        assert maintenance_task is not None
+        while not maintenance_task.cancelling():
+            await asyncio.sleep(0)
+
+    monkeypatch.setattr(MarkdownMemoryStore, "append_history_once", delayed_append)
+    monkeypatch.setattr(maintenance._worker, "prepare_consolidation", prepare)
+    monkeypatch.setattr(loop_core, "_MANUAL_CONSOLIDATION_TIMEOUT_SECONDS", 0.05)
+    event_bus.on(ConsolidationCommitted, save_source)
+    loop = AgentLoop.__new__(AgentLoop)
+    loop._session_services = SessionServices(session_manager=manager)
+    loop._markdown_memory = MarkdownMemoryRuntime(
+        store=maintenance._store, maintenance=maintenance, workspace=tmp_path
+    )
+    task = asyncio.create_task(
+        loop.trigger_memory_consolidation(session.key, force=True)
+    )
+    undo_task = None
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=2)
+        # The real AgentLoop wait_for has cancelled maintenance while its thread writes.
+        await asyncio.wait_for(wait_for_cancellation(), timeout=2)
+        undo_task = asyncio.create_task(PluginUndo(manager, engine).undo(session.key))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not undo_task.done()
+        assert not task.done()
+        assert len(session.messages) == 6
+        release.set()
+        outcome, reply = await asyncio.wait_for(
+            asyncio.gather(task, undo_task, return_exceptions=True), timeout=2
+        )
+        assert isinstance(outcome, TimeoutError)
+        assert "memory consolidation busy" in str(outcome)
+        assert finished.is_set()
+        assert isinstance(reply, str)
+        assert "失效记忆：1 条" in reply
+        assert memory_store.get_items_by_ids(item_ids)[0]["status"] == "superseded"
+        assert len(session.messages) == 4
+        assert session.last_consolidated == 0
+        manager.invalidate(session.key)
+        assert manager.get_or_create(session.key).last_consolidated == 0
+    finally:
+        release.set()
+        await asyncio.gather(
+            task, *([undo_task] if undo_task else []), return_exceptions=True
+        )
+        await asyncio.wait_for(finished.wait(), timeout=2)
+        memory_store.close()
         await event_bus.aclose()
