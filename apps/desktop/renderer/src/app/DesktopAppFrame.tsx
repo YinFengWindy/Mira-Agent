@@ -139,6 +139,7 @@ type DesktopAppFrameProps = {
   onPickRoleAssets: (categoryId: string) => void;
   onUpdateRoleAssetOrganization: (categories: import("../shared/types").RoleAssetCategory[], bindings: Record<string, string>, removedIllustrations?: string[]) => Promise<boolean>;
   onRemoveRoleAsset: (path: string) => void;
+  onPluginRoleDataChanged: () => void;
   onSelectAvatarAsset: (path: string) => void;
   onSelectChatBackground: (path: string) => void;
   onSaveRoleAssets: (nextSelection?: { avatarAsset?: string; chatBackground?: string; moodIllustrationBindings?: Record<string, string> }) => void;
@@ -264,6 +265,7 @@ export function DesktopAppFrame({
   onPickRoleAssets,
   onUpdateRoleAssetOrganization,
   onRemoveRoleAsset,
+  onPluginRoleDataChanged,
   onSelectAvatarAsset,
   onSelectChatBackground,
   onSaveRoleAssets,
@@ -488,6 +490,7 @@ export function DesktopAppFrame({
               onPickAssets={onPickRoleAssets}
               onUpdateAssetOrganization={onUpdateRoleAssetOrganization}
               onRemoveAsset={onRemoveRoleAsset}
+              onPluginRoleDataChanged={onPluginRoleDataChanged}
               onSelectAvatarAsset={onSelectAvatarAsset}
               onSelectChatBackground={onSelectChatBackground}
               onUpdateRoleForm={onUpdateRoleForm}

@@ -1,3 +1,4 @@
+import type { PluginUiModule } from "../../../apps/desktop/renderer/src/plugins/pluginUiModuleContract";
 import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
 
 /**
@@ -9,7 +10,9 @@ import { RolePetPackagesPanel } from "./RolePetPackagesPanel";
  * package manager, which belongs inside the role asset library the packages
  * are stored under, hence `role.assets` rather than a page of its own.
  */
-export default {
+const desktopPetUiModule: PluginUiModule = {
   pluginId: "desktop_pet",
   roleAssets: { component: RolePetPackagesPanel },
 };
+
+export default desktopPetUiModule;

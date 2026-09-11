@@ -21,6 +21,8 @@ type RoleAssetsPageProps = {
   onBackToDetail: () => void;
   onPickAssets: (categoryId: string) => void;
   onRemoveAsset: (path: string) => void;
+  /** Re-reads the open role after a plugin panel changed data the host stores on it. */
+  onPluginRoleDataChanged: () => void;
   onSelectAvatarAsset: (path: string) => void;
   onSelectChatBackground: (path: string) => void;
   onUpdateRoleForm: React.Dispatch<React.SetStateAction<RoleFormState>>;
@@ -44,6 +46,7 @@ export function RoleAssetsPage({
   onBackToDetail,
   onPickAssets,
   onRemoveAsset,
+  onPluginRoleDataChanged,
   onSelectAvatarAsset,
   onSelectChatBackground,
   onUpdateRoleForm,
@@ -188,9 +191,14 @@ export function RoleAssetsPage({
               */}
             {roleAssetsPanels.map((panel) => (
               <panel.Component
-                key={panel.id}
+                // Keyed by role as well as by plugin: switching roles must
+                // remount rather than hand the same component a new `roleId`,
+                // which would leave the previous role's data (and any in-flight
+                // request for it) on screen under the new role's heading.
+                key={`${panel.id}:${activeRole?.id ?? ""}`}
                 roleId={activeRole?.id ?? ""}
                 disabled={!bridgeReady || savingSelection}
+                onRoleDataChanged={onPluginRoleDataChanged}
               />
             ))}
           </div>

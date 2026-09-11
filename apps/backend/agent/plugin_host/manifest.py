@@ -29,9 +29,13 @@ KNOWN_CAPABILITIES = frozenset(
         "workspace",
         # 共享宿主那一个 RoleStore 实例。与 workspace 并列而不是让插件自己
         # RoleStore(ctx.workspace)：后者每次都新建一个 RoleManifestRepository，
-        # 而写锁是 **按实例的** threading.RLock（manifest.py）。两个实例写同一份
-        # roles.json 时 atomic_save_json 只保证单次写原子、不防丢更新，读-改-写
-        # 会互相覆盖。共享实例 = 共享那把锁。
+        # 而写锁是 **按实例的** threading.RLock。两个实例写同一份 roles.json 时
+        # atomic_save_json 只保证单次写原子、不防丢更新。
+        #
+        # 它买到的是「插件的写与宿主的写不再互相覆盖」——注意不是「插件自己的并发
+        # 写安全了」：RolePetPackageService.import_package 在任何锁之外读
+        # role.pet_packages，再把整份列表交给 replace_pet_packages，所以两次并发
+        # 导入仍会丢一个包（磁盘上留下孤儿目录）。那是既有性质，共享锁修不了它。
         "role_store",
         "memory_engine",
         "session_manager",

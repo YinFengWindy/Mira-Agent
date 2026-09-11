@@ -58,7 +58,6 @@ export type RoleRecord = {
   updated_at: string;
 };
 
-/** One validated desktop-pet package listed under its owning role. */
 
 /** User-defined single-owner category for one role's asset library. */
 export type RoleAssetCategory = {

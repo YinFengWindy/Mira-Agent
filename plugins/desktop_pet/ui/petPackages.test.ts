@@ -24,15 +24,19 @@ test("a pets.list response becomes rows with displayable preview URLs", () => {
   });
 });
 
-test("the raw filesystem path never reaches the row", () => {
+test("the row carries only what the resolver returned, never the path itself", () => {
+  // An opaque resolver, like the real one: the granted URL is a token, and the
+  // path does not survive inside it. With a stub that echoes the path back
+  // (`shiori-asset://local/${path}`) this assertion would pass no matter what
+  // the parser did, which is why that stub is not used here.
   const parsed = readPetPackages({
     packages: [{ id: "pet-1", display_name: "小猫", preview_abs: "C:/roles/mira/preview.png" }],
-  }, url);
+  }, () => "shiori-asset://local/token-1");
 
-  // The renderer must not display or keep a filesystem path; only the opaque
-  // granted URL is allowed past this boundary.
-  assert.equal(parsed.packages[0].previewUrl.includes("C:/roles"), true);
-  assert.equal(Object.values(parsed.packages[0]).includes("C:/roles/mira/preview.png"), false);
+  assert.deepEqual(parsed.packages, [
+    { id: "pet-1", displayName: "小猫", previewUrl: "shiori-asset://local/token-1" },
+  ]);
+  assert.doesNotMatch(JSON.stringify(parsed), /C:\/roles/);
 });
 
 test("a malformed row is dropped rather than rendered with holes in it", () => {

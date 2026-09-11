@@ -62,10 +62,10 @@ export type PluginNavPageContribution = {
 
 /**
  * The shape a plugin's `ui/index.tsx` default-exports to participate in
- * `settings.section` and/or `nav.page`. A plugin id is required (it scopes
- * both its own RPC namespace and hot enable/disable filtering); both slots
- * are optional since a plugin may only need one, or a config-only plugin
- * may only need the schema form.
+ * `settings.section`, `nav.page` and/or `role.assets`. A plugin id is required
+ * (it scopes both its own RPC namespace and hot enable/disable filtering);
+ * every slot is optional since a plugin may only need one, or a config-only
+ * plugin may only need the schema form.
  */
 export type PluginUiModule = {
   pluginId: string;
