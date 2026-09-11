@@ -38,6 +38,10 @@ from agent.scheduler import SchedulerService
 from agent.tools.message_push import MessagePushTool
 from agent.tools.observe_screen import ObserveScreenTool
 from agent.tools.registry import ToolRegistry
+from core.scene.controller import SceneAwarenessController
+from core.scene.demand import SceneObservationDemand
+from core.scene.service import SceneObservationService
+from core.scene.state import SceneStateStore
 from core.common.cleanup import run_cleanup_steps
 from bootstrap.paths import REPOSITORY_ROOT, resource_root
 from bootstrap.runtime.construction import track_build_resource
@@ -99,6 +103,7 @@ class CoreRuntime:
     presence: PresenceStore
     relationship_runtime: RoleRelationshipRuntimeService
     role_runtime_registry: RoleRuntimeRegistry
+    scene_service: SceneObservationService | None = None
     image_sync_service: ExternalImageSyncService | None = None
     agent_provider: LLMProvider | None = None
     plugin_manager: "PluginKernel | None" = None
@@ -148,6 +153,8 @@ class CoreRuntime:
 
     async def stop(self) -> None:
         """Drains child work before releasing this generation's providers."""
+        if self.scene_service is not None:
+            await self.scene_service.close()
         spawn = self.tools.get_tool("spawn")
         if spawn is not None:
             await spawn.manager.drain()
@@ -158,15 +165,20 @@ class CoreRuntime:
         steps = []
         if self.plugin_manager is not None:
             steps.append(("plugins.terminate", self.plugin_manager.terminate_all))
-        steps.extend([
-            ("mcp.shutdown", self.mcp_registry.shutdown),
-            ("event_bus.aclose", self.event_bus.aclose),
-            ("provider.aclose", self.provider.aclose),
-        ])
+        steps.extend(
+            [
+                ("mcp.shutdown", self.mcp_registry.shutdown),
+                ("event_bus.aclose", self.event_bus.aclose),
+                ("provider.aclose", self.provider.aclose),
+            ]
+        )
         resolver = self.role_runtime_registry.model_resolver
         if resolver is not None:
             steps.append(("role_models.aclose", resolver.aclose))
-        steps.extend((f"provider:{index}", provider.aclose) for index, provider in enumerate(self.additional_providers))
+        steps.extend(
+            (f"provider:{index}", provider.aclose)
+            for index, provider in enumerate(self.additional_providers)
+        )
         await run_cleanup_steps(*steps)
 
 
@@ -200,9 +212,7 @@ def build_registered_tools(
     wiring = getattr(config, "wiring", WiringConfig())
     tools = tools or ToolRegistry()
     multimodal = getattr(config, "multimodal", True)
-    readonly_tools = build_readonly_tools(
-        http_resources, multimodal=multimodal
-    )
+    readonly_tools = build_readonly_tools(http_resources, multimodal=multimodal)
     store = session_store or SessionStore(workspace / "sessions.db")
     push_tool = shared_push_tool or MessagePushTool(event_bus=event_publisher)
     memory_result = resolve_memory_toolset_provider(wiring.memory).register(
@@ -405,13 +415,19 @@ def build_core_runtime(
     provider, light_provider, agent_provider = build_providers(config)
     loop_provider = provider
     loop_model = config.model
-    session_manager = shared.session_manager if shared is not None else SessionManager(workspace)
+    session_manager = (
+        shared.session_manager if shared is not None else SessionManager(workspace)
+    )
     if shared is None:
         track_build_resource(session_manager._store, session_manager._store.close)
     default_registration_id = (
         config.model_registrations[0].id if config.model_registrations else ""
     )
-    role_store = shared.role_runtime_registry.repository.store if shared else RoleStore(workspace)
+    role_store = (
+        shared.role_runtime_registry.repository.store
+        if shared
+        else RoleStore(workspace)
+    )
     if shared is None:
         role_store.migrate_model_selections(
             dialogue_registration_id=default_registration_id,
@@ -445,26 +461,42 @@ def build_core_runtime(
             agent_loop_provider=agent_loop_provider or (lambda: loop_ref.get("loop")),
             role_repository=role_repository,
             shared_push_tool=(
-                shared.push_tool if shared else MessagePushTool(event_bus=event_outlet or event_bus)
+                shared.push_tool
+                if shared
+                else MessagePushTool(event_bus=event_outlet or event_bus)
             ),
             shared_scheduler=shared.scheduler if shared else None,
         )
     )
-    presence = shared.presence if shared is not None else PresenceStore(session_manager._store)
-    if shared is not None:
-        memory_runtime.markdown.maintenance.share_execution(shared.memory_runtime.markdown.maintenance)
-    relationship_runtime = shared.relationship_runtime if shared is not None else RoleRelationshipRuntimeService(
-        workspace,
-        role_store=role_store,
-        session_manager=session_manager,
-        presence=presence,
+    presence = (
+        shared.presence if shared is not None else PresenceStore(session_manager._store)
     )
-    processing_state = shared.loop.processing_state if shared is not None else ProcessingState()
+    if shared is not None:
+        memory_runtime.markdown.maintenance.share_execution(
+            shared.memory_runtime.markdown.maintenance
+        )
+    relationship_runtime = (
+        shared.relationship_runtime
+        if shared is not None
+        else RoleRelationshipRuntimeService(
+            workspace,
+            role_store=role_store,
+            session_manager=session_manager,
+            presence=presence,
+        )
+    )
+    processing_state = (
+        shared.loop.processing_state if shared is not None else ProcessingState()
+    )
     if processing_state is None:
         raise RuntimeError("Shared runtime is missing its processing state")
-    image_sync_service = shared.image_sync_service if shared is not None else ExternalImageSyncService(
-        session_manager=session_manager,
-        event_bus=event_outlet or event_bus,
+    image_sync_service = (
+        shared.image_sync_service
+        if shared is not None
+        else ExternalImageSyncService(
+            session_manager=session_manager,
+            event_bus=event_outlet or event_bus,
+        )
     )
     if shared is None:
         push_tool.set_role_target_validator(
@@ -515,10 +547,38 @@ def build_core_runtime(
     )
 
     from agent.plugin_host import HostServices, PluginKernel
+
     plugin_light_provider, plugin_light_model = _resolve_plugin_llm_dependencies(
         config,
         provider,
         light_provider,
+    )
+    scene_demand = SceneObservationDemand()
+    scene_service = SceneObservationService(
+        SceneAwarenessController(
+            role_store=RoleStore(workspace),
+            session_manager=session_manager,
+            event_bus=event_bus,
+            kv_store=(
+                shared.scene_service.controller.state
+                if shared is not None and shared.scene_service is not None
+                else SceneStateStore(
+                    workspace,
+                    (
+                        resource_root() / "plugins",
+                        REPOSITORY_ROOT / "apps" / "backend" / "plugins",
+                    ),
+                )
+            ),
+            light_provider=plugin_light_provider,
+            light_model=plugin_light_model,
+            needs_observation=lambda role: config.scene_observation_enabled
+            and (
+                (role.proactive.enabled and config.proactive_strategies.scene_followup)
+                or scene_demand.needed(role)
+            ),
+        ),
+        event_bus,
     )
     plugin_manager = PluginKernel(
         plugin_dirs=_resolve_plugin_dirs(workspace),
@@ -535,6 +595,7 @@ def build_core_runtime(
             relationship_runtime=relationship_runtime,
             legacy_plugin_root=_legacy_plugin_root(),
             role_runtime_registry=role_runtime_registry,
+            scene_observations=scene_demand,
             is_reload=shared is not None,
             previously_active_plugins=(
                 frozenset(
@@ -570,6 +631,7 @@ def build_core_runtime(
         relationship_runtime=relationship_runtime,
         role_runtime_registry=role_runtime_registry,
         plugin_manager=plugin_manager,
+        scene_service=scene_service,
         screen_observation=screen_observation,
         proactive_motives=[
             *(

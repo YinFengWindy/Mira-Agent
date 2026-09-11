@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
+from collections.abc import Callable
 
 from agent.lifecycle.types import AfterTurnCtx, BeforeTurnCtx
-from agent.plugins.context import PluginKVStore
+from core.scene.state import SceneStateStore
+from core.roles.models import RoleRecord
 from bus.event_bus import EventBus
 from bus.events_lifecycle import (
     ProactiveMessageCommitted,
@@ -15,18 +17,16 @@ from bus.events_lifecycle import (
 )
 from core.roles.store import RoleStore
 from core.common.runtime_tasks import create_runtime_task
-from plugins.scene_awareness.backend.contracts import (
+from core.scene.contracts import (
     SceneDecision,
     SceneDecisionInput,
     SceneDecisionProtocolError,
 )
-from plugins.scene_awareness.backend.decision import (
+from core.scene.decision import (
     decide_scene,
 )
 
 logger = logging.getLogger(__name__)
-
-_STATE_KEY = "scene_awareness_sessions"
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,7 @@ class _PendingTurn:
     chat_id: str
     role_id: str
     tools_used: tuple[str, ...] = ()
+    revision: int = 0
 
 
 class SceneAwarenessController:
@@ -49,15 +50,21 @@ class SceneAwarenessController:
         role_store: RoleStore,
         session_manager: Any,
         event_bus: EventBus,
-        kv_store: PluginKVStore,
+        kv_store: SceneStateStore,
         light_provider: Any,
         light_model: str,
         decision_provider: Any = decide_scene,
+        needs_observation: Callable[
+            [RoleRecord], bool
+        ] = lambda role: role.proactive.enabled,
     ) -> None:
+        self._needs_observation = needs_observation
+        self._closed = False
+        self._all_tasks: set[asyncio.Task[None]] = set()
         self._role_store = role_store
         self._session_manager = session_manager
         self._event_bus = event_bus
-        self._kv_store = kv_store
+        self.state = kv_store
         self._light_provider = light_provider
         self._light_model = str(light_model or "").strip()
         self._decision_provider = decision_provider
@@ -95,13 +102,10 @@ class SceneAwarenessController:
         if pending is None or not ctx.reply.strip():
             return
         self._schedule(
-            _PendingTurn(
-                decision_input=pending.decision_input,
-                source=pending.source,
-                session_key=pending.session_key,
+            replace(
+                pending,
                 channel=ctx.channel,
                 chat_id=ctx.chat_id,
-                role_id=pending.role_id,
                 tools_used=tuple(ctx.tools_used),
             ),
             assistant_reply=ctx.reply,
@@ -130,7 +134,8 @@ class SceneAwarenessController:
     async def terminate(self) -> None:
         """Cancel and await all in-flight scene observation tasks."""
 
-        tasks = list(self._tasks.values())
+        self._closed = True
+        tasks = list(self._all_tasks)
         for task in tasks:
             _ = task.cancel()
         if tasks:
@@ -151,7 +156,8 @@ class SceneAwarenessController:
         tools_used: tuple[str, ...] = (),
     ) -> _PendingTurn | None:
         if (
-            self._light_provider is None
+            self._closed
+            or self._light_provider is None
             or not self._light_model
             or self._session_manager is None
         ):
@@ -163,18 +169,16 @@ class SceneAwarenessController:
         role = self._role_store.get_role(clean_role_id)
         if role is None:
             return None
-        if not (
-            role.proactive.enabled
-            or bool(role.runtime_config.get("auto_scene_cg_enabled"))
-        ):
+        if not self._needs_observation(role):
             return None
+        current = self.state.current(session_key)
         return _PendingTurn(
             decision_input=SceneDecisionInput(
                 role_name=role.name,
                 role_prompt=role.system_prompt,
                 user_message=user_message,
-                current_scene_key=self._current_scene_key(session_key),
-                current_visual_key=self._current_visual_key(session_key),
+                current_scene_key=current["scene_key"],
+                current_visual_key=current["visual_key"],
                 recent_history=_compact_history(history_messages),
             ),
             source=source,
@@ -183,14 +187,18 @@ class SceneAwarenessController:
             chat_id=chat_id,
             role_id=clean_role_id,
             tools_used=tuple(tools_used),
+            revision=self.state.reserve(session_key),
         )
 
     def _schedule(self, pending: _PendingTurn, *, assistant_reply: str) -> None:
+        if self._closed:
+            return
         task = create_runtime_task(
             self._run(pending, assistant_reply=assistant_reply),
             name=f"scene_awareness:{pending.session_key}",
         )
         self._tasks[pending.session_key] = task
+        self._all_tasks.add(task)
         task.add_done_callback(
             lambda completed, session_key=pending.session_key: self._finish_task(
                 session_key,
@@ -200,19 +208,14 @@ class SceneAwarenessController:
 
     async def _run(self, pending: _PendingTurn, *, assistant_reply: str) -> None:
         source_input = pending.decision_input
-        decision = await self._decide_with_retry(
-            SceneDecisionInput(
-                role_name=source_input.role_name,
-                role_prompt=source_input.role_prompt,
-                user_message=source_input.user_message,
-                assistant_reply=assistant_reply,
-                current_scene_key=source_input.current_scene_key,
-                current_visual_key=source_input.current_visual_key,
-                recent_history=source_input.recent_history,
-            ),
+        decision = await self._decide(
+            replace(source_input, assistant_reply=assistant_reply),
             session_key=pending.session_key,
         )
-        self._apply_scene_state(pending.session_key, decision)
+        # A newer observation in any generation supersedes this same-session snapshot.
+        if not self.state.is_current(pending.session_key, pending.revision):
+            return
+        self.state.apply(pending.session_key, decision)
         await self._event_bus.fanout(
             SceneObservationCommitted(
                 session_key=pending.session_key,
@@ -223,15 +226,16 @@ class SceneAwarenessController:
                 transition=decision.transition,
                 scene_key=decision.scene_key,
                 visual_key=decision.visual_key,
-                should_generate=decision.should_generate,
-                prompt=decision.prompt,
-                negative_prompt=decision.negative_prompt,
-                size_preset=decision.size_preset,
+                visual_description=decision.visual_description,
+                role_name=source_input.role_name,
+                role_description=source_input.role_prompt,
+                user_message=source_input.user_message,
+                assistant_reply=assistant_reply,
                 tools_used=pending.tools_used,
             )
         )
 
-    async def _decide_with_retry(
+    async def _decide(
         self,
         decision_input: SceneDecisionInput,
         *,
@@ -255,37 +259,6 @@ class SceneAwarenessController:
             )
             raise
 
-    def _current_scene_key(self, session_key: str) -> str:
-        return self._current_scene_state(session_key).get("scene_key", "")
-
-    def _current_visual_key(self, session_key: str) -> str:
-        return self._current_scene_state(session_key).get("visual_key", "")
-
-    def _current_scene_state(self, session_key: str) -> dict[str, str]:
-        sessions = self._read_sessions()
-        state = sessions.get(session_key)
-        if not isinstance(state, dict):
-            return {}
-        return {
-            "scene_key": str(state.get("scene_key") or "").strip(),
-            "visual_key": str(state.get("visual_key") or "").strip(),
-        }
-
-    def _apply_scene_state(self, session_key: str, decision: SceneDecision) -> None:
-        sessions = self._read_sessions()
-        if decision.transition == "closed":
-            sessions.pop(session_key, None)
-        elif decision.scene_key:
-            sessions[session_key] = {
-                "scene_key": decision.scene_key,
-                "visual_key": decision.visual_key,
-            }
-        self._kv_store.set(_STATE_KEY, sessions)
-
-    def _read_sessions(self) -> dict[str, Any]:
-        raw = self._kv_store.get(_STATE_KEY, {})
-        return dict(raw) if isinstance(raw, dict) else {}
-
     def _session_history(self, session_key: str) -> tuple[Any, ...]:
         session = self._session_manager.get_or_create(session_key)
         messages = getattr(session, "messages", ())
@@ -297,6 +270,7 @@ class SceneAwarenessController:
             task.cancel()
 
     def _finish_task(self, session_key: str, task: asyncio.Task[None]) -> None:
+        self._all_tasks.discard(task)
         if self._tasks.get(session_key) is task:
             self._tasks.pop(session_key, None)
         if task.cancelled():

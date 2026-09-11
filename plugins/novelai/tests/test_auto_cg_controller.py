@@ -26,7 +26,7 @@ def _observation(**overrides: Any) -> SceneObservationCommitted:
         "transition": "same",
         "scene_key": "rain",
         "visual_key": "rain-standing",
-        "should_generate": False,
+        "visual_description": "",
     }
     payload.update(overrides)
     return SceneObservationCommitted(**payload)
@@ -35,10 +35,24 @@ def _observation(**overrides: Any) -> SceneObservationCommitted:
 @pytest.mark.asyncio
 async def test_cg_task_holds_generation_until_image_work_finishes(tmp_path):
     controller = AutoCgController(
-        role_store=SimpleNamespace(get_role=lambda _: SimpleNamespace(runtime_config={"auto_scene_cg_enabled": True})),
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
+        role_store=SimpleNamespace(
+            get_role=lambda _: SimpleNamespace(
+                runtime_config={"auto_scene_cg_enabled": True}
+            )
+        ),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
-        session_manager=SimpleNamespace(get_or_create=lambda _: SimpleNamespace(metadata={})),
-        generate_tool=None, tool_registry=None,
+        session_manager=SimpleNamespace(
+            get_or_create=lambda _: SimpleNamespace(metadata={})
+        ),
+        generate_tool=None,
+        tool_registry=None,
     )
     started, finish = asyncio.Event(), asyncio.Event()
     observed = []
@@ -49,11 +63,16 @@ async def test_cg_task_holds_generation_until_image_work_finishes(tmp_path):
         await finish.wait()
 
     controller._run = run
-    core = SimpleNamespace(stop=AsyncMock(side_effect=controller.terminate), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    core = SimpleNamespace(
+        stop=AsyncMock(side_effect=controller.terminate),
+        memory_runtime=SimpleNamespace(aclose=AsyncMock()),
+    )
     generation = RuntimeCandidate(3, core, SimpleNamespace())
     parent = generation.acquire()
     with bind_runtime(parent):
-        controller.schedule(_observation(should_generate=True, transition="started"))
+        controller.schedule(
+            _observation(visual_description="少女站在雨里", transition="started")
+        )
     await parent.release()
     await generation.retire()
     await started.wait()
@@ -70,6 +89,13 @@ def test_controller_advances_cooldown_for_passive_observations(tmp_path: Path) -
     policy.advance_turn(session_key)
     policy.record_success(session_key, "rain")
     controller = AutoCgController(
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, None),
@@ -86,6 +112,13 @@ def test_controller_advances_cooldown_for_passive_observations(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_new_observation_cancels_stale_in_flight_task(tmp_path: Path) -> None:
     controller = AutoCgController(
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
         role_store=cast(Any, None),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
         session_manager=cast(Any, None),
@@ -127,6 +160,13 @@ async def test_controller_records_state_only_after_image_push_succeeds(
             return '{"output_paths": ["cg.png"]}'
 
     controller = AutoCgController(
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, None),
@@ -135,8 +175,7 @@ async def test_controller_records_state_only_after_image_push_succeeds(
     )
     event = _observation(
         transition="started",
-        should_generate=True,
-        prompt="1girl, rainy street",
+        visual_description="少女站在雨里",
     )
 
     with pytest.raises(RuntimeError, match="自动场景 CG 补发失败"):
@@ -171,6 +210,13 @@ async def test_controller_retries_generation_once_and_pushes_one_image(
 
     generate_tool = GenerateTool()
     controller = AutoCgController(
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
         role_store=cast(Any, None),
         policy=policy,
         session_manager=cast(Any, SimpleNamespace()),
@@ -181,8 +227,7 @@ async def test_controller_retries_generation_once_and_pushes_one_image(
     await controller._run(
         _observation(
             transition="started",
-            should_generate=True,
-            prompt="1girl, rainy street",
+            visual_description="少女站在雨里",
         ),
         role_id="mira",
         bypass_cooldown=True,
@@ -207,6 +252,13 @@ async def test_controller_abandons_after_one_generation_retry(
 
     generate_tool = GenerateTool()
     controller = AutoCgController(
+        prompt_provider=AsyncMock(
+            return_value={
+                "prompt": "1girl, rain",
+                "negative_prompt": "blurry",
+                "size_preset": "portrait",
+            }
+        ),
         role_store=cast(Any, None),
         policy=AutoCgPolicy(PluginKVStore(tmp_path / ".kv.json")),
         session_manager=cast(Any, None),
@@ -223,3 +275,38 @@ async def test_controller_abandons_after_one_generation_retry(
     assert media == []
     assert generate_tool.calls == 2
     assert "已重试 1 次" in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocked", ["disabled", "duplicate", "cooldown", "manual"])
+async def test_prompt_model_is_not_called_for_ineligible_cg(tmp_path, blocked):
+    policy = AutoCgPolicy(PluginKVStore(tmp_path / "kv.json"))
+    if blocked in {"duplicate", "cooldown"}:
+        policy.record_success(
+            "role:mira", "rain-standing" if blocked == "duplicate" else "old"
+        )
+    prompt = AsyncMock()
+    controller = AutoCgController(
+        role_store=SimpleNamespace(
+            get_role=lambda _: SimpleNamespace(
+                runtime_config={"auto_scene_cg_enabled": blocked != "disabled"}
+            )
+        ),
+        policy=policy,
+        session_manager=SimpleNamespace(
+            get_or_create=lambda _: SimpleNamespace(metadata={})
+        ),
+        generate_tool=None,
+        tool_registry=None,
+        prompt_provider=prompt,
+    )
+    controller.schedule(
+        _observation(
+            transition="same" if blocked == "cooldown" else "started",
+            visual_description="少女站在雨里",
+            tools_used=("generate_image",) if blocked == "manual" else (),
+        )
+    )
+    await asyncio.gather(*controller.tasks.values())
+    prompt.assert_not_awaited()
+    await controller.terminate()

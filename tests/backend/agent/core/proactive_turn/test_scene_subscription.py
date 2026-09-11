@@ -16,8 +16,7 @@ def _event():
         source="passive",
         transition="started",
         scene_key="rain",
-        should_generate=False,
-        prompt="",
+        visual_description="雨夜车站的少女",
     )
 
 

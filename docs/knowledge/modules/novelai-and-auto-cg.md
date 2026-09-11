@@ -4,7 +4,7 @@ kind: 领域说明
 status: 当前有效
 last_verified_commit: 966af779
 source_paths:
-  - plugins/scene_awareness/
+  - apps/backend/core/scene/
   - plugins/novelai/
   - plugins/story/
   - apps/backend/agent/plugin_host/
@@ -44,10 +44,10 @@ NovelAI 与故事的业务回归分别随 `plugins/novelai/tests/`、`plugins/st
 
 ## 自动 CG 生命周期
 
-1. Scene Awareness 插件在 `BeforeTurn` 捕获被动回合上下文，并在 `AfterTurn` 对非空回复调度场景判断；主动消息则从 `ProactiveMessageCommitted` 接入同一判断链。
-2. `plugins/scene_awareness/backend/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
-3. Scene Awareness 对函数参数执行协议和语义校验；有效结果才会持久化这两个键并发布 `SceneObservationCommitted`。`scene_key` 供场景追问保持连续性，`visual_key` 供图片生成判断重复。
-4. NovelAI 插件订阅场景观察事件，`AutoCgController` 根据视觉定格、冷却和手动生成抑制规则决定是否生成。
+1. 核心场景服务在 `BeforeTurn` 捕获被动回合上下文，并在 `AfterTurn` 对非空回复调度场景判断；主动消息则从 `ProactiveMessageCommitted` 接入同一判断链。
+2. `apps/backend/core/scene/decision.py` 使用独立观察器 system prompt，并强制模型调用内部函数 `submit_scene_observation`，将结果归为 `started`、`same`、`changed`、`closed` 或 `none`。观察结果同时携带持续场景 `scene_key` 与可见定格 `visual_key`。
+3. 核心场景服务对函数参数执行协议和语义校验；有效结果才会持久化这两个键并发布 `SceneObservationCommitted`。`scene_key` 供场景追问保持连续性，`visual_key` 供图片生成判断重复。
+4. NovelAI 插件通过 `scene_observations` capability 登记角色消费需求，订阅场景事件。`AutoCgController` 独立检查自动 CG 开关、视觉去重、冷却与手动生成抑制；通过后才由 `scene_prompt.py` 使用既有 light 模型把冻结的中立场景事实转换为 NovelAI tags 和画幅，并校验供应商参数。
 5. 成功图片通过消息推送发送，并同步回权威角色会话。
 
 `AfterTurnCtx.will_dispatch` 只表示核心消息总线是否还需下发回复，不表示回合是否完成。桌面桥接直接取得回复时该值为 `false`，场景观察仍必须处理这个有效回合。
@@ -56,14 +56,22 @@ NovelAI 与故事的业务回归分别随 `plugins/novelai/tests/`、`plugins/st
 
 - 自动生成冷却为 5 个用户回合。
 - `scene_key` 表示持续场景；`visual_key` 表示当前可见定格。自动 CG 使用 `visual_key` 去重，因此同一场景中的动作、姿势、人物位置关系、构图、服装、道具或光线变化可以生成新的 CG。
-- `same + should_generate=true` 表示持续场景不变但视觉定格变化；它必须提供新的 `visual_key`，并在普通 5 回合冷却结束后生成。
+- `same` 配合新的 `visual_key` 表示持续场景不变但视觉定格变化；NovelAI 自行在普通 5 回合冷却结束后生成。核心事件不含生图决策、供应商提示词或尺寸。
 - 重复定格的策略日志使用 `scene_cg_duplicate_visual`，不再把持续场景本身标记为重复。
 - 当前回合若已经调用 `generate_image`，不再追加自动 CG。
 - 场景协议无效时，观察器会携带校验原因请求一次修复；控制器不再对同一请求做无反馈重试。
 - 修复后仍无效时，不发布场景事件，也不写入场景状态；日志只记录工具调用数量、工具名、参数键和文本长度等响应形态。
 - 图片生成保留自身重试；主回复不因后台自动 CG 失败而失败。
 - `started` 建立首个场景，`same` 延续当前场景，`changed` 建立新场景，`closed` 关闭场景状态，`none` 表示当前没有可观测场景。
-- `started` 和 `changed` 必须携带新的稳定 `scene_key`、`visual_key` 与完整 CG 参数；同一场景的视觉变化使用 `same`、原 `scene_key`、新的 `visual_key` 和完整 CG 参数；完全相同的定格使用 `same`、原有两个键且不生成；`closed` 和 `none` 的场景、视觉和图像字段必须为空。
+- 可见场景携带 `scene_key`、`visual_key` 和中立自然语言 `visual_description`；事件冻结该回合的角色描述、用户内容和回复，异步提示词模型不会读取之后改变的会话。`closed` 和 `none` 的场景键与视觉描述为空。
+
+## 核心服务所有权与迁移
+
+`[agent.scene_observation].enabled` 控制核心服务，默认开启。角色开启主动且核心 `agent.proactive_strategies.scene_followup` 开启，或至少一个已装配消费者请求时才调用观察模型；仅残留角色自动 CG 偏好但 NovelAI 已停用或卸载，不会形成消费需求。没有 NovelAI 时核心观察和场景跟进照常可用。桌面设置保留显式核心开关，不把缺省值提前写成启用。
+
+候选 runtime 只构造服务，发布时在该代局部事件总线上激活。旧代已接受的回合仍可完成观察，包括发布前捕获、发布后才结束的回合；代际 lease 排空后才退订、取消并等待剩余任务。跨代共享场景 state owner，以同会话观察序号防止较慢旧结果覆盖较新事实。
+
+状态读取优先 `workspace/scene/state.json`。若不存在，读取 `workspace/plugins/scene_awareness/kv.json`，再依次读取新旧插件代码目录的 `.kv.json`；首次真实场景写入原子导入全部旧 key，已存在的新状态始终优先。候选准备不写迁移数据。旧 TOML 停用配置和两处 `plugin.disabled` 在配置加载时幂等转换为核心开关；旧文件不删除。场景插件包已移除，发现和打包仅保留核心模块及实际插件。
 
 ## 修改影响
 

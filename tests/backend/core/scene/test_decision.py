@@ -6,19 +6,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agent.provider import LLMResponse, ToolCall
-from plugins.scene_awareness.backend.contracts import SCENE_DECISION_TOOL_NAME
-from plugins.scene_awareness.backend.decision import SceneDecisionInput, decide_scene
+from core.scene.contracts import SCENE_DECISION_TOOL_NAME
+from core.scene.decision import SceneDecisionInput, decide_scene
 
 
 def _scene_tool_call(**overrides: Any) -> ToolCall:
     arguments = {
         "transition": "started",
-        "should_generate": True,
         "scene_key": "rain-confession",
         "visual_key": "rain-confession-standing",
-        "prompt": "1girl, pink hair, standing in rain, emotional, night",
-        "negative_prompt": "blurry, text",
-        "size_preset": "portrait",
+        "visual_description": "粉发少女站在雨夜里",
     }
     arguments.update(overrides)
     return ToolCall("scene-1", SCENE_DECISION_TOOL_NAME, arguments)
@@ -43,14 +40,14 @@ async def test_decide_scene_forces_observer_tool_with_isolated_system_prompt() -
         model="qwen-flash",
         decision_input=SceneDecisionInput(
             role_name="Mira",
-            role_prompt="粉发少女",
+            role_prompt="",
             user_message="我终于找到你了",
             assistant_reply="她站在雨里，终于说出了藏了很久的话。",
         ),
     )
 
     assert decision.transition == "started"
-    assert decision.should_generate is True
+    assert decision.visual_description
     assert decision.scene_key == "rain-confession"
     call = provider.chat.await_args.kwargs
     assert call["model"] == "qwen-flash"
@@ -77,12 +74,9 @@ async def test_decide_scene_repairs_invalid_tool_protocol_once() -> None:
                         tool_calls=[
                             _scene_tool_call(
                                 transition="none",
-                                should_generate=False,
                                 scene_key="",
                                 visual_key="",
-                                prompt="",
-                                negative_prompt="",
-                                size_preset="",
+                                visual_description="",
                             )
                         ],
                     ),
@@ -96,7 +90,7 @@ async def test_decide_scene_repairs_invalid_tool_protocol_once() -> None:
         model="qwen-flash",
         decision_input=SceneDecisionInput(
             role_name="Mira",
-            role_prompt="role",
+            role_prompt="",
             user_message="这段技术方案合理吗？",
         ),
     )
@@ -127,7 +121,7 @@ async def test_decide_scene_repairs_malformed_tool_arguments_once() -> None:
         model="qwen-flash",
         decision_input=SceneDecisionInput(
             role_name="Mira",
-            role_prompt="role",
+            role_prompt="",
             user_message="雨突然下大了",
             assistant_reply="她站在雨夜的车站里。",
         ),

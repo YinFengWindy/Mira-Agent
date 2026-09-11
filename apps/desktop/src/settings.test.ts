@@ -202,3 +202,63 @@ path = "C:\\" # escaped slash before closing quote
     });
   }
 });
+
+
+describe("core scene observation settings", () => {
+  it("preserves an explicit core disable over the retired plugin preference", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "shiori-scene-settings-"));
+    try {
+      const path = join(directory, "config.toml");
+      writeFileSync(path, "[agent.scene_observation] # core\nenabled = false # disabled\n[plugins.scene_awareness]\nenabled = true\n", "utf-8");
+      configureSettingsConfigPath(path);
+      const form = loadSettingsData().formData;
+      assert.equal(form.advanced.sceneObservationEnabled, false);
+      form.advanced.maxTokens += 1;
+      await saveSettings(form, async (request) => {
+        assert.match(request.config_toml, /\[agent\.scene_observation\]\nenabled = false/);
+        return { success: true };
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+
+for (const legacy of ["", "[plugins.scene_awareness]\nenabled = false\n"]) {
+  it("keeps an absent scene core preference available for backend marker migration", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "shiori-scene-absent-"));
+    try {
+      const path = join(directory, "config.toml");
+      writeFileSync(path, legacy, "utf-8");
+      configureSettingsConfigPath(path);
+      const form = loadSettingsData().formData;
+      assert.equal(form.advanced.sceneObservationEnabled, undefined);
+      await saveSettings(form, async (request) => {
+        assert.doesNotMatch(request.config_toml, /\[agent\.scene_observation\]/);
+        if (legacy) assert.match(request.config_toml, /\[plugins\.scene_awareness\]\nenabled = false/);
+        return { success: true };
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
+
+it("preserves a core scene opt-in over an old plugin disable", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "shiori-scene-enabled-"));
+  try {
+    const path = join(directory, "config.toml");
+    writeFileSync(path, "[agent.scene_observation]\nenabled = true\n[plugins.scene_awareness]\nenabled = false\n", "utf-8");
+    configureSettingsConfigPath(path);
+    const form = loadSettingsData().formData;
+    assert.equal(form.advanced.sceneObservationEnabled, true);
+    await saveSettings(form, async (request) => {
+      assert.match(request.config_toml, /\[agent\.scene_observation\]\nenabled = true/);
+      return { success: true };
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

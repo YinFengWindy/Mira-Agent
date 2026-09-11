@@ -255,6 +255,9 @@ export function loadSettingsData(contentOverride?: string): SettingsSnapshot {
         memoryWindow: Number(agentContext.memory_window ?? 40),
         searchEnabled: Boolean(agentTools.search_enabled),
         spawnEnabled: Boolean(agentTools.spawn_enabled ?? true),
+        sceneObservationEnabled: optionalBoolean(
+          asRecord(agent.scene_observation).enabled, "agent.scene_observation.enabled",
+        ),
         memoryOptimizerEnabled: Boolean(
           agentMaintenance.memory_optimizer_enabled ?? true,
         ),
@@ -314,6 +317,11 @@ function renderSettingsToml(formData: SettingsFormData): string {
     `search_enabled = ${formData.advanced.searchEnabled ? "true" : "false"}`,
     `spawn_enabled = ${formData.advanced.spawnEnabled ? "true" : "false"}`,
     "",
+    ...(formData.advanced.sceneObservationEnabled === undefined ? [] : [
+      "[agent.scene_observation]",
+      `enabled = ${formData.advanced.sceneObservationEnabled}`,
+      "",
+    ]),
     "[agent.maintenance]",
     `memory_optimizer_enabled = ${
       formData.advanced.memoryOptimizerEnabled ? "true" : "false"

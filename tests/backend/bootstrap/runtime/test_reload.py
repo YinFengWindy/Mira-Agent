@@ -8,10 +8,22 @@ from bootstrap.app import AppRuntime, RuntimeFeatures
 
 
 @pytest.mark.asyncio
-async def test_empty_application_hot_reload_preserves_shared_state_and_old_lease(tmp_path, monkeypatch):
+async def test_empty_application_hot_reload_preserves_shared_state_and_old_lease(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [])
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False)
-    app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     lease = app.acquire()
     original = app.core
@@ -38,8 +50,18 @@ async def test_empty_application_hot_reload_preserves_shared_state_and_old_lease
 @pytest.mark.asyncio
 async def test_persistence_failure_keeps_live_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [])
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False)
-    app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     original = app.core
     prepared = await app.prepare(replace(config, max_tokens=2048))
@@ -60,10 +82,22 @@ async def test_persistence_failure_keeps_live_runtime(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_partial_candidate_construction_closes_new_provider_and_preserves_live_core(tmp_path, monkeypatch):
+async def test_partial_candidate_construction_closes_new_provider_and_preserves_live_core(
+    tmp_path, monkeypatch
+):
     monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", lambda _: [])
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False)
-    app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+    )
+    app = AppRuntime(
+        config,
+        tmp_path,
+        features=RuntimeFeatures(enable_message_channels=False, enable_proactive=False),
+    )
     await app.start()
     original = app.core
     allocated = []
@@ -78,9 +112,21 @@ async def test_partial_candidate_construction_closes_new_provider_and_preserves_
 
     monkeypatch.setattr("bootstrap.providers.LLMProvider", Provider)
     monkeypatch.setattr("bootstrap.tools._build_loop_deps", fail)
-    changed = replace(config, provider="openai", model="configured", api_key="key", model_registrations=[
-        ModelRegistration(id="model", provider="openai", model="configured", api_key="key", base_url=""),
-    ])
+    changed = replace(
+        config,
+        provider="openai",
+        model="configured",
+        api_key="key",
+        model_registrations=[
+            ModelRegistration(
+                id="model",
+                provider="openai",
+                model="configured",
+                api_key="key",
+                base_url="",
+            ),
+        ],
+    )
     try:
         with pytest.raises(ValueError, match="context assembly failed"):
             await app.prepare(changed)
@@ -127,8 +173,7 @@ async def test_core_motives_follow_generation_publication_and_rollback(
         source="passive",
         transition="started",
         scene_key="rain",
-        should_generate=False,
-        prompt="",
+        visual_description="雨夜车站的少女",
     )
     try:
         assert [strategy.name for strategy in original.proactive_motives] == [

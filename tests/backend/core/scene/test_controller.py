@@ -10,16 +10,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agent.lifecycle.types import AfterTurnCtx, BeforeTurnCtx
-from agent.plugins.context import PluginKVStore
+from core.scene.state import SceneStateStore
 from bus.event_bus import EventBus
 from bus.events_lifecycle import (
     ProactiveMessageCommitted,
     SceneObservationCommitted,
 )
 from core.roles.store import RoleStore
-from plugins.scene_awareness.backend.contracts import SceneDecisionProtocolError
-from plugins.scene_awareness.backend.controller import SceneAwarenessController
-from plugins.scene_awareness.backend.decision import SceneDecision
+from core.scene.contracts import SceneDecisionProtocolError
+from core.scene.controller import SceneAwarenessController
+from core.scene.decision import SceneDecision
 from session.manager import SessionManager
 from bootstrap.runtime.generations import RuntimeCandidate
 from core.common.runtime_scope import bind_runtime, current_runtime_lease
@@ -44,7 +44,11 @@ def _controller(
         role_store=role_store,
         session_manager=sessions,
         event_bus=event_bus,
-        kv_store=PluginKVStore(tmp_path / ".kv.json"),
+        kv_store=SceneStateStore(tmp_path),
+        needs_observation=lambda role: bool(
+            role.runtime_config.get("auto_scene_cg_enabled")
+        )
+        or role.proactive.enabled,
         light_provider=cast(Any, object()),
         light_model="light-model",
         decision_provider=decision_provider,
@@ -52,8 +56,12 @@ def _controller(
 
 
 @pytest.mark.asyncio
-async def test_scene_task_prevents_retired_runtime_from_terminating_its_controller(tmp_path):
-    controller = _controller(tmp_path, event_bus=EventBus(), decision_provider=AsyncMock())
+async def test_scene_task_prevents_retired_runtime_from_terminating_its_controller(
+    tmp_path,
+):
+    controller = _controller(
+        tmp_path, event_bus=EventBus(), decision_provider=AsyncMock()
+    )
     started, finish = asyncio.Event(), asyncio.Event()
     observed = []
 
@@ -63,11 +71,16 @@ async def test_scene_task_prevents_retired_runtime_from_terminating_its_controll
         await finish.wait()
 
     controller._run = run
-    core = SimpleNamespace(stop=AsyncMock(side_effect=controller.terminate), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    core = SimpleNamespace(
+        stop=AsyncMock(side_effect=controller.terminate),
+        memory_runtime=SimpleNamespace(aclose=AsyncMock()),
+    )
     generation = RuntimeCandidate(3, core, SimpleNamespace())
     parent = generation.acquire()
     with bind_runtime(parent):
-        controller._schedule(SimpleNamespace(session_key="role:mira"), assistant_reply="scene")
+        controller._schedule(
+            SimpleNamespace(session_key="role:mira"), assistant_reply="scene"
+        )
     await parent.release()
     await generation.retire()
     await started.wait()
@@ -90,8 +103,7 @@ async def test_passive_turn_publishes_started_scene_and_persists_scene_key(
             transition="started",
             scene_key="rain",
             visual_key="rain-standing",
-            should_generate=True,
-            prompt="1girl, rain",
+            visual_description="粉发少女站在雨里",
         )
     )
     controller = _controller(tmp_path, event_bus=bus, decision_provider=decide)
@@ -161,8 +173,7 @@ async def test_passive_turn_observes_reply_returned_by_desktop_bridge(
             transition="started",
             scene_key="kitchen",
             visual_key="kitchen-cooking",
-            should_generate=True,
-            prompt="1girl, cooking in kitchen",
+            visual_description="粉发少女站在雨里",
         )
     )
     controller = _controller(tmp_path, event_bus=bus, decision_provider=decide)
@@ -235,8 +246,8 @@ async def test_passive_turn_publishes_none_without_persisting_scene_key(
 
     assert observations[0].transition == "none"
     assert observations[0].scene_key == ""
-    assert observations[0].size_preset == ""
-    assert controller._current_scene_key("role:mira") == ""
+    assert observations[0].visual_description == ""
+    assert controller.state.current("role:mira")["scene_key"] == ""
     await controller.terminate()
 
 
@@ -283,7 +294,7 @@ async def test_invalid_scene_protocol_does_not_publish_observation(
         await asyncio.gather(*controller.tasks.values())
 
     assert observations == []
-    assert controller._current_scene_key("role:mira") == ""
+    assert controller.state.current("role:mira")["scene_key"] == ""
     await controller.terminate()
 
 
@@ -299,8 +310,7 @@ async def test_proactive_message_is_observed_with_shared_scene_state(
             transition="changed",
             scene_key="rain-hug",
             visual_key="rain-hug-closeup",
-            should_generate=True,
-            prompt="2girls, hugging, rain",
+            visual_description="粉发少女站在雨里",
         )
     )
     controller = _controller(tmp_path, event_bus=bus, decision_provider=decide)
@@ -327,9 +337,11 @@ async def test_proactive_message_is_observed_with_shared_scene_state(
             transition="changed",
             scene_key="rain-hug",
             visual_key="rain-hug-closeup",
-            should_generate=True,
-            prompt="2girls, hugging, rain",
+            visual_description="粉发少女站在雨里",
             tools_used=("message_push",),
+            role_name="Mira",
+            role_description="粉发少女",
+            assistant_reply="她忽然走近抱住了你。",
         )
     ]
     await controller.terminate()

@@ -215,6 +215,8 @@ export type SettingsFormData = {
     memoryWindow: number;
     searchEnabled: boolean;
     spawnEnabled: boolean;
+    /** Preserves the core scene observation switch across unrelated settings saves. */
+    sceneObservationEnabled?: boolean;
     memoryOptimizerEnabled: boolean;
     memoryOptimizerIntervalSeconds: number;
     pluginsRawToml: string;

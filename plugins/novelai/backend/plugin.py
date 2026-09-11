@@ -135,6 +135,8 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
         session_manager=ctx.session_manager,
         generate_tool=tool,
         tool_registry=ctx.tools,
+        light_provider=ctx.light_provider,
+        light_model=ctx.light_model,
     )
     # 顺序要紧，别调换。`EffectScope.dispose_all` 从尾部 pop，所以**先登记的最后释放**：
     # `ctx.effect` 放在 `ctx.events.on` 之前，卸载时才会先退订 `SceneObservationCommitted`
@@ -144,6 +146,9 @@ async def setup(ctx: "PluginRuntimeContext") -> None:
     # `schedule()` 起一个新任务，既不会被 cancel 也不会被 await，而 terminate 不会再跑第二次。
     ctx.effect("auto_cg_controller", auto_cg_controller.terminate)
     ctx.events.on(SceneObservationCommitted, auto_cg_controller.schedule)
+    ctx.scene_observations.request(
+        lambda role: bool(role.runtime_config.get("auto_scene_cg_enabled"))
+    )
 
     ctx.tool_hooks.add_handler(
         lambda event: auto_cg.guard(event.session_key, event.arguments),
@@ -196,7 +201,9 @@ def _register_rpc(ctx: "PluginRuntimeContext", handlers: NovelAIRpcHandlers) -> 
     )
     ctx.rpc.register("history", handlers.history, concurrency=Concurrency.READ_ONLY)
     ctx.rpc.register(
-        "prompt_tags.list", handlers.prompt_tags_list, concurrency=Concurrency.READ_ONLY,
+        "prompt_tags.list",
+        handlers.prompt_tags_list,
+        concurrency=Concurrency.READ_ONLY,
     )
     ctx.rpc.register("prompt_tags.upsert", handlers.prompt_tags_upsert)
     ctx.rpc.register("prompt_tags.delete", handlers.prompt_tags_delete)

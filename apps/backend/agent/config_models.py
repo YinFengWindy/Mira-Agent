@@ -106,6 +106,7 @@ class Config:
     desktop_streaming_enabled: bool = False
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     wiring: WiringConfig = field(default_factory=WiringConfig)
+    scene_observation_enabled: bool = True
     plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     model_registrations: list[ModelRegistration] = field(
         default_factory=lambda: _UNSET_MODEL_REGISTRATIONS
@@ -117,9 +118,7 @@ class Config:
         self.model_registrations = []
         if not self.model.strip():
             return
-        stable_key = "|".join(
-            [self.provider, str(self.base_url or ""), self.model]
-        )
+        stable_key = "|".join([self.provider, str(self.base_url or ""), self.model])
         self.model_registrations = [
             ModelRegistration(
                 id=str(uuid.uuid5(uuid.NAMESPACE_URL, stable_key)),
