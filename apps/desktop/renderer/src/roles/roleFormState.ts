@@ -26,7 +26,7 @@ export function createRoleFormFromRole(role: RoleRecord): RoleFormState {
     systemPrompt: role.system_prompt,
     profile: role.profile,
     nsfwMemoryEnabled: Boolean(role.runtime_config?.nsfw_memory_enabled),
-    pluginSettings: readPluginRoleSettings(role.runtime_config),
+    pluginSettings: readPluginRoleSettings(role.runtime_config, role.plugin_state),
     channelBindings: role.channel_bindings ?? [],
     ...readRoleProactiveForm(role),
     avatarSource: "",
@@ -35,7 +35,6 @@ export function createRoleFormFromRole(role: RoleRecord): RoleFormState {
     moodCatalog: moodConfig.moodCatalog,
     defaultMood: moodConfig.defaultMood,
     moodIllustrationBindings: moodConfig.moodIllustrationBindings,
-    desktopPetEnabled: Boolean(role.desktop_pet_enabled),
     voiceEnabled: voiceConfig.enabled,
     voiceProvider: voiceConfig.provider,
     voiceOwnership: voiceConfig.ownership,
@@ -59,11 +58,10 @@ export function isRoleFormDirty(roleForm: RoleFormState, role: RoleRecord | null
         || roleForm.systemPrompt !== role.system_prompt
         || JSON.stringify(roleForm.profile ?? {}) !== JSON.stringify(role.profile ?? {})
         || roleForm.nsfwMemoryEnabled !== Boolean(role.runtime_config?.nsfw_memory_enabled)
-        || pluginRoleSettingsDirty(roleForm.pluginSettings, role.runtime_config)
+        || pluginRoleSettingsDirty(roleForm.pluginSettings, role.runtime_config, role.plugin_state)
         || JSON.stringify(roleForm.channelBindings ?? []) !== JSON.stringify(role.channel_bindings ?? [])
         || !roleProactiveConfigEqual(roleForm, role)
         || !roleMoodConfigEqual(roleForm, persistedMoodConfig)
-        || Boolean(roleForm.desktopPetEnabled) !== Boolean(role.desktop_pet_enabled)
         || !roleVoiceConfigEqual(roleForm, persistedVoiceConfig)
         || Boolean(roleForm.avatarSource)
         || roleForm.illustrationSources.length > 0

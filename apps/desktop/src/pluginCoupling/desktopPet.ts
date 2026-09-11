@@ -13,7 +13,7 @@ import type { SurfaceKey } from "../surface/host.js";
  * | What the host needs | Who needs it | Removed by |
  * | --- | --- | --- |
  * | the pet's surface key | voice IPC, observation dismiss | #221 / #220 |
- * | relaying `desktop:pet-sync` | the role form's save, the pet's own panel | #218 |
+ * | relaying `desktop:pet-sync` | the pet's role settings and package panel | #218 |
  * | whether the pet is showing, and whose | voice admission, observation | #221 / #220 |
  *
  * #181-D took two rows off this table: the tray entry is the pet's own now
@@ -24,21 +24,17 @@ import type { SurfaceKey } from "../surface/host.js";
  * is no longer "the host starts the pet" — the host has no reason to — it is
  * the only route from *any* main-window renderer to the pet's background code,
  * which lives in a different renderer. Both callers are pet-owned code
- * (`plugins/desktop_pet/ui/RolePetPackagesPanel.tsx`) or about to be; it goes
+ * (`plugins/desktop_pet/ui/RolePetPackagesPanel.tsx` and `ui/roleSettings.tsx`);
+ * it goes
  * with surface-to-background messaging (#218).
  *
  * What the host no longer knows at all: roles, packages, sprite states,
  * positions, window geometry — in the main process since #181-C, and in the
  * bridge and the package-manager UI since #181-D.
  *
- * **Still outstanding, and not this file's scope.** The pet's data is still on
- * `RoleRecord` (`pet_packages` / `selected_pet_package_id` /
- * `desktop_pet_enabled`), so the role capability toggle
- * (`roles/RoleCapabilitiesPanel.tsx`) and `roles.update` still carry it, and
- * `desktop_bridge/server.py` still bridges `DesktopPetActionRequested` to
- * `desktop.pet.action`. Those move when the pet's data leaves the role record;
- * until then "宿主不感知桌宠领域" is true of the main process, the package
- * manager and the role bridge, but not of the role *model*.
+ * Pet persistence and role-save contributions now belong to the plugin. The
+ * core manifest retains an opaque namespace only to commit role drafts and
+ * plugin state atomically. The action event bridge remains for #218.
  */
 
 export const desktopPetPluginId = "desktop_pet";

@@ -108,20 +108,7 @@ export type PluginNavPageSidebarProps = {
 export type PluginRoleAssetsProps = {
   roleId: string;
   disabled: boolean;
-  /**
-   * Tells the host this panel changed something the host still stores on the
-   * role, so it re-reads that role.
-   *
-   * Needed for as long as a plugin's data lives on `RoleRecord`. The desktop
-   * pet's `selected_pet_package_id` is the live case: the host's role capability
-   * toggle reads it, so without this a user who imports and selects a package
-   * gets a toggle that stays greyed out, and — worse — a stale
-   * `desktop_pet_enabled` in the role form can make the *next* role save fail
-   * outright (the backend refuses "enabled with no package selected").
-   *
-   * It exists because the host still owns that field, not as a general
-   * "something happened" hook; it goes when the pet's data leaves `RoleRecord`.
-   */
+  /** Refreshes core and independent plugin projections after an asset mutation. */
   onRoleDataChanged: () => void;
 };
 

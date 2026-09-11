@@ -1,26 +1,12 @@
-"""``plugin.desktop_pet.*`` RPC handlers: which role and package the pet renders.
-
-Ported from the Electron main process (#181-C). Before this, `main.ts`'s
-``resolveDesktopPetBinding`` called the core ``roles.list`` method and reached
-into the role payload for ``pet_packages`` / ``selected_pet_package_id`` /
-``desktop_pet_enabled`` — pet domain knowledge sitting in the host, which is
-exactly what #181 set out to remove. The pet's controller now runs in the
-plugin host renderer and has no way to call core bridge methods: ``ctx.rpc``
-only reaches this plugin's own ``plugin.desktop_pet.*`` namespace. So the
-lookup moves here, where the plugin already owns a ``RoleStore``.
-
-``spritesheet_abs`` is deliberately named that way: it is one of the declared
-trusted asset fields in ``apps/desktop/src/assets/localAssetPolicy.ts``, so the
-desktop bridge grants it a ``shiori-asset://`` URL on the way out and the
-renderer never sees a filesystem path it could not already reach.
-"""
+"""Plugin-owned pet package and binding RPC projections."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from core.roles.models import RolePetPackage, RoleRecord
-from core.roles.pet_packages import RolePetPackageService
+from .models import RolePetPackage, RolePetState
+from .pet_packages import RolePetPackageService
+from .pet_state import RolePetStateStore
 from core.roles.store import RoleStore
 
 
@@ -30,6 +16,7 @@ class DesktopPetRpcHandlers:
     def __init__(self, *, role_store: RoleStore) -> None:
         self._role_store = role_store
         self._packages = RolePetPackageService(role_store)
+        self._state = RolePetStateStore(role_store)
 
     async def pets_list(self, payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.desktop_pet.pets.list``: one role's pet packages.
@@ -56,17 +43,21 @@ class DesktopPetRpcHandlers:
 
     async def pets_remove(self, payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.desktop_pet.pets.remove``: delete one package and its files."""
-        self._packages.remove_package(_require_role_id(payload), _require_package_id(payload))
+        self._packages.remove_package(
+            _require_role_id(payload), _require_package_id(payload)
+        )
         return await self.pets_list(payload)
 
     async def pets_select(self, payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.desktop_pet.pets.select``: choose which package renders."""
-        self._packages.select_package(_require_role_id(payload), _require_package_id(payload))
+        self._packages.select_package(
+            _require_role_id(payload), _require_package_id(payload)
+        )
         return await self.pets_list(payload)
 
-    def _require_role(self, payload: dict[str, Any]) -> RoleRecord:
+    def _require_role(self, payload: dict[str, Any]) -> RolePetState:
         role_id = _require_role_id(payload)
-        role = self._role_store.get_role(role_id)
+        role = self._state.get_role(role_id)
         if role is None:
             raise KeyError(f"role 不存在: {role_id}")
         return role
@@ -121,14 +112,14 @@ class DesktopPetRpcHandlers:
             }
         }
 
-    def _resolve_role(self) -> RoleRecord | None:
+    def _resolve_role(self) -> RolePetState | None:
         return next(
-            (role for role in self._role_store.list_roles() if role.desktop_pet_enabled),
+            (role for role in self._state.list_roles() if role.desktop_pet_enabled),
             None,
         )
 
     @staticmethod
-    def _selected_package(role: RoleRecord) -> RolePetPackage | None:
+    def _selected_package(role: RolePetState) -> RolePetPackage | None:
         if not role.selected_pet_package_id:
             return None
         return next(

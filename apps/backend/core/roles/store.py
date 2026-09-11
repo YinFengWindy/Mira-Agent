@@ -12,14 +12,13 @@ from .models import (
     DEFAULT_ASSET_CATEGORY_ID,
     RoleAssetCategory,
     RoleChannelBindingConfig,
-    RolePetPackage,
     RoleProactiveConfig,
     RoleRecord,
     default_asset_category,
     normalize_rel_path,
     now_iso,
 )
-from .pet_state import RolePetStateStore
+from .extensions import RoleExtensions
 from .profile_models import RoleProfile
 
 
@@ -35,7 +34,7 @@ class RoleStore:
         self._lock = self._repository.lock
         self._assets = RoleAssetStore(self.roles_dir, self.assets_dir)
         self._bindings = RoleBindingPolicy()
-        self._pets = RolePetStateStore(self._repository)
+        self.extensions = RoleExtensions(self._repository)
 
     @property
     def lock(self):
@@ -128,18 +127,17 @@ class RoleStore:
                 memory_init_state={},
                 created_at=now,
                 updated_at=now,
-                pet_packages=[],
-                selected_pet_package_id=None,
-                desktop_pet_enabled=False,
             )
             record.profile = (
                 profile
                 if isinstance(profile, RoleProfile)
-                else RoleProfile.from_dict(profile)
-                if isinstance(profile, dict)
-                else RoleProfile.from_legacy(
-                    system_prompt=clean_prompt,
-                    background=str(background),
+                else (
+                    RoleProfile.from_dict(profile)
+                    if isinstance(profile, dict)
+                    else RoleProfile.from_legacy(
+                        system_prompt=clean_prompt,
+                        background=str(background),
+                    )
                 )
             )
             asset_directory = (self.assets_dir / resolved_id).resolve()
@@ -203,7 +201,7 @@ class RoleStore:
         clear_illustrations: bool = False,
         asset_categories: Sequence[RoleAssetCategory | dict[str, Any]] | None = None,
         asset_category_bindings: dict[str, str] | None = None,
-        desktop_pet_enabled: bool | None = None,
+        plugin_drafts: dict[str, Any] | None = None,
     ) -> RoleRecord:
         with self._lock:
             roles = self.list_roles()
@@ -236,8 +234,7 @@ class RoleStore:
                     asset_categories=asset_categories,
                     asset_category_bindings=asset_category_bindings,
                 )
-                if desktop_pet_enabled is not None:
-                    self._pets.set_enabled(roles, role, desktop_pet_enabled)
+                extension_data = self.extensions.prepare_save(role_id, plugin_drafts)
                 self._update_asset_files(
                     role,
                     avatar_source=avatar_source,
@@ -252,7 +249,7 @@ class RoleStore:
                 )
                 role.updated_at = now_iso()
                 roles[index] = role
-                self._save_roles(roles)
+                self._repository.save_roles(roles, plugin_data=extension_data)
                 return role
         raise KeyError(f"role 不存在: {role_id}")
 
@@ -282,18 +279,6 @@ class RoleStore:
         if not normalized or not self._assets.is_role_asset_path(role_id, normalized):
             return None
         return self._assets.resolve_path(normalized)
-
-    def replace_pet_packages(
-        self,
-        role_id: str,
-        packages: list[RolePetPackage],
-    ) -> RoleRecord:
-        """Persists the complete validated pet-package set for one role."""
-        return self._pets.replace_packages(role_id, packages)
-
-    def select_pet_package(self, role_id: str, package_id: str) -> RoleRecord:
-        """Persists one role-owned pet package as that role's selected desktop pet."""
-        return self._pets.select_package(role_id, package_id)
 
     @staticmethod
     def _update_fields(

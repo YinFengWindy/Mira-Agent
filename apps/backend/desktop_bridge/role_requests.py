@@ -60,7 +60,11 @@ class DesktopRoleRequestHandler:
                 ),
             )
             return {"role": self._role_presenter.serialize(aggregate.role)}
-        if method in {"roles.cardImport.preview", "roles.cardImport.commit", "roles.cardImport.cancel"}:
+        if method in {
+            "roles.cardImport.preview",
+            "roles.cardImport.commit",
+            "roles.cardImport.cancel",
+        }:
             service = self._card_import_service
             if service is None:
                 raise RuntimeError("role card import service unavailable")
@@ -71,7 +75,9 @@ class DesktopRoleRequestHandler:
             }[method]
             handler = getattr(service, operation, None)
             if not callable(handler):
-                raise RuntimeError(f"role card import service lacks {operation} operation")
+                raise RuntimeError(
+                    f"role card import service lacks {operation} operation"
+                )
             argument = dict(payload)
             result = handler(argument)
             if inspect.isawaitable(result):
@@ -79,10 +85,14 @@ class DesktopRoleRequestHandler:
             if hasattr(result, "to_dict") and callable(result.to_dict):
                 result = result.to_dict()
             if not isinstance(result, dict):
-                raise RuntimeError(f"role card import {operation} returned invalid payload")
+                raise RuntimeError(
+                    f"role card import {operation} returned invalid payload"
+                )
             if operation == "commit":
                 role = result.get("role")
-                role_id = str(role.get("id") or "").strip() if isinstance(role, dict) else ""
+                role_id = (
+                    str(role.get("id") or "").strip() if isinstance(role, dict) else ""
+                )
                 if not role_id:
                     raise RuntimeError("role card import commit returned no role")
                 result = {
@@ -132,11 +142,7 @@ class DesktopRoleRequestHandler:
                 asset_category_bindings=self._string_dict_payload(
                     payload, "asset_category_bindings"
                 ),
-                desktop_pet_enabled=(
-                    bool(payload["desktop_pet_enabled"])
-                    if isinstance(payload.get("desktop_pet_enabled"), bool)
-                    else None
-                ),
+                plugin_drafts=self._dict_payload(payload, "plugin_drafts"),
             )
             await self._voice_handler.reconcile_role_update(
                 dict(previous.runtime_config),
@@ -156,7 +162,6 @@ class DesktopRoleRequestHandler:
         # is — and the desktop's package manager, which is now plugin UI, can
         # only reach its own namespace anyway.
         return None
-
 
     @staticmethod
     def _dict_payload(payload: dict[str, Any], key: str) -> dict[str, Any] | None:

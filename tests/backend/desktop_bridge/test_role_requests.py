@@ -20,11 +20,11 @@ def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     image.save(path)
 
 
-
-
 @pytest.mark.asyncio
 async def test_role_card_preview_forwards_the_full_payload_to_its_service() -> None:
-    card_import = SimpleNamespace(preview=AsyncMock(return_value={"import_id": "preview-1"}))
+    card_import = SimpleNamespace(
+        preview=AsyncMock(return_value={"import_id": "preview-1"})
+    )
     handler = DesktopRoleRequestHandler(
         role_service=SimpleNamespace(),
         role_store=SimpleNamespace(),
@@ -126,6 +126,8 @@ async def test_role_create_persists_structured_profile(tmp_path: Path) -> None:
     assert character["response_constraints"] == "Use short paragraphs."
     assert character["profile"] == "A meticulous archivist."
     await service.aclose()
+
+
 @pytest.mark.asyncio
 async def test_the_core_bridge_no_longer_answers_pet_package_methods() -> None:
     """#181-D: pet package management belongs to the plugin that owns it.
@@ -145,4 +147,45 @@ async def test_the_core_bridge_no_longer_answers_pet_package_methods() -> None:
     )
 
     for method in ("roles.pets.import", "roles.pets.remove", "roles.pets.select"):
-        assert await handler.handle(method, {"role_id": "mira", "package_id": "pet-1"}) is None
+        assert (
+            await handler.handle(method, {"role_id": "mira", "package_id": "pet-1"})
+            is None
+        )
+
+
+@pytest.mark.asyncio
+async def test_role_update_commits_generic_plugin_draft_and_projects_its_owner(
+    tmp_path,
+):
+    store = RoleStore(tmp_path)
+    store.create_role(role_id="mira", name="Before", system_prompt="test")
+
+    def write(role_id, draft, data):
+        data[role_id] = draft
+
+    store.extensions.register(
+        "sample", write, lambda role_id, data: data.get(role_id, {})
+    )
+    service = DesktopBridgeService(
+        workspace=tmp_path,
+        role_store=store,
+        session_manager=SessionManager(tmp_path),
+        agent_loop=SimpleNamespace(process_direct=AsyncMock()),
+        event_bus=EventBus(),
+    )
+    response = await service.handle(
+        {
+            "id": "save",
+            "method": "roles.update",
+            "payload": {
+                "role_id": "mira",
+                "name": "After",
+                "plugin_drafts": {"sample": {"enabled": True}},
+            },
+        },
+        emit_event=lambda _payload: None,
+    )
+    assert response.error is None
+    assert response.payload["role"]["plugin_state"] == {"sample": {"enabled": True}}
+    assert store.get_role("mira").name == "After"
+    assert "plugin_state" not in store.get_role("mira").to_dict()

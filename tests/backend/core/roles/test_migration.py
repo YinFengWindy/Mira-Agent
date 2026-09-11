@@ -17,7 +17,7 @@ def test_manifest_v2_migration_is_idempotent_and_preserves_legacy_fields() -> No
     )
 
     assert changed is True
-    assert payload["version"] == 3
+    assert payload["version"] == 4
     role = payload["roles"][0]
     assert role["profile"]["character"]["profile"] == "背景"
     assert role["runtime_config"] == {"dialogue_model_effort": "high"}

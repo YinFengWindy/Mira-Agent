@@ -12,6 +12,9 @@ from agent.tools.base import Tool
 from bus.events_lifecycle import DesktopPetActionRequested
 from core.roles.store import RoleStore
 
+from .pet_state import RolePetStateStore
+from .models import RolePetState
+
 _COOLDOWN_SECONDS = 3.0
 _POSITION_TARGETS = frozenset(
     {"top_left", "top_right", "center", "bottom_left", "bottom_right"}
@@ -37,7 +40,13 @@ class DesktopPetActionTool(Tool):
             },
             "target": {
                 "type": "string",
-                "enum": ["top_left", "top_right", "center", "bottom_left", "bottom_right"],
+                "enum": [
+                    "top_left",
+                    "top_right",
+                    "center",
+                    "bottom_left",
+                    "bottom_right",
+                ],
                 "description": "move 的语义位置目标。",
             },
             "name": {
@@ -62,6 +71,7 @@ class DesktopPetActionTool(Tool):
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._role_store = role_store
+        self._state = RolePetStateStore(role_store)
         self._event_bus = event_bus
         self._tool_registry = tool_registry
         self._clock = clock
@@ -96,7 +106,7 @@ class DesktopPetActionTool(Tool):
         if not role_id or not session_key:
             return _rejected("missing_role_context")
 
-        role = self._role_store.get_role(role_id)
+        role = self._state.get_role(role_id)
         if role is None or not role.desktop_pet_enabled:
             return _rejected("pet_not_enabled")
         package = self._selected_package(role)
@@ -143,7 +153,9 @@ class DesktopPetActionTool(Tool):
                 )
             )
             if request.error or not request.dispatched:
-                return _rejected(request.error or "desktop_bridge_unavailable", action_id=action_id)
+                return _rejected(
+                    request.error or "desktop_bridge_unavailable", action_id=action_id
+                )
             self._last_action_at[role_id] = now
             self._last_turn_key[role_id] = turn_key
             return json.dumps(
@@ -169,7 +181,7 @@ class DesktopPetActionTool(Tool):
             )
         if not role_id:
             return f"{self.description} 桌宠状态：不可用（缺少角色上下文）。", []
-        role = self._role_store.get_role(role_id)
+        role = self._state.get_role(role_id)
         if role is None:
             return f"{self.description} 桌宠状态：不可用（角色不存在）。", []
         if not role.desktop_pet_enabled:
@@ -178,9 +190,10 @@ class DesktopPetActionTool(Tool):
         if package is None:
             return f"{self.description} 桌宠状态：已开启，但尚未绑定桌宠包。", []
         action_names = list(package.actions)
-        action_hint = "、".join(
-            f"{name}（{state}）" for name, state in package.actions.items()
-        ) or "无已声明动作"
+        action_hint = (
+            "、".join(f"{name}（{state}）" for name, state in package.actions.items())
+            or "无已声明动作"
+        )
         return (
             f"{self.description} 桌宠状态：已开启；当前桌宠包：{package.display_name}；"
             f"可用动作：{action_hint}。",
@@ -188,15 +201,23 @@ class DesktopPetActionTool(Tool):
         )
 
     @staticmethod
-    def _selected_package(role):
+    def _selected_package(role: RolePetState):
         return next(
-            (item for item in role.pet_packages if item.id == role.selected_pet_package_id),
+            (
+                item
+                for item in role.pet_packages
+                if item.id == role.selected_pet_package_id
+            ),
             None,
         )
 
 
 def _rejected(reason: str, *, action_id: str = "") -> str:
     return json.dumps(
-        {"accepted": False, "reason": reason, **({"action_id": action_id} if action_id else {})},
+        {
+            "accepted": False,
+            "reason": reason,
+            **({"action_id": action_id} if action_id else {}),
+        },
         ensure_ascii=False,
     )
