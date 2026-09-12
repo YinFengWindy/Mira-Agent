@@ -114,16 +114,14 @@ class ProactiveTurnPipeline:
             self._drift_pipeline is not None
             and getattr(self._drift_pipeline, "step_recorder", None) is None
         ):
-            self._drift_pipeline.step_recorder = (
-                lambda ctx, phase, tool_name, tool_call_id, tool_args, tool_result_text: (
-                    self._record_tick_step(
-                        ctx,
-                        phase=phase,
-                        tool_name=tool_name,
-                        tool_call_id=tool_call_id,
-                        tool_args=tool_args,
-                        tool_result_text=tool_result_text,
-                    )
+            self._drift_pipeline.step_recorder = lambda ctx, phase, tool_name, tool_call_id, tool_args, tool_result_text: (
+                self._record_tick_step(
+                    ctx,
+                    phase=phase,
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    tool_args=tool_args,
+                    tool_result_text=tool_result_text,
                 )
             )
 

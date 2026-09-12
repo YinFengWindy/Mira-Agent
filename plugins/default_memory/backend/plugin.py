@@ -50,7 +50,9 @@ class _DefaultMemoryRecorder:
     def record_context_prepare(self, event: BeforeTurnCtx) -> None:
         if not self._active:
             return
-        turn_id = _turn_id(event.session_key, event.timestamp.isoformat(), event.content)
+        turn_id = _turn_id(
+            event.session_key, event.timestamp.isoformat(), event.content
+        )
         self._active_turns[event.session_key] = turn_id
         block = event.retrieved_memory_block or ""
         injected_items = _items_from_block(block)
@@ -81,7 +83,11 @@ class _DefaultMemoryRecorder:
             return
         turn_id = self._active_turns.get(event.session_key)
         if not turn_id:
-            turn_id = _turn_id(event.session_key, _now_iso(), json.dumps(event.arguments, ensure_ascii=False))
+            turn_id = _turn_id(
+                event.session_key,
+                _now_iso(),
+                json.dumps(event.arguments, ensure_ascii=False),
+            )
         payload = _safe_json(event.result)
         raw_items: object = payload.get("items")
         items: list[dict[str, Any]] = []
@@ -206,7 +212,9 @@ def _hits_from_trace(trace: Any) -> list[dict[str, Any]]:
         items.append(
             {
                 "id": item_id,
-                "summary": _split_summary_meta(str(getattr(hit, "summary", "") or ""))[0],
+                "summary": _split_summary_meta(str(getattr(hit, "summary", "") or ""))[
+                    0
+                ],
                 "memory_type": str(getattr(hit, "memory_type", "") or ""),
                 "score": getattr(hit, "score", None),
                 "injected": bool(getattr(hit, "injected", False)),

@@ -203,8 +203,6 @@ class RoleSessionService:
         return self._session_manager.delete_role_session(clean_role_id)
 
 
-
-
 class RoleBindingService:
     """角色配置中的渠道绑定查询与兼容服务。"""
 

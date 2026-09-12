@@ -44,7 +44,7 @@ def test_diagnostic_line_uses_fixed_field_order():
     assert line == (
         "[PassiveTurnPipeline.run] event=start flow=passive phase=before_turn "
         "session=telegram:1 turn=abc123 tick=- action=run reason=- "
-        "duration_ms=- counts=- error_type=- error_fp=- note=\"-\""
+        'duration_ms=- counts=- error_type=- error_fp=- note="-"'
     )
 
 
@@ -166,9 +166,7 @@ def test_write_turn_persists_react_budget_fields(tmp_path):
 def test_open_db_creates_react_budget_columns(tmp_path):
     conn = open_db(tmp_path / "observe.db")
     try:
-        cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(turns)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(turns)").fetchall()}
     finally:
         conn.close()
 
@@ -185,7 +183,8 @@ def test_open_db_creates_global_error_schema(tmp_path):
     conn = open_db(db_path)
     try:
         cols = {
-            row[1] for row in conn.execute("PRAGMA table_info(global_errors)").fetchall()
+            row[1]
+            for row in conn.execute("PRAGMA table_info(global_errors)").fetchall()
         }
     finally:
         conn.close()
@@ -271,13 +270,11 @@ async def test_trace_writer_drain_waits_for_rag_query(tmp_path):
         await writer.drain()
         conn = sqlite3.connect(str(db_path))
         try:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 select caller, session_key, query, orig_query, injected_count,
                        route_decision, hits_json
                 from rag_queries
-                """
-            ).fetchone()
+                """).fetchone()
         finally:
             conn.close()
     finally:
@@ -319,12 +316,10 @@ async def test_global_error_collector_captures_error_log_with_context(tmp_path):
         await writer.drain()
         conn = sqlite3.connect(str(db_path))
         try:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT source, error_type, message, session_keys
                 FROM global_errors
-                """
-            ).fetchone()
+                """).fetchone()
         finally:
             conn.close()
     finally:
@@ -364,8 +359,7 @@ def test_open_db_preserves_existing_observe_records(tmp_path):
     conn = sqlite3.connect(str(db_path))
     try:
         with conn:
-            conn.executescript(
-                """
+            conn.executescript("""
                 create table turns (
                     id integer primary key autoincrement,
                     ts text not null,
@@ -388,8 +382,7 @@ def test_open_db_preserves_existing_observe_records(tmp_path):
                 values('2026-04-01T00:01:00+00:00', 'proactive', 'cli:1', '', 'push');
                 insert into proactive_decisions(tick_id, ts, session_key, stage)
                 values('tick-1', '2026-04-01T00:01:00+00:00', 'cli:1', 'gate');
-                """
-            )
+                """)
     finally:
         conn.close()
 
@@ -414,24 +407,20 @@ def test_retention_cleans_rag_queries(tmp_path):
     conn = open_db(db_path)
     try:
         with conn:
-            conn.execute(
-                """
+            conn.execute("""
                 insert into rag_queries (
                     ts, caller, session_key, query
                 ) values (
                     datetime('now', '-91 days'), 'passive', 'cli:1', '旧问题'
                 )
-                """
-            )
-            conn.execute(
-                """
+                """)
+            conn.execute("""
                 insert into rag_queries (
                     ts, caller, session_key, query, error
                 ) values (
                     datetime('now', '-91 days'), 'passive', 'cli:1', '错误问题', 'failed'
                 )
-                """
-            )
+                """)
     finally:
         conn.close()
 
@@ -439,9 +428,7 @@ def test_retention_cleans_rag_queries(tmp_path):
 
     conn = sqlite3.connect(str(db_path))
     try:
-        rows = conn.execute(
-            "select query from rag_queries order by query"
-        ).fetchall()
+        rows = conn.execute("select query from rag_queries order by query").fetchall()
     finally:
         conn.close()
 

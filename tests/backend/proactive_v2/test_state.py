@@ -9,8 +9,7 @@ from proactive_v2.state import ProactiveStateStore
 
 def _create_legacy_tick_log(db_path: Path) -> None:
     connection = sqlite3.connect(db_path)
-    connection.execute(
-        """
+    connection.execute("""
         CREATE TABLE tick_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tick_id TEXT NOT NULL UNIQUE,
@@ -30,8 +29,7 @@ def _create_legacy_tick_log(db_path: Path) -> None:
             drift_entered INTEGER DEFAULT 0,
             final_message TEXT
         )
-        """
-    )
+        """)
     connection.commit()
     connection.close()
 

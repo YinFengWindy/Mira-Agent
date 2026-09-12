@@ -234,9 +234,7 @@ async def run_tool_step(
             "[proactive_v2] %s: missing required tool call, retrying once",
             loop_tag,
         )
-        messages.append(
-            {"role": "user", "content": _SCENE_TOOL_PROTOCOL_RETRY_PROMPT}
-        )
+        messages.append({"role": "user", "content": _SCENE_TOOL_PROTOCOL_RETRY_PROMPT})
         tool_call = await llm_fn(messages, active_schemas, "required")
         if tool_call is None:
             ctx.skip_reason = "tool_protocol_error"

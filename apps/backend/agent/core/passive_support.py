@@ -98,8 +98,7 @@ def build_post_reply_context_budget(
     history_stats = estimate_history_budget(history)
     debug_breakdown = getattr(context, "last_debug_breakdown", []) or []
     prompt_tokens = sum(
-        int(getattr(item, "est_tokens", 0) or 0)
-        for item in debug_breakdown
+        int(getattr(item, "est_tokens", 0) or 0) for item in debug_breakdown
     )
     return {
         "history_window": history_window,
@@ -191,9 +190,7 @@ def update_session_runtime_metadata(
 ) -> None:
     md = session.metadata if isinstance(session.metadata, dict) else {}  # type: ignore[union-attr]
     call_count = sum(
-        len(group.get("calls") or [])
-        for group in tool_chain
-        if isinstance(group, dict)
+        len(group.get("calls") or []) for group in tool_chain if isinstance(group, dict)
     )
 
     md["last_turn_tool_calls_count"] = call_count
@@ -231,5 +228,3 @@ def predict_current_user_source_ref(
         if last_id:
             return last_id
     return ""
-
-

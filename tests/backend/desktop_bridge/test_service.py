@@ -23,20 +23,29 @@ from session.manager import SessionManager
 
 
 @pytest.mark.parametrize("delivery_key", ["", "missing"])
-async def test_registered_committed_push_requires_its_original_message(tmp_path, delivery_key):
+async def test_registered_committed_push_requires_its_original_message(
+    tmp_path, delivery_key
+):
     role_store = RoleStore(tmp_path)
     role_store.create_role(role_id="mira", name="Mira", system_prompt="test")
     sessions = SessionManager(tmp_path)
     push = MessagePushTool()
     service = DesktopBridgeService(
-        workspace=tmp_path, role_store=role_store, session_manager=sessions,
-        agent_loop=SimpleNamespace(), event_bus=EventBus(), push_tool=push,
+        workspace=tmp_path,
+        role_store=role_store,
+        session_manager=sessions,
+        agent_loop=SimpleNamespace(),
+        event_bus=EventBus(),
+        push_tool=push,
     )
     emitted = []
     service.add_event_listener(emitted.append)
     result = await push.execute(
-        channel="desktop", chat_id="role:mira", message="uncommitted",
-        push_delivery_key=delivery_key, push_message_already_persisted=True,
+        channel="desktop",
+        chat_id="role:mira",
+        message="uncommitted",
+        push_delivery_key=delivery_key,
+        push_message_already_persisted=True,
     )
     assert "发送失败" in result
     assert "uncommitted delivery" in result
@@ -49,7 +58,9 @@ async def test_registered_committed_push_requires_its_original_message(tmp_path,
 @pytest.mark.parametrize("field", ["image", "file"])
 @pytest.mark.parametrize("message", ["", "valid text"])
 async def test_push_tool_blank_media_cannot_create_empty_desktop_messages(
-    tmp_path, field, message,
+    tmp_path,
+    field,
+    message,
 ):
     role_store = RoleStore(tmp_path)
     role_store.create_role(role_id="mira", name="Mira", system_prompt="You are Mira.")
@@ -65,7 +76,10 @@ async def test_push_tool_blank_media_cannot_create_empty_desktop_messages(
     )
     try:
         result = await push_tool.execute(
-            channel="desktop", chat_id="mira", message=message, **{field: "   "},
+            channel="desktop",
+            chat_id="mira",
+            message=message,
+            **{field: "   "},
         )
 
         persisted = SessionManager(tmp_path).get_or_create("role:mira").messages
@@ -583,9 +597,7 @@ async def test_external_proactive_media_commit_broadcasts_role_session(
 
     assert len(emitted) == 1
     assert emitted[0]["method"] == "session.updated"
-    assert emitted[0]["payload"]["message"]["media"] == [
-        "D:\\media\\scene.png"
-    ]
+    assert emitted[0]["payload"]["message"]["media"] == ["D:\\media\\scene.png"]
 
     await event_bus.fanout(
         ProactiveMessageCommitted(
@@ -705,16 +717,22 @@ async def test_session_read_bridge_methods_return_bounded_desktop_projections(
     assert page.error is None
     assert [message["seq"] for message in page.payload["page"]["messages"]] == [1, 2]
     assert page.payload["page"]["has_more"] is True
-    assert search.payload["results"] == [{
-        "id": "role:mira:1",
-        "session_key": "role:mira",
-        "seq": 1,
-        "role": "assistant",
-        "timestamp": session.messages[1]["timestamp"],
-        "preview": "搜索天气",
-    }]
+    assert search.payload["results"] == [
+        {
+            "id": "role:mira:1",
+            "session_key": "role:mira",
+            "seq": 1,
+            "role": "assistant",
+            "timestamp": session.messages[1]["timestamp"],
+            "preview": "搜索天气",
+        }
+    ]
     assert search.payload["has_more"] is False
-    assert [message["seq"] for message in around.payload["around"]["messages"]] == [0, 1, 2]
+    assert [message["seq"] for message in around.payload["around"]["messages"]] == [
+        0,
+        1,
+        2,
+    ]
     assert around.payload["around"]["messages"][1]["is_target"] is True
     around_without_context = await service.handle(
         {
@@ -725,7 +743,10 @@ async def test_session_read_bridge_methods_return_bounded_desktop_projections(
         emit_event=Mock(),
     )
     assert around_without_context.error is None
-    assert [message["seq"] for message in around_without_context.payload["around"]["messages"]] == [1]
+    assert [
+        message["seq"]
+        for message in around_without_context.payload["around"]["messages"]
+    ] == [1]
     assert image_history.error is None
     assert image_history.payload == {"session_key": "role:mira", "messages": []}
 
@@ -799,9 +820,11 @@ async def test_session_image_history_returns_media_only_projection(tmp_path) -> 
 
     assert response.error is None
     assert response.payload["session_key"] == "role:mira"
-    assert response.payload["messages"] == [{
-        "id": "role:mira:0",
-        "seq": 0,
-        "timestamp": session.messages[0]["timestamp"],
-        "media": ["D:\\images\\old.png"],
-    }]
+    assert response.payload["messages"] == [
+        {
+            "id": "role:mira:0",
+            "seq": 0,
+            "timestamp": session.messages[0]["timestamp"],
+            "media": ["D:\\images\\old.png"],
+        }
+    ]

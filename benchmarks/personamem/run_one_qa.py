@@ -12,7 +12,9 @@ from .runtime import close_runtime, create_runtime
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run QA only for one PersonaMem instance.")
+    parser = argparse.ArgumentParser(
+        description="Run QA only for one PersonaMem instance."
+    )
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--questions", required=True, type=Path)
     parser.add_argument("--contexts", required=True, type=Path)
@@ -24,7 +26,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 async def _run(args: argparse.Namespace) -> None:
     instances = load_dataset(args.questions, args.contexts)
-    inst = next((item for item in instances if item.question_id == args.question_id), None)
+    inst = next(
+        (item for item in instances if item.question_id == args.question_id), None
+    )
     if inst is None:
         raise SystemExit(f"question_id not found: {args.question_id}")
 

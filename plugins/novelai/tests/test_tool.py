@@ -90,8 +90,7 @@ async def test_generate_image_tool_uses_runtime_user_message_for_tag_matching() 
     )
 
     assert (
-        service.generate.await_args.kwargs["prompt_tag_match_text"]
-        == "给我画一张雨景"
+        service.generate.await_args.kwargs["prompt_tag_match_text"] == "给我画一张雨景"
     )
 
 

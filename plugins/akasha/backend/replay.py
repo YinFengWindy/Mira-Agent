@@ -44,6 +44,7 @@ from plugins.akasha.backend.engine import (
     _query_log_id,
     _sort_cards_by_time,
 )
+
 CONTEXT_QUERY_LIMIT = 8
 
 
@@ -59,7 +60,9 @@ class ReplayStore(Protocol):
         self,
     ) -> tuple[dict[tuple[str, str], float], dict[tuple[str, str], float]]: ...
     def update_activation_batch(self, updates: list[ActivationUpdate]) -> None: ...
-    def upsert_message_node(self, message: SourceMessage, embedding: list[float]) -> str: ...
+    def upsert_message_node(
+        self, message: SourceMessage, embedding: list[float]
+    ) -> str: ...
     def upsert_edges(self, updates: list[EdgeUpdate]) -> None: ...
     def insert_activation_events(self, rows: list[ActivationEventRow]) -> None: ...
     def insert_query_log(
@@ -169,7 +172,9 @@ class AkashaReplayRuntime:
         if not query_text:
             return _empty_activation()
         if query_text != message.content:
-            raise ValueError(f"Akasha replay 缺少 strip 后 query embedding: {message.id}")
+            raise ValueError(
+                f"Akasha replay 缺少 strip 后 query embedding: {message.id}"
+            )
         nodes = {node.key: node for node in self._store.list_nodes()}
         if not nodes:
             return _empty_activation()
@@ -224,7 +229,9 @@ class AkashaReplayRuntime:
             return_limit=display_limit,
             graph_seed_keys=graph_seed_keys,
         )
-        self._store.update_activation_batch(activation_updates(candidates, nodes, now_ts))
+        self._store.update_activation_batch(
+            activation_updates(candidates, nodes, now_ts)
+        )
         return ReplayActivation(candidates, dense_items, ripple_items, trace)
 
     # 提交当前 turn，并把本轮激活转成共激活边和诊断事件。
@@ -236,14 +243,19 @@ class AkashaReplayRuntime:
         current_key = ""
         for item in items:
             current_key = self._store.upsert_message_node(item.message, item.embedding)
-            self._message_embeddings[item.message.id] = np.array(item.embedding, dtype=np.float32)
+            self._message_embeddings[item.message.id] = np.array(
+                item.embedding, dtype=np.float32
+            )
             self._message_turn_keys[item.message.id] = turn_key(
                 item.message.session_key,
                 item.message.seq,
                 item.message.role,
             )[2]
         if current_key and activation_items:
-            trigger = next((item.message for item in items if item.message.role == "user"), items[0].message)
+            trigger = next(
+                (item.message for item in items if item.message.role == "user"),
+                items[0].message,
+            )
             ts = parse_ts_unix(trigger.ts)
             reinforced = self._reinforce_boosts.get(current_key, 1.0) > 1.0
             trigger_emb = next(
@@ -260,7 +272,9 @@ class AkashaReplayRuntime:
                     reinforced=reinforced,
                 )
             )
-            self._store.insert_activation_events(_activation_events(trigger, activation_items))
+            self._store.insert_activation_events(
+                _activation_events(trigger, activation_items)
+            )
         return current_key
 
     # ν_turn = 1 − max_{j<i} cos(query, prior_j)²；当前 turn 自身排除。
@@ -324,12 +338,16 @@ class AkashaReplayRuntime:
             ensure_ascii=False,
         )
         self._store.insert_query_log(
-            query_id=_query_log_id(message.session_key, message.seq, "context", message.content),
+            query_id=_query_log_id(
+                message.session_key, message.seq, "context", message.content
+            ),
             session_key=message.session_key,
             seq=message.seq,
             query_text=message.content.strip(),
             intent="context",
-            ts=datetime.fromtimestamp(parse_ts_unix(message.ts), timezone.utc).isoformat(),
+            ts=datetime.fromtimestamp(
+                parse_ts_unix(message.ts), timezone.utc
+            ).isoformat(),
             seed_count=activation.trace.seed_count,
             pool_count=activation.trace.pool_count,
             activated_count=len(activation.activation_items),
@@ -367,6 +385,7 @@ def _core_config(config: AkashaConfig) -> CoreConfig:
 
 def _empty_activation() -> ReplayActivation:
     return ReplayActivation([], [], [], ActivationTrace(seed_count=0, pool_count=0))
+
 
 def _activation_events(
     message: SourceMessage,
@@ -461,18 +480,30 @@ def _format_context_block(
 ) -> str:
     parts: list[str] = []
     if dense_cards or ripple_cards:
-        date_label = datetime.fromtimestamp(now_ts, timezone.utc).astimezone().strftime("%Y-%m-%d")
+        date_label = (
+            datetime.fromtimestamp(now_ts, timezone.utc)
+            .astimezone()
+            .strftime("%Y-%m-%d")
+        )
         parts.append(f"# Akasha memory now={date_label}")
     if dense_cards:
-        parts.append(_format_cards("## 左脑记忆：精确回忆", _sort_cards_by_time(dense_cards)))
+        parts.append(
+            _format_cards("## 左脑记忆：精确回忆", _sort_cards_by_time(dense_cards))
+        )
     if ripple_cards:
-        parts.append(_format_cards("## 右脑联想：潜意识第一反应", _sort_cards_by_time(ripple_cards)))
+        parts.append(
+            _format_cards(
+                "## 右脑联想：潜意识第一反应", _sort_cards_by_time(ripple_cards)
+            )
+        )
 
     text = "\n\n".join(part for part in parts if part.strip())
     max_chars = max(1, config.inject_max_chars)
     if len(text) <= max_chars:
         return text
-    return text[:max_chars].rstrip() + f"\n...[Akasha 已截断 {len(text) - max_chars} 字]"
+    return (
+        text[:max_chars].rstrip() + f"\n...[Akasha 已截断 {len(text) - max_chars} 字]"
+    )
 
 
 def _source_refs(

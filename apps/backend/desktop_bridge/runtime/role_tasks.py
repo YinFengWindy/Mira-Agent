@@ -26,8 +26,15 @@ class RuntimeRoleTasks:
         """Merges background work while deduplicating the shared scheduler."""
         if self._roles.get_role(role_id) is None:
             raise KeyError(f"角色不存在: {role_id}")
-        tasks = {str(task["id"]): task for _, source in self._sources() for task in source.list_tasks(role_id)}
-        return sorted(tasks.values(), key=lambda task: (str(task.get("created_at") or ""), str(task["id"])))
+        tasks = {
+            str(task["id"]): task
+            for _, source in self._sources()
+            for task in source.list_tasks(role_id)
+        }
+        return sorted(
+            tasks.values(),
+            key=lambda task: (str(task.get("created_at") or ""), str(task["id"])),
+        )
 
     async def cancel_task(self, role_id: str, task_id: str):
         """Cancels through the original task owner and preserves its completion version."""

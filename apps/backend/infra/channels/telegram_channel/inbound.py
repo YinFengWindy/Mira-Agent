@@ -119,7 +119,9 @@ class _InboundMixin:
             sender_id=message.sender,
             sender_alias=str(message.metadata.get("username") or ""),
         ):
-            logger.warning("[telegram] 拒绝未绑定渠道或未授权用户 chat_id=%s", message.chat_id)
+            logger.warning(
+                "[telegram] 拒绝未绑定渠道或未授权用户 chat_id=%s", message.chat_id
+            )
             return
         routed = self._route_inbound(message)
         if routed.metadata.get("conversation_duplicate"):

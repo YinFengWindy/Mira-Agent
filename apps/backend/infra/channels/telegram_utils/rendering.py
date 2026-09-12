@@ -5,7 +5,9 @@ import re
 
 _THINKING_MIN = 100
 _PREVIEW_OVERHEAD = 80
-_PARSE_ERR_RE = re.compile(r"can't parse entities|parse entities|find end of the entity", re.I)
+_PARSE_ERR_RE = re.compile(
+    r"can't parse entities|parse entities|find end of the entity", re.I
+)
 _SPOILER_RE = re.compile(r"\|\|(.+?)\|\|", re.S)
 _STRIKE_RE = re.compile(r"~~(.+?)~~", re.S)
 _FENCE_RE = re.compile(r"^\s*```")
@@ -15,7 +17,11 @@ _BLOCKQUOTE_RE = re.compile(r"^\s*>\s?(.*)$")
 _LINK_RE = re.compile(r"\[([^\]\n]+)\]\((https?://[^)\s]+)\)")
 _CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 _BOLD_RE = re.compile(r"(\*\*|__)(.+?)\1", re.S)
-_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", re.S)
+_ITALIC_RE = re.compile(
+    r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)", re.S
+)
+
+
 def _is_telegram_html_parse_error(err: Exception) -> bool:
     return bool(_PARSE_ERR_RE.search(str(err)))
 
@@ -51,7 +57,9 @@ def _render_preview_blocks(text: str) -> str:
             return
         _append_preview_part(
             parts,
-            "<blockquote>" + "\n".join(_render_inline(line) for line in blockquote_lines) + "</blockquote>",
+            "<blockquote>"
+            + "\n".join(_render_inline(line) for line in blockquote_lines)
+            + "</blockquote>",
             kind="blockquote",
             prev_kind=prev_kind,
             pending_blank=pending_blank,
@@ -152,7 +160,12 @@ def _append_preview_part(
 ) -> None:
     if not text:
         return
-    if parts and pending_blank and prev_kind in {"paragraph", "blockquote", "pre"} and kind in {"paragraph", "blockquote", "pre"}:
+    if (
+        parts
+        and pending_blank
+        and prev_kind in {"paragraph", "blockquote", "pre"}
+        and kind in {"paragraph", "blockquote", "pre"}
+    ):
         parts.append("")
     parts.append(text)
 
@@ -185,7 +198,7 @@ def _render_inline(text: str) -> str:
             pieces.append(html.escape(text[idx:]))
             break
         if earliest_match.start() > idx:
-            pieces.append(html.escape(text[idx:earliest_match.start()]))
+            pieces.append(html.escape(text[idx : earliest_match.start()]))
         pieces.append(_render_inline_match(earliest_kind or "", earliest_match))
         idx = earliest_match.end()
     return "".join(pieces)

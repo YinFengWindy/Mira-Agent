@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from bus.event_bus import EventBus
     from .maintenance import MarkdownMemoryMaintenance
 
+
 class MarkdownMemoryStore(MemoryStore):
     def read_recent_history(self, *, max_chars: int = 0) -> str:
         return self.read_history(max_chars=max_chars)
@@ -118,6 +119,7 @@ class MarkdownMemoryRuntime:
             session_metadata=session_metadata,
             role_id=role_id,
         ).get_memory_context()
+
 
 def build_markdown_memory_runtime(
     *,

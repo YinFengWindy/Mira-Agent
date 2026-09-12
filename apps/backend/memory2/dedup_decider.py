@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class DedupDecision(str, Enum):
-    SKIP   = "skip"
+    SKIP = "skip"
     CREATE = "create"
-    NONE   = "none"
+    NONE = "none"
 
 
 class MemoryAction(str, Enum):
-    MERGE  = "merge"
+    MERGE = "merge"
     DELETE = "delete"
 
 
@@ -56,7 +56,7 @@ class DedupDecider:
         embedder,
         provider: LLMProvider,
         model: str,
-        similarity_threshold: float = 0.45,   # 库内预筛阈值（宽松，找候选送 LLM）
+        similarity_threshold: float = 0.45,  # 库内预筛阈值（宽松，找候选送 LLM）
         batch_dedup_threshold: float = 0.90,  # 批内去重阈值（严格，判同义）
     ) -> None:
         self._store = store
@@ -74,7 +74,7 @@ class DedupDecider:
         batch_vecs: list[tuple[list[float], dict]] | None = None,
     ) -> DedupResult:
         summary = (candidate.get("summary") or "").strip()
-        mtype   = candidate.get("memory_type", "procedure")
+        mtype = candidate.get("memory_type", "procedure")
 
         query_vec = await self._embedder.embed(summary)
 
@@ -95,7 +95,9 @@ class DedupDecider:
                 query_vector=query_vec,
             )
 
-        decision, reason, actions, reason_codes = await self._llm_decide(summary, similar)
+        decision, reason, actions, reason_codes = await self._llm_decide(
+            summary, similar
+        )
 
         return DedupResult(
             decision=decision,
@@ -146,7 +148,7 @@ class DedupDecider:
                     similar.append(ctx_copy)
                     seen_ids.add(cid)
 
-        return similar[:self.MAX_SIMILAR_TO_LLM]
+        return similar[: self.MAX_SIMILAR_TO_LLM]
 
     async def _llm_decide(
         self,
@@ -194,22 +196,30 @@ class DedupDecider:
         similar: list[dict],
     ) -> tuple[DedupDecision, str, list[ExistingAction], tuple[str, ...]]:
         if "decision" not in data:
-            return DedupDecision.SKIP, "missing decision", [], ("invalid_missing_decision",)
+            return (
+                DedupDecision.SKIP,
+                "missing decision",
+                [],
+                ("invalid_missing_decision",),
+            )
 
         raw_decision = data.get("decision")
         if not isinstance(raw_decision, str):
-            return DedupDecision.SKIP, "invalid decision type", [], (
-                "invalid_decision_type",
+            return (
+                DedupDecision.SKIP,
+                "invalid decision type",
+                [],
+                ("invalid_decision_type",),
             )
         decision_str = raw_decision.lower().strip()
         reason = str(data.get("reason", "") or "")
         reason_codes: list[str] = []
 
         decision_map = {
-            "skip":   DedupDecision.SKIP,
+            "skip": DedupDecision.SKIP,
             "create": DedupDecision.CREATE,
-            "none":   DedupDecision.NONE,
-            "merge":  DedupDecision.NONE,   # legacy: LLM 直接输出 merge 时降级为 none
+            "none": DedupDecision.NONE,
+            "merge": DedupDecision.NONE,  # legacy: LLM 直接输出 merge 时降级为 none
         }
         decision = decision_map.get(decision_str)
         if decision is None:
@@ -222,8 +232,11 @@ class DedupDecider:
 
         raw_list = data.get("list", [])
         if not isinstance(raw_list, list):
-            return DedupDecision.SKIP, reason or "invalid action list", [], (
-                "invalid_action_list",
+            return (
+                DedupDecision.SKIP,
+                reason or "invalid action list",
+                [],
+                ("invalid_action_list",),
             )
 
         # legacy 兼容：LLM 输出 decision=merge 但 list 为空时，取 similar[0] 作为 merge 目标
@@ -243,7 +256,9 @@ class DedupDecider:
                 invalid_codes.append("invalid_action_entry")
                 continue
             action_str = str(entry.get("decide", "")).lower().strip()
-            action = {"merge": MemoryAction.MERGE, "delete": MemoryAction.DELETE}.get(action_str)
+            action = {"merge": MemoryAction.MERGE, "delete": MemoryAction.DELETE}.get(
+                action_str
+            )
             if not action:
                 invalid_codes.append("invalid_action")
                 continue
@@ -271,23 +286,31 @@ class DedupDecider:
                 continue
 
             seen[iid] = action
-            actions.append(ExistingAction(
-                item_id=iid,
-                summary=item.get("summary", ""),
-                action=action,
-                reason=str(entry.get("reason", "") or ""),
-            ))
+            actions.append(
+                ExistingAction(
+                    item_id=iid,
+                    summary=item.get("summary", ""),
+                    action=action,
+                    reason=str(entry.get("reason", "") or ""),
+                )
+            )
 
         if invalid_codes:
-            return DedupDecision.SKIP, reason or "invalid dedup payload", [], tuple(
-                [*reason_codes, *invalid_codes]
+            return (
+                DedupDecision.SKIP,
+                reason or "invalid dedup payload",
+                [],
+                tuple([*reason_codes, *invalid_codes]),
             )
 
         # SKIP 不应该带任何动作
         if decision == DedupDecision.SKIP:
             if actions:
-                return decision, reason or "skip with actions", [], tuple(
-                    [*reason_codes, "invalid_skip_actions"]
+                return (
+                    decision,
+                    reason or "skip with actions",
+                    [],
+                    tuple([*reason_codes, "invalid_skip_actions"]),
                 )
             return decision, reason, [], tuple(reason_codes)
 
@@ -295,8 +318,11 @@ class DedupDecider:
 
         # create + merge 矛盾：降级为 none
         if decision == DedupDecision.CREATE and has_merge:
-            return DedupDecision.SKIP, reason or "create with merge action", [], tuple(
-                [*reason_codes, "invalid_create_merge_conflict"]
+            return (
+                DedupDecision.SKIP,
+                reason or "create with merge action",
+                [],
+                tuple([*reason_codes, "invalid_create_merge_conflict"]),
             )
 
         # create 只能带 delete
@@ -311,12 +337,18 @@ class DedupDecider:
                     "dedup: %d merge targets exceeds MVP limit 1, downgrading to SKIP",
                     len(merge_actions),
                 )
-                return DedupDecision.SKIP, reason + " | multi-merge->skip", [], tuple(
-                    [*reason_codes, "invalid_multi_merge"]
+                return (
+                    DedupDecision.SKIP,
+                    reason + " | multi-merge->skip",
+                    [],
+                    tuple([*reason_codes, "invalid_multi_merge"]),
                 )
             if not actions:
-                return DedupDecision.SKIP, reason or "missing merge target", [], tuple(
-                    [*reason_codes, "invalid_missing_merge_target"]
+                return (
+                    DedupDecision.SKIP,
+                    reason or "missing merge target",
+                    [],
+                    tuple([*reason_codes, "invalid_missing_merge_target"]),
                 )
 
         return decision, reason, actions, tuple(reason_codes)

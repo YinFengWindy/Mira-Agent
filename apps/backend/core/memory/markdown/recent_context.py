@@ -24,11 +24,14 @@ logger = logging.getLogger("memory.markdown")
 
 _RECENT_CONTEXT_TIMEOUT_S = 180.0
 
+
 def _recent_turn_count(keep_count: int) -> int:
     return max(1, keep_count // 2)
 
+
 def _message_time(message: dict) -> str:
     return str(message.get("timestamp") or "").strip()
+
 
 def _format_recent_context_messages(
     messages: list[dict],
@@ -123,7 +126,12 @@ def _render_recent_context(
         ("最近待延续话题", compression.get("follow_ups") or []),
         ("最近避免事项", compression.get("avoidances") or []),
     ]
-    lines = ["# 最近发生的事", "", "## 最近聊过的事", f"until: {compression_until or 'none'}"]
+    lines = [
+        "# 最近发生的事",
+        "",
+        "## 最近聊过的事",
+        f"until: {compression_until or 'none'}",
+    ]
     rendered_any = False
     for title, items in sections:
         cleaned = [str(item).strip() for item in items if str(item).strip()]
@@ -139,12 +147,15 @@ def _render_recent_context(
             lines.append(f"- {item}")
     else:
         lines.append("- none")
-    lines.extend(["", "## 最近的对话", "<!-- a-preview = assistant reply preview only -->"])
+    lines.extend(
+        ["", "## 最近的对话", "<!-- a-preview = assistant reply preview only -->"]
+    )
     if recent_turns.strip():
         lines.append(recent_turns.strip())
     else:
         lines.append("- none")
     return "\n".join(lines).rstrip() + "\n"
+
 
 class _RecentContextWorkerMixin:
     @staticmethod
@@ -299,12 +310,16 @@ ongoing_threads 严格限制：
         archive_all: bool,
         nsfw_memory_enabled: bool = False,
     ) -> str | _ConsolidationFailure:
-        tail = list(session.messages[-self._keep_count :]) if self._keep_count > 0 else []
+        tail = (
+            list(session.messages[-self._keep_count :]) if self._keep_count > 0 else []
+        )
         recent_count = min(len(tail), _recent_turn_count(self._keep_count))
         session_messages = list(session.messages)
         if archive_all:
             compact_source = (
-                session_messages[:-recent_count] if recent_count > 0 else session_messages
+                session_messages[:-recent_count]
+                if recent_count > 0
+                else session_messages
             )
         else:
             compact_source = list(window.old_messages) if window is not None else []
@@ -322,7 +337,7 @@ ongoing_threads 严格限制：
         if hasattr(profile_maint, "read_recent_context"):
             old_recent_context = str(
                 await asyncio.to_thread(profile_maint.read_recent_context) or ""
-        )
+            )
         conversation = _format_conversation_for_recent_context(
             compact_source,
             nsfw_memory_enabled=nsfw_memory_enabled,
@@ -399,7 +414,11 @@ ongoing_threads 严格限制：
                 or (
                     match.group(1).strip()
                     if old_recent_context.strip()
-                    and (match := re.search(r"^until:\s*(.+)$", old_recent_context, flags=re.M))
+                    and (
+                        match := re.search(
+                            r"^until:\s*(.+)$", old_recent_context, flags=re.M
+                        )
+                    )
                     else ""
                 )
             ),
@@ -408,7 +427,9 @@ ongoing_threads 严格限制：
 
     async def refresh_recent_turns(self, *, session, profile_maint=None) -> None:
         profile = profile_maint or self._profile_maint
-        tail = list(session.messages[-self._keep_count :]) if self._keep_count > 0 else []
+        tail = (
+            list(session.messages[-self._keep_count :]) if self._keep_count > 0 else []
+        )
         recent_count = min(len(tail), _recent_turn_count(self._keep_count))
         recent_turns = tail[-recent_count:] if recent_count > 0 else []
         rendered_recent_turns = _format_recent_context_messages(
@@ -417,7 +438,9 @@ ongoing_threads 严格限制：
         )
         existing_text = ""
         if hasattr(profile, "read_recent_context"):
-            existing_text = str(await asyncio.to_thread(profile.read_recent_context) or "")
+            existing_text = str(
+                await asyncio.to_thread(profile.read_recent_context) or ""
+            )
         updated = _replace_recent_turns_block(existing_text, rendered_recent_turns)
         if hasattr(profile, "write_recent_context"):
             await asyncio.to_thread(profile.write_recent_context, updated)

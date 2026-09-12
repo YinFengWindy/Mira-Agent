@@ -79,7 +79,9 @@ class _PreviewRedirectHandler(urllib.request.HTTPRedirectHandler):
 def request_json(url: str, headers: dict[str, str], body: bytes) -> dict[str, Any]:
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=VOICE_HTTP_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(
+            request, timeout=VOICE_HTTP_TIMEOUT_SECONDS
+        ) as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -109,7 +111,9 @@ def request_stream(url: str, headers: dict[str, str], body: bytes) -> Iterator[b
 
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=VOICE_HTTP_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(
+            request, timeout=VOICE_HTTP_TIMEOUT_SECONDS
+        ) as response:
             for chunk in response:
                 if chunk:
                     yield bytes(chunk)

@@ -20,7 +20,9 @@ class DesktopSessionPresenter:
     def serialize(self, session: Session) -> dict[str, Any]:
         """Returns the desktop-compatible role session snapshot."""
         payload = self.serialize_summary(session)
-        payload["messages"] = [self.serialize_message(message) for message in session.messages]
+        payload["messages"] = [
+            self.serialize_message(message) for message in session.messages
+        ]
         return payload
 
     def serialize_summary(self, session: Session) -> dict[str, Any]:
@@ -135,8 +137,7 @@ class DesktopSessionPresenter:
             turn_metrics = {
                 key: value
                 for key in ("total_tokens", "thinking_duration_ms")
-                if isinstance((value := raw_turn_metrics.get(key)), int)
-                and value >= 0
+                if isinstance((value := raw_turn_metrics.get(key)), int) and value >= 0
             }
             if turn_metrics:
                 merged_metadata["turn_metrics"] = turn_metrics
@@ -187,26 +188,32 @@ class DesktopSessionPresenter:
                 tool_name = str(raw_call.get("name") or "").strip()
                 if not call_id or not tool_name:
                     continue
-                calls.append({
-                    "call_id": call_id,
-                    "name": tool_name,
-                    "status": str(raw_call.get("status") or "success"),
-                    "arguments": raw_call.get("arguments")
-                    if isinstance(raw_call.get("arguments"), dict)
-                    else {},
-                    "final_arguments": raw_call.get("final_arguments")
-                    if isinstance(raw_call.get("final_arguments"), dict)
-                    else {},
-                    "result": truncate_desktop_tool_result(
-                        raw_call.get("result")
-                    ),
-                })
+                calls.append(
+                    {
+                        "call_id": call_id,
+                        "name": tool_name,
+                        "status": str(raw_call.get("status") or "success"),
+                        "arguments": (
+                            raw_call.get("arguments")
+                            if isinstance(raw_call.get("arguments"), dict)
+                            else {}
+                        ),
+                        "final_arguments": (
+                            raw_call.get("final_arguments")
+                            if isinstance(raw_call.get("final_arguments"), dict)
+                            else {}
+                        ),
+                        "result": truncate_desktop_tool_result(raw_call.get("result")),
+                    }
+                )
             if calls:
-                groups.append({
-                    "text": str(raw_group.get("text") or ""),
-                    "reasoning_content": str(
-                        raw_group.get("reasoning_content") or ""
-                    ),
-                    "calls": calls,
-                })
+                groups.append(
+                    {
+                        "text": str(raw_group.get("text") or ""),
+                        "reasoning_content": str(
+                            raw_group.get("reasoning_content") or ""
+                        ),
+                        "calls": calls,
+                    }
+                )
         return groups

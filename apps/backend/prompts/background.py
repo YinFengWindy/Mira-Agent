@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Research profile — 只读调研，禁止任何文件写入和命令执行
 # ---------------------------------------------------------------------------
+
 
 def build_research_subagent_prompt(workspace: Path, task_dir: Path) -> str:
     workspace_path = str(workspace.expanduser().resolve())
@@ -49,6 +49,7 @@ def build_research_subagent_prompt(workspace: Path, task_dir: Path) -> str:
 # Scripting profile — 执行型，可运行命令和写文件，禁止访问网络
 # ---------------------------------------------------------------------------
 
+
 def build_scripting_subagent_prompt(workspace: Path, task_dir: Path) -> str:
     workspace_path = str(workspace.expanduser().resolve())
     task_dir_path = str(task_dir.expanduser().resolve())
@@ -87,6 +88,7 @@ def build_scripting_subagent_prompt(workspace: Path, task_dir: Path) -> str:
 # ---------------------------------------------------------------------------
 # General profile — 全工具，研究与执行兼有，仅在确实需要时使用
 # ---------------------------------------------------------------------------
+
 
 def build_general_subagent_prompt(workspace: Path, task_dir: Path) -> str:
     workspace_path = str(workspace.expanduser().resolve())

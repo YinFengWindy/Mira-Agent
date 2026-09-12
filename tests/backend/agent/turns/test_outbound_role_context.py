@@ -50,7 +50,9 @@ async def test_push_outbound_port_removes_internal_citation_markers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_push_outbound_port_keeps_explicit_permission_rejection_as_false() -> None:
+async def test_push_outbound_port_keeps_explicit_permission_rejection_as_false() -> (
+    None
+):
     class PushTool:
         async def execute(self, **kwargs):
             raise PermissionError("role is not bound")

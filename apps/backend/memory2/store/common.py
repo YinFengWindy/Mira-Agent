@@ -156,11 +156,12 @@ def _hotness_score(
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
     effective_half_life = max(
-        half_life_days * (1.0 + 0.5 * _coerce_emotional_weight(emotional_weight) / 10.0),
+        half_life_days
+        * (1.0 + 0.5 * _coerce_emotional_weight(emotional_weight) / 10.0),
         0.1,
     )
-    freq    = 1.0 / (1.0 + math.exp(-math.log1p(max(0, reinforcement))))
-    age_d   = max((now - updated_at).total_seconds() / 86400.0, 0.0)
+    freq = 1.0 / (1.0 + math.exp(-math.log1p(max(0, reinforcement))))
+    age_d = max((now - updated_at).total_seconds() / 86400.0, 0.0)
     recency = math.exp(-math.log(2) / effective_half_life * age_d)
     return freq * recency
 

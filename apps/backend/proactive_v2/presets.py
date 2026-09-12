@@ -50,9 +50,9 @@ PRESETS: dict[str, PresetConfig] = {
     "dev_verify": {
         # 改完代码后 2-5 分钟内可见效果
         "trigger": {
-            "tick_interval_s0": 60,   # 1分钟
-            "tick_interval_s1": 30,   # 30秒
-            "tick_jitter": 0.0,       # 无抖动，精确触发
+            "tick_interval_s0": 60,  # 1分钟
+            "tick_interval_s1": 30,  # 30秒
+            "tick_jitter": 0.0,  # 无抖动，精确触发
         },
         "gate": {
             "score_llm_threshold": 0.08,  # 极低门槛
@@ -68,7 +68,7 @@ PRESETS: dict[str, PresetConfig] = {
         # 低打扰模式，比 daily 慢 3-4 倍
         "trigger": {
             "tick_interval_s0": 1800,  # 30分钟
-            "tick_interval_s1": 900,   # 15分钟
+            "tick_interval_s1": 900,  # 15分钟
             "tick_jitter": 0.3,
         },
         "gate": {

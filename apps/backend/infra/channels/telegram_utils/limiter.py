@@ -10,6 +10,7 @@ from telegram.error import NetworkError, RetryAfter, TimedOut
 logger = logging.getLogger("infra.channels.telegram_utils")
 _T = TypeVar("_T")
 
+
 class TelegramOutboundLimiter:
     def __init__(
         self,
@@ -59,7 +60,8 @@ class TelegramOutboundLimiter:
                 except RetryAfter as e:
                     last_err = e
                     delay = max(
-                        float(getattr(e, "retry_after", 1.0) or 1.0) + self._retry_padding_s,
+                        float(getattr(e, "retry_after", 1.0) or 1.0)
+                        + self._retry_padding_s,
                         self._interval(kind),
                     )
                     self._cooldown(cid, delay)
@@ -112,10 +114,11 @@ class TelegramOutboundLimiter:
                 return result
             except RetryAfter as e:
                 delay = (
-                    float(getattr(e, "retry_after", 1.0) or 1.0)
-                    + self._retry_padding_s
+                    float(getattr(e, "retry_after", 1.0) or 1.0) + self._retry_padding_s
                 )
-                self._next_typing_at[chat_id] = asyncio.get_running_loop().time() + delay
+                self._next_typing_at[chat_id] = (
+                    asyncio.get_running_loop().time() + delay
+                )
                 raise
 
     async def _wait_for_chat_slot(self, chat_id: int) -> None:
@@ -221,6 +224,7 @@ async def _send_with_retry(
             await asyncio.sleep(delay)
     if last_err is not None:
         raise last_err
+
 
 async def _send_with_retry_result(
     send_coro_factory,

@@ -12,7 +12,6 @@ from agent.lifecycle.types import PromptRenderInput, PromptRenderResult
 logger = logging.getLogger("agent.tool_discovery")
 
 
-
 @dataclass
 class MemoryConfig:
     window: int = 40
@@ -72,7 +71,9 @@ class ToolDiscoveryState:
         """
         return set(self.unlock_names_from_result(result_json))
 
-    def update(self, session_key: str, tools_used: list[str], always_on: set[str]) -> None:
+    def update(
+        self, session_key: str, tools_used: list[str], always_on: set[str]
+    ) -> None:
         skip = always_on | {"tool_search"}
         lru: OrderedDict[str, None] = self._unlocked.setdefault(
             session_key,
@@ -89,7 +90,9 @@ class ToolDiscoveryState:
                 newly_added.append(name)
             while len(lru) > self.capacity:
                 evicted, _ = lru.popitem(last=False)
-                logger.info("[LRU驱逐] session=%s 移除最旧工具: %s", session_key, evicted)
+                logger.info(
+                    "[LRU驱逐] session=%s 移除最旧工具: %s", session_key, evicted
+                )
         if newly_added:
             logger.info(
                 "[LRU更新] session=%s 新增工具: %s，当前LRU: %s",
@@ -113,6 +116,7 @@ class SessionLike(Protocol):
     ) -> list[dict]: ...
     def add_message(self, role: str, content: str, media=None, **kwargs) -> None: ...
 
+
 @dataclass
 class TurnRunResult:
     reply: str | None
@@ -133,13 +137,11 @@ class AgentLoopRunner(Protocol):
         tool_event_channel: str = "",
         tool_event_chat_id: str = "",
         tool_execution_context: dict[str, str] | None = None,
-    ) -> tuple[str, list[str], list[dict], set[str] | None, str | None]:
-        ...
+    ) -> tuple[str, list[str], list[dict], set[str] | None, str | None]: ...
 
 
 class PromptRenderRunner(Protocol):
     async def __call__(
         self,
         input: PromptRenderInput,
-    ) -> PromptRenderResult:
-        ...
+    ) -> PromptRenderResult: ...

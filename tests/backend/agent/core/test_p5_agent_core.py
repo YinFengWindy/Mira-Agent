@@ -72,9 +72,7 @@ async def test_agent_core_process_runs_prepare_prompt_run_commit_in_order():
         order.append("render")
         return SimpleNamespace(system_prompt="system prompt", messages=[])
 
-    context = SimpleNamespace(
-        render=MagicMock(side_effect=_render)
-    )
+    context = SimpleNamespace(render=MagicMock(side_effect=_render))
     tools = SimpleNamespace(
         set_context=MagicMock(side_effect=lambda **kwargs: order.append("tool_context"))
     )
@@ -135,11 +133,11 @@ async def test_agent_core_process_runs_prepare_prompt_run_commit_in_order():
         current_user_message="你好",
         role_config_version="",
         thread_id="",
-            delivery_key="",
-            current_user_source_ref="telegram:123:0",
-            current_timestamp="2026-04-04T22:00:00",
-            defer_push_session_sync="true",
-        )
+        delivery_key="",
+        current_user_source_ref="telegram:123:0",
+        current_timestamp="2026-04-04T22:00:00",
+        defer_push_session_sync="true",
+    )
     assert reasoner.run_turn.await_args.kwargs["skill_names"] == ["refactor"]
     assert reasoner.run_turn.await_args.kwargs["retrieved_memory_block"] == "remembered"
     # AfterReasoning persists user+assistant messages to session
@@ -173,7 +171,9 @@ async def test_agent_core_process_coerces_empty_reply_before_commit():
                 ContextBuilder,
                 SimpleNamespace(
                     render=MagicMock(
-                        return_value=SimpleNamespace(system_prompt="prompt", messages=[])
+                        return_value=SimpleNamespace(
+                            system_prompt="prompt", messages=[]
+                        )
                     ),
                 ),
             ),
@@ -208,7 +208,9 @@ async def test_agent_core_before_reasoning_can_patch_context():
         ),
     )
     context = SimpleNamespace(
-        render=MagicMock(return_value=SimpleNamespace(system_prompt="prompt", messages=[]))
+        render=MagicMock(
+            return_value=SimpleNamespace(system_prompt="prompt", messages=[])
+        )
     )
     tools = SimpleNamespace(set_context=MagicMock())
     reasoner = SimpleNamespace(
@@ -469,10 +471,7 @@ async def test_reasoner_exception_turn_returns_control_outbound():
 @pytest.mark.asyncio
 async def test_memory_consolidation_failure_propagates_to_transport_error():
     session = _DummySession("role:mira")
-    session.messages = [
-        {"role": "user", "content": f"u{i}"}
-        for i in range(30)
-    ]
+    session.messages = [{"role": "user", "content": f"u{i}"} for i in range(30)]
     context_store = SimpleNamespace(prepare=AsyncMock())
     reasoner = SimpleNamespace(run_turn=AsyncMock())
 
@@ -504,7 +503,9 @@ async def test_memory_consolidation_failure_propagates_to_transport_error():
             memory_consolidator=_FailedConsolidator(),
         )
     )
-    msg = InboundMessage(channel="desktop", sender="user", chat_id="role:mira", content="hi")
+    msg = InboundMessage(
+        channel="desktop", sender="user", chat_id="role:mira", content="hi"
+    )
 
     with pytest.raises(
         MemoryConsolidationFailedError,

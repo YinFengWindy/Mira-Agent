@@ -13,7 +13,9 @@ def normalize_chat_id(channel: str, chat_id: str) -> str:
 def normalize_qq_group_chat_id(group_id: str) -> str:
     """Return the canonical QQ group chat identifier used by the runtime."""
     clean_group_id = str(group_id).strip()
-    return clean_group_id if clean_group_id.startswith("gqq:") else f"gqq:{clean_group_id}"
+    return (
+        clean_group_id if clean_group_id.startswith("gqq:") else f"gqq:{clean_group_id}"
+    )
 
 
 def chat_ids_equal(channel: str, left: str, right: str) -> bool:
@@ -23,5 +25,7 @@ def chat_ids_equal(channel: str, left: str, right: str) -> bool:
     if channel == "qq" and (
         normalized_left.startswith("gqq:") or normalized_right.startswith("gqq:")
     ):
-        return normalized_left.removeprefix("gqq:") == normalized_right.removeprefix("gqq:")
+        return normalized_left.removeprefix("gqq:") == normalized_right.removeprefix(
+            "gqq:"
+        )
     return normalized_left == normalized_right

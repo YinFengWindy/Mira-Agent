@@ -4,6 +4,7 @@ import platform
 from datetime import datetime, timedelta
 from pathlib import Path
 
+
 def _normalize_timestamp(message_timestamp: datetime | None = None) -> datetime:
     ts = message_timestamp
     if ts is None:
@@ -133,11 +134,15 @@ def build_agent_session_context_prompt(
 ) -> str:
     parts = [build_agent_environment_prompt()]
     if channel and chat_id:
-        parts.append(build_current_session_prompt(channel=channel, chat_id=chat_id).strip())
+        parts.append(
+            build_current_session_prompt(channel=channel, chat_id=chat_id).strip()
+        )
     return "\n\n".join(part for part in parts if part.strip())
 
 
-def build_current_message_time_envelope(*, message_timestamp: datetime | None = None) -> str:
+def build_current_message_time_envelope(
+    *, message_timestamp: datetime | None = None
+) -> str:
     ts = _normalize_timestamp(message_timestamp)
     if ts.tzinfo is None:
         ts = ts.astimezone()
@@ -159,7 +164,6 @@ def build_current_message_time_envelope(*, message_timestamp: datetime | None = 
 def build_agent_environment_prompt() -> str:
     return f"""## 环境
 {platform.machine()}"""
-
 
 
 def build_skills_catalog_prompt(skills_summary: str) -> str:

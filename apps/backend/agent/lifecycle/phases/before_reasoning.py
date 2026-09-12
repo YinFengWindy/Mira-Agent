@@ -52,7 +52,9 @@ class _SyncToolContextModule:
         if state.session is None:
             raise RuntimeError("BeforeReasoning requires TurnState.session")
         role_id = str(state.session.metadata.get("role_id") or "").strip()
-        message_metadata = state.msg.metadata if isinstance(state.msg.metadata, dict) else {}
+        message_metadata = (
+            state.msg.metadata if isinstance(state.msg.metadata, dict) else {}
+        )
         self._tools.set_context(
             channel=before_turn.channel,
             chat_id=before_turn.chat_id,

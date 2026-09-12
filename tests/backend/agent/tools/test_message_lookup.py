@@ -151,7 +151,12 @@ async def test_fetch_messages_supports_window_source_ref(tmp_path):
         "tg:1:4",
     ]
     assert payload["matched_count"] == 2
-    assert [m["in_source_ref"] for m in payload["messages"]] == [False, True, True, False]
+    assert [m["in_source_ref"] for m in payload["messages"]] == [
+        False,
+        True,
+        True,
+        False,
+    ]
 
 
 @pytest.mark.asyncio
@@ -233,9 +238,27 @@ async def test_search_messages_supports_filters(tmp_path):
         metadata={},
     )
 
-    store.insert_message("tg:1", role="user", content="benchmark recall 0.62", ts="2026-01-01T00:00:01+00:00", seq=0)
-    store.insert_message("tg:1", role="assistant", content="benchmark done", ts="2026-01-01T00:00:02+00:00", seq=1)
-    store.insert_message("tg:2", role="user", content="benchmark other", ts="2026-01-01T00:00:03+00:00", seq=0)
+    store.insert_message(
+        "tg:1",
+        role="user",
+        content="benchmark recall 0.62",
+        ts="2026-01-01T00:00:01+00:00",
+        seq=0,
+    )
+    store.insert_message(
+        "tg:1",
+        role="assistant",
+        content="benchmark done",
+        ts="2026-01-01T00:00:02+00:00",
+        seq=1,
+    )
+    store.insert_message(
+        "tg:2",
+        role="user",
+        content="benchmark other",
+        ts="2026-01-01T00:00:03+00:00",
+        seq=0,
+    )
 
     tool = SearchMessagesTool(store)
 
@@ -276,7 +299,9 @@ async def test_search_messages_supports_offset_pagination(tmp_path):
 
     tool = SearchMessagesTool(store)
 
-    first_page = json.loads(await tool.execute(query="benchmark", session_key="tg:1", limit=2))
+    first_page = json.loads(
+        await tool.execute(query="benchmark", session_key="tg:1", limit=2)
+    )
     second_page = json.loads(
         await tool.execute(
             query="benchmark",
@@ -301,7 +326,9 @@ async def test_search_messages_supports_offset_pagination(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_search_messages_mixed_long_and_short_terms_keeps_short_only_hits(tmp_path):
+async def test_search_messages_mixed_long_and_short_terms_keeps_short_only_hits(
+    tmp_path,
+):
     store = SessionStore(tmp_path / "sessions.db")
     store.upsert_session(
         "tg:1",
@@ -310,16 +337,36 @@ async def test_search_messages_mixed_long_and_short_terms_keeps_short_only_hits(
         last_consolidated=0,
         metadata={},
     )
-    store.insert_message("tg:1", role="user", content="phase only", ts="2026-01-01T00:00:01+00:00", seq=0)
-    store.insert_message("tg:1", role="assistant", content="只提到支付", ts="2026-01-01T00:00:02+00:00", seq=1)
-    store.insert_message("tg:1", role="user", content="phase 支付 一起命中", ts="2026-01-01T00:00:03+00:00", seq=2)
+    store.insert_message(
+        "tg:1", role="user", content="phase only", ts="2026-01-01T00:00:01+00:00", seq=0
+    )
+    store.insert_message(
+        "tg:1",
+        role="assistant",
+        content="只提到支付",
+        ts="2026-01-01T00:00:02+00:00",
+        seq=1,
+    )
+    store.insert_message(
+        "tg:1",
+        role="user",
+        content="phase 支付 一起命中",
+        ts="2026-01-01T00:00:03+00:00",
+        seq=2,
+    )
 
     tool = SearchMessagesTool(store)
-    payload = json.loads(await tool.execute(query="phase 支付", session_key="tg:1", limit=10))
+    payload = json.loads(
+        await tool.execute(query="phase 支付", session_key="tg:1", limit=10)
+    )
 
     assert payload["count"] == 3
     assert payload["matched_count"] == 3
-    assert {item["id"] for item in payload["messages"]} == {"tg:1:0", "tg:1:1", "tg:1:2"}
+    assert {item["id"] for item in payload["messages"]} == {
+        "tg:1:0",
+        "tg:1:1",
+        "tg:1:2",
+    }
 
 
 @pytest.mark.asyncio

@@ -82,8 +82,11 @@ class StorySimulationHandler:
     async def drain(self) -> None:
         """Waits for accepted Story turns and generated assets before retirement."""
         while self._tasks or self._resource_tasks:
-            await asyncio.gather(*self._tasks.values(), *self._resource_tasks.values(),
-                                 return_exceptions=True)
+            await asyncio.gather(
+                *self._tasks.values(),
+                *self._resource_tasks.values(),
+                return_exceptions=True,
+            )
             await asyncio.sleep(0)
 
     def skip_startup_recovery(self) -> None:
@@ -110,13 +113,19 @@ class StorySimulationHandler:
                 "stories": [
                     {
                         **summary,
-                        **self._repository(summary["story_id"]).current_stage_state(summary["story_id"]),
+                        **self._repository(summary["story_id"]).current_stage_state(
+                            summary["story_id"]
+                        ),
                     }
                     for summary in summaries
                 ]
             }
         if method == "stories.get":
-            return {"story": self._repository(self._story_id(payload)).story_read_model(self._story_id(payload))}
+            return {
+                "story": self._repository(self._story_id(payload)).story_read_model(
+                    self._story_id(payload)
+                )
+            }
         if method == "stories.cg.list":
             return self._cg_gallery()
         if method == "stories.cg.retry":
@@ -126,9 +135,13 @@ class StorySimulationHandler:
         if method == "stories.create":
             return await self._create(payload, emit_event=emit_event)
         if method == "stories.input":
-            return await self._input(payload, request_id=request_id, emit_event=emit_event)
+            return await self._input(
+                payload, request_id=request_id, emit_event=emit_event
+            )
         if method == "stories.continue":
-            return await self._continue(payload, request_id=request_id, emit_event=emit_event)
+            return await self._continue(
+                payload, request_id=request_id, emit_event=emit_event
+            )
         raise ValueError(f"unknown Story method: {method}")
 
     async def _create(
@@ -290,7 +303,9 @@ class StorySimulationHandler:
                 if opening_turn["status"] == "pending":
                     self._start_generation(service, opening_turn, emit_event)
                 if opening_turn["status"] == "committed":
-                    await self._fail_interrupted_resources(repository, story_id, emit_event)
+                    await self._fail_interrupted_resources(
+                        repository, story_id, emit_event
+                    )
                 for turn in repository.interrupted_turns(story_id):
                     if turn["id"] == opening_turn["id"]:
                         continue
@@ -309,7 +324,9 @@ class StorySimulationHandler:
         for resource in repository.story_resources(story_id):
             if resource["status"] != "generating":
                 continue
-            updated = repository.fail_resource(str(resource["id"]), "generation_interrupted")
+            updated = repository.fail_resource(
+                str(resource["id"]), "generation_interrupted"
+            )
             await self._emit_resource_changed(repository, updated, emit_event)
 
     async def _emit_resource_changed(
@@ -425,7 +442,10 @@ class StorySimulationHandler:
         await self._emit_resource_changed(repository, prepared, emit_event)
         service = self._service(repository)
         self._start_resource_generation(service, prepared, emit_event)
-        return {"story": repository.story_read_model(story_id), "resource_id": resource_id}
+        return {
+            "story": repository.story_read_model(story_id),
+            "resource_id": resource_id,
+        }
 
     async def _regenerate_cg(
         self, payload: dict[str, Any], *, emit_event: EventEmitter
@@ -516,7 +536,10 @@ class StorySimulationHandler:
         )
 
     def _start_generation(
-        self, service: StorySimulationService, turn: dict[str, Any], emit_event: EventEmitter
+        self,
+        service: StorySimulationService,
+        turn: dict[str, Any],
+        emit_event: EventEmitter,
     ) -> None:
         turn_id = str(turn["id"])
         existing = self._tasks.get(turn_id)
@@ -527,7 +550,9 @@ class StorySimulationHandler:
             name=f"story-director:{turn_id}",
         )
         self._tasks[turn_id] = task
-        task.add_done_callback(lambda _task, turn_id=turn_id: self._tasks.pop(turn_id, None))
+        task.add_done_callback(
+            lambda _task, turn_id=turn_id: self._tasks.pop(turn_id, None)
+        )
 
     async def _generate_turn(
         self,

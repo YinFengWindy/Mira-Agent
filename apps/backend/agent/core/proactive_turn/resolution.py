@@ -52,7 +52,9 @@ def _normalize_delivery_url(raw: str) -> str:
         return ""
     parts = urlsplit(text)
     path = parts.path.rstrip("/") or parts.path
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
+    return urlunsplit(
+        (parts.scheme.lower(), parts.netloc.lower(), path, parts.query, "")
+    )
 
 
 def _build_delivery_refs(ctx: AgentTickContext) -> list[str]:
@@ -73,7 +75,9 @@ def _build_delivery_refs(ctx: AgentTickContext) -> list[str]:
         if url:
             refs.append(f"url:{url}")
             continue
-        source = str(meta.get("source") or meta.get("source_name") or "").strip().lower()
+        source = (
+            str(meta.get("source") or meta.get("source_name") or "").strip().lower()
+        )
         title = str(meta.get("title") or "").strip().lower()
         if title:
             refs.append(f"title:{source}|{title}")
@@ -104,7 +108,9 @@ async def ack_discarded(ctx: AgentTickContext, ack_fn) -> None:
         await ack_fn(key, _DISCARDED_ACK_TTL)
 
 
-async def ack_post_guard_fail(ctx: AgentTickContext, ack_fn, *, alert_ack_fn=None) -> None:
+async def ack_post_guard_fail(
+    ctx: AgentTickContext, ack_fn, *, alert_ack_fn=None
+) -> None:
     """对通过模型判断但未通过发送后置 guard 的条目执行 ACK。"""
 
     if ack_fn is None:
@@ -160,7 +166,9 @@ async def ack_on_success(ctx: AgentTickContext, ack_fn, *, alert_ack_fn=None) ->
         await ack_fn(key, _DISCARDED_ACK_TTL)
 
 
-async def _mark_delivery(*, state_store: Any, session_key: str, delivery_key: str) -> None:
+async def _mark_delivery(
+    *, state_store: Any, session_key: str, delivery_key: str
+) -> None:
     state_store.mark_delivery(session_key, delivery_key)
 
 
@@ -243,7 +251,10 @@ async def resolve_decide(
                 name="ack_discarded_skip",
             )
         ]
-        if ctx.active_gate is not None and ctx.skip_reason in {"scene_changed", "no_content"}:
+        if ctx.active_gate is not None and ctx.skip_reason in {
+            "scene_changed",
+            "no_content",
+        }:
             skip_side_effects.extend(
                 _active_gate_close_effects(
                     pipeline._proactive_gates,

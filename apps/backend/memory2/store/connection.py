@@ -79,7 +79,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_items USING vec0(
 
     def _migrate_existing_to_vec(self) -> None:
         """启动时将 memory_items 中尚未同步到 vec_items 的 embedding 迁移过去。"""
-        existing = {r[0] for r in self._db.execute("SELECT rowid FROM vec_items").fetchall()}
+        existing = {
+            r[0] for r in self._db.execute("SELECT rowid FROM vec_items").fetchall()
+        }
         rows = self._db.execute(
             "SELECT rowid, embedding FROM memory_items WHERE embedding IS NOT NULL"
         ).fetchall()

@@ -90,6 +90,9 @@ def test_parse_frame_requires_png_and_valid_timestamp() -> None:
     frame = parse_observation_frame(_payload())
     assert frame.frame_id == "frame-1"
 
-    invalid = {**_payload(), "image_base64": base64.b64encode(b"not-png").decode("ascii")}
+    invalid = {
+        **_payload(),
+        "image_base64": base64.b64encode(b"not-png").decode("ascii"),
+    }
     with pytest.raises(ValueError, match="PNG"):
         parse_observation_frame(invalid)

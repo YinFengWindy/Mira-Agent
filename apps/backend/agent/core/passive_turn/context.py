@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from agent.retrieval.protocol import MemoryRetrievalPipeline
     from bus.events import InboundMessage
 
+
 class ContextStore(ABC):
     """
     ┌──────────────────────────────────────┐

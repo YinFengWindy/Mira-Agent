@@ -65,20 +65,28 @@ async def start_channels(
     if config.channels.telegram and config.channels.telegram.token:
         tg = config.channels.telegram
         configuration = (tg, tuple(bot_commands or []))
-        existing = previous_host.reusable(tg.channel_name, configuration) if previous_host else None
+        existing = (
+            previous_host.reusable(tg.channel_name, configuration)
+            if previous_host
+            else None
+        )
         try:
             from infra.channels.telegram_channel import TelegramChannel
 
-            host.add(existing or TelegramChannel(
-                token=tg.token,
-                bus=bus,
-                session_manager=session_manager,
-                bot_commands=bot_commands,
-                event_bus=event_bus,
-                interrupt_controller=interrupt_controller,
-                channel_name=tg.channel_name,
-                channel_hub=channel_hub,
-            ), configuration=configuration)
+            host.add(
+                existing
+                or TelegramChannel(
+                    token=tg.token,
+                    bus=bus,
+                    session_manager=session_manager,
+                    bot_commands=bot_commands,
+                    event_bus=event_bus,
+                    interrupt_controller=interrupt_controller,
+                    channel_name=tg.channel_name,
+                    channel_hub=channel_hub,
+                ),
+                configuration=configuration,
+            )
         except Exception as exc:
             if strict:
                 raise
@@ -91,16 +99,20 @@ async def start_channels(
         try:
             from infra.channels.qq_channel import QQChannel
 
-            host.add(existing or QQChannel(
-                bot_uin=qq.bot_uin,
-                bus=bus,
-                session_manager=session_manager,
-                websocket_open_timeout_seconds=qq.websocket_open_timeout_seconds,
-                http_requester=http_resources.external_default,
-                event_bus=event_bus,
-                interrupt_controller=interrupt_controller,
-                channel_hub=channel_hub,
-            ), configuration=qq)
+            host.add(
+                existing
+                or QQChannel(
+                    bot_uin=qq.bot_uin,
+                    bus=bus,
+                    session_manager=session_manager,
+                    websocket_open_timeout_seconds=qq.websocket_open_timeout_seconds,
+                    http_requester=http_resources.external_default,
+                    event_bus=event_bus,
+                    interrupt_controller=interrupt_controller,
+                    channel_hub=channel_hub,
+                ),
+                configuration=qq,
+            )
         except Exception as exc:
             if strict:
                 raise
@@ -113,7 +125,8 @@ async def start_channels(
         configuration = getattr(channel, "configuration_key", None)
         existing = (
             previous_host.reusable(channel.name, configuration)
-            if previous_host is not None and configuration is not None else None
+            if previous_host is not None and configuration is not None
+            else None
         )
         if existing is not None:
             await channel.stop()

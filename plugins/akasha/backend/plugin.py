@@ -64,7 +64,9 @@ def render_last_query(workspace: Path | None, session_key: str) -> str:
     store = AkashaStore(
         resolve_akasha_db_path(
             workspace=workspace,
-            akasha_config=load_akasha_config(plugin_dir=Path(__file__).resolve().parent),
+            akasha_config=load_akasha_config(
+                plugin_dir=Path(__file__).resolve().parent
+            ),
         )
     )
     try:
@@ -103,29 +105,35 @@ def _render_query_detail(raw: dict[str, object]) -> str:
             f" | 门槛: `{threshold:.3f}`"
         ),
     ]
-    lines.extend(_render_activated_nodes(
-        activation_items,
-        threshold=threshold,
-        limit=8,
-    ))
-    lines.extend(_render_memory_items(
-        "🎯 左脑精确回忆 (Dense):",
-        "(最终注入大模型的左脑候选)",
-        dense_items,
-        show_signals=False,
-        show_path=False,
-        score_label="得",
-        limit=8,
-    ))
-    lines.extend(_render_memory_items(
-        "🌊 右脑联想记忆 (Ripple):",
-        "(最终注入大模型的右脑候选)",
-        ripple_items,
-        show_signals=True,
-        show_path=True,
-        score_label="得",
-        limit=8,
-    ))
+    lines.extend(
+        _render_activated_nodes(
+            activation_items,
+            threshold=threshold,
+            limit=8,
+        )
+    )
+    lines.extend(
+        _render_memory_items(
+            "🎯 左脑精确回忆 (Dense):",
+            "(最终注入大模型的左脑候选)",
+            dense_items,
+            show_signals=False,
+            show_path=False,
+            score_label="得",
+            limit=8,
+        )
+    )
+    lines.extend(
+        _render_memory_items(
+            "🌊 右脑联想记忆 (Ripple):",
+            "(最终注入大模型的右脑候选)",
+            ripple_items,
+            show_signals=True,
+            show_path=True,
+            score_label="得",
+            limit=8,
+        )
+    )
     return "\n".join(lines).strip()
 
 
@@ -145,14 +153,16 @@ def _render_activated_nodes(
         lines.append("无")
         return lines
     for index, item in enumerate(items[:limit], start=1):
-        lines.extend(_render_item(
-            index,
-            item,
-            inline=False,
-            score_label="分",
-            show_path=True,
-            show_signals=False,
-        ))
+        lines.extend(
+            _render_item(
+                index,
+                item,
+                inline=False,
+                score_label="分",
+                show_path=True,
+                show_signals=False,
+            )
+        )
     if len(items) > limit:
         lines.append(f"(后略，还有 `{len(items) - limit}` 条)")
     return lines
@@ -173,14 +183,16 @@ def _render_memory_items(
         lines.append("无")
         return lines
     for index, item in enumerate(items[:limit], start=1):
-        lines.extend(_render_item(
-            index,
-            item,
-            inline=True,
-            score_label=score_label,
-            show_path=show_path,
-            show_signals=show_signals,
-        ))
+        lines.extend(
+            _render_item(
+                index,
+                item,
+                inline=True,
+                score_label=score_label,
+                show_path=show_path,
+                show_signals=show_signals,
+            )
+        )
     if len(items) > limit:
         lines.append(f"(后略，还有 `{len(items) - limit}` 条)")
     return lines

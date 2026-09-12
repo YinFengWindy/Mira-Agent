@@ -9,12 +9,10 @@ TDD — Phase 1: proactive_v2/context.py
   - _fetch 保护字段
 """
 
-
-
 from proactive_v2.context import AgentTickContext
 
-
 # ── 默认值 ────────────────────────────────────────────────────────────────
+
 
 def test_tick_id_is_8_chars():
     ctx = AgentTickContext()
@@ -84,6 +82,7 @@ def test_steps_taken_defaults_zero():
 
 # ── 集合字段默认值 ────────────────────────────────────────────────────────
 
+
 def test_interesting_item_ids_defaults_empty_set():
     ctx = AgentTickContext()
     assert ctx.interesting_item_ids == set()
@@ -111,6 +110,7 @@ def test_fetched_context_defaults_empty_list():
 
 # ── _fetch 保护字段 ───────────────────────────────────────────────────────
 
+
 def test_alerts_fetched_defaults_false():
     ctx = AgentTickContext()
     assert ctx._alerts_fetched is False
@@ -127,6 +127,7 @@ def test_context_fetched_defaults_false():
 
 
 # ── 实例隔离（shared default mutable 不能共享） ────────────────────────────
+
 
 def test_interesting_set_is_independent_per_instance():
     ctx1 = AgentTickContext()
@@ -157,6 +158,7 @@ def test_fetched_alerts_is_independent_per_instance():
 
 
 # ── 复合键格式语义 ────────────────────────────────────────────────────────
+
 
 def test_compound_key_format_from_event():
     event = {"id": "abc123", "ack_server": "feed-mcp"}
@@ -195,6 +197,7 @@ def test_interesting_set_stores_compound_keys():
 
 # ── terminal_action Literal 类型值 ───────────────────────────────────────
 
+
 def test_terminal_action_accepts_reply():
     ctx = AgentTickContext()
     ctx.terminal_action = "reply"
@@ -208,6 +211,7 @@ def test_terminal_action_accepts_skip():
 
 
 # ── context_as_fallback_open：ACK 阶段使用，agent 不写 ────────────────────
+
 
 def test_context_as_fallback_open_can_be_set():
     ctx = AgentTickContext()

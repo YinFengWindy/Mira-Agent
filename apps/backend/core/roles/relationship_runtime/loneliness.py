@@ -12,6 +12,7 @@ _NIGHT_SUPPRESSION_END_HOUR = 6
 _LONELINESS_TICK_MINUTES = 10
 _PROACTIVE_CLOSENESS_THRESHOLD = 0.7
 
+
 @dataclass(frozen=True)
 class LonelinessRuntimeState:
     role_id: str
@@ -26,6 +27,7 @@ class LonelinessRuntimeState:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
 
 def _now_iso(now: datetime | None = None) -> str:
     return (now or datetime.now().astimezone()).astimezone().isoformat()
@@ -46,7 +48,9 @@ def _advance_by_loneliness_ticks(
     *,
     tick_count: int,
 ) -> datetime:
-    return last_calculated + timedelta(minutes=max(0, tick_count) * _LONELINESS_TICK_MINUTES)
+    return last_calculated + timedelta(
+        minutes=max(0, tick_count) * _LONELINESS_TICK_MINUTES
+    )
 
 
 def _loneliness_tick_count(

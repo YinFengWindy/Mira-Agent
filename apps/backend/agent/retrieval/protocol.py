@@ -13,7 +13,9 @@ class RetrievalRequest:
     session_key: str
     channel: str
     chat_id: str
-    history: list[HistoryMessage]  # 完整会话历史，无截窗。pipeline 实现负责自行决定使用范围。
+    history: list[
+        HistoryMessage
+    ]  # 完整会话历史，无截窗。pipeline 实现负责自行决定使用范围。
     # DefaultMemoryRetrievalPipeline 内部截取末尾 MemoryConfig.window 条后使用。
     session_metadata: dict[str, object]
     timestamp: datetime | None = None

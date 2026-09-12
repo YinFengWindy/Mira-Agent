@@ -78,7 +78,10 @@ def test_personamem_loader_splits_turns_into_sessions(tmp_path: Path) -> None:
     assert len(instances) == 1
     inst = instances[0]
     assert len(inst.haystack_sessions) == 2
-    assert [turn.content for turn in inst.haystack_sessions[0]] == ["first u", "first a"]
+    assert [turn.content for turn in inst.haystack_sessions[0]] == [
+        "first u",
+        "first a",
+    ]
     assert [turn.content for turn in inst.haystack_sessions[1]] == [
         "second u1",
         "second u2",

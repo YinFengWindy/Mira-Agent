@@ -6,7 +6,13 @@ import json
 from typing import Any, Protocol
 
 from .errors import StoryInvalidOutputError, StoryProviderUnavailableError
-from .models import DirectorDraft, StoryBeatDraft, StoryContext, StoryScene, has_chinese_text
+from .models import (
+    DirectorDraft,
+    StoryBeatDraft,
+    StoryContext,
+    StoryScene,
+    has_chinese_text,
+)
 
 
 class StoryDirector(Protocol):
@@ -59,11 +65,11 @@ class ProviderStoryDirector:
     def _system_prompt() -> str:
         return (
             "你是视觉小说 Story Director。只输出 JSON，不要 Markdown。"
-            "输出格式为 {\"beats\":[{\"text\":string,\"kind\":\"dialogue|action|narration\","
-            "\"speaker\":string|null,\"time_band\":\"清晨|上午|下午|夜晚|深夜\"|null,"
-            "\"fact_changes\":[]}],\"stop_reason\":\"awaiting_player\","
-            "\"current_scene\":{\"key\":string,\"name\":string,\"character_ids\":[string]},"
-            "\"visual_type\":\"scene|character\",\"visual_prompt\":string}。"
+            '输出格式为 {"beats":[{"text":string,"kind":"dialogue|action|narration",'
+            '"speaker":string|null,"time_band":"清晨|上午|下午|夜晚|深夜"|null,'
+            '"fact_changes":[]}],"stop_reason":"awaiting_player",'
+            '"current_scene":{"key":string,"name":string,"character_ids":[string]},'
+            '"visual_type":"scene|character","visual_prompt":string}。'
             "一次最多 3 个 beat，所有 text 合计最多 1200 个中文字符，单个 beat 最多 400 字符。"
             "故事日期由 story.story_date 提供且不能修改；剧情时间只使用清晨、上午、下午、夜晚、深夜五档。"
             "只有剧情明确进入另一个时段时才填写 time_band，否则必须填写 null。"
@@ -138,7 +144,9 @@ class ProviderStoryDirector:
             if not isinstance(fact_changes, list):
                 raise StoryInvalidOutputError("fact_changes 必须是数组")
             raw_time_band = item.get("time_band")
-            time_band = str(raw_time_band).strip() if raw_time_band is not None else None
+            time_band = (
+                str(raw_time_band).strip() if raw_time_band is not None else None
+            )
             beats.append(
                 StoryBeatDraft(
                     text=str(item.get("text") or ""),
@@ -163,14 +171,21 @@ class ProviderStoryDirector:
         scene_key = str(raw_current_scene.get("key") or "").strip()
         scene_name = str(raw_current_scene.get("name") or "").strip()
         raw_character_ids = raw_current_scene.get("character_ids")
-        if not scene_key or not scene_name or not has_chinese_text(scene_name) or not isinstance(raw_character_ids, list):
+        if (
+            not scene_key
+            or not scene_name
+            or not has_chinese_text(scene_name)
+            or not isinstance(raw_character_ids, list)
+        ):
             raise StoryInvalidOutputError("Director current_scene 格式无效")
         character_ids = tuple(
             str(character_id).strip()
             for character_id in raw_character_ids
             if str(character_id).strip()
         )
-        current_scene = StoryScene(key=scene_key, name=scene_name, character_ids=character_ids)
+        current_scene = StoryScene(
+            key=scene_key, name=scene_name, character_ids=character_ids
+        )
         try:
             current_scene.validate()
         except ValueError as exc:

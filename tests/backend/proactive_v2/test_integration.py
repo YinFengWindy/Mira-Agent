@@ -4,6 +4,7 @@ tests/proactive_v2/test_integration.py — P7 集成测试
 验证 ProactiveLoop._tick() 稳定路由到 ProactiveTurnPipeline。
 使用 object.__new__ 绕过复杂构造函数，直接注入 mock 依赖。
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,7 +15,6 @@ from unittest.mock import AsyncMock, MagicMock
 from bus.events_lifecycle import TurnStarted
 from proactive_v2.config import ProactiveConfig
 from proactive_v2.loop import ProactiveLoop
-
 
 # ── 工厂 ──────────────────────────────────────────────────────────────────
 

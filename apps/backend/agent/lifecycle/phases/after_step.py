@@ -60,13 +60,13 @@ class _CollectAfterStepExportSlotsModule:
 
     async def run(self, frame: AfterStepFrame) -> AfterStepFrame:
         ctx = cast(AfterStepCtx, frame.slots[_CTX_SLOT])
-        collected = set(cast(set[str], frame.slots.get(_COLLECTED_TELEMETRY_SLOT, set())))
+        collected = set(
+            cast(set[str], frame.slots.get(_COLLECTED_TELEMETRY_SLOT, set()))
+        )
         exports = collect_prefixed_slots(frame.slots, _TELEMETRY_PREFIX)
         # after_fanout 可补充 telemetry，但不能覆盖 fanout handler 已看到的同名值。
         new_exports = {
-            key: value
-            for key, value in exports.items()
-            if key not in collected
+            key: value for key, value in exports.items() if key not in collected
         }
         extra_metadata = dict(ctx.extra_metadata)
         extra_metadata.update(new_exports)

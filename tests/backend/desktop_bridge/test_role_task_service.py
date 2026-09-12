@@ -126,10 +126,23 @@ def test_role_task_service_lists_only_tasks_owned_by_role():
         "subagent",
         "memory_maintenance",
     }
-    assert next(task for task in tasks if task["id"] == "schedule-a")["status"] == "running"
-    assert next(task for task in tasks if task["id"] == "schedule-a")["editable"] is False
-    assert _schedule(next(task for task in tasks if task["id"] == "schedule-a"))["tier"] == "instant"
-    assert next(task for task in tasks if task["kind"] == "memory_maintenance")["cancellable"] is False
+    assert (
+        next(task for task in tasks if task["id"] == "schedule-a")["status"]
+        == "running"
+    )
+    assert (
+        next(task for task in tasks if task["id"] == "schedule-a")["editable"] is False
+    )
+    assert (
+        _schedule(next(task for task in tasks if task["id"] == "schedule-a"))["tier"]
+        == "instant"
+    )
+    assert (
+        next(task for task in tasks if task["kind"] == "memory_maintenance")[
+            "cancellable"
+        ]
+        is False
+    )
 
 
 def test_role_task_service_creates_and_updates_desktop_schedule_binding():

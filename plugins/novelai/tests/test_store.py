@@ -91,14 +91,18 @@ def test_find_generation_source_by_output_path_rejects_untracked_image(
 ) -> None:
     store = NovelAIStore(tmp_path)
 
-    assert store.find_generation_source_by_output_path(str(tmp_path / "other.png")) is None
+    assert (
+        store.find_generation_source_by_output_path(str(tmp_path / "other.png")) is None
+    )
 
 
 def test_list_records_preserves_stored_workspace_paths(tmp_path: Path) -> None:
     workspace = tmp_path / ".shiori" / "workspace"
     store = NovelAIStore(workspace)
     relative_output = Path("2026-07-12") / "record-1" / "output-1.png"
-    current_output = workspace / "private_runtime" / "novelai" / "outputs" / relative_output
+    current_output = (
+        workspace / "private_runtime" / "novelai" / "outputs" / relative_output
+    )
     current_output.parent.mkdir(parents=True, exist_ok=True)
     current_output.write_bytes(b"png")
 

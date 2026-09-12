@@ -15,6 +15,7 @@ from plugins.story.backend.models import (
 from plugins.story.backend.repository import StoryRepository, payload_hash
 from plugins.story.backend.service import StorySimulationService
 
+
 class SequencedDirector(StoryDirector):
     """Return deterministic drafts or failures for Story service tests."""
 
@@ -51,7 +52,9 @@ async def test_service_retries_invalid_draft_once_before_committing(tmp_path) ->
     draft = DirectorDraft(
         beats=(
             StoryBeatDraft(text="风从走廊尽头吹来。"),
-            StoryBeatDraft(text="澪抬眼看向你。", kind="dialogue", speaker="澪", time_band="夜晚"),
+            StoryBeatDraft(
+                text="澪抬眼看向你。", kind="dialogue", speaker="澪", time_band="夜晚"
+            ),
         )
     )
     service, director = _service(tmp_path, [StoryInvalidOutputError("bad json"), draft])
@@ -69,8 +72,14 @@ async def test_service_retries_invalid_draft_once_before_committing(tmp_path) ->
     story = service.repository.story_read_model("story-1")
     assert director.calls == 2
     assert story["turns"][0]["status"] == "committed"
-    assert [cue["text"] for cue in story["cues"]] == ["风从走廊尽头吹来。", "澪抬眼看向你。"]
-    assert [beat["storyDate"] for beat in story["beats"]] == ["2026-08-01", "2026-08-01"]
+    assert [cue["text"] for cue in story["cues"]] == [
+        "风从走廊尽头吹来。",
+        "澪抬眼看向你。",
+    ]
+    assert [beat["storyDate"] for beat in story["beats"]] == [
+        "2026-08-01",
+        "2026-08-01",
+    ]
     assert [beat["timeBand"] for beat in story["beats"]] == ["上午", "夜晚"]
     assert story["currentTimeBand"] == "夜晚"
     assert [event["method"] for event in events] == [
@@ -81,10 +90,18 @@ async def test_service_retries_invalid_draft_once_before_committing(tmp_path) ->
 
 
 @pytest.mark.asyncio
-async def test_service_replaces_a_generic_dialogue_speaker_with_the_story_role_name(tmp_path) -> None:
+async def test_service_replaces_a_generic_dialogue_speaker_with_the_story_role_name(
+    tmp_path,
+) -> None:
     service, _director = _service(
         tmp_path,
-        [DirectorDraft(beats=(StoryBeatDraft(text="别乱动。", kind="dialogue", speaker="角色"),))],
+        [
+            DirectorDraft(
+                beats=(
+                    StoryBeatDraft(text="别乱动。", kind="dialogue", speaker="角色"),
+                )
+            )
+        ],
     )
     turn = service.create_player_turn(
         story_id="story-1",
@@ -127,7 +144,9 @@ async def test_service_does_not_commit_beats_after_final_failure(tmp_path) -> No
 
 
 @pytest.mark.asyncio
-async def test_service_rejects_characters_outside_the_current_scene_contract(tmp_path) -> None:
+async def test_service_rejects_characters_outside_the_current_scene_contract(
+    tmp_path,
+) -> None:
     invalid = DirectorDraft(
         beats=(StoryBeatDraft(text="陌生人推门进来。"),),
         current_scene=StoryScene(key="classroom", character_ids=("role-unknown",)),
@@ -146,4 +165,8 @@ async def test_service_rejects_characters_outside_the_current_scene_contract(tmp
     story = service.repository.story_read_model("story-1")
     assert director.calls == 2
     assert story["beats"] == []
-    assert story["currentScene"] == {"key": "", "name": "未命名场景", "characterIds": []}
+    assert story["currentScene"] == {
+        "key": "",
+        "name": "未命名场景",
+        "characterIds": [],
+    }

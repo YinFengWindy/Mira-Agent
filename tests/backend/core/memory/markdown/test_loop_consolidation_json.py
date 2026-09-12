@@ -103,8 +103,18 @@ def test_format_conversation_for_consolidation_skips_proactive_assistant_message
 def test_consolidation_formatters_skip_context_frame_messages():
     frame = '<system-reminder data-system-context-frame="true">\n内部上下文'
     messages = [
-        {"id": "1", "role": "user", "content": frame, "timestamp": "2026-03-09T10:00:00"},
-        {"id": "2", "role": "user", "content": "真实用户内容", "timestamp": "2026-03-09T10:01:00"},
+        {
+            "id": "1",
+            "role": "user",
+            "content": frame,
+            "timestamp": "2026-03-09T10:00:00",
+        },
+        {
+            "id": "2",
+            "role": "user",
+            "content": "真实用户内容",
+            "timestamp": "2026-03-09T10:01:00",
+        },
     ]
 
     window = SimpleNamespace(old_messages=messages)
@@ -117,14 +127,22 @@ def test_consolidation_formatters_skip_context_frame_messages():
 
 def test_recent_context_formatters_skip_memory_maintenance_assistant_messages():
     messages = [
-        {"role": "user", "content": "把今天聊的东西整理下", "timestamp": "2026-06-30T20:40:00"},
+        {
+            "role": "user",
+            "content": "把今天聊的东西整理下",
+            "timestamp": "2026-06-30T20:40:00",
+        },
         {
             "role": "assistant",
             "content": "📋 今日总结 · 2026-06-30",
             "timestamp": "2026-06-30T20:41:00",
             "tools_used": ["read_file", "memorize"],
         },
-        {"role": "assistant", "content": "普通回复", "timestamp": "2026-06-30T20:42:00"},
+        {
+            "role": "assistant",
+            "content": "普通回复",
+            "timestamp": "2026-06-30T20:42:00",
+        },
     ]
 
     recent_turns = _format_recent_context_messages(messages)

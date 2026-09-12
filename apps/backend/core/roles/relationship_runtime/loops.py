@@ -10,6 +10,7 @@ from .loneliness import _LONELINESS_TICK_MINUTES, _parse_iso
 from .service import RoleRelationshipRuntimeService
 from .snapshot import RelationshipSnapshotOptimizer
 
+
 class RelationshipSnapshotLoop:
     """Runs the relationship snapshot optimizer on overdue roles."""
 
@@ -62,14 +63,25 @@ class RelationshipSnapshotLoop:
         if generated_at is None:
             return True
         last_activity = self._latest_activity(role_id)
-        if last_activity is not None and (now - last_activity).total_seconds() <= self._recent_window:
+        if (
+            last_activity is not None
+            and (now - last_activity).total_seconds() <= self._recent_window
+        ):
             return (now - generated_at).total_seconds() >= self._recent_refresh
         return (now - generated_at).total_seconds() >= self._interval
 
     def _latest_activity(self, role_id: str) -> datetime | None:
         session_key = self._runtime._session_manager.role_session_key(role_id)
-        last_user = self._runtime._presence.get_last_user_at(session_key) if self._runtime._presence else None
-        last_proactive = self._runtime._presence.get_last_proactive_at(session_key) if self._runtime._presence else None
+        last_user = (
+            self._runtime._presence.get_last_user_at(session_key)
+            if self._runtime._presence
+            else None
+        )
+        last_proactive = (
+            self._runtime._presence.get_last_proactive_at(session_key)
+            if self._runtime._presence
+            else None
+        )
         if last_user is None:
             return last_proactive
         if last_proactive is None:

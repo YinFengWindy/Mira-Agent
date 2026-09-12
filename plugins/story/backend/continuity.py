@@ -26,4 +26,6 @@ class ContinuityGuard:
                     continue
                 if kind == "event" and operation == "record":
                     continue
-                raise StoryInvalidOutputError("FactChange 只支持 state.set 或 event.record")
+                raise StoryInvalidOutputError(
+                    "FactChange 只支持 state.set 或 event.record"
+                )

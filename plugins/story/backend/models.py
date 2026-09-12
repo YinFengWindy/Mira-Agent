@@ -98,7 +98,11 @@ class StoryScene:
             raise ValueError("current_scene.character_ids 不能重复")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"key": self.key, "name": self.name, "character_ids": list(self.character_ids)}
+        return {
+            "key": self.key,
+            "name": self.name,
+            "character_ids": list(self.character_ids),
+        }
 
 
 @dataclass(frozen=True)

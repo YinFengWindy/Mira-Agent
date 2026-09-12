@@ -64,7 +64,9 @@ class MessageBus:
             subscribers.append(callback)
 
     def unsubscribe_outbound(
-        self, channel: str, callback: Callable[[OutboundMessage], Awaitable[None]],
+        self,
+        channel: str,
+        callback: Callable[[OutboundMessage], Awaitable[None]],
     ) -> None:
         """Removes a transport callback before replacing or stopping its connection."""
         subscribers = self._subscribers.get(channel, [])
@@ -94,21 +96,32 @@ class MessageBus:
             try:
                 await cb(msg)
             except Exception as first_err:
-                logger.warning("分发消息到 %s 首次失败，2s 后重试: %s", msg.channel, first_err)
+                logger.warning(
+                    "分发消息到 %s 首次失败，2s 后重试: %s", msg.channel, first_err
+                )
                 await asyncio.sleep(2)
                 try:
                     await cb(msg)
                 except Exception as second_err:
-                    logger.error("分发消息到 %s 重试仍失败，发送降级通知: %s", msg.channel, second_err)
+                    logger.error(
+                        "分发消息到 %s 重试仍失败，发送降级通知: %s",
+                        msg.channel,
+                        second_err,
+                    )
                     fallback = OutboundMessage(
-                        channel=msg.channel, chat_id=msg.chat_id,
+                        channel=msg.channel,
+                        chat_id=msg.chat_id,
                         content="（消息发送失败，请稍后重试）",
                         metadata=dict(msg.metadata or {}),
                     )
                     try:
                         await cb(fallback)
                     except Exception:
-                        logger.error("降级通知也失败，消息彻底丢失 channel=%s chat_id=%s", msg.channel, msg.chat_id)
+                        logger.error(
+                            "降级通知也失败，消息彻底丢失 channel=%s chat_id=%s",
+                            msg.channel,
+                            msg.chat_id,
+                        )
 
     def stop(self) -> None:
         self._running = False

@@ -48,7 +48,9 @@ def test_role_target_resolver_failure_does_not_fall_back_to_global_target() -> N
     assert resolve_target_transport(pipeline) is None
 
 
-def test_role_target_resolver_empty_result_does_not_fall_back_to_global_target() -> None:
+def test_role_target_resolver_empty_result_does_not_fall_back_to_global_target() -> (
+    None
+):
     pipeline = _pipeline(
         session_key="role:mira",
         target_transport_fn=lambda: ("", ""),

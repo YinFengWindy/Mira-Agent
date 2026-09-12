@@ -59,14 +59,21 @@ def test_explicit_knowledge_enabled_and_raw_source_survive_round_trip() -> None:
 
 def test_profile_round_trips_constraints_nickname_and_attribution() -> None:
     provenance = {
-        "format": "charx", "card_version": "3.0", "creator": "作者",
-        "tags": ["科幻"], "source": ["https://example.test/card"],
-        "created_at": 123, "updated_at": "2026-09-01", "imported_at": "2026-09-07",
+        "format": "charx",
+        "card_version": "3.0",
+        "creator": "作者",
+        "tags": ["科幻"],
+        "source": ["https://example.test/card"],
+        "created_at": 123,
+        "updated_at": "2026-09-01",
+        "imported_at": "2026-09-07",
     }
-    profile = RoleProfile.from_dict({
-        "character": {"response_constraints": "每次回答一句", "nickname": "小栞"},
-        "import_provenance": provenance,
-    })
+    profile = RoleProfile.from_dict(
+        {
+            "character": {"response_constraints": "每次回答一句", "nickname": "小栞"},
+            "import_provenance": provenance,
+        }
+    )
 
     assert profile.to_dict()["import_provenance"] == provenance
     assert profile.character.nickname == "小栞"

@@ -23,6 +23,7 @@ from .helpers import (
     logger,
 )
 
+
 class _InterruptMixin:
     def request_interrupt(
         self,

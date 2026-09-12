@@ -75,13 +75,21 @@ class FetchMessagesTool(Tool):
             evidence=evidence or [],
         )
         if not clean_ids:
-            return json.dumps({"count": 0, "matched_count": 0, "messages": []}, ensure_ascii=False)
+            return json.dumps(
+                {"count": 0, "matched_count": 0, "messages": []}, ensure_ascii=False
+            )
 
         ctx = max(0, min(int(context), _MAX_CONTEXT))
         if ctx == 0:
-            messages = [_to_public_message(m) for m in self._store.fetch_by_ids(clean_ids)]
+            messages = [
+                _to_public_message(m) for m in self._store.fetch_by_ids(clean_ids)
+            ]
             return json.dumps(
-                {"count": len(messages), "matched_count": len(messages), "messages": messages},
+                {
+                    "count": len(messages),
+                    "matched_count": len(messages),
+                    "messages": messages,
+                },
                 ensure_ascii=False,
             )
 
@@ -249,12 +257,15 @@ class SearchMessagesTool(Tool):
         )
 
 
-def _build_search_preview(message: dict[str, Any], query_terms: list[str] | None = None) -> dict[str, Any]:
+def _build_search_preview(
+    message: dict[str, Any], query_terms: list[str] | None = None
+) -> dict[str, Any]:
     content = str(message.get("content", "") or "")
-    preview, line_count, truncated = _preview_lines(content, max_lines=_MAX_PREVIEW_LINES)
+    preview, line_count, truncated = _preview_lines(
+        content, max_lines=_MAX_PREVIEW_LINES
+    )
     matched_terms = (
-        [t for t in query_terms if t.lower() in content.lower()]
-        if query_terms else []
+        [t for t in query_terms if t.lower() in content.lower()] if query_terms else []
     )
     result: dict[str, Any] = {
         "id": str(message.get("id", "") or ""),

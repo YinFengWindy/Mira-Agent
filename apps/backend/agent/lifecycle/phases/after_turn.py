@@ -153,9 +153,7 @@ class _BuildTurnCommittedModule:
             ),
             thinking_duration_ms=(
                 value
-                if isinstance(
-                    (value := turn_metrics.get("thinking_duration_ms")), int
-                )
+                if isinstance((value := turn_metrics.get("thinking_duration_ms")), int)
                 and value >= 0
                 else None
             ),

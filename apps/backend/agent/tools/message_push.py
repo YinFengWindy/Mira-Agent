@@ -155,11 +155,15 @@ class MessagePushTool(Tool):
         if channels.qq is not None and channel == "qq":
             return True
         manager = lease.core.plugin_manager
-        return manager is not None and any(item.name == channel for item in manager.channels)
+        return manager is not None and any(
+            item.name == channel for item in manager.channels
+        )
 
     async def _execute_send(self, **kwargs: Any) -> str:
         channel: str = kwargs["channel"]
-        if channel in self._retired_channels and not self._has_retired_transport(channel):
+        if channel in self._retired_channels and not self._has_retired_transport(
+            channel
+        ):
             return f"渠道 {channel!r} 已停用"
         requested_chat_id = str(kwargs["chat_id"])
         message = _nonblank_payload(kwargs.get("message"))
@@ -173,20 +177,28 @@ class MessagePushTool(Tool):
 
         try:
             resolver = self._target_resolvers.get(channel)
-            chat_id = resolver(requested_chat_id) if resolver is not None else requested_chat_id
+            chat_id = (
+                resolver(requested_chat_id)
+                if resolver is not None
+                else requested_chat_id
+            )
         except Exception as e:
-            logger.error(f"[message_push] 目标解析失败 {channel}:{requested_chat_id}: {e}")
+            logger.error(
+                f"[message_push] 目标解析失败 {channel}:{requested_chat_id}: {e}"
+            )
             return f"发送失败：{e}"
 
         if role_id and self._role_target_validator is not None:
             validation = self._role_target_validator(role_id, channel, chat_id)
             if validation is not True:
-                detail = validation if isinstance(validation, str) else (
-                    f"角色 {role_id} 未绑定目标渠道: {channel}:{requested_chat_id}"
+                detail = (
+                    validation
+                    if isinstance(validation, str)
+                    else (
+                        f"角色 {role_id} 未绑定目标渠道: {channel}:{requested_chat_id}"
+                    )
                 )
-                raise PermissionError(
-                    detail
-                )
+                raise PermissionError(detail)
 
         senders = self._senders.get(channel)
         if senders is None:
@@ -196,7 +208,8 @@ class MessagePushTool(Tool):
         image_sent = False
         try:
             if message and any(
-                name in senders for name in ("text_with_metadata", "stream_text", "text")
+                name in senders
+                for name in ("text_with_metadata", "stream_text", "text")
             ):
                 if "text_with_metadata" in senders:
                     await senders["text_with_metadata"](

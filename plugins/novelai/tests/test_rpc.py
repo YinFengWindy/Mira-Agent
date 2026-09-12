@@ -264,7 +264,9 @@ async def test_regenerate_message_media_rejects_concurrent_same_slot(
 
 
 @pytest.mark.asyncio
-async def test_regenerate_message_media_rejects_non_novelai_image(tmp_path: Path) -> None:
+async def test_regenerate_message_media_rejects_non_novelai_image(
+    tmp_path: Path,
+) -> None:
     manager = SessionManager(tmp_path)
     session_key, message_id = _persist_message(manager, str(tmp_path / "plain.png"))
     handlers = _handlers(tmp_path=tmp_path, session_manager=manager)

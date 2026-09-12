@@ -5,7 +5,6 @@ from importlib import import_module
 import re
 from zoneinfo import ZoneInfo
 
-
 _POSIX_CRON_WEEKDAY_NAMES = ("sun", "mon", "tue", "wed", "thu", "fri", "sat")
 _POSIX_CRON_WEEKDAY_VALUES = {
     name: str(index) for index, name in enumerate(_POSIX_CRON_WEEKDAY_NAMES)

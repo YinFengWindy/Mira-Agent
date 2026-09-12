@@ -53,29 +53,31 @@ def load_default_memory_config(
 def render_default_memory_config(config: DefaultMemoryConfig | None = None) -> str:
     cfg = config or DefaultMemoryConfig()
     retrieval = cfg.retrieval
-    return "\n".join([
-        f'db_path = "{cfg.db_path}"',
-        "",
-        "[retrieval]",
-        f"top_k_history = {retrieval.top_k_history}",
-        f"score_threshold = {retrieval.score_threshold}",
-        f"relative_delta = {retrieval.relative_delta}",
-        f"procedure_guard_enabled = {str(retrieval.procedure_guard_enabled).lower()}",
-        "",
-        "[retrieval.thresholds]",
-        f"procedure = {retrieval.thresholds.procedure}",
-        f"preference = {retrieval.thresholds.preference}",
-        f"event = {retrieval.thresholds.event}",
-        f"profile = {retrieval.thresholds.profile}",
-        "",
-        "[retrieval.inject]",
-        f"max_chars = {retrieval.inject.max_chars}",
-        f"forced = {retrieval.inject.forced}",
-        f"procedure_preference = {retrieval.inject.procedure_preference}",
-        f"event_profile = {retrieval.inject.event_profile}",
-        f"line_max = {retrieval.inject.line_max}",
-        "",
-    ])
+    return "\n".join(
+        [
+            f'db_path = "{cfg.db_path}"',
+            "",
+            "[retrieval]",
+            f"top_k_history = {retrieval.top_k_history}",
+            f"score_threshold = {retrieval.score_threshold}",
+            f"relative_delta = {retrieval.relative_delta}",
+            f"procedure_guard_enabled = {str(retrieval.procedure_guard_enabled).lower()}",
+            "",
+            "[retrieval.thresholds]",
+            f"procedure = {retrieval.thresholds.procedure}",
+            f"preference = {retrieval.thresholds.preference}",
+            f"event = {retrieval.thresholds.event}",
+            f"profile = {retrieval.thresholds.profile}",
+            "",
+            "[retrieval.inject]",
+            f"max_chars = {retrieval.inject.max_chars}",
+            f"forced = {retrieval.inject.forced}",
+            f"procedure_preference = {retrieval.inject.procedure_preference}",
+            f"event_profile = {retrieval.inject.event_profile}",
+            f"line_max = {retrieval.inject.line_max}",
+            "",
+        ]
+    )
 
 
 def ensure_default_memory_config_file(*, plugin_dir: Path | None = None) -> Path:

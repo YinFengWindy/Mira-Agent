@@ -23,7 +23,9 @@ async def test_runtime_transaction_does_not_block_control_or_new_request_respons
     try:
         await asyncio.wait_for(started.wait(), 0.2)
         for method in ("health", "chat.cancel", "chat.send"):
-            dispatcher.submit({"method": method}, lambda method=method: responses.put(method))
+            dispatcher.submit(
+                {"method": method}, lambda method=method: responses.put(method)
+            )
         completed = [await asyncio.wait_for(responses.get(), 0.2) for _ in range(3)]
         assert set(completed) == {"health", "chat.cancel", "chat.send"}
     finally:

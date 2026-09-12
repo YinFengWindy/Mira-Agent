@@ -27,18 +27,24 @@ from .common import (
 
 logger = logging.getLogger(__name__)
 
+
 class _StoreVectorMixin:
-    def get_all_with_embedding(self, include_superseded: bool = False) -> list[_EmbeddingRow]:
+    def get_all_with_embedding(
+        self, include_superseded: bool = False
+    ) -> list[_EmbeddingRow]:
         """返回 [(id, memory_type, summary, embedding_list, extra_json_dict, happened_at, source_ref)]
         extra_json_dict 中注入 _reinforcement / _updated_at / _emotional_weight
         （_ 前缀，不污染用户字段）。
         """
         where = "" if include_superseded else "AND status='active'"
-        rows = cast(list[tuple[object, ...]], self._db.execute(
-            "SELECT id, memory_type, summary, embedding, extra_json, happened_at, "
-            "reinforcement, updated_at, source_ref, emotional_weight "
-            f"FROM memory_items WHERE embedding IS NOT NULL {where}"
-        ).fetchall())
+        rows = cast(
+            list[tuple[object, ...]],
+            self._db.execute(
+                "SELECT id, memory_type, summary, embedding, extra_json, happened_at, "
+                "reinforcement, updated_at, source_ref, emotional_weight "
+                f"FROM memory_items WHERE embedding IS NOT NULL {where}"
+            ).fetchall(),
+        )
         result: list[_EmbeddingRow] = []
         for row in rows:
             (
@@ -108,19 +114,24 @@ class _StoreVectorMixin:
             where_parts.append(
                 "COALESCE(TRIM(json_extract(extra_json, '$.scope_chat_id')), '') = ?"
             )
-            params.extend([(scope_channel or "").strip(), (scope_chat_id or "").strip()])
+            params.extend(
+                [(scope_channel or "").strip(), (scope_chat_id or "").strip()]
+            )
         time_clauses, time_params = _time_prefilter_clauses(
             "happened_at", time_start, time_end
         )
         where_parts.extend(time_clauses)
         params.extend(time_params)
 
-        rows = cast(list[tuple[object, ...]], self._db.execute(
-            "SELECT id, memory_type, summary, embedding, extra_json, happened_at, "
-            "reinforcement, updated_at, source_ref, emotional_weight "
-            f"FROM memory_items WHERE {' AND '.join(where_parts)}",
-            tuple(params),
-        ).fetchall())
+        rows = cast(
+            list[tuple[object, ...]],
+            self._db.execute(
+                "SELECT id, memory_type, summary, embedding, extra_json, happened_at, "
+                "reinforcement, updated_at, source_ref, emotional_weight "
+                f"FROM memory_items WHERE {' AND '.join(where_parts)}",
+                tuple(params),
+            ).fetchall(),
+        )
         result: list[_EmbeddingRow] = []
         for row in rows:
             (
@@ -379,7 +390,9 @@ class _StoreVectorMixin:
             WHERE 1=1 {status_filter} {type_filter} {domain_filter} {role_filter} {scope_filter}
             ORDER BY v.distance ASC
         """
-        rows = cast(list[tuple[object, ...]], self._db.execute(sql, tuple(params)).fetchall())
+        rows = cast(
+            list[tuple[object, ...]], self._db.execute(sql, tuple(params)).fetchall()
+        )
 
         now = datetime.now(timezone.utc)
         scored: list[_MemoryHit] = []
@@ -444,6 +457,7 @@ class _StoreVectorMixin:
 
         scored.sort(key=_result_score, reverse=True)
         return scored[:top_k]
+
     def _vector_search_fullscan(
         self,
         query_vec: list[float],
@@ -547,7 +561,9 @@ class _StoreVectorMixin:
             if hotness_alpha > 0:
                 reinforcement = _coerce_int(extra.get("_reinforcement"), 1)
                 updated_at_raw = extra.get("_updated_at")
-                updated_at_str = updated_at_raw if isinstance(updated_at_raw, str) else ""
+                updated_at_str = (
+                    updated_at_raw if isinstance(updated_at_raw, str) else ""
+                )
                 emotional_weight = _coerce_emotional_weight(
                     extra.get("_emotional_weight", 0)
                 )

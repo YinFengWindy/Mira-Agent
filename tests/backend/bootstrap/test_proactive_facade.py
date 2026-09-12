@@ -98,7 +98,9 @@ def test_sensor_requires_default_role_id_for_memory_reads():
 
     import pytest
 
-    with pytest.raises(RuntimeError, match="default_role_id required for proactive memory access"):
+    with pytest.raises(
+        RuntimeError, match="default_role_id required for proactive memory access"
+    ):
         _ = sensor.read_memory_text()
 
 
@@ -113,7 +115,9 @@ def test_sensor_reads_role_long_term_from_facade_when_default_role_id_present():
         read_long_term=lambda: "ROLE_MEMORY",
     )
     sensor = Sensor(
-        cfg=SimpleNamespace(default_role_id="mira", default_channel="telegram", default_chat_id="1"),
+        cfg=SimpleNamespace(
+            default_role_id="mira", default_channel="telegram", default_chat_id="1"
+        ),
         sessions=cast(Any, SimpleNamespace()),
         state=cast(Any, SimpleNamespace()),
         memory=cast(Any, facade),
@@ -136,20 +140,23 @@ def test_agent_tick_prompt_keeps_self_block_with_facade():
             passive_busy_fn=None,
             turn_orchestrator=None,
             deduper=MagicMock(),
-            tool_deps=cast(Any, SimpleNamespace(
-                memory=SimpleNamespace(
-                    read_long_term_context=lambda: "MEMORY",
-                    read_self=lambda: "SELF",
+            tool_deps=cast(
+                Any,
+                SimpleNamespace(
+                    memory=SimpleNamespace(
+                        read_long_term_context=lambda: "MEMORY",
+                        read_self=lambda: "SELF",
+                    ),
+                    recent_chat_fn=None,
                 ),
-                recent_chat_fn=None,
-            )),
-                gateway_deps=GatewayDeps(
+            ),
+            gateway_deps=GatewayDeps(
                 alert_fn=MagicMock(),
                 feed_fn=MagicMock(),
                 context_fn=MagicMock(),
-                ),
-                role_prompt_fn=lambda: "测试角色提示词",
-                workspace_context_fn=None,
+            ),
+            role_prompt_fn=lambda: "测试角色提示词",
+            workspace_context_fn=None,
             llm_fn=None,
             rng=None,
             recent_proactive_fn=None,
@@ -183,22 +190,25 @@ def test_agent_tick_prompt_binds_role_metadata_for_memory_reads():
             passive_busy_fn=None,
             turn_orchestrator=None,
             deduper=MagicMock(),
-            tool_deps=cast(Any, SimpleNamespace(
-                memory=SimpleNamespace(
-                    bind_session_metadata=_bind_session_metadata,
-                    read_long_term=lambda: "MEMORY",
-                    read_self=lambda: "SELF",
-                    read_recent_context=lambda: "RECENT",
+            tool_deps=cast(
+                Any,
+                SimpleNamespace(
+                    memory=SimpleNamespace(
+                        bind_session_metadata=_bind_session_metadata,
+                        read_long_term=lambda: "MEMORY",
+                        read_self=lambda: "SELF",
+                        read_recent_context=lambda: "RECENT",
+                    ),
+                    recent_chat_fn=None,
                 ),
-                recent_chat_fn=None,
-            )),
-                gateway_deps=GatewayDeps(
+            ),
+            gateway_deps=GatewayDeps(
                 alert_fn=MagicMock(),
                 feed_fn=MagicMock(),
                 context_fn=MagicMock(),
-                ),
-                role_prompt_fn=lambda: "测试角色提示词",
-                workspace_context_fn=None,
+            ),
+            role_prompt_fn=lambda: "测试角色提示词",
+            workspace_context_fn=None,
             llm_fn=None,
             rng=None,
             recent_proactive_fn=None,

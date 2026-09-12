@@ -10,13 +10,18 @@ from session.manager import SessionManager
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("message,media", [
-    ("", None),
-    (" \t\n", []),
-    ("", ["   "]),
-    (" ", ["", "\t", "\n"]),
-])
-async def test_empty_push_has_no_session_or_runtime_side_effects(tmp_path, message, media):
+@pytest.mark.parametrize(
+    "message,media",
+    [
+        ("", None),
+        (" \t\n", []),
+        ("", ["   "]),
+        (" ", ["", "\t", "\n"]),
+    ],
+)
+async def test_empty_push_has_no_session_or_runtime_side_effects(
+    tmp_path, message, media
+):
     manager = SessionManager(tmp_path)
     session = manager.get_or_create("role:mira")
     session.add_message("assistant", "existing history")
@@ -50,12 +55,17 @@ async def test_empty_push_has_no_session_or_runtime_side_effects(tmp_path, messa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("message,media,expected_media", [
-    ("  hello\n", [" "], None),
-    ("", [" ", "image.png", "\t"], ["image.png"]),
-    ("caption", ["document.pdf"], ["document.pdf"]),
-])
-async def test_push_with_content_survives_reload(tmp_path, message, media, expected_media):
+@pytest.mark.parametrize(
+    "message,media,expected_media",
+    [
+        ("  hello\n", [" "], None),
+        ("", [" ", "image.png", "\t"], ["image.png"]),
+        ("caption", ["document.pdf"], ["document.pdf"]),
+    ],
+)
+async def test_push_with_content_survives_reload(
+    tmp_path, message, media, expected_media
+):
     manager = SessionManager(tmp_path)
     service = DesktopAppService(
         role_service=SimpleNamespace(),
@@ -74,7 +84,9 @@ async def test_push_with_content_survives_reload(tmp_path, message, media, expec
 @pytest.mark.asyncio
 @pytest.mark.parametrize("pause_at", ["append_messages", "save_async"])
 async def test_persist_user_message_keeps_identity_across_concurrent_append(
-    tmp_path, monkeypatch, pause_at,
+    tmp_path,
+    monkeypatch,
+    pause_at,
 ):
     manager = SessionManager(tmp_path)
     session = manager.get_or_create("role:mira")
@@ -101,13 +113,15 @@ async def test_persist_user_message_keeps_identity_across_concurrent_append(
         await original_operation(*args)
 
     monkeypatch.setattr(manager, pause_at, paused_operation)
-    task = asyncio.create_task(service.persist_desktop_user_message(
-        session=session,
-        role_id="mira",
-        content="my message",
-        media=["photo.png"],
-        metadata={"client_message_id": "client-user", "turn_id": "turn-user"},
-    ))
+    task = asyncio.create_task(
+        service.persist_desktop_user_message(
+            session=session,
+            role_id="mira",
+            content="my message",
+            media=["photo.png"],
+            metadata={"client_message_id": "client-user", "turn_id": "turn-user"},
+        )
+    )
     try:
         await asyncio.wait_for(entered.wait(), timeout=2)
         user_message = session.messages[0]
@@ -135,5 +149,6 @@ async def test_persist_user_message_keeps_identity_across_concurrent_append(
     reloaded = SessionManager(tmp_path).get_or_create(session.key)
     assert reloaded.metadata["relationship"] == "updated"
     assert {message["id"] for message in reloaded.messages} == {
-        persisted["id"], assistant_message["id"],
+        persisted["id"],
+        assistant_message["id"],
     }

@@ -30,7 +30,11 @@ from .models import (
     has_chinese_text,
     utc_now,
 )
-from .story_time import next_story_clock, normalize_story_date, normalize_story_time_band
+from .story_time import (
+    next_story_clock,
+    normalize_story_date,
+    normalize_story_time_band,
+)
 
 
 class StoryRepository:
@@ -158,7 +162,11 @@ class StoryRepository:
             ).fetchall()
         resource_models = [self._resource_dict(row) for row in resources]
         background_resource = next(
-            (resource for resource in resource_models if resource["kind"] == "background"),
+            (
+                resource
+                for resource in resource_models
+                if resource["kind"] == "background"
+            ),
             None,
         )
         return {
@@ -177,7 +185,9 @@ class StoryRepository:
             "cgGallery": resource_models,
             "currentStoryDate": str(segment["story_date"]),
             "currentTimeBand": str(segment["time_band"]),
-            "currentScene": self._current_scene_dict(load(segment["runtime_snapshot"], {})),
+            "currentScene": self._current_scene_dict(
+                load(segment["runtime_snapshot"], {})
+            ),
         }
 
     def story_resources(self, story_id: str) -> list[dict[str, Any]]:
@@ -210,7 +220,9 @@ class StoryRepository:
         if visual_type not in {"scene", "character"}:
             raise ValueError("资源视觉类型无效")
         with self.transaction() as connection:
-            self._require_row("SELECT id FROM stories WHERE id = ?", (story_id,), connection)
+            self._require_row(
+                "SELECT id FROM stories WHERE id = ?", (story_id,), connection
+            )
             sequence = int(
                 connection.execute(
                     "SELECT COALESCE(MAX(sequence), 0) + 1 FROM story_resources WHERE story_id = ?",
@@ -394,7 +406,9 @@ class StoryRepository:
         """Return an interrupted generation Turn to pending for process recovery."""
 
         with self.transaction() as connection:
-            turn = self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+            turn = self._require_row(
+                "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+            )
             if turn["status"] not in {"generating", "validating"}:
                 return self._turn_dict(turn)
             now = utc_now()
@@ -415,7 +429,9 @@ class StoryRepository:
                 (turn["segment_id"],),
             )
             return self._turn_dict(
-                self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+                self._require_row(
+                    "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+                )
             )
 
     def interrupted_turns(self, story_id: str) -> list[dict[str, Any]]:
@@ -434,7 +450,9 @@ class StoryRepository:
         """Return one failed Turn to pending so its logical request can be retried."""
 
         with self.transaction() as connection:
-            turn = self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+            turn = self._require_row(
+                "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+            )
             if turn["status"] != "failed":
                 raise StoryInvalidStateError("Turn 当前不可重试")
             now = utc_now()
@@ -443,14 +461,18 @@ class StoryRepository:
                 error = NULL, updated_at = ? WHERE id = ?""",
                 (now, turn_id),
             )
-            segment_status = "awaiting_opening" if turn["kind"] == "opening" else "active"
+            segment_status = (
+                "awaiting_opening" if turn["kind"] == "opening" else "active"
+            )
             connection.execute(
                 """UPDATE segments SET status = ?, operation = 'generating'
                 WHERE id = ?""",
                 (segment_status, turn["segment_id"]),
             )
             return self._turn_dict(
-                self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+                self._require_row(
+                    "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+                )
             )
 
     def create_turn(
@@ -497,7 +519,10 @@ class StoryRepository:
                 (story_id,),
                 connection,
             )
-            if segment["status"] != "active" and segment["status"] != "awaiting_opening":
+            if (
+                segment["status"] != "active"
+                and segment["status"] != "awaiting_opening"
+            ):
                 raise StoryInvalidStateError("Story 段当前不可输入")
             busy = connection.execute(
                 """SELECT id FROM turns WHERE segment_id = ?
@@ -531,7 +556,9 @@ class StoryRepository:
                 (request_id, story_id, request_payload_hash, turn_id),
             )
             return self._turn_dict(
-                self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+                self._require_row(
+                    "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+                )
             )
 
     def start_attempt(self, turn_id: str) -> dict[str, Any]:
@@ -539,7 +566,9 @@ class StoryRepository:
 
         attempt_id = f"attempt-{uuid4().hex}"
         with self.transaction() as connection:
-            turn = self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+            turn = self._require_row(
+                "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+            )
             if turn["status"] != "pending":
                 raise StoryInvalidStateError("Turn 不处于可生成状态")
             now = utc_now()
@@ -655,7 +684,13 @@ class StoryRepository:
                 }
                 connection.execute(
                     "INSERT INTO outbox VALUES (NULL, ?, ?, ?, ?, ?)",
-                    (event_id, story["id"], "beat.committed", dump(payload), recorded_at),
+                    (
+                        event_id,
+                        story["id"],
+                        "beat.committed",
+                        dump(payload),
+                        recorded_at,
+                    ),
                 )
                 committed.append((beat, cue, payload))
             connection.execute(
@@ -664,10 +699,12 @@ class StoryRepository:
                 (
                     current_story_date,
                     current_time_band,
-                    dump({
-                        **load(segment["runtime_snapshot"], {}),
-                        "current_scene": draft.current_scene.to_dict(),
-                    }),
+                    dump(
+                        {
+                            **load(segment["runtime_snapshot"], {}),
+                            "current_scene": draft.current_scene.to_dict(),
+                        }
+                    ),
                     turn["segment_id"],
                 ),
             )
@@ -775,7 +812,11 @@ class StoryRepository:
             connection.execute(
                 """UPDATE turns SET status = 'cancelled', active_attempt_id = NULL,
                 error = ?, updated_at = ? WHERE id = ?""",
-                (dump({"code": "cancelled", "message": "Story 生成已取消"}), now, turn_id),
+                (
+                    dump({"code": "cancelled", "message": "Story 生成已取消"}),
+                    now,
+                    turn_id,
+                ),
             )
             connection.execute(
                 "UPDATE segments SET status = 'active', operation = 'awaiting_player' WHERE id = ?",
@@ -814,7 +855,9 @@ class StoryRepository:
     def _assert_active_attempt(
         self, connection: sqlite3.Connection, turn_id: str, attempt_id: str
     ) -> sqlite3.Row:
-        turn = self._require_row("SELECT * FROM turns WHERE id = ?", (turn_id,), connection)
+        turn = self._require_row(
+            "SELECT * FROM turns WHERE id = ?", (turn_id,), connection
+        )
         if turn["active_attempt_id"] != attempt_id or turn["status"] not in {
             "generating",
             "validating",
@@ -864,9 +907,11 @@ class StoryRepository:
         return {
             "key": str(raw_scene.get("key") or ""),
             "name": raw_name if has_chinese_text(raw_name) else "未命名场景",
-            "characterIds": [str(item) for item in character_ids if str(item).strip()]
-            if isinstance(character_ids, list)
-            else [],
+            "characterIds": (
+                [str(item) for item in character_ids if str(item).strip()]
+                if isinstance(character_ids, list)
+                else []
+            ),
         }
 
     @staticmethod
@@ -911,7 +956,9 @@ class StoryRepository:
             status=str(row["status"]),  # type: ignore[arg-type]
             path=str(row["path"]) if row["path"] else None,
             prompt=str(row["prompt"] or ""),
-            source_turn_id=(str(row["source_turn_id"]) if row["source_turn_id"] else None),
+            source_turn_id=(
+                str(row["source_turn_id"]) if row["source_turn_id"] else None
+            ),
             sequence=int(row["sequence"]),
             error_code=str(row["error_code"]) if row["error_code"] else None,
             created_at=str(row["created_at"]),

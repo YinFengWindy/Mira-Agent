@@ -51,7 +51,7 @@ _CONTEXT_FRAME_SECTIONS = {
     "recent_context",
     "retrieved_memory",
 }
-SYSTEM_CONTEXT_FRAME_MARKER = "<system-reminder data-system-context-frame=\"true\">"
+SYSTEM_CONTEXT_FRAME_MARKER = '<system-reminder data-system-context-frame="true">'
 SYSTEM_CONTEXT_FRAME_END = "</system-reminder>"
 LEGACY_CONTEXT_FRAME_MARKER = "[SYSTEM_CONTEXT_FRAME]"
 
@@ -112,11 +112,13 @@ class PromptAssembler:
         injection_context = turn_injection_context or {}
         disabled = disabled_sections or set()
         top_sections = [
-            section for section in (system_sections_top or [])
+            section
+            for section in (system_sections_top or [])
             if section.name not in disabled
         ]
         bottom_sections = [
-            section for section in (system_sections_bottom or [])
+            section
+            for section in (system_sections_bottom or [])
             if section.name not in disabled
         ]
         all_sections = [

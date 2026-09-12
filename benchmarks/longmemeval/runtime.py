@@ -62,7 +62,7 @@ Never ask the user for information you might already have in memory.
 
 @dataclass
 class BenchmarkRuntime:
-    core: object          # CoreRuntime
+    core: object  # CoreRuntime
     # Kept for callers that still inspect the old runtime shape. Ingest now
     # goes through core.memory_runtime.engine and does not use a second
     # ConsolidationService instance.
@@ -131,6 +131,7 @@ async def close_runtime(rt: BenchmarkRuntime) -> None:
             try:
                 import asyncio
                 import inspect
+
                 if inspect.iscoroutinefunction(close):
                     await close()
                 else:

@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from core.roles import LonelinessHeartbeatLoop, RoleRelationshipRuntimeService, RoleStore
+from core.roles import (
+    LonelinessHeartbeatLoop,
+    RoleRelationshipRuntimeService,
+    RoleStore,
+)
 from proactive_v2.presence import PresenceStore
 from session.manager import SessionManager
 
@@ -16,7 +20,9 @@ def _utc(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> dat
     return datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
 
 
-def _runtime(tmp_path: Path) -> tuple[RoleRelationshipRuntimeService, SessionManager, PresenceStore]:
+def _runtime(
+    tmp_path: Path,
+) -> tuple[RoleRelationshipRuntimeService, SessionManager, PresenceStore]:
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     presence = PresenceStore(session_manager._store)
@@ -111,13 +117,17 @@ def test_user_message_clears_unanswered_state_and_reduces_loneliness(tmp_path: P
 
     now = _utc(2026, 7, 6, 12, 0)
     presence.record_user_message(session_manager.role_session_key("mira"), now=now)
-    updated = runtime.handle_user_message(session_manager.role_session_key("mira"), now=now)
+    updated = runtime.handle_user_message(
+        session_manager.role_session_key("mira"), now=now
+    )
 
     assert updated is not None
     assert updated["awaiting_reply_after_proactive"] is False
     assert updated["awaiting_reply_since"] == ""
     assert updated["loneliness_value"] < 80
-    assert datetime.fromisoformat(updated["last_user_at"]).astimezone(timezone.utc) == now
+    assert (
+        datetime.fromisoformat(updated["last_user_at"]).astimezone(timezone.utc) == now
+    )
     scene_due, scene_meta = runtime.should_trigger_scene_followup(
         session_manager.role_session_key("mira"),
         now=now + timedelta(minutes=5),
@@ -131,7 +141,9 @@ def test_snapshot_growth_profile_is_raised_to_default_floor(tmp_path: Path):
     runtime, _, _ = _runtime(tmp_path)
     payload = _snapshot_payload()
     payload["internal_profile"]["behavior_profile"]["loneliness_growth_base"] = 1.2
-    payload["internal_profile"]["behavior_profile"]["loneliness_growth_when_unanswered"] = 1.8
+    payload["internal_profile"]["behavior_profile"][
+        "loneliness_growth_when_unanswered"
+    ] = 1.8
 
     saved = runtime.write_snapshot("mira", payload)
 
@@ -140,7 +152,9 @@ def test_snapshot_growth_profile_is_raised_to_default_floor(tmp_path: Path):
     assert profile["loneliness_growth_when_unanswered"] == 2.4
 
 
-def test_current_loneliness_runtime_grows_once_per_complete_ten_minute_tick(tmp_path: Path):
+def test_current_loneliness_runtime_grows_once_per_complete_ten_minute_tick(
+    tmp_path: Path,
+):
     _seed_role(tmp_path)
     runtime, _, _ = _runtime(tmp_path)
     runtime.write_snapshot("mira", _snapshot_payload())
@@ -165,7 +179,9 @@ def test_current_loneliness_runtime_grows_once_per_complete_ten_minute_tick(tmp_
     )
     assert before_tick is not None
     assert before_tick["loneliness_value"] == 10
-    assert datetime.fromisoformat(before_tick["last_calculated_at"]).astimezone(timezone.utc) == _utc(2026, 7, 6, 0, 0)
+    assert datetime.fromisoformat(before_tick["last_calculated_at"]).astimezone(
+        timezone.utc
+    ) == _utc(2026, 7, 6, 0, 0)
 
     first_tick = runtime.current_loneliness_runtime(
         "mira",
@@ -173,7 +189,9 @@ def test_current_loneliness_runtime_grows_once_per_complete_ten_minute_tick(tmp_
     )
     assert first_tick is not None
     assert first_tick["loneliness_value"] == 12
-    assert datetime.fromisoformat(first_tick["last_calculated_at"]).astimezone(timezone.utc) == _utc(2026, 7, 6, 0, 10)
+    assert datetime.fromisoformat(first_tick["last_calculated_at"]).astimezone(
+        timezone.utc
+    ) == _utc(2026, 7, 6, 0, 10)
 
     second_tick = runtime.current_loneliness_runtime(
         "mira",
@@ -181,7 +199,9 @@ def test_current_loneliness_runtime_grows_once_per_complete_ten_minute_tick(tmp_
     )
     assert second_tick is not None
     assert second_tick["loneliness_value"] == 14
-    assert datetime.fromisoformat(second_tick["last_calculated_at"]).astimezone(timezone.utc) == _utc(2026, 7, 6, 0, 20)
+    assert datetime.fromisoformat(second_tick["last_calculated_at"]).astimezone(
+        timezone.utc
+    ) == _utc(2026, 7, 6, 0, 20)
 
 
 def test_current_loneliness_runtime_adds_unanswered_growth_per_tick(tmp_path: Path):
@@ -210,10 +230,14 @@ def test_current_loneliness_runtime_adds_unanswered_growth_per_tick(tmp_path: Pa
 
     assert updated is not None
     assert updated["loneliness_value"] == 20
-    assert datetime.fromisoformat(updated["last_calculated_at"]).astimezone(timezone.utc) == _utc(2026, 7, 6, 0, 20)
+    assert datetime.fromisoformat(updated["last_calculated_at"]).astimezone(
+        timezone.utc
+    ) == _utc(2026, 7, 6, 0, 20)
 
 
-def test_non_close_roles_do_not_accumulate_loneliness_and_clear_awaiting_state(tmp_path: Path):
+def test_non_close_roles_do_not_accumulate_loneliness_and_clear_awaiting_state(
+    tmp_path: Path,
+):
     _seed_role(tmp_path)
     runtime, _, _ = _runtime(tmp_path)
     payload = _snapshot_payload()
@@ -243,7 +267,9 @@ def test_non_close_roles_do_not_accumulate_loneliness_and_clear_awaiting_state(t
     assert updated["loneliness_value"] == 22
     assert updated["awaiting_reply_after_proactive"] is False
     assert updated["awaiting_reply_since"] == ""
-    assert datetime.fromisoformat(updated["last_calculated_at"]).astimezone(timezone.utc) == _utc(2026, 7, 6, 1, 0)
+    assert datetime.fromisoformat(updated["last_calculated_at"]).astimezone(
+        timezone.utc
+    ) == _utc(2026, 7, 6, 1, 0)
 
 
 def test_proactive_sent_marks_unanswered_and_sets_cooldown(tmp_path: Path):
@@ -252,13 +278,23 @@ def test_proactive_sent_marks_unanswered_and_sets_cooldown(tmp_path: Path):
     runtime.write_snapshot("mira", _snapshot_payload())
 
     now = _utc(2026, 7, 6, 8, 0)
-    updated = runtime.handle_proactive_sent(session_manager.role_session_key("mira"), now=now)
+    updated = runtime.handle_proactive_sent(
+        session_manager.role_session_key("mira"), now=now
+    )
 
     assert updated is not None
     assert updated["awaiting_reply_after_proactive"] is True
-    assert datetime.fromisoformat(updated["awaiting_reply_since"]).astimezone(timezone.utc) == now
-    assert datetime.fromisoformat(updated["last_triggered_at"]).astimezone(timezone.utc) == now
-    assert datetime.fromisoformat(updated["cooldown_until"]).astimezone(timezone.utc) == now + timedelta(minutes=120)
+    assert (
+        datetime.fromisoformat(updated["awaiting_reply_since"]).astimezone(timezone.utc)
+        == now
+    )
+    assert (
+        datetime.fromisoformat(updated["last_triggered_at"]).astimezone(timezone.utc)
+        == now
+    )
+    assert datetime.fromisoformat(updated["cooldown_until"]).astimezone(
+        timezone.utc
+    ) == now + timedelta(minutes=120)
 
 
 def test_should_trigger_proactive_respects_threshold(tmp_path: Path):
@@ -431,7 +467,9 @@ async def test_generate_snapshot_via_llm_accepts_prompt_json_example(tmp_path: P
 
 
 @pytest.mark.asyncio
-async def test_refresh_snapshot_after_consolidation_updates_session_metadata(tmp_path: Path):
+async def test_refresh_snapshot_after_consolidation_updates_session_metadata(
+    tmp_path: Path,
+):
     _seed_role(tmp_path)
     runtime, session_manager, _ = _runtime(tmp_path)
     session = session_manager.get_or_create(session_manager.role_session_key("mira"))

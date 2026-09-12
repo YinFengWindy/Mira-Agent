@@ -27,6 +27,7 @@ from agent.core.proactive_turn.strategies import RelationshipStrategy
 
 # ── FakeStateStore ────────────────────────────────────────────────────────
 
+
 class FakeStateStore:
     """ProactiveStateStore 的最小 fake，只实现主动 pipeline 需要的接口。"""
 
@@ -48,7 +49,9 @@ class FakeStateStore:
         return self._delivery_count
 
     # post-guard
-    def is_delivery_duplicate(self, session_key: str, delivery_key: str, window_hours: int) -> bool:
+    def is_delivery_duplicate(
+        self, session_key: str, delivery_key: str, window_hours: int
+    ) -> bool:
         return self._is_dup
 
     def mark_delivery(self, session_key: str, delivery_key: str) -> None:
@@ -99,6 +102,7 @@ class FakeStateStore:
 
 # ── FakeRng ───────────────────────────────────────────────────────────────
 
+
 class FakeRng:
     def __init__(self, value: float = 0.5):
         self._value = value
@@ -108,6 +112,7 @@ class FakeRng:
 
 
 # ── FakeAckSink ──────────────────────────────────────────────────────────
+
 
 class FakeAckSink:
     """记录所有 ACK 调用的 (compound_key, ttl_hours) 对。"""
@@ -132,6 +137,7 @@ class FakeAckSink:
 
 
 # ── FakeAlertAckSink ─────────────────────────────────────────────────────
+
 
 class FakeAlertAckSink:
     """记录 alert_ack_fn 调用的 compound_key 列表（无 TTL）。"""
@@ -173,13 +179,14 @@ class _FakeSession:
 
 # ── FakeLLM ──────────────────────────────────────────────────────────────
 
+
 class FakeLLM:
     """预定义工具调用序列。序列耗尽后返回 None（loop 自然结束）。"""
 
     def __init__(self, sequence: list[tuple[str, dict]]):
         self._sequence = list(sequence)
         self._index = 0
-        self.calls: list[list[dict]] = []         # 每次 llm 调用收到的 messages
+        self.calls: list[list[dict]] = []  # 每次 llm 调用收到的 messages
         self.tool_choices: list[str | dict] = []  # 每次调用传入的 tool_choice
 
     async def __call__(
@@ -198,6 +205,7 @@ class FakeLLM:
 
 
 # ── cfg_with ──────────────────────────────────────────────────────────────
+
 
 def cfg_with(**kwargs) -> ProactiveConfig:
     """从默认 ProactiveConfig 创建，只覆盖指定字段。"""
@@ -248,6 +256,7 @@ def relationship_gate_chain(
         runtime = SimpleNamespace(should_trigger_proactive=loneliness_evaluate)
         gates.append(RelationshipStrategy(cast(Any, runtime)))
     return ProactiveGateChain(motives=gates)
+
 
 def make_proactive_pipeline(
     *,
@@ -305,7 +314,11 @@ def make_proactive_pipeline(
             context_fn=AsyncMock(return_value=[]),
             web_fetch_tool=tool_deps.web_fetch_tool,
             max_chars=tool_deps.max_chars,
-            content_limit=(cfg.agent_tick_content_limit if cfg else ProactiveConfig().agent_tick_content_limit),
+            content_limit=(
+                cfg.agent_tick_content_limit
+                if cfg
+                else ProactiveConfig().agent_tick_content_limit
+            ),
         )
 
     if rng is None:
@@ -323,6 +336,7 @@ def make_proactive_pipeline(
         session_manager=cast(Any, session_manager),
         presence=cast(Any, SimpleNamespace(record_proactive_sent=lambda _key: None)),
     )
+
     class _Outbound:
         async def dispatch(self, outbound: OutboundDispatch) -> bool:
             return await sender.send(outbound.content)

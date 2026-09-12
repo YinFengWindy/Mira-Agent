@@ -180,12 +180,20 @@ async def test_desktop_bridge_rejects_cross_role_and_running_schedule_updates(tm
     }
 
     cross_role = await service.handle(
-        {"id": "cross", "method": "roles.tasks.update", "payload": {**update_payload, "role_id": "other"}},
+        {
+            "id": "cross",
+            "method": "roles.tasks.update",
+            "payload": {**update_payload, "role_id": "other"},
+        },
         emit_event=lambda payload: None,
     )
     scheduler._in_flight.add(job.id)
     running = await service.handle(
-        {"id": "running", "method": "roles.tasks.update", "payload": {**update_payload, "role_id": "mira"}},
+        {
+            "id": "running",
+            "method": "roles.tasks.update",
+            "payload": {**update_payload, "role_id": "mira"},
+        },
         emit_event=lambda payload: None,
     )
 

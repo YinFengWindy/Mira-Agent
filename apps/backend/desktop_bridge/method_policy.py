@@ -65,31 +65,51 @@ _DEFAULT_POLICY = MethodPolicy()
 METHOD_POLICIES: dict[str, MethodPolicy] = {
     "health": MethodPolicy(concurrency=Concurrency.READ_ONLY, admission_exempt=True),
     "runtime.status": MethodPolicy(
-        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.SETTINGS,
+        concurrency=Concurrency.READ_ONLY,
+        admission_exempt=True,
+        handler=Handler.SETTINGS,
     ),
     "runtime.apply": MethodPolicy(
-        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.SETTINGS,
+        concurrency=Concurrency.SETTINGS_APPLY,
+        admission_exempt=True,
+        handler=Handler.SETTINGS,
     ),
     "plugin.config.get": MethodPolicy(
-        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
+        concurrency=Concurrency.READ_ONLY,
+        admission_exempt=True,
+        handler=Handler.PLUGIN_CONFIG,
     ),
     "plugin.config.set": MethodPolicy(
         # 写入复用设置事务自己的串行锁，语义与 runtime.apply 一致
-        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_CONFIG,
+        concurrency=Concurrency.SETTINGS_APPLY,
+        admission_exempt=True,
+        handler=Handler.PLUGIN_CONFIG,
     ),
     "plugins.list": MethodPolicy(
-        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.PLUGIN_MANAGEMENT,
+        concurrency=Concurrency.READ_ONLY,
+        admission_exempt=True,
+        handler=Handler.PLUGIN_MANAGEMENT,
     ),
     "plugins.setEnabled": MethodPolicy(
         # 同样复用设置事务自己的串行锁：启停一律走一次完整的生成代切换
-        concurrency=Concurrency.SETTINGS_APPLY, admission_exempt=True, handler=Handler.PLUGIN_MANAGEMENT,
+        concurrency=Concurrency.SETTINGS_APPLY,
+        admission_exempt=True,
+        handler=Handler.PLUGIN_MANAGEMENT,
     ),
     "roles.tasks.list": MethodPolicy(
-        concurrency=Concurrency.READ_ONLY, admission_exempt=True, handler=Handler.ROLE_TASKS,
+        concurrency=Concurrency.READ_ONLY,
+        admission_exempt=True,
+        handler=Handler.ROLE_TASKS,
     ),
-    "roles.tasks.cancel": MethodPolicy(admission_exempt=True, handler=Handler.ROLE_TASKS),
-    "roles.list": MethodPolicy(concurrency=Concurrency.READ_ONLY, admission_exempt=True),
-    "session.messagesPage": MethodPolicy(concurrency=Concurrency.READ_ONLY, admission_exempt=True),
+    "roles.tasks.cancel": MethodPolicy(
+        admission_exempt=True, handler=Handler.ROLE_TASKS
+    ),
+    "roles.list": MethodPolicy(
+        concurrency=Concurrency.READ_ONLY, admission_exempt=True
+    ),
+    "session.messagesPage": MethodPolicy(
+        concurrency=Concurrency.READ_ONLY, admission_exempt=True
+    ),
     "session.messagesAround": MethodPolicy(concurrency=Concurrency.READ_ONLY),
     "session.search": MethodPolicy(concurrency=Concurrency.READ_ONLY),
     "session.imageHistory": MethodPolicy(concurrency=Concurrency.READ_ONLY),
@@ -101,10 +121,12 @@ METHOD_POLICIES: dict[str, MethodPolicy] = {
         owner_routing=OwnerRouting.BUSY_VOICE_SYNTHESIS,
     ),
     "chat.cancel": MethodPolicy(
-        admission_exempt=True, owner_routing=OwnerRouting.BUSY_CHAT_SESSION,
+        admission_exempt=True,
+        owner_routing=OwnerRouting.BUSY_CHAT_SESSION,
     ),
     "voice.turn.cancel": MethodPolicy(
-        admission_exempt=True, owner_routing=OwnerRouting.BUSY_VOICE_TURN,
+        admission_exempt=True,
+        owner_routing=OwnerRouting.BUSY_VOICE_TURN,
     ),
 }
 
@@ -124,7 +146,8 @@ _PLUGIN_CONFIG_METHOD_PREFIX = "plugin.config."
 
 
 def resolve_plugin_method_policy(
-    method: str, registry_provider: "Callable[[], PluginRpcRegistry | None]",
+    method: str,
+    registry_provider: "Callable[[], PluginRpcRegistry | None]",
 ) -> MethodPolicy:
     """Resolves dispatcher policy for one request, consulting a plugin RPC registry.
 

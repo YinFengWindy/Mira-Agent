@@ -267,7 +267,9 @@ async def test_rpc_capability_registers_under_plugin_namespace_and_disposes():
     scope = EffectScope("demo_plugin")
     capability = RpcCapability(registry, scope, "demo_plugin")
 
-    capability.register("ping", _ping, concurrency=Concurrency.READ_ONLY, admission_exempt=True)
+    capability.register(
+        "ping", _ping, concurrency=Concurrency.READ_ONLY, admission_exempt=True
+    )
 
     resolved = registry.resolve("plugin.demo_plugin.ping")
     assert resolved == ("demo_plugin", _ping)

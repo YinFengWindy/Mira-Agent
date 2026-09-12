@@ -86,10 +86,16 @@ class VoiceService:
                 emotion=emotion,
                 cancel_event=cancel_event,
             ).audio
-        return self.tts.synthesize(text, voice_id=voice_id, speed=speed, emotion=emotion)
+        return self.tts.synthesize(
+            text, voice_id=voice_id, speed=speed, emotion=emotion
+        )
 
-    def stream_synthesize(self, text: str, *, voice_id: str, speed: float, emotion: str = "") -> bytes:
-        return self.tts.stream_synthesize(text, voice_id=voice_id, speed=speed, emotion=emotion)
+    def stream_synthesize(
+        self, text: str, *, voice_id: str, speed: float, emotion: str = ""
+    ) -> bytes:
+        return self.tts.stream_synthesize(
+            text, voice_id=voice_id, speed=speed, emotion=emotion
+        )
 
     def stream_synthesize_result(
         self,
@@ -110,7 +116,9 @@ class VoiceService:
             cancel_event=cancel_event,
         )
 
-    def clone_voice(self, audio: bytes, *, file_name: str = "voice-clone.wav") -> dict[str, object]:
+    def clone_voice(
+        self, audio: bytes, *, file_name: str = "voice-clone.wav"
+    ) -> dict[str, object]:
         return self.tts.clone_voice(audio, file_name=file_name)
 
     def delete_managed_voice(

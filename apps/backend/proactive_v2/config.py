@@ -18,6 +18,7 @@ class ProactiveConfig:
 
     使用预设 + 覆盖的方式配置，大部分算法参数内置在策略中。
     """
+
     # 必填运行信息
     enabled: bool = False
     default_role_id: str = ""

@@ -15,7 +15,6 @@ from .helpers import (
     _truncate_tool_result,
 )
 
-
 INTERRUPTED_TURN_METADATA_KEY = "interrupted_turn"
 
 

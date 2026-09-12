@@ -27,6 +27,7 @@ from .helpers import (
     logger,
 )
 
+
 class _ProcessingMixin:
     async def run(self) -> None:
         self._running = True
@@ -202,19 +203,23 @@ class _ProcessingMixin:
             )
         context = registry.context_from_metadata(metadata)
         if context is None:
-            if str(metadata.get("role_id") or "").strip() or session_key.startswith("role:"):
+            if str(metadata.get("role_id") or "").strip() or session_key.startswith(
+                "role:"
+            ):
                 raise ValueError("角色回合缺少完整 RoleExecutionContext")
             return await self._process(
                 item,
                 session_key=session_key,
                 dispatch_outbound=dispatch_outbound,
             )
+
         async def operation() -> OutboundMessage:
             return await self._process(
                 item,
                 session_key=session_key,
                 dispatch_outbound=dispatch_outbound,
             )
+
         if context.work_kind == "scheduled_job":
             return await registry.dispatch_background_task(context, operation)
         return await registry.dispatch_passive_turn(context, operation)
@@ -295,8 +300,12 @@ class _ProcessingMixin:
         if registry is None or registry.context_from_metadata(metadata) is not None:
             return
         session = self.session_manager.get_or_create(session_key)
-        session_metadata = session.metadata if isinstance(session.metadata, dict) else {}
-        role_id = str(metadata.get("role_id") or session_metadata.get("role_id") or "").strip()
+        session_metadata = (
+            session.metadata if isinstance(session.metadata, dict) else {}
+        )
+        role_id = str(
+            metadata.get("role_id") or session_metadata.get("role_id") or ""
+        ).strip()
         thread_id = str(metadata.get("thread_id") or "").strip()
         transport_channel = str(metadata.get("transport_channel") or "").strip()
         transport_chat_id = str(metadata.get("transport_chat_id") or "").strip()

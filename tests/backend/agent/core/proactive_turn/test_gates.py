@@ -93,9 +93,7 @@ def test_gate_chain_preserves_block_metadata():
     assert result.blocked is True
     assert result.blocked_gate_name == "relationship.loneliness"
     assert result.reason == "cooldown"
-    assert result.trace[0].metadata == {
-        "cooldown_until": "2026-08-10T18:16:40+08:00"
-    }
+    assert result.trace[0].metadata == {"cooldown_until": "2026-08-10T18:16:40+08:00"}
 
 
 def test_resolve_gate_attempt_index_accepts_non_negative_integer_strings():

@@ -75,32 +75,56 @@ def _install_background_work(monkeypatch):
         loop_consumer(loop)
         return [loop.run()], None
 
-    monkeypatch.setattr("bootstrap.runtime.background.build_memory_optimizer_task", build)
+    monkeypatch.setattr(
+        "bootstrap.runtime.background.build_memory_optimizer_task", build
+    )
     return loops
 
 
 async def _prepare_account_switch(tmp_path, monkeypatch):
     _install_transport(monkeypatch, [])
     loops = _install_background_work(monkeypatch)
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False,
-                    channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+        channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")),
+    )
     app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_proactive=False))
     await app.start()
     await asyncio.wait_for(loops[0].started.wait(), 1)
-    candidate = await app.prepare(replace(config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))))
+    candidate = await app.prepare(
+        replace(
+            config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))
+        )
+    )
     return app, candidate, loops
 
 
 @pytest.mark.asyncio
-async def test_credential_change_drains_old_direct_and_queued_replies_before_switch(tmp_path, monkeypatch):
+async def test_credential_change_drains_old_direct_and_queued_replies_before_switch(
+    tmp_path, monkeypatch
+):
     sent = []
     _install_transport(monkeypatch, sent)
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False,
-                    channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+        channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")),
+    )
     app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_proactive=False))
     await app.start()
     accepted = app.acquire()
-    candidate = await app.prepare(replace(config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))))
+    candidate = await app.prepare(
+        replace(
+            config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))
+        )
+    )
     publish = asyncio.create_task(app.publish(candidate))
     try:
         for _ in range(10):
@@ -111,8 +135,12 @@ async def test_credential_change_drains_old_direct_and_queued_replies_before_swi
         assert not app.accepting_work
         assert not publish.done()
         with bind_runtime(accepted):
-            await accepted.core.push_tool.execute(channel="telegram", chat_id="chat", message="direct old")
-            await accepted.core.bus.publish_outbound(OutboundMessage("telegram", "chat", "queued old"))
+            await accepted.core.push_tool.execute(
+                channel="telegram", chat_id="chat", message="direct old"
+            )
+            await accepted.core.bus.publish_outbound(
+                OutboundMessage("telegram", "chat", "queued old")
+            )
         await accepted.release()
         await asyncio.wait_for(publish, 3)
         assert sent == [("account-A", "direct old"), ("account-A", "queued old")]
@@ -121,7 +149,9 @@ async def test_credential_change_drains_old_direct_and_queued_replies_before_swi
         assert app.accepting_work
         async with app.acquire() as fresh:
             with bind_runtime(fresh):
-                await fresh.core.push_tool.execute(channel="telegram", chat_id="chat", message="new")
+                await fresh.core.push_tool.execute(
+                    channel="telegram", chat_id="chat", message="new"
+                )
         assert sent[-1] == ("account-B", "new")
     finally:
         await accepted.release()
@@ -130,14 +160,26 @@ async def test_credential_change_drains_old_direct_and_queued_replies_before_swi
 
 
 @pytest.mark.asyncio
-async def test_channel_commit_failure_restores_old_transport_and_admission(tmp_path, monkeypatch):
+async def test_channel_commit_failure_restores_old_transport_and_admission(
+    tmp_path, monkeypatch
+):
     sent = []
     _install_transport(monkeypatch, sent)
-    config = Config(provider="", model="", api_key="", model_registrations=[], memory_optimizer_enabled=False,
-                    channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        model_registrations=[],
+        memory_optimizer_enabled=False,
+        channels=ChannelsConfig(telegram=TelegramChannelConfig("account-A")),
+    )
     app = AppRuntime(config, tmp_path, features=RuntimeFeatures(enable_proactive=False))
     await app.start()
-    candidate = await app.prepare(replace(config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))))
+    candidate = await app.prepare(
+        replace(
+            config, channels=ChannelsConfig(telegram=TelegramChannelConfig("account-B"))
+        )
+    )
 
     def fail():
         raise OSError("commit failed")
@@ -147,17 +189,23 @@ async def test_channel_commit_failure_restores_old_transport_and_admission(tmp_p
             await app.publish(candidate, commit=fail)
         await app.discard(candidate)
         assert app.generation == 1 and app._generation_manager.admission.is_set()
-        await app.push_tool.execute(channel="telegram", chat_id="chat", message="still A")
+        await app.push_tool.execute(
+            channel="telegram", chat_id="chat", message="still A"
+        )
         assert sent == [("account-A", "still A")]
     finally:
         await app.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_successful_account_switch_starts_untouched_candidate_background(tmp_path, monkeypatch):
+async def test_successful_account_switch_starts_untouched_candidate_background(
+    tmp_path, monkeypatch
+):
     app, candidate, loops = await _prepare_account_switch(tmp_path, monkeypatch)
     try:
-        resume_after_commit = Mock(side_effect=AssertionError("barrier must not resume after commit"))
+        resume_after_commit = Mock(
+            side_effect=AssertionError("barrier must not resume after commit")
+        )
         monkeypatch.setattr(app.channel_host, "resume_intake", resume_after_commit)
         assert len(loops) == 2 and not loops[1].started.is_set()
         await asyncio.wait_for(app.publish(candidate), 3)
@@ -193,7 +241,9 @@ async def test_failed_switch_restarts_only_published_background(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_pause_failure_reopens_admission_without_stopping_background(tmp_path, monkeypatch):
+async def test_pause_failure_reopens_admission_without_stopping_background(
+    tmp_path, monkeypatch
+):
     app, candidate, loops = await _prepare_account_switch(tmp_path, monkeypatch)
 
     def fail():
@@ -212,8 +262,12 @@ async def test_pause_failure_reopens_admission_without_stopping_background(tmp_p
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("recovery_phase", ["_prepare_background", "_publish_background"])
-async def test_background_recovery_failure_preserves_errors_and_reopens_admission(tmp_path, monkeypatch, recovery_phase):
+@pytest.mark.parametrize(
+    "recovery_phase", ["_prepare_background", "_publish_background"]
+)
+async def test_background_recovery_failure_preserves_errors_and_reopens_admission(
+    tmp_path, monkeypatch, recovery_phase
+):
     app, candidate, loops = await _prepare_account_switch(tmp_path, monkeypatch)
 
     def commit_failure():
@@ -224,9 +278,14 @@ async def test_background_recovery_failure_preserves_errors_and_reopens_admissio
 
     monkeypatch.setattr(app, recovery_phase, recovery_failure)
     try:
-        with pytest.raises(ExceptionGroup, match="Channel handover recovery failed") as failure:
+        with pytest.raises(
+            ExceptionGroup, match="Channel handover recovery failed"
+        ) as failure:
             await asyncio.wait_for(app.publish(candidate, commit=commit_failure), 3)
-        assert [str(error) for error in failure.value.exceptions] == ["commit failed", "background recovery failed"]
+        assert [str(error) for error in failure.value.exceptions] == [
+            "commit failed",
+            "background recovery failed",
+        ]
         assert app._generation_manager.admission.is_set()
         assert loops[1].stop_calls == 0
         assert app.generation == 1

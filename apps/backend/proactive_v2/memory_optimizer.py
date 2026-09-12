@@ -501,7 +501,9 @@ class MemoryOptimizerLoop:
                 logger.exception("[memory_optimizer] 启动补跑角色失败: %s", role.id)
 
     def _is_role_overdue(self, role, *, now: datetime) -> bool:
-        state = role.memory_init_state if isinstance(role.memory_init_state, dict) else {}
+        state = (
+            role.memory_init_state if isinstance(role.memory_init_state, dict) else {}
+        )
         raw = str(state.get(_LAST_OPTIMIZED_STATE_KEY) or "").strip()
         if not raw:
             return True

@@ -36,7 +36,9 @@ def test_alert_prompt_line_hides_empty_severity():
 
 
 def test_normalize_alert_metrics_trimmed_by_keys_and_value_len():
-    metrics = {f"k{i}": f"value-{i}-" + ("x" * 100) for i in range(MAX_METRICS_KEYS + 2)}
+    metrics = {
+        f"k{i}": f"value-{i}-" + ("x" * 100) for i in range(MAX_METRICS_KEYS + 2)
+    }
     event = {"ack_server": "fitbit", "id": "evt-2", "metrics": metrics}
 
     contract = normalize_alert(event)

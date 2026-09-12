@@ -86,9 +86,7 @@ class TelegramChannel(
         self._app = Application.builder().token(token).build()
         self._bot_commands = bot_commands or []
         self._app.add_handler(CommandHandler("stop", self._on_stop_command))
-        self._app.add_handler(
-            MessageHandler(filters.COMMAND, self._on_command)
-        )
+        self._app.add_handler(MessageHandler(filters.COMMAND, self._on_command))
         self._app.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_message)
         )
@@ -113,7 +111,9 @@ class TelegramChannel(
         self._polling_conflict_task: asyncio.Task[None] | None = None
         self._telegram_outbound_limiter = TelegramOutboundLimiter()
         self._active_streams: dict[str, TelegramStreamMessage] = {}
-        self._live_edit_queue = TelegramLiveEditQueue(limiter=self._telegram_outbound_limiter)
+        self._live_edit_queue = TelegramLiveEditQueue(
+            limiter=self._telegram_outbound_limiter
+        )
         self._live_messages: dict[str, TelegramLiveTextMessage] = {}
         self._reply_buffers: dict[str, str] = {}
         self._thinking_buffers: dict[str, str] = {}

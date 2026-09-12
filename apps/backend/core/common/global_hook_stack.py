@@ -47,7 +47,9 @@ def install_global_hooks(owner, handler, system, thread, loop, loop_handler):
 
 def uninstall_global_hooks(owner) -> None:
     """Removes any retired owner without restoring another retired collector."""
-    index = next((index for index, item in enumerate(_owners) if item.owner is owner), None)
+    index = next(
+        (index for index, item in enumerate(_owners) if item.owner is owner), None
+    )
     if index is None:
         return
     hooks = _owners.pop(index)
@@ -63,7 +65,8 @@ def uninstall_global_hooks(owner) -> None:
         if hooks.loop is not None and not hooks.loop.is_closed():
             if hooks.loop.get_exception_handler() == hooks.loop_handler:
                 hooks.loop.set_exception_handler(
-                    previous.loop_handler if previous and previous.loop is hooks.loop
+                    previous.loop_handler
+                    if previous and previous.loop is hooks.loop
                     else _original_loop_handlers.get(hooks.loop)
                 )
     if not _owners:

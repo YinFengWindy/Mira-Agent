@@ -85,11 +85,11 @@ def _v3_assets(raw: Any) -> tuple[list[RoleCardAsset], list[str]]:
         mapped_kind = (
             "avatar"
             if kind == "icon" and name == "main"
-            else "background"
-            if kind == "background" and name == "main"
-            else "emotion"
-            if kind == "emotion" and name
-            else "asset"
+            else (
+                "background"
+                if kind == "background" and name == "main"
+                else "emotion" if kind == "emotion" and name else "asset"
+            )
         )
         assets.append(
             RoleCardAsset(

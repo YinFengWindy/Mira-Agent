@@ -41,7 +41,9 @@ class RuntimePluginConfig:
         if not plugin_id:
             raise RuntimeApplyError("runtime_invalid_request", "plugin_id 不能为空")
         kernel = self._plugin_kernel()
-        schema = kernel.config_schemas.schema_for(plugin_id) if kernel is not None else None
+        schema = (
+            kernel.config_schemas.schema_for(plugin_id) if kernel is not None else None
+        )
         stored = dict(self._app.config.plugins.get(plugin_id, {}))
         # 启停状态归宿主所有，由 plugins.list / plugins.setEnabled 管理；
         # 不要混进配置表单的值里被 renderer 原样回传。
@@ -88,17 +90,20 @@ class RuntimePluginConfig:
         )
         if model_cls is None:
             raise RuntimeApplyError(
-                "plugin_config_unsupported", f"插件 {plugin_id} 未声明配置模型",
+                "plugin_config_unsupported",
+                f"插件 {plugin_id} 未声明配置模型",
             )
         try:
             normalized = validate_against(model_cls, values)
         except ValidationError as exc:
             raise RuntimeApplyError(
-                "plugin_config_invalid", format_validation_error(exc),
+                "plugin_config_invalid",
+                format_validation_error(exc),
                 # details 会被 JSON 序列化写回 renderer：去掉 url 与 ctx，
                 # 后者可能携带异常对象等不可序列化内容。
                 errors=exc.errors(include_url=False, include_context=False),
             ) from exc
+
         # 复用设置事务：定位-替换式合并 TOML 文本后走既有事务化落盘 + 热更新路径，
         # 不另起一套写盘逻辑（见 desktop_bridge/plugin_config_text.py）。
         # 合并与守卫都在事务锁内进行：本方法只改一张表、其余文本沿用"当前已提交
@@ -129,7 +134,11 @@ class RuntimePluginConfig:
                     f"整理成独立的 [plugins.{plugin_id}] 表，再通过设置页保存",
                 ) from exc
             self._assert_config_round_trip(
-                model_cls, plugin_id, current_text, merged, normalized,
+                model_cls,
+                plugin_id,
+                current_text,
+                merged,
+                normalized,
             )
             return merged
 

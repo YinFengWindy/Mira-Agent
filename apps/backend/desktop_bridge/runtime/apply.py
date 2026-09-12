@@ -18,7 +18,6 @@ from core.roles.model_updates import prepare_role_model_updates
 from core.roles.store import RoleStore
 from desktop_bridge.config_transaction import ConfigTransaction
 
-
 _RESULT_HISTORY_LIMIT = 64
 
 
@@ -44,13 +43,16 @@ def read_plugin_table(config_toml: str, plugin_id: str) -> dict[str, Any]:
         document = tomllib.loads(config_toml)
     except tomllib.TOMLDecodeError as exc:
         raise RuntimeApplyError(
-            "plugin_config_unrepresentable", f"当前配置无法解析: {exc}",
+            "plugin_config_unrepresentable",
+            f"当前配置无法解析: {exc}",
         ) from exc
     return dict(document.get("plugins", {}).get(plugin_id, {}))
 
 
 def assert_plugin_table_isolated(
-    plugin_id: str, original_text: str, merged_text: str,
+    plugin_id: str,
+    original_text: str,
+    merged_text: str,
 ) -> dict[str, Any]:
     """Rejects a ``[plugins.<plugin_id>]`` merge that touched anything else.
 
@@ -72,15 +74,19 @@ def assert_plugin_table_isolated(
         # module rather than a user mistake — but never assume anything
         # about it and refuse the write regardless.
         raise RuntimeApplyError(
-            "plugin_config_unrepresentable", f"当前配置无法解析: {exc}",
+            "plugin_config_unrepresentable",
+            f"当前配置无法解析: {exc}",
         ) from exc
     try:
         after = tomllib.loads(merged_text)
     except tomllib.TOMLDecodeError as exc:
         raise RuntimeApplyError(
-            "plugin_config_unrepresentable", f"合并后的配置无法解析: {exc}",
+            "plugin_config_unrepresentable",
+            f"合并后的配置无法解析: {exc}",
         ) from exc
-    if _without_plugin_table(before, plugin_id) != _without_plugin_table(after, plugin_id):
+    if _without_plugin_table(before, plugin_id) != _without_plugin_table(
+        after, plugin_id
+    ):
         raise RuntimeApplyError(
             "plugin_config_unrepresentable",
             "合并后配置中出现了与目标插件无关的改动，写入已取消",
@@ -124,7 +130,9 @@ class DerivedWrite:
 class RuntimeSettingsApplication:
     """Prepares candidates, commits persistence, and remembers idempotent results."""
 
-    def __init__(self, app: AppRuntime, config_path: Path, role_store: RoleStore) -> None:
+    def __init__(
+        self, app: AppRuntime, config_path: Path, role_store: RoleStore
+    ) -> None:
         self.app = app
         self.roles = role_store
         self.transaction = ConfigTransaction(config_path, role_store.workspace)
@@ -133,7 +141,10 @@ class RuntimeSettingsApplication:
         self._results: OrderedDict[str, tuple[str, dict[str, Any]]] = OrderedDict()
 
     async def apply(
-        self, payload: dict[str, Any], *, prepare_service: Callable,
+        self,
+        payload: dict[str, Any],
+        *,
+        prepare_service: Callable,
         publish_service: Callable,
         derive: DerivedWrite | None = None,
     ) -> dict[str, Any]:
@@ -158,17 +169,23 @@ class RuntimeSettingsApplication:
             operation_id = payload.get("operation_id")
             updates = payload.get("role_model_updates", [])
             if not isinstance(operation_id, str) or not operation_id.strip():
-                raise RuntimeApplyError("runtime_invalid_request", "配置内容和操作 ID 不能为空")
+                raise RuntimeApplyError(
+                    "runtime_invalid_request", "配置内容和操作 ID 不能为空"
+                )
             if not isinstance(updates, list) or any(
                 not isinstance(item, dict) for item in updates
             ):
-                raise RuntimeApplyError("runtime_invalid_request", "角色模型更新必须是数组")
+                raise RuntimeApplyError(
+                    "runtime_invalid_request", "角色模型更新必须是数组"
+                )
             if derive is not None:
                 fingerprint = self._fingerprint(derive.fingerprint_payload, updates)
             else:
                 text = payload.get("config_toml")
                 if not isinstance(text, str):
-                    raise RuntimeApplyError("runtime_invalid_request", "配置内容不能为空")
+                    raise RuntimeApplyError(
+                        "runtime_invalid_request", "配置内容不能为空"
+                    )
                 fingerprint = self._fingerprint(text, updates)
             memoized = self._check_memo(operation_id, fingerprint)
             if memoized is not None:
@@ -177,12 +194,17 @@ class RuntimeSettingsApplication:
                 derived_text = derive.build_config_toml(self.config_text)
                 payload = {**payload, "config_toml": derived_text}
             return await self._apply(
-                operation_id, payload, prepare_service, publish_service, fingerprint,
+                operation_id,
+                payload,
+                prepare_service,
+                publish_service,
+                fingerprint,
             )
 
     @staticmethod
     def _fingerprint(
-        identity: str | dict[str, Any], updates: list[dict[str, Any]],
+        identity: str | dict[str, Any],
+        updates: list[dict[str, Any]],
     ) -> str:
         """Hashes an operation's identity plus role updates into a retry fingerprint.
 
@@ -194,11 +216,13 @@ class RuntimeSettingsApplication:
         try:
             encoded = json.dumps(
                 {"identity": identity, "updates": updates},
-                sort_keys=True, ensure_ascii=False,
+                sort_keys=True,
+                ensure_ascii=False,
             )
         except TypeError as exc:
             raise RuntimeApplyError(
-                "runtime_invalid_request", f"操作载荷无法序列化: {exc}",
+                "runtime_invalid_request",
+                f"操作载荷无法序列化: {exc}",
             ) from exc
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
@@ -213,7 +237,9 @@ class RuntimeSettingsApplication:
         if previous is None:
             return None
         if previous[0] != fingerprint:
-            raise RuntimeApplyError("runtime_operation_conflict", "操作 ID 已用于其他配置")
+            raise RuntimeApplyError(
+                "runtime_operation_conflict", "操作 ID 已用于其他配置"
+            )
         return previous[1]
 
     async def _apply(
@@ -228,19 +254,28 @@ class RuntimeSettingsApplication:
         updates = payload.get("role_model_updates", [])
         generation = self.app.generation
         expected = payload.get("expected_generation")
-        if expected is not None and (type(expected) is not int or expected != generation):
-            raise RuntimeApplyError("runtime_generation_conflict", "配置已更新，请重新读取后保存",
-                                    generation=generation)
+        if expected is not None and (
+            type(expected) is not int or expected != generation
+        ):
+            raise RuntimeApplyError(
+                "runtime_generation_conflict",
+                "配置已更新，请重新读取后保存",
+                generation=generation,
+            )
         try:
             config = load_config_text(text)
-            prepare_role_model_updates(self.roles, updates, {item.id for item in config.model_registrations})
+            prepare_role_model_updates(
+                self.roles, updates, {item.id for item in config.model_registrations}
+            )
         except (ValueError, TypeError) as exc:
             raise RuntimeApplyError("runtime_config_invalid", str(exc)) from exc
         if config == self.app.config:
             try:
                 with self.roles.lock:
                     roles_payload = prepare_role_model_updates(
-                        self.roles, updates, {item.id for item in config.model_registrations},
+                        self.roles,
+                        updates,
+                        {item.id for item in config.model_registrations},
                     )
                     self.transaction.commit(text, roles_payload)
             except (OSError, ValueError, RuntimeError) as exc:
@@ -260,7 +295,9 @@ class RuntimeSettingsApplication:
                 # Only model fields are merged, so intervening state is retained.
                 with self.roles.lock:
                     roles_payload = prepare_role_model_updates(
-                        self.roles, updates, {item.id for item in config.model_registrations},
+                        self.roles,
+                        updates,
+                        {item.id for item in config.model_registrations},
                     )
                     self.transaction.commit(text, roles_payload)
 
@@ -275,14 +312,21 @@ class RuntimeSettingsApplication:
             if isinstance(exc, asyncio.CancelledError):
                 raise
             details = exc.to_details() if hasattr(exc, "to_details") else {}
-            raise RuntimeApplyError(getattr(exc, "code", "runtime_apply_failed"), str(exc), **details) from exc
+            raise RuntimeApplyError(
+                getattr(exc, "code", "runtime_apply_failed"), str(exc), **details
+            ) from exc
         self.config_text = text
         publish_service(service)
-        result = {"generation": self.app.generation, "changed": self.app.generation != generation}
+        result = {
+            "generation": self.app.generation,
+            "changed": self.app.generation != generation,
+        }
         self._remember(operation_id, fingerprint, result)
         return result
 
-    def _remember(self, operation_id: str, fingerprint: str, result: dict[str, Any]) -> None:
+    def _remember(
+        self, operation_id: str, fingerprint: str, result: dict[str, Any]
+    ) -> None:
         # Retries arrive shortly after the original attempt; a bounded window
         # keeps idempotency without growing for the lifetime of the bridge.
         self._results[operation_id] = fingerprint, result

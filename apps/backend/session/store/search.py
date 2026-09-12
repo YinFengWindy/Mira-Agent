@@ -8,6 +8,7 @@ from typing import Any
 
 from .common import _MESSAGE_SELECT_COLUMNS
 
+
 class _SearchMixin:
     def fetch_by_ids_with_context(
         self, ids: list[str], context: int

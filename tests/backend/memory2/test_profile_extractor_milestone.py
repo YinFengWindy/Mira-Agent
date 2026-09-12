@@ -13,26 +13,22 @@ def _make_extractor(llm_response: str) -> ProfileFactExtractor:
 
 @pytest.mark.asyncio
 async def test_game_completion_captured_as_status():
-    extractor = _make_extractor(
-        """
+    extractor = _make_extractor("""
 <facts>
 <fact><summary>用户和朋友通关了仁王3 A10</summary><category>status</category><happened_at></happened_at></fact>
 </facts>
-"""
-    )
+""")
     facts = await extractor.extract("我和朋友通关了仁王3 A10")
     assert any(f.category == "status" and "通关" in f.summary for f in facts)
 
 
 @pytest.mark.asyncio
 async def test_project_launch_captured_as_decision_or_status():
-    extractor = _make_extractor(
-        """
+    extractor = _make_extractor("""
 <facts>
 <fact><summary>用户将仓库脱敏后公开发布</summary><category>decision</category><happened_at></happened_at></fact>
 </facts>
-"""
-    )
+""")
     facts = await extractor.extract("我把仓库脱敏后公开了")
     assert facts
     assert facts[0].category in {"decision", "status"}
@@ -47,16 +43,13 @@ async def test_routine_chat_not_captured():
 
 @pytest.mark.asyncio
 async def test_exchange_milestone_captured():
-    extractor = _make_extractor(
-        """
+    extractor = _make_extractor("""
 <facts>
 <fact><summary>用户和朋友通关了仁王3 A10</summary><category>status</category><happened_at></happened_at></fact>
 </facts>
-"""
-    )
+""")
     facts = await extractor.extract_from_exchange(
         "我和朋友通关了仁王3 A10",
         "记住了",
     )
     assert any(f.category == "status" and "通关" in f.summary for f in facts)
-

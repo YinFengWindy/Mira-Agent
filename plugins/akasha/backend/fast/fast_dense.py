@@ -9,6 +9,7 @@ Python 点积循环）换成"构建一次归一矩阵 + 缓存复用 + 向量化
 通过 install() 同时替换 core 和 replay 两个命名空间里的引用（replay 用 from-import 持有自己的绑定）。
 不修改任何源文件。
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -16,14 +17,24 @@ import numpy as np
 import plugins.akasha.backend.core as _core
 import plugins.akasha.backend.replay as _replay
 from plugins.akasha.backend.core import (
-    AkashaCandidate, normalize, build_dense_message_index, dense_candidates,
+    AkashaCandidate,
+    normalize,
+    build_dense_message_index,
+    dense_candidates,
 )
 
 _CACHE: dict[tuple[int, int], object] = {}
 
 
-def fast_dense_message_candidates(query_vec, nodes, message_embeddings, message_turn_keys,
-                                  *, limit, message_index=None):
+def fast_dense_message_candidates(
+    query_vec,
+    nodes,
+    message_embeddings,
+    message_turn_keys,
+    *,
+    limit,
+    message_index=None,
+):
     if not message_embeddings:
         return dense_candidates(query_vec, nodes, limit=limit)
     query_norm = normalize(query_vec)
@@ -39,7 +50,9 @@ def fast_dense_message_candidates(query_vec, nodes, message_embeddings, message_
         return []
     message_ids, matrix = indexed
     scores = np.dot(matrix, query_norm)
-    order = np.argsort(-scores, kind="stable")  # 降序，平局保持原插入序（对齐 sorted reverse=True）
+    order = np.argsort(
+        -scores, kind="stable"
+    )  # 降序，平局保持原插入序（对齐 sorted reverse=True）
     candidates: list = []
     seen: set = set()
     for j in order:
@@ -48,9 +61,20 @@ def fast_dense_message_candidates(query_vec, nodes, message_embeddings, message_
             continue
         seen.add(key)
         s = float(scores[j])
-        candidates.append(AkashaCandidate(
-            key=key, source="Dense", ripple=0.0, direct=s, state=0.0, edge=0.0,
-            long=0.0, resource=1.0, fan=0, score=s))
+        candidates.append(
+            AkashaCandidate(
+                key=key,
+                source="Dense",
+                ripple=0.0,
+                direct=s,
+                state=0.0,
+                edge=0.0,
+                long=0.0,
+                resource=1.0,
+                fan=0,
+                score=s,
+            )
+        )
         if len(candidates) >= limit:
             break
     return candidates

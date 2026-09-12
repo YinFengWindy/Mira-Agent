@@ -101,8 +101,6 @@ async def test_serve_stdio_forces_utf8_for_all_bridge_streams(
     }
 
 
-
-
 def test_desktop_server_reuses_core_screen_observation_service(
     tmp_path: Path, stub_core_runtime
 ) -> None:
@@ -263,10 +261,7 @@ async def test_server_uses_one_writer_for_concurrent_responses(
 ) -> None:
     server = _build_server(tmp_path, stub_core_runtime)
     lines = iter(
-        [
-            json.dumps({"id": str(index), "method": "health"})
-            for index in range(4)
-        ]
+        [json.dumps({"id": str(index), "method": "health"}) for index in range(4)]
         + [None]
     )
     active_writes = 0
@@ -295,9 +290,7 @@ async def test_server_eof_cancels_and_awaits_in_flight_request(
     tmp_path: Path, stub_core_runtime
 ) -> None:
     server = _build_server(tmp_path, stub_core_runtime)
-    lines = iter(
-        [json.dumps({"id": "slow", "method": "plugin.demo.slow"}), None]
-    )
+    lines = iter([json.dumps({"id": "slow", "method": "plugin.demo.slow"}), None])
     cancelled = asyncio.Event()
 
     async def _read() -> str | None:

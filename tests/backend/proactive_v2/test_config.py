@@ -8,17 +8,17 @@ TDD — Phase 2: proactive/config.py v2 新字段
   - 字段类型正确
 """
 
-
 from proactive_v2.config import ProactiveConfig
 
-
 # ── v2-only ───────────────────────────────────────────────────────────────
+
 
 def test_use_agent_tick_removed():
     assert not hasattr(ProactiveConfig(), "use_agent_tick")
 
 
 # ── agent loop ───────────────────────────────────────────────────────────
+
 
 def test_agent_tick_max_steps_default():
     assert ProactiveConfig().agent_tick_max_steps == 35
@@ -42,6 +42,7 @@ def test_agent_tick_content_limit_is_int():
 
 # ── web_fetch 截断 ────────────────────────────────────────────────────────
 
+
 def test_agent_tick_web_fetch_max_chars_default():
     assert ProactiveConfig().agent_tick_web_fetch_max_chars == 8_000
 
@@ -56,6 +57,7 @@ def test_web_fetch_max_chars_less_than_50000():
 
 
 # ── removed proactive gates ────────────────────────────────────────────────
+
 
 def test_agent_tick_context_prob_removed():
     assert not hasattr(ProactiveConfig(), "agent_tick_context_prob")
@@ -83,6 +85,7 @@ def test_drift_min_interval_hours_default():
 
 # ── 复用 v1 已有字段（不重复定义） ────────────────────────────────────────
 
+
 def test_delivery_dedupe_hours_exists():
     assert hasattr(ProactiveConfig(), "delivery_dedupe_hours")
 
@@ -109,6 +112,7 @@ def test_web_fetch_max_chars_can_be_overridden():
 
 
 # ── v2 字段不影响 v1 字段默认值 ──────────────────────────────────────────
+
 
 def test_v1_enabled_still_false_by_default():
     assert ProactiveConfig().enabled is False

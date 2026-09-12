@@ -15,7 +15,9 @@ def build_inbound_text_with_reply_context(
         return current_text
 
     sender_label = str(reply_sender or "").strip()
-    reply_header = f"被回复消息（来自 {sender_label}）：" if sender_label else "被回复消息："
+    reply_header = (
+        f"被回复消息（来自 {sender_label}）：" if sender_label else "被回复消息："
+    )
     return (
         "【你正在回复一条历史消息】\n"
         f"{reply_header}\n"

@@ -74,7 +74,7 @@ def _parse_mood_payload(raw_text: str) -> dict[str, object] | None:
     if start < 0 or end < start:
         return None
     try:
-        payload = json.loads(stripped[start:end + 1])
+        payload = json.loads(stripped[start : end + 1])
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None

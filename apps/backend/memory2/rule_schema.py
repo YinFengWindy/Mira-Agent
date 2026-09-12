@@ -93,7 +93,9 @@ def build_procedure_rule_schema(
     }
 
 
-def resolve_procedure_rule_schema(summary: str, extra: dict[str, Any] | None) -> dict[str, list[str]]:
+def resolve_procedure_rule_schema(
+    summary: str, extra: dict[str, Any] | None
+) -> dict[str, list[str]]:
     payload = extra or {}
     return build_procedure_rule_schema(
         summary=summary,
@@ -131,9 +133,11 @@ def _normalize_schema_list(value: Any) -> list[str]:
 
 
 def _schema_terms(schema: dict[str, list[str]]) -> set[str]:
-    return set(schema.get("mentioned_tools") or []) | set(
-        schema.get("required_tools") or []
-    ) | set(schema.get("forbidden_tools") or [])
+    return (
+        set(schema.get("mentioned_tools") or [])
+        | set(schema.get("required_tools") or [])
+        | set(schema.get("forbidden_tools") or [])
+    )
 
 
 def _infer_rule_constraints(

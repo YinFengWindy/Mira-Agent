@@ -100,7 +100,9 @@ class HistoryRoutePolicy:
                 start=start,
             )
 
-        prompt = self._build_prompt(user_msg=default_query, recent_history=recent_history)
+        prompt = self._build_prompt(
+            user_msg=default_query, recent_history=recent_history
+        )
         try:
             timeout_s = max(0.1, self._llm_timeout_ms / 1000.0)
             resp = await asyncio.wait_for(
@@ -245,5 +247,5 @@ def _strip_multiple_choice_block(user_msg: str) -> str:
     for pattern in _MULTIPLE_CHOICE_SPLIT_PATTERNS:
         match = pattern.search(text)
         if match is not None:
-            return text[:match.start()].strip()
+            return text[: match.start()].strip()
     return text

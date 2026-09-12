@@ -187,7 +187,9 @@ async def fetch_pull(
     fetched_contents = [
         {
             "id": meta["id"].split(":", 1)[1] if ":" in meta["id"] else meta["id"],
-            "event_id": meta["id"].split(":", 1)[1] if ":" in meta["id"] else meta["id"],
+            "event_id": (
+                meta["id"].split(":", 1)[1] if ":" in meta["id"] else meta["id"]
+            ),
             "ack_server": meta["id"].split(":", 1)[0],
             "title": meta.get("title") or "",
             "source": meta.get("source") or "",

@@ -12,7 +12,9 @@ if TYPE_CHECKING:
     from bootstrap.tools import CoreRuntime
 
 T = TypeVar("T")
-_scope: ContextVar[tuple[AsyncExitStack, set[int]] | None] = ContextVar("runtime_construction", default=None)
+_scope: ContextVar[tuple[AsyncExitStack, set[int]] | None] = ContextVar(
+    "runtime_construction", default=None
+)
 
 
 def track_build_resource(resource: T, cleanup: Callable[[], object]) -> T:

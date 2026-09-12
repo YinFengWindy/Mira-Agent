@@ -11,6 +11,7 @@ from proactive_v2.presets import ALLOWED_OVERRIDE_KEYS, PRESETS, STRATEGY_PARAMS
 
 class ProactiveConfigError(Exception):
     """Proactive 配置错误"""
+
     pass
 
 
@@ -18,8 +19,7 @@ def _validate_preset_name(preset: str) -> None:
     """验证预设名称"""
     if preset not in PRESETS:
         raise ProactiveConfigError(
-            f"无效的 preset: '{preset}'。"
-            f"只允许: {', '.join(PRESETS.keys())}"
+            f"无效的 preset: '{preset}'。" f"只允许: {', '.join(PRESETS.keys())}"
         )
 
 
@@ -57,9 +57,7 @@ def _validate_ranges(config: dict[str, Any]) -> None:
         if key in config:
             val = config[key]
             if not (0 <= val <= 1):
-                raise ProactiveConfigError(
-                    f"{key} 必须在 [0, 1] 范围内，当前值: {val}"
-                )
+                raise ProactiveConfigError(f"{key} 必须在 [0, 1] 范围内，当前值: {val}")
 
     # tick_interval_s0 >= s1 >= 1
     intervals = [
@@ -216,8 +214,7 @@ def load_proactive_config(p: dict[str, Any]) -> ProactiveConfig:
     preset_name = p.get("profile", p.get("preset"))
     if not preset_name:
         raise ProactiveConfigError(
-            "proactive.profile 是必填字段。"
-            f"可选值: {', '.join(PRESETS.keys())}"
+            "proactive.profile 是必填字段。" f"可选值: {', '.join(PRESETS.keys())}"
         )
     user_profiles = p.get("profiles", {}) or {}
     if not isinstance(user_profiles, dict):

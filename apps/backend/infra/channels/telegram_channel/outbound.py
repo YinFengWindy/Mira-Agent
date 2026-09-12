@@ -59,7 +59,9 @@ class _OutboundMixin:
         if cid <= 0:
             return None
         key = str(cid)
-        stream = TelegramStreamMessage(self._app.bot, cid, self._telegram_outbound_limiter)
+        stream = TelegramStreamMessage(
+            self._app.bot, cid, self._telegram_outbound_limiter
+        )
         self._active_streams[key] = stream
 
         async def _push(delta: dict[str, str] | str) -> None:
@@ -179,7 +181,7 @@ class _OutboundMixin:
                 await self._send_final_thinking(cid, msg.chat_id, final_thinking)
             self._reply_buffers.pop(session_key, None)
             self._thinking_buffers.pop(session_key, None)
-            for image in (msg.media or []):
+            for image in msg.media or []:
                 await self.send_image(str(msg.chat_id), image)
         except Exception:
             send_failed = True

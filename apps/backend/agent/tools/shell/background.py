@@ -28,9 +28,9 @@ from .runner import _invoke_kill_process_tree
 class _BackgroundTask:
     proc: Any  # asyncio.subprocess.Process
     log_path: str
-    pump_task: asyncio.Task | None   # None 仅在创建瞬间，pump 注册后立即填入
-    started_at: float                # monotonic，用于 TTL 检查
-    wall_started_at_ms: int          # epoch ms，返回给 LLM
+    pump_task: asyncio.Task | None  # None 仅在创建瞬间，pump 注册后立即填入
+    started_at: float  # monotonic，用于 TTL 检查
+    wall_started_at_ms: int  # epoch ms，返回给 LLM
     command: str = ""
     description: str = ""
     last_output_at_ms: int | None = None  # epoch ms，每次写文件时更新
@@ -38,8 +38,10 @@ class _BackgroundTask:
     timeout_handle: asyncio.TimerHandle | None = None
     finish_reason: str = "natural"
 
+
 # 模块级单例：跨 ShellTool 实例共享
 _BG_REGISTRY: dict[str, _BackgroundTask] = {}
+
 
 async def _bg_pump(
     proc: Any,
@@ -55,6 +57,7 @@ async def _bg_pump(
     on_data 用于前台阶段的实时流式回调（转后台后不再触发）。
     """
     with open(log_path, "wb") as f:
+
         async def _drain_stream(stream) -> None:
             if stream is None:
                 return
@@ -107,6 +110,7 @@ def _schedule_eviction(task_id: str, log_path: str) -> None:
 
 def _on_background_task_done(task_id: str, task: _BackgroundTask) -> None:
     _schedule_eviction(task_id, task.log_path)
+
 
 def _bg_kill(task_id: str, *, finish_reason: str = "stopped") -> None:
     """杀掉后台任务、从注册表移除并立即删除日志文件。"""
@@ -190,7 +194,9 @@ class ShellTaskOutputTool(Tool):
         task_id: str = kwargs.get("task_id", "")
         block: bool = bool(kwargs.get("block", False))
         # 钳到硬上限：block 本质是轮询一次，单次最多等 _BLOCK_MAX_MS，避免一次调用长时间静默
-        timeout_ms: int = min(max(int(kwargs.get("timeout_ms", _BLOCK_DEFAULT_MS)), 0), _BLOCK_MAX_MS)
+        timeout_ms: int = min(
+            max(int(kwargs.get("timeout_ms", _BLOCK_DEFAULT_MS)), 0), _BLOCK_MAX_MS
+        )
 
         task = _BG_REGISTRY.get(task_id)
         if task is None:
@@ -206,8 +212,7 @@ class ShellTaskOutputTool(Tool):
         if block and not pump_task.done():
             if task.timeout_s is not None:
                 remaining_ms = int(
-                    max(task.timeout_s - (time.monotonic() - task.started_at), 0)
-                    * 1000
+                    max(task.timeout_s - (time.monotonic() - task.started_at), 0) * 1000
                 )
                 timeout_ms = min(timeout_ms, remaining_ms)
             try:

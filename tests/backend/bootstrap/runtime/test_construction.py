@@ -36,20 +36,31 @@ async def test_complete_runtime_takes_ownership_without_closing_resources():
 
 
 @pytest.mark.asyncio
-async def test_default_memory_constructor_failure_closes_open_database(tmp_path, monkeypatch):
+async def test_default_memory_constructor_failure_closes_open_database(
+    tmp_path, monkeypatch
+):
     from agent.config_models import Config
     from plugins.default_memory.backend.config import load_default_memory_config
     from plugins.default_memory.backend.engine.lifecycle import DefaultMemoryEngine
 
     store = SimpleNamespace(close=Mock())
-    monkeypatch.setattr("plugins.default_memory.backend.engine.lifecycle.MemoryStore2", lambda *args, **kwargs: store)
-    monkeypatch.setattr("plugins.default_memory.backend.engine.lifecycle.Embedder", Mock(side_effect=ValueError("bad embedding")))
+    monkeypatch.setattr(
+        "plugins.default_memory.backend.engine.lifecycle.MemoryStore2",
+        lambda *args, **kwargs: store,
+    )
+    monkeypatch.setattr(
+        "plugins.default_memory.backend.engine.lifecycle.Embedder",
+        Mock(side_effect=ValueError("bad embedding")),
+    )
     config = Config(provider="", model="", api_key="", model_registrations=[])
 
     def build():
         return DefaultMemoryEngine(
-            config=config, default_config=load_default_memory_config(), workspace=tmp_path,
-            provider=None, http_resources=SimpleNamespace(external_default=None),
+            config=config,
+            default_config=load_default_memory_config(),
+            workspace=tmp_path,
+            provider=None,
+            http_resources=SimpleNamespace(external_default=None),
         )
 
     with pytest.raises(ValueError, match="bad embedding"):

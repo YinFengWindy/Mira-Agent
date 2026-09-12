@@ -20,6 +20,7 @@ from bus.event_bus import EventBus
 from bus.events import InboundMessage
 from bus.events_lifecycle import TurnCommitted
 
+
 class _DummySession:
     def __init__(self, key: str) -> None:
         self.key = key
@@ -46,12 +47,20 @@ class _DummySession:
 async def test_context_store_commit_persists_commits_and_dispatches():
     order: list[str] = []
     session = _DummySession("telegram:123")
-    presence = SimpleNamespace(record_user_message=MagicMock(side_effect=lambda _key: None))
+    presence = SimpleNamespace(
+        record_user_message=MagicMock(side_effect=lambda _key: None)
+    )
     session_manager = SimpleNamespace(
         get_or_create=MagicMock(return_value=session),
-        append_messages=AsyncMock(side_effect=lambda *_args, **_kwargs: order.append("persist")),
+        append_messages=AsyncMock(
+            side_effect=lambda *_args, **_kwargs: order.append("persist")
+        ),
     )
-    outbound = SimpleNamespace(dispatch=AsyncMock(side_effect=lambda *_args, **_kwargs: order.append("dispatch") or True))
+    outbound = SimpleNamespace(
+        dispatch=AsyncMock(
+            side_effect=lambda *_args, **_kwargs: order.append("dispatch") or True
+        )
+    )
     event_bus = EventBus()
     committed_events: list[TurnCommitted] = []
 
@@ -98,9 +107,7 @@ async def test_context_store_commit_persists_commits_and_dispatches():
             )
         )
     )
-    tools = SimpleNamespace(
-        set_context=MagicMock()
-    )
+    tools = SimpleNamespace(set_context=MagicMock())
     agent_core = AgentCore(
         AgentCoreDeps(
             session=cast(
@@ -257,7 +264,9 @@ def test_response_parser_keeps_reply_protocols_for_plugins():
 
 
 @pytest.mark.asyncio
-async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(tmp_path: Path):
+async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
+    tmp_path: Path,
+):
     from agent.core.passive_turn import ContextStore
 
     order: list[str] = []
@@ -271,7 +280,9 @@ async def test_new_chain_after_reasoning_persists_meme_and_fires_turn_committed(
     )
     session = _DummySession("telegram:456")
     presence = SimpleNamespace(
-        record_user_message=MagicMock(side_effect=lambda _key: order.append("presence")),
+        record_user_message=MagicMock(
+            side_effect=lambda _key: order.append("presence")
+        ),
     )
     session_manager = SimpleNamespace(
         get_or_create=MagicMock(return_value=session),

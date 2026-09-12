@@ -116,9 +116,13 @@ class DesktopBridgeService:
         registrations = getattr(config, "model_registrations", None)
         self._owns_model_resolver = model_resolver is None
         self.model_resolver = model_resolver or (
-            RoleModelRuntime(role_store=role_store, registrations=registrations,
-                             dev_mode=bool(getattr(config, "dev_mode", False)))
-            if isinstance(registrations, list) else None
+            RoleModelRuntime(
+                role_store=role_store,
+                registrations=registrations,
+                dev_mode=bool(getattr(config, "dev_mode", False)),
+            )
+            if isinstance(registrations, list)
+            else None
         )
         self.memory_engine = memory_engine
         self._event_listeners: set[
@@ -614,9 +618,12 @@ class DesktopBridgeService:
             with ExitStack() as task_scope:
                 if method == "chat.send" and self.model_resolver is not None:
                     purpose = "vision" if payload.get("media") else "chat"
-                    task_scope.enter_context(self.model_resolver.activate(
-                        str(payload.get("role_id") or ""), purpose,
-                    ))
+                    task_scope.enter_context(
+                        self.model_resolver.activate(
+                            str(payload.get("role_id") or ""),
+                            purpose,
+                        )
+                    )
                 result = await self.request_router.dispatch(
                     method,
                     payload,
@@ -649,7 +656,9 @@ class DesktopBridgeService:
                 details=details,
             )
         except ModelConfigurationError as exc:
-            return self._error(request_id, method, exc.code, str(exc), details=exc.to_details())
+            return self._error(
+                request_id, method, exc.code, str(exc), details=exc.to_details()
+            )
         except ValueError as exc:
             return self._error(request_id, method, "invalid_request", str(exc))
         except ChatTurnBusyError as exc:

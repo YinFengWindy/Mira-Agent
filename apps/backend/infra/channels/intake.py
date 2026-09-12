@@ -17,8 +17,13 @@ _RETRY_MESSAGE = "渠道配置正在切换，这条消息尚未处理，请稍�
 class ChannelIntake:
     """Buffers unaccepted input and keeps retry notices on its original transport."""
 
-    def __init__(self, accept: Callable[[InboundMessage], Awaitable[None]],
-                 send: Callable[[str, str], Awaitable[None]], *, capacity: int = 256) -> None:
+    def __init__(
+        self,
+        accept: Callable[[InboundMessage], Awaitable[None]],
+        send: Callable[[str, str], Awaitable[None]],
+        *,
+        capacity: int = 256,
+    ) -> None:
         if capacity < 1:
             raise ValueError("Channel intake capacity must be positive")
         self._accept = accept
@@ -45,7 +50,11 @@ class ChannelIntake:
     def resume(self) -> None:
         """Schedules buffered messages after the synchronous publication finishes."""
         self._paused = False
-        if not self._closed and self._pending and (self._flush_task is None or self._flush_task.done()):
+        if (
+            not self._closed
+            and self._pending
+            and (self._flush_task is None or self._flush_task.done())
+        ):
             self._flush_task = asyncio.create_task(self._flush(), context=Context())
 
     async def submit(self, message: InboundMessage) -> None:

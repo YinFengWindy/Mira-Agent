@@ -62,7 +62,7 @@ class EventBus:
     async def observe(
         self,
         event: object,
-        ) -> None:
+    ) -> None:
         # 1. 依次执行观察者，单个观察者失败不打断主流程。
         for handler in self._handlers.get(type(event), []):
             _ = await self._run_observer(event, handler)
@@ -93,7 +93,9 @@ class EventBus:
     ) -> None:
         # 1. 后台队列只负责把事件交给 fanout，避免主回复等待后处理。
         if self._closed:
-            logger.warning("event enqueue ignored after close: %s", type(event).__name__)
+            logger.warning(
+                "event enqueue ignored after close: %s", type(event).__name__
+            )
             return
         queue = self._ensure_observe_queue()
         queue.put_nowait(event)

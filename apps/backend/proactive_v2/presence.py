@@ -22,7 +22,12 @@ class PresenceStore:
         ts = (now or _utcnow()).isoformat()
         target_key = self._role_key_for_presence(session_key)
         self._store.update_presence(target_key, last_user_at=ts)
-        logger.debug("[presence] 心跳更新 session=%s presence=%s ts=%s", session_key, target_key, ts)
+        logger.debug(
+            "[presence] 心跳更新 session=%s presence=%s ts=%s",
+            session_key,
+            target_key,
+            ts,
+        )
 
     def record_proactive_sent(
         self, session_key: str, now: datetime | None = None
@@ -30,7 +35,12 @@ class PresenceStore:
         ts = (now or _utcnow()).isoformat()
         target_key = self._role_key_for_presence(session_key)
         self._store.update_presence(target_key, last_proactive_at=ts)
-        logger.debug("[presence] 主动消息记录 session=%s presence=%s ts=%s", session_key, target_key, ts)
+        logger.debug(
+            "[presence] 主动消息记录 session=%s presence=%s ts=%s",
+            session_key,
+            target_key,
+            ts,
+        )
 
     def record_user_message_by_role(
         self,

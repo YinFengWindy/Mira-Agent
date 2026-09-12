@@ -64,7 +64,9 @@ async def test_inspect_modules_prints_result(
 
 
 @pytest.mark.asyncio
-async def test_module_inspection_closes_http_when_construction_fails(monkeypatch, tmp_path):
+async def test_module_inspection_closes_http_when_construction_fails(
+    monkeypatch, tmp_path
+):
     http = SimpleNamespace(aclose=AsyncMock())
     monkeypatch.setattr(app_main.Config, "load", lambda _: object())
     monkeypatch.setattr(app_main, "SharedHttpResources", lambda: http)
@@ -96,15 +98,17 @@ def test_dev_launch_makes_top_level_plugins_importable(tmp_path: Path):
     workspace = tmp_path / "workspace"
     config_path = tmp_path / "config.toml"
 
-    probe = "\n".join([
-        "import sys",
-        f"sys.path[:] = [p for p in sys.path if p != {str(repository_root)!r}]",
-        "import main",
-        f"code = main.main(['init', '--workspace', {str(workspace)!r},"
-        f" '--config', {str(config_path)!r}])",
-        "import plugins.default_memory.backend.config",
-        "print('PLUGINS_IMPORTABLE', code)",
-    ])
+    probe = "\n".join(
+        [
+            "import sys",
+            f"sys.path[:] = [p for p in sys.path if p != {str(repository_root)!r}]",
+            "import main",
+            f"code = main.main(['init', '--workspace', {str(workspace)!r},"
+            f" '--config', {str(config_path)!r}])",
+            "import plugins.default_memory.backend.config",
+            "print('PLUGINS_IMPORTABLE', code)",
+        ]
+    )
     result = subprocess.run(
         [sys.executable, "-c", probe],
         cwd=backend_root,

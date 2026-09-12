@@ -77,7 +77,9 @@ class MemorizeTool(Tool):
             )
         )
         logger.info("memorize: engine stored memory_kind=%s", result.actual_kind)
-        return _format_result(result.item_id, result.status, result.actual_kind, summary)
+        return _format_result(
+            result.item_id, result.status, result.actual_kind, summary
+        )
 
 
 def _format_result(item_id: str, status: str, actual_kind: str, summary: str) -> str:

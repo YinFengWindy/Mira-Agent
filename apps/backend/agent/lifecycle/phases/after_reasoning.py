@@ -112,8 +112,7 @@ class _BuildAfterReasoningCtxModule:
             {
                 key: value
                 for key in ("total_tokens", "thinking_duration_ms")
-                if isinstance((value := raw_turn_metrics.get(key)), int)
-                and value >= 0
+                if isinstance((value := raw_turn_metrics.get(key)), int) and value >= 0
             }
             if isinstance(raw_turn_metrics, dict)
             else {}
@@ -160,7 +159,9 @@ class _ResolveMoodModule:
     slot = "after_reasoning.resolve_mood"
     requires = ("after_reasoning.emit", _CTX_SLOT)
 
-    def __init__(self, llm: "LLMServices | None", llm_config: "LLMConfig | None") -> None:
+    def __init__(
+        self, llm: "LLMServices | None", llm_config: "LLMConfig | None"
+    ) -> None:
         self._llm = llm
         self._llm_config = llm_config
 
@@ -187,7 +188,9 @@ class _ResolveMoodModule:
         ]
         if not available_moods:
             return frame
-        default_mood = str(runtime_config.get("default_mood") or "").strip() or available_moods[0]
+        default_mood = (
+            str(runtime_config.get("default_mood") or "").strip() or available_moods[0]
+        )
         resolved_mood = await resolve_role_mood(
             self._llm.provider,
             model=self._llm_config.model,
@@ -221,7 +224,9 @@ class _PersistUserMessageModule:
             return frame
         if self._session_services.presence:
             self._session_services.presence.record_user_message(session.key)
-        relationship_runtime = getattr(self._session_services, "relationship_runtime", None)
+        relationship_runtime = getattr(
+            self._session_services, "relationship_runtime", None
+        )
         if relationship_runtime is not None:
             relationship_runtime.handle_user_message(session.key)
         user_kwargs: dict[str, object] = {}
@@ -244,7 +249,11 @@ class _PersistUserMessageModule:
             )
         )
         persisted_user_content = msg.metadata.get(_PERSISTED_USER_CONTENT_METADATA_KEY)
-        user_content = persisted_user_content if isinstance(persisted_user_content, str) else msg.content
+        user_content = (
+            persisted_user_content
+            if isinstance(persisted_user_content, str)
+            else msg.content
+        )
         session.add_message(
             "user",
             user_content,
@@ -332,7 +341,9 @@ class _AppendMessagesModule:
         if raw_session is None:
             raise RuntimeError("AfterReasoning requires TurnState.session")
         session = cast("Session", raw_session)
-        persist_count = 1 if bool((state.msg.metadata or {}).get("omit_user_turn")) else 2
+        persist_count = (
+            1 if bool((state.msg.metadata or {}).get("omit_user_turn")) else 2
+        )
         await self._session_services.session_manager.append_messages(
             session,
             cast(list[dict[str, Any]], session.messages[-persist_count:]),
@@ -350,7 +361,9 @@ class _BuildOutboundMessageModule:
         metadata = dict(ctx.outbound_metadata)
         metadata.update(collect_prefixed_slots(frame.slots, _OUTBOUND_METADATA_PREFIX))
         media = list(ctx.media)
-        _append_media(media, collect_prefixed_slots(frame.slots, _OUTBOUND_MEDIA_PREFIX))
+        _append_media(
+            media, collect_prefixed_slots(frame.slots, _OUTBOUND_MEDIA_PREFIX)
+        )
         frame.slots[_OUTBOUND_SLOT] = OutboundMessage(
             channel=ctx.channel,
             chat_id=ctx.chat_id,

@@ -27,10 +27,7 @@ from core.common.workspace import resolve_default_workspace
 def tokenize(text: str) -> set[str]:
     out: set[str] = set()
     for w in jieba.cut_for_search(text or ""):
-        cleaned = "".join(
-            c for c in w.strip()
-            if c.isalnum() or "一" <= c <= "鿿"
-        )
+        cleaned = "".join(c for c in w.strip() if c.isalnum() or "一" <= c <= "鿿")
         if len(cleaned) > 1:
             out.add(cleaned.lower())
     return out
@@ -116,7 +113,7 @@ def main() -> None:
 
     print("\n=== 最稀有 token sample (高 IDF，有信息量) ===")
     rare = [t for t in sorted_by_idf if 4.5 < t[1] < 8.5]
-    for tok, v in rare[::max(1, len(rare)//20)][:20]:
+    for tok, v in rare[:: max(1, len(rare) // 20)][:20]:
         print(f"  IDF={v:.2f}  df={df[tok]:>5}  {tok}")
 
     aconn.close()

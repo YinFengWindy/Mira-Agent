@@ -4,7 +4,12 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 from agent.looping.core import AgentLoop
-from agent.looping.ports import AgentLoopConfig, AgentLoopDeps, LLMConfig, MemoryServices
+from agent.looping.ports import (
+    AgentLoopConfig,
+    AgentLoopDeps,
+    LLMConfig,
+    MemoryServices,
+)
 from agent.provider import LLMResponse, ToolCall
 from agent.tools.base import Tool
 from agent.tools.registry import ToolRegistry
@@ -66,6 +71,7 @@ def _make_loop(
         AgentLoopConfig(llm=LLMConfig(max_iterations=5)),
     )
 
+
 def test_tool_executes_without_procedure_interceptor(tmp_path: Path):
     tool = _DummyTool()
     provider = _FakeProvider(
@@ -73,7 +79,9 @@ def test_tool_executes_without_procedure_interceptor(tmp_path: Path):
             LLMResponse(
                 content="",
                 tool_calls=[
-                    ToolCall("c1", "web_fetch", {"url": "https://www.bilibili.com/video/BV1"})
+                    ToolCall(
+                        "c1", "web_fetch", {"url": "https://www.bilibili.com/video/BV1"}
+                    )
                 ],
             ),
             LLMResponse(content="done", tool_calls=[]),

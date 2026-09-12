@@ -27,14 +27,15 @@ def _parse_question_date(raw: str) -> datetime:
             continue
     return datetime.now(tz=timezone.utc)
 
+
 _TOOL_EMOJI = {
-    "recall_memory":    "🔍",
-    "search_messages":  "🔎",
-    "fetch_messages":   "📄",
-    "memorize":         "💾",
-    "web_search":       "🌐",
-    "web_fetch":        "🌐",
-    "shell":            "💻",
+    "recall_memory": "🔍",
+    "search_messages": "🔎",
+    "fetch_messages": "📄",
+    "memorize": "💾",
+    "web_search": "🌐",
+    "web_fetch": "🌐",
+    "shell": "💻",
 }
 _DEFAULT_TOOL_EMOJI = "🔧"
 
@@ -115,7 +116,8 @@ async def run_qa_instance(
             channel="benchmark",
             sender="user",
             chat_id=instance.question_id,
-            content=instance.question + "\n\n[Respond in English only. One sentence or short phrase.]",
+            content=instance.question
+            + "\n\n[Respond in English only. One sentence or short phrase.]",
             timestamp=question_dt,
             metadata={"role_id": "benchmark"},
         )

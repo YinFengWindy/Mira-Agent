@@ -4,7 +4,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from agent.looping.core import AgentLoop
-from agent.looping.ports import AgentLoopConfig, AgentLoopDeps, LLMConfig, MemoryServices
+from agent.looping.ports import (
+    AgentLoopConfig,
+    AgentLoopDeps,
+    LLMConfig,
+    MemoryServices,
+)
 from agent.provider import LLMResponse
 from agent.tools.registry import ToolRegistry
 from bus.events import SpawnCompletionItem
@@ -75,6 +80,7 @@ async def test_spawn_completion_updates_original_session_without_raw_result(tmp_
         m["content"] != "原始后台结果：文件位于 /tmp/report.md"
         for m in updated.messages
     )
+
 
 @pytest.mark.asyncio
 async def test_spawn_completion_retry_count_one_disables_retry_guidance(tmp_path):

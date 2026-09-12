@@ -81,9 +81,7 @@ class DriftStateStore:
         self.skills_dir = self.drift_dir / "skills"
         self.drift_file = self.drift_dir / "drift.json"
         self.builtin_skills_dir = (
-            builtin_skills_dir.expanduser()
-            if builtin_skills_dir is not None
-            else None
+            builtin_skills_dir.expanduser() if builtin_skills_dir is not None else None
         )
         self.include_builtin_skills = include_builtin_skills
         self.builtin_skill_names = set(builtin_skill_names or set())
@@ -99,7 +97,11 @@ class DriftStateStore:
             for skill_dir in sorted(root.iterdir()):
                 if not skill_dir.is_dir():
                     continue
-                if builtin and self.builtin_skill_names and skill_dir.name not in self.builtin_skill_names:
+                if (
+                    builtin
+                    and self.builtin_skill_names
+                    and skill_dir.name not in self.builtin_skill_names
+                ):
                     continue
                 skill = self._load_skill_meta(skill_dir, builtin=builtin)
                 if skill is None:
@@ -110,7 +112,8 @@ class DriftStateStore:
                 seen_names.add(skill.name)
                 skills.append(skill)
         skills.sort(
-            key=lambda item: item.last_run_at or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda item: item.last_run_at
+            or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
         logger.info(
@@ -140,12 +143,14 @@ class DriftStateStore:
                 message_result = "silent"
             if not skill or not run_at or not one_line:
                 continue
-            rows.append({
-                "skill": skill,
-                "run_at": run_at,
-                "one_line": one_line,
-                "message_result": message_result,
-            })
+            rows.append(
+                {
+                    "skill": skill,
+                    "run_at": run_at,
+                    "one_line": one_line,
+                    "message_result": message_result,
+                }
+            )
         return {
             "version": 1,
             "recent_runs": rows[-10:],
@@ -217,7 +222,10 @@ class DriftStateStore:
         atomic_save_json(self.drift_file, payload, domain="drift_state")
 
     def _load_skill_state(self, skill_dir: Path) -> dict[str, Any]:
-        raw = load_json(skill_dir / "state.json", default=None, domain="drift_state") or {}
+        raw = (
+            load_json(skill_dir / "state.json", default=None, domain="drift_state")
+            or {}
+        )
         return raw if isinstance(raw, dict) else {}
 
     @staticmethod
@@ -239,14 +247,18 @@ class DriftStateStore:
         name = str(metadata.get("name") or "").strip()
         description = str(metadata.get("description") or "").strip()
         if not name or not description or name != skill_dir.name:
-            logger.info("[drift_state] skip invalid skill dir=%s name=%r", skill_dir, name)
+            logger.info(
+                "[drift_state] skip invalid skill dir=%s name=%r", skill_dir, name
+            )
             return None
         requires_mcp_val = metadata.get("requires_mcp")
         if isinstance(requires_mcp_val, list):
             requires_mcp = [s.strip() for s in requires_mcp_val if s.strip()]
         else:
             raw = str(requires_mcp_val or "").strip()
-            requires_mcp = [s.strip() for s in raw.split(",") if s.strip()] if raw else []
+            requires_mcp = (
+                [s.strip() for s in raw.split(",") if s.strip()] if raw else []
+            )
         raw_state = self._load_skill_state(skill_dir)
         return SkillMeta(
             name=name,

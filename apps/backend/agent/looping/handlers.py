@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING, cast
 
 from agent.core.passive_support import predict_current_user_source_ref
 from agent.core.passive_turn import get_session_metadata
-from agent.core.runtime_support import AgentLoopRunner, PromptRenderRunner, TurnRunResult
+from agent.core.runtime_support import (
+    AgentLoopRunner,
+    PromptRenderRunner,
+    TurnRunResult,
+)
 from agent.lifecycle.types import PromptRenderInput
 from agent.looping.ports import SessionServices
 from bus.events import InboundMessage, OutboundMessage, SpawnCompletionItem
@@ -12,6 +16,7 @@ from bus.events import InboundMessage, OutboundMessage, SpawnCompletionItem
 if TYPE_CHECKING:
     from agent.core.passive_turn import PassiveTurnPipeline
     from agent.tools.registry import ToolRegistry
+
 
 async def process_spawn_completion_event(
     *,

@@ -220,7 +220,6 @@ async def test_filesystem_tools_cover_core_paths(
     assert "不是目录" in await lister.execute("a.txt")
 
 
-
 @pytest.mark.asyncio
 async def test_file_mutation_lock_serializes_same_file_and_allows_different_files(
     tmp_path: Path,
@@ -246,4 +245,3 @@ async def test_file_mutation_lock_serializes_same_file_and_allows_different_file
     assert order.index("shared_a:end") < order.index("shared_b:start")
     assert order.index("other:start") < order.index("shared_a:end")
     assert not _FILE_MUTATION_LOCKS
-

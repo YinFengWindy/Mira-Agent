@@ -19,6 +19,7 @@ from .common import (
     _time_prefilter_clauses,
 )
 
+
 class _StoreTemporalMixin:
     def list_events_by_time_range(
         self,
@@ -54,15 +55,20 @@ class _StoreTemporalMixin:
             where_parts.append(
                 "COALESCE(TRIM(json_extract(extra_json, '$.scope_chat_id')), '') = ?"
             )
-            params.extend([(scope_channel or "").strip(), (scope_chat_id or "").strip()])
+            params.extend(
+                [(scope_channel or "").strip(), (scope_chat_id or "").strip()]
+            )
         where_parts.extend(time_clauses)
         params.extend(time_params)
-        rows = cast(list[tuple[object, ...]], self._db.execute(
-            "SELECT id, memory_type, summary, source_ref, happened_at "
-            "FROM memory_items "
-            f"WHERE {' AND '.join(where_parts)}",
-            tuple(params),
-        ).fetchall())
+        rows = cast(
+            list[tuple[object, ...]],
+            self._db.execute(
+                "SELECT id, memory_type, summary, source_ref, happened_at "
+                "FROM memory_items "
+                f"WHERE {' AND '.join(where_parts)}",
+                tuple(params),
+            ).fetchall(),
+        )
 
         hits: list[tuple[datetime, dict[str, object]]] = []
         for row_id, memory_type, summary, source_ref, happened_at in rows:
@@ -151,7 +157,9 @@ class _StoreTemporalMixin:
             ).fetchone()
         return row is not None
 
-    def keyword_match_procedures(self, action_tokens: list[str]) -> list[dict[str, object]]:
+    def keyword_match_procedures(
+        self, action_tokens: list[str]
+    ) -> list[dict[str, object]]:
         """对 trigger_tags 做纯关键字匹配，无需向量检索。
 
         action_tokens 是从工具调用中提取的 token 列表，例如：
@@ -264,7 +272,10 @@ class _StoreTemporalMixin:
                 " AND COALESCE(TRIM(json_extract(extra_json, '$.scope_channel')), '') = ?"
                 " AND COALESCE(TRIM(json_extract(extra_json, '$.scope_chat_id')), '') = ?"
             )
-            scope_params = [(scope_channel or "").strip(), (scope_chat_id or "").strip()]
+            scope_params = [
+                (scope_channel or "").strip(),
+                (scope_chat_id or "").strip(),
+            ]
 
         or_conditions = " OR ".join("summary LIKE ?" for _ in terms)
         score_expr = " + ".join(
@@ -329,15 +340,17 @@ class _StoreTemporalMixin:
                 ):
                     continue
                 extra = _json_object(extra_json)
-                results.append({
-                    "id": str(row_id),
-                    "memory_type": str(mtype),
-                    "memory_domain": str(extra.get("memory_domain", "") or ""),
-                    "summary": str(summary),
-                    "source_ref": str(source_ref) if source_ref else "",
-                    "happened_at": str(happened_at or created_at or ""),
-                    "keyword_score": _coerce_float(kw_score) / len(terms),
-                })
+                results.append(
+                    {
+                        "id": str(row_id),
+                        "memory_type": str(mtype),
+                        "memory_domain": str(extra.get("memory_domain", "") or ""),
+                        "summary": str(summary),
+                        "source_ref": str(source_ref) if source_ref else "",
+                        "happened_at": str(happened_at or created_at or ""),
+                        "keyword_score": _coerce_float(kw_score) / len(terms),
+                    }
+                )
                 if len(results) >= limit:
                     return results
             if not has_time_filter or len(rows) < batch_size:

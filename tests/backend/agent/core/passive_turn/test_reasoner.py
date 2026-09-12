@@ -71,7 +71,9 @@ async def test_run_turn_retry_preserves_persisted_history(
 
     # Each request can shrink its context while the current user input remains.
     expected_windows = [6, 6, 6, 6, 6, 3, 0][: len(responses)]
-    for call, window in zip(reasoner.run.await_args_list, expected_windows, strict=True):
+    for call, window in zip(
+        reasoner.run.await_args_list, expected_windows, strict=True
+    ):
         expected_history = source_history[-window:] if window else []
         assert call.args[0] == [
             *expected_history,

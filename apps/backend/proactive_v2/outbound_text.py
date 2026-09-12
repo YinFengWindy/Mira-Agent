@@ -4,7 +4,6 @@ import re
 
 from ftfy.fixes import decode_escapes, fix_line_breaks
 
-
 _ESCAPED_LINE_BREAK_RE = re.compile(r"(?<!\\)\\[nr]")
 
 

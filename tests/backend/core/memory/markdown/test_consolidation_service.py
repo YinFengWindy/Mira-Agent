@@ -106,6 +106,7 @@ def test_consolidation_service_archive_all_and_profile_extract():
         save_item=AsyncMock(return_value="new:profile-1"),
         save_item_with_supersede=AsyncMock(return_value="new:profile-1"),
     )
+
     async def _chat_side_effect(**kwargs):
         text = _message_text(kwargs)
         if "近期语境压缩代理" in text:
@@ -131,8 +132,16 @@ def test_consolidation_service_archive_all_and_profile_extract():
     session = SimpleNamespace(
         key="cli:1",
         messages=[
-            {"role": "user", "content": "我买了 Zigbee 网关", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "记住了", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "user",
+                "content": "我买了 Zigbee 网关",
+                "timestamp": "2026-03-15T10:00:00",
+            },
+            {
+                "role": "assistant",
+                "content": "记住了",
+                "timestamp": "2026-03-15T10:01:00",
+            },
         ],
         last_consolidated=0,
         _channel="cli",
@@ -158,7 +167,9 @@ def test_consolidation_service_archive_all_and_profile_extract():
     )
     assert "## 最近三次 consolidation event" in event_prompt
     assert "用户准备下单 Zigbee 网关" in event_prompt
-    assert "不能作为人物身份、说话人归属、关系判断或具体事实归属的直接证据" in event_prompt
+    assert (
+        "不能作为人物身份、说话人归属、关系判断或具体事实归属的直接证据" in event_prompt
+    )
     assert "emotional_weight" in event_prompt
     assert session.last_consolidated == 0
 
@@ -307,7 +318,8 @@ def test_consolidation_recent_context_uses_main_model_for_nsfw_sessions():
     recent_context_call = next(
         call
         for call in main_provider.chat.await_args_list
-        if call.kwargs["messages"][0]["content"] == "你是近期语境压缩代理，只返回合法 JSON。"
+        if call.kwargs["messages"][0]["content"]
+        == "你是近期语境压缩代理，只返回合法 JSON。"
     )
     assert recent_context_call.kwargs["model"] == "main-model"
 
@@ -380,7 +392,10 @@ def test_consolidation_recent_context_keeps_fast_model_for_non_nsfw_sessions():
 
     assert draft is not None
     recent_context_call = fast_provider.chat.await_args_list[0]
-    assert recent_context_call.kwargs["messages"][0]["content"] == "你是近期语境压缩代理，只返回合法 JSON。"
+    assert (
+        recent_context_call.kwargs["messages"][0]["content"]
+        == "你是近期语境压缩代理，只返回合法 JSON。"
+    )
     assert recent_context_call.kwargs["model"] == "fast-model"
     assert main_provider.chat.await_count == 1
 
@@ -399,6 +414,7 @@ def test_consolidation_service_uses_profile_maint_for_reads():
         append_pending_once=MagicMock(return_value=True),
         append_journal=MagicMock(),
     )
+
     async def _chat_side_effect(**kwargs):
         text = _message_text(kwargs)
         if "近期语境压缩代理" in text:
@@ -421,8 +437,16 @@ def test_consolidation_service_uses_profile_maint_for_reads():
     session = SimpleNamespace(
         key="cli:1",
         messages=[
-            {"role": "user", "content": "我买了 Zigbee 网关", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "记住了", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "user",
+                "content": "我买了 Zigbee 网关",
+                "timestamp": "2026-03-15T10:00:00",
+            },
+            {
+                "role": "assistant",
+                "content": "记住了",
+                "timestamp": "2026-03-15T10:01:00",
+            },
         ],
         last_consolidated=0,
         _channel="cli",
@@ -466,8 +490,16 @@ def test_consolidation_event_failure_does_not_write_markdown():
     session = SimpleNamespace(
         key="cli:1",
         messages=[
-            {"role": "user", "content": "我买了 Zigbee 网关", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "记住了", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "user",
+                "content": "我买了 Zigbee 网关",
+                "timestamp": "2026-03-15T10:00:00",
+            },
+            {
+                "role": "assistant",
+                "content": "记住了",
+                "timestamp": "2026-03-15T10:01:00",
+            },
         ],
         last_consolidated=0,
         _channel="cli",
@@ -499,6 +531,7 @@ def test_consolidation_recent_context_formats_user_full_and_assistant_preview():
         save_item=AsyncMock(return_value="new:profile-1"),
         save_item_with_supersede=AsyncMock(return_value="new:profile-1"),
     )
+
     async def _chat_side_effect(**kwargs):
         text = _message_text(kwargs)
         if "近期语境压缩代理" in text:
@@ -522,7 +555,11 @@ def test_consolidation_recent_context_formats_user_full_and_assistant_preview():
         key="cli:1",
         messages=[
             {"role": "user", "content": "第一轮", "timestamp": "2026-03-15T09:58:00"},
-            {"role": "assistant", "content": "第一轮回复", "timestamp": "2026-03-15T09:59:00"},
+            {
+                "role": "assistant",
+                "content": "第一轮回复",
+                "timestamp": "2026-03-15T09:59:00",
+            },
             {
                 "role": "user",
                 "content": "我更想要一个轻量 recent context 文件，不要太重。",
@@ -550,7 +587,9 @@ def test_consolidation_recent_context_formats_user_full_and_assistant_preview():
     assert "用户正在推进 recent context 设计" in written
     assert "<!-- a-preview = assistant reply preview only -->" in written
     assert "[user] 我更想要一个轻量 recent context 文件，不要太重。" in written
-    assert "[a-preview] 可以把 compression 和 recent turns 合并在一个短文件里" in written
+    assert (
+        "[a-preview] 可以把 compression 和 recent turns 合并在一个短文件里" in written
+    )
 
 
 def test_consolidation_recent_context_compresses_archived_window_not_kept_gap():
@@ -606,17 +645,41 @@ def test_consolidation_recent_context_compresses_archived_window_not_kept_gap():
         key="cli:1",
         messages=[
             {"role": "user", "content": "第一条", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "第二条", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "assistant",
+                "content": "第二条",
+                "timestamp": "2026-03-15T10:01:00",
+            },
             {"role": "user", "content": "第三条", "timestamp": "2026-03-15T10:02:00"},
-            {"role": "assistant", "content": "第四条", "timestamp": "2026-03-15T10:03:00"},
+            {
+                "role": "assistant",
+                "content": "第四条",
+                "timestamp": "2026-03-15T10:03:00",
+            },
             {"role": "user", "content": "第五条", "timestamp": "2026-03-15T10:04:00"},
-            {"role": "assistant", "content": "第六条", "timestamp": "2026-03-15T10:05:00"},
+            {
+                "role": "assistant",
+                "content": "第六条",
+                "timestamp": "2026-03-15T10:05:00",
+            },
             {"role": "user", "content": "第七条", "timestamp": "2026-03-15T10:06:00"},
-            {"role": "assistant", "content": "第八条", "timestamp": "2026-03-15T10:07:00"},
+            {
+                "role": "assistant",
+                "content": "第八条",
+                "timestamp": "2026-03-15T10:07:00",
+            },
             {"role": "user", "content": "第九条", "timestamp": "2026-03-15T10:08:00"},
-            {"role": "assistant", "content": "第十条", "timestamp": "2026-03-15T10:09:00"},
+            {
+                "role": "assistant",
+                "content": "第十条",
+                "timestamp": "2026-03-15T10:09:00",
+            },
             {"role": "user", "content": "第十一条", "timestamp": "2026-03-15T10:10:00"},
-            {"role": "assistant", "content": "第十二条", "timestamp": "2026-03-15T10:11:00"},
+            {
+                "role": "assistant",
+                "content": "第十二条",
+                "timestamp": "2026-03-15T10:11:00",
+            },
             {"role": "user", "content": "第十三条", "timestamp": "2026-03-15T10:12:00"},
         ],
         last_consolidated=4,
@@ -626,7 +689,10 @@ def test_consolidation_recent_context_compresses_archived_window_not_kept_gap():
 
     draft = _prepare(service, session)
 
-    assert "【较早窗口（本次待压缩）】\nUSER: 第五条\nASSISTANT: 第六条\nUSER: 第七条\nASSISTANT: 第八条\nUSER: 第九条" in captured_prompt["text"]
+    assert (
+        "【较早窗口（本次待压缩）】\nUSER: 第五条\nASSISTANT: 第六条\nUSER: 第七条\nASSISTANT: 第八条\nUSER: 第九条"
+        in captured_prompt["text"]
+    )
     assert draft is not None
     written = draft.recent_context_text
     assert "until: 2026-03-15T10:08:00" in written
@@ -693,17 +759,41 @@ def test_consolidation_archive_all_compresses_full_history_before_recent_turns()
         key="cli:1",
         messages=[
             {"role": "user", "content": "第一条", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "第二条", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "assistant",
+                "content": "第二条",
+                "timestamp": "2026-03-15T10:01:00",
+            },
             {"role": "user", "content": "第三条", "timestamp": "2026-03-15T10:02:00"},
-            {"role": "assistant", "content": "第四条", "timestamp": "2026-03-15T10:03:00"},
+            {
+                "role": "assistant",
+                "content": "第四条",
+                "timestamp": "2026-03-15T10:03:00",
+            },
             {"role": "user", "content": "第五条", "timestamp": "2026-03-15T10:04:00"},
-            {"role": "assistant", "content": "第六条", "timestamp": "2026-03-15T10:05:00"},
+            {
+                "role": "assistant",
+                "content": "第六条",
+                "timestamp": "2026-03-15T10:05:00",
+            },
             {"role": "user", "content": "第七条", "timestamp": "2026-03-15T10:06:00"},
-            {"role": "assistant", "content": "第八条", "timestamp": "2026-03-15T10:07:00"},
+            {
+                "role": "assistant",
+                "content": "第八条",
+                "timestamp": "2026-03-15T10:07:00",
+            },
             {"role": "user", "content": "第九条", "timestamp": "2026-03-15T10:08:00"},
-            {"role": "assistant", "content": "第十条", "timestamp": "2026-03-15T10:09:00"},
+            {
+                "role": "assistant",
+                "content": "第十条",
+                "timestamp": "2026-03-15T10:09:00",
+            },
             {"role": "user", "content": "第十一条", "timestamp": "2026-03-15T10:10:00"},
-            {"role": "assistant", "content": "第十二条", "timestamp": "2026-03-15T10:11:00"},
+            {
+                "role": "assistant",
+                "content": "第十二条",
+                "timestamp": "2026-03-15T10:11:00",
+            },
             {"role": "user", "content": "第十三条", "timestamp": "2026-03-15T10:12:00"},
         ],
         last_consolidated=0,
@@ -779,17 +869,41 @@ def test_consolidation_recent_context_invalid_json_fails_consolidation():
         key="cli:1",
         messages=[
             {"role": "user", "content": "第一条", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "第二条", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "assistant",
+                "content": "第二条",
+                "timestamp": "2026-03-15T10:01:00",
+            },
             {"role": "user", "content": "第三条", "timestamp": "2026-03-15T10:02:00"},
-            {"role": "assistant", "content": "第四条", "timestamp": "2026-03-15T10:03:00"},
+            {
+                "role": "assistant",
+                "content": "第四条",
+                "timestamp": "2026-03-15T10:03:00",
+            },
             {"role": "user", "content": "第五条", "timestamp": "2026-03-15T10:04:00"},
-            {"role": "assistant", "content": "第六条", "timestamp": "2026-03-15T10:05:00"},
+            {
+                "role": "assistant",
+                "content": "第六条",
+                "timestamp": "2026-03-15T10:05:00",
+            },
             {"role": "user", "content": "第七条", "timestamp": "2026-03-15T10:06:00"},
-            {"role": "assistant", "content": "第八条", "timestamp": "2026-03-15T10:07:00"},
+            {
+                "role": "assistant",
+                "content": "第八条",
+                "timestamp": "2026-03-15T10:07:00",
+            },
             {"role": "user", "content": "第九条", "timestamp": "2026-03-15T10:08:00"},
-            {"role": "assistant", "content": "第十条", "timestamp": "2026-03-15T10:09:00"},
+            {
+                "role": "assistant",
+                "content": "第十条",
+                "timestamp": "2026-03-15T10:09:00",
+            },
             {"role": "user", "content": "第十一条", "timestamp": "2026-03-15T10:10:00"},
-            {"role": "assistant", "content": "第十二条", "timestamp": "2026-03-15T10:11:00"},
+            {
+                "role": "assistant",
+                "content": "第十二条",
+                "timestamp": "2026-03-15T10:11:00",
+            },
             {"role": "user", "content": "第十三条", "timestamp": "2026-03-15T10:12:00"},
         ],
         last_consolidated=4,
@@ -837,17 +951,41 @@ def test_consolidation_recent_context_exception_fails_consolidation():
         key="cli:1",
         messages=[
             {"role": "user", "content": "第一条", "timestamp": "2026-03-15T10:00:00"},
-            {"role": "assistant", "content": "第二条", "timestamp": "2026-03-15T10:01:00"},
+            {
+                "role": "assistant",
+                "content": "第二条",
+                "timestamp": "2026-03-15T10:01:00",
+            },
             {"role": "user", "content": "第三条", "timestamp": "2026-03-15T10:02:00"},
-            {"role": "assistant", "content": "第四条", "timestamp": "2026-03-15T10:03:00"},
+            {
+                "role": "assistant",
+                "content": "第四条",
+                "timestamp": "2026-03-15T10:03:00",
+            },
             {"role": "user", "content": "第五条", "timestamp": "2026-03-15T10:04:00"},
-            {"role": "assistant", "content": "第六条", "timestamp": "2026-03-15T10:05:00"},
+            {
+                "role": "assistant",
+                "content": "第六条",
+                "timestamp": "2026-03-15T10:05:00",
+            },
             {"role": "user", "content": "第七条", "timestamp": "2026-03-15T10:06:00"},
-            {"role": "assistant", "content": "第八条", "timestamp": "2026-03-15T10:07:00"},
+            {
+                "role": "assistant",
+                "content": "第八条",
+                "timestamp": "2026-03-15T10:07:00",
+            },
             {"role": "user", "content": "第九条", "timestamp": "2026-03-15T10:08:00"},
-            {"role": "assistant", "content": "第十条", "timestamp": "2026-03-15T10:09:00"},
+            {
+                "role": "assistant",
+                "content": "第十条",
+                "timestamp": "2026-03-15T10:09:00",
+            },
             {"role": "user", "content": "第十一条", "timestamp": "2026-03-15T10:10:00"},
-            {"role": "assistant", "content": "第十二条", "timestamp": "2026-03-15T10:11:00"},
+            {
+                "role": "assistant",
+                "content": "第十二条",
+                "timestamp": "2026-03-15T10:11:00",
+            },
             {"role": "user", "content": "第十三条", "timestamp": "2026-03-15T10:12:00"},
         ],
         last_consolidated=4,

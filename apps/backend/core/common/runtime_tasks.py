@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def create_runtime_task(operation: Coroutine[Any, Any, T], *, name: str) -> asyncio.Task[T]:
+def create_runtime_task(
+    operation: Coroutine[Any, Any, T], *, name: str
+) -> asyncio.Task[T]:
     """Pins the caller's generation until this task and any retained children finish."""
     parent = current_runtime_lease()
     if parent is None:
@@ -37,7 +39,9 @@ def create_runtime_task(operation: Coroutine[Any, Any, T], *, name: str) -> asyn
     return task
 
 
-def release_lease_in_background(lease, *, name: str = "runtime-lease-release") -> asyncio.Task[None]:
+def release_lease_in_background(
+    lease, *, name: str = "runtime-lease-release"
+) -> asyncio.Task[None]:
     """Releases generation ownership outside the owned task, logging any failure."""
     task = asyncio.create_task(lease.release(), name=name)
     task.add_done_callback(_report_release_failure)
@@ -46,4 +50,7 @@ def release_lease_in_background(lease, *, name: str = "runtime-lease-release") -
 
 def _report_release_failure(task: asyncio.Task[None]) -> None:
     if not task.cancelled() and (error := task.exception()) is not None:
-        logger.error("Detached runtime task cleanup failed", exc_info=(type(error), error, error.__traceback__))
+        logger.error(
+            "Detached runtime task cleanup failed",
+            exc_info=(type(error), error, error.__traceback__),
+        )

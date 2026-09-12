@@ -19,17 +19,23 @@ from session.manager.models import INTERRUPTED_TURN_METADATA_KEY
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exit_path", ["before_turn", "before_reasoning", "provider_error"])
+@pytest.mark.parametrize(
+    "exit_path", ["before_turn", "before_reasoning", "provider_error"]
+)
 async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
     tmp_path, exit_path
 ):
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
-    reasoner = SimpleNamespace(run_turn=AsyncMock(side_effect=RuntimeError("provider down")))
+    reasoner = SimpleNamespace(
+        run_turn=AsyncMock(side_effect=RuntimeError("provider down"))
+    )
     pipeline = PassiveTurnPipeline(
         AgentCoreDeps(
             session=SimpleNamespace(session_manager=session_manager),
-            context_store=SimpleNamespace(prepare=AsyncMock(return_value=ContextBundle())),
+            context_store=SimpleNamespace(
+                prepare=AsyncMock(return_value=ContextBundle())
+            ),
             context=Mock(),
             tools=ToolRegistry(),
             reasoner=reasoner,
@@ -47,7 +53,9 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
         )
 
     class _Loop:
-        async def process_direct(self, content, *, session_key, channel, chat_id, **_kwargs):
+        async def process_direct(
+            self, content, *, session_key, channel, chat_id, **_kwargs
+        ):
             outbound = await pipeline.run(
                 InboundMessage(
                     channel=channel, sender="user", chat_id=chat_id, content=content
@@ -102,7 +110,9 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
         )
         await service.drain()
 
-    terminals = [event for event in emitted if event["method"] in {"chat.done", "chat.error"}]
+    terminals = [
+        event for event in emitted if event["method"] in {"chat.done", "chat.error"}
+    ]
     assert [event["method"] for event in terminals] == ["chat.error", "chat.error"]
     assert [event["payload"]["turn_id"] for event in terminals] == ["turn-0", "turn-1"]
     expected = (
@@ -112,9 +122,14 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
     )
     assert all(event["payload"]["message"] == expected for event in terminals)
     assert busy_on_terminal == [False, False]
-    assert len([event for event in emitted if event["method"] == "session.updated"]) == 2
+    assert (
+        len([event for event in emitted if event["method"] == "session.updated"]) == 2
+    )
     assert [event["method"] for event in emitted] == [
-        "session.updated", "chat.error", "session.updated", "chat.error",
+        "session.updated",
+        "chat.error",
+        "session.updated",
+        "chat.error",
     ]
     assert not service.is_busy("role:mira")
     assert session_manager.get_or_create("role:mira").messages == []
@@ -123,7 +138,9 @@ async def test_pipeline_early_exit_emits_one_error_and_releases_desktop_turn(
 
 
 @pytest.mark.asyncio
-async def test_desktop_chat_service_reconciles_persisted_user_before_chat_error(tmp_path):
+async def test_desktop_chat_service_reconciles_persisted_user_before_chat_error(
+    tmp_path,
+):
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
     emitted: list[dict] = []
@@ -145,12 +162,18 @@ async def test_desktop_chat_service_reconciles_persisted_user_before_chat_error(
         session,
         emit_event,
     ) -> None:
-        await _emit_payload(emit_event, {
-            "id": request_id,
-            "type": "event",
-            "method": "session.updated",
-            "payload": {"session_key": session.key, "messages": session.messages[:]},
-        })
+        await _emit_payload(
+            emit_event,
+            {
+                "id": request_id,
+                "type": "event",
+                "method": "session.updated",
+                "payload": {
+                    "session_key": session.key,
+                    "messages": session.messages[:],
+                },
+            },
+        )
 
     service = DesktopChatService(
         agent_loop=_Loop(),  # type: ignore[arg-type]
@@ -183,11 +206,11 @@ async def test_desktop_chat_service_reconciles_persisted_user_before_chat_error(
             "id": "1",
             "type": "event",
             "method": "chat.error",
-                "payload": {
-                    "session_key": "role:mira",
-                    "turn_id": "1",
-                    "message": "boom",
-                },
+            "payload": {
+                "session_key": "role:mira",
+                "turn_id": "1",
+                "message": "boom",
+            },
         }
     ]
 

@@ -20,7 +20,9 @@ _DIAG_FIELDS = (
     "note",
 )
 
-diagnostic_session: ContextVar[str | None] = ContextVar("diagnostic_session", default=None)
+diagnostic_session: ContextVar[str | None] = ContextVar(
+    "diagnostic_session", default=None
+)
 diagnostic_flow: ContextVar[str | None] = ContextVar("diagnostic_flow", default=None)
 diagnostic_phase: ContextVar[str | None] = ContextVar("diagnostic_phase", default=None)
 diagnostic_turn: ContextVar[str | None] = ContextVar("diagnostic_turn", default=None)

@@ -55,8 +55,12 @@ def _trace(**kw) -> object:
 
 
 def test_fingerprint_is_stable_across_numbers():
-    a = _fingerprint("TimeoutError", "timed out after 60.0s id=12345", "agent/core.py:10")
-    b = _fingerprint("TimeoutError", "timed out after 42.5s id=99887", "agent/core.py:10")
+    a = _fingerprint(
+        "TimeoutError", "timed out after 60.0s id=12345", "agent/core.py:10"
+    )
+    b = _fingerprint(
+        "TimeoutError", "timed out after 42.5s id=99887", "agent/core.py:10"
+    )
     assert a == b
 
 
@@ -133,8 +137,16 @@ def test_collector_dedups_and_counts():
 def test_collector_flush_clears_so_next_flush_emits_delta():
     emitter = _RecordingEmitter()
     col = GlobalErrorCollector(emitter)
-    col.capture(source="log", logger_name="x", error_type="E", message="m",
-                traceback_text="t", level="ERROR", top_frame="a:1", session_key=None)
+    col.capture(
+        source="log",
+        logger_name="x",
+        error_type="E",
+        message="m",
+        traceback_text="t",
+        level="ERROR",
+        top_frame="a:1",
+        session_key=None,
+    )
     col._flush()
     col._flush()  # 无新增 → 不再 emit
     assert len(emitter.events) == 1

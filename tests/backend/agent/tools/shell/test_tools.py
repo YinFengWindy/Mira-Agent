@@ -135,7 +135,9 @@ async def test_shell_tool_adds_nvm_bin_to_path(
 
 
 @pytest.mark.asyncio
-async def test_shell_tool_supports_spawn_hook_and_streaming(monkeypatch, tmp_path: Path):
+async def test_shell_tool_supports_spawn_hook_and_streaming(
+    monkeypatch, tmp_path: Path
+):
     observed: dict[str, object] = {}
     streamed: list[str] = []
 
@@ -226,7 +228,9 @@ async def test_restricted_shell_spawn_hook_empty_cwd_falls_back_to_restricted_di
 
 
 @pytest.mark.asyncio
-async def test_shell_tool_truncates_to_tail_and_persists_full_output(monkeypatch, tmp_path: Path):
+async def test_shell_tool_truncates_to_tail_and_persists_full_output(
+    monkeypatch, tmp_path: Path
+):
     long_stdout = "HEAD\n" + ("x" * 31_000) + "\nTAIL\n"
 
     async def _fake_create_subprocess_shell(command, **kwargs):
@@ -464,7 +468,9 @@ async def test_task_output_returns_log_content(monkeypatch, tmp_path):
     assert "hello from bg" in result["output"]
     assert result["truncation"] is None
     assert result["elapsed_ms"] >= 0
-    assert result["since_last_output_ms"] is None  # pump 没写，last_output_at_ms 为 None
+    assert (
+        result["since_last_output_ms"] is None
+    )  # pump 没写，last_output_at_ms 为 None
 
     shell_mod._BG_REGISTRY.pop(task_id, None)
 
@@ -699,6 +705,7 @@ async def test_bg_pump_completes_when_pipe_inherited_by_child(tmp_path):
 
     class _ProcExitsImmediately:
         """wait() 立即返回，但 stdout/stderr 永远不关（模拟子进程继承 fd）。"""
+
         pid = 0
         returncode = 0
         stdout = _BlockingPipe()
@@ -725,7 +732,9 @@ async def test_bg_pump_completes_when_pipe_inherited_by_child(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_shell_run_in_background_started_at_ms_is_wall_clock(monkeypatch, tmp_path):
+async def test_shell_run_in_background_started_at_ms_is_wall_clock(
+    monkeypatch, tmp_path
+):
     """started_at_ms 应是 Unix epoch 毫秒（wall clock），不是 monotonic。"""
     import time as time_mod
 
@@ -740,12 +749,16 @@ async def test_shell_run_in_background_started_at_ms_is_wall_clock(monkeypatch, 
     before_ms = int(time_mod.time() * 1000)
     tool = ShellTool()
     result = json.loads(
-        await tool.execute(command="echo x", description="wall clock 测试", run_in_background=True)
+        await tool.execute(
+            command="echo x", description="wall clock 测试", run_in_background=True
+        )
     )
     after_ms = int(time_mod.time() * 1000)
 
     ts = result["started_at_ms"]
-    assert before_ms <= ts <= after_ms, f"started_at_ms={ts} 不在 [{before_ms}, {after_ms}] 范围内"
+    assert (
+        before_ms <= ts <= after_ms
+    ), f"started_at_ms={ts} 不在 [{before_ms}, {after_ms}] 范围内"
 
     _BG_REGISTRY.pop(result["background_task_id"], None)
 
@@ -1151,7 +1164,9 @@ async def test_shell_tool_reports_nonzero_exit_code_in_output():
         return p
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("agent.tools.shell.asyncio.create_subprocess_shell", _fake_subprocess)
+        mp.setattr(
+            "agent.tools.shell.asyncio.create_subprocess_shell", _fake_subprocess
+        )
         result = json.loads(await tool.execute(command="echo 1", timeout=999))
 
     assert result["exit_code"] == 2

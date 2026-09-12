@@ -21,6 +21,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
+
 @dataclass(frozen=True)
 class QQGroupFilterConfig:
     """Runtime-only QQ group filter settings owned by the channel layer."""
@@ -28,6 +29,7 @@ class QQGroupFilterConfig:
     group_id: str
     allow_from: list[str] = field(default_factory=list)
     require_at: bool = True
+
 
 logger = logging.getLogger(__name__)
 

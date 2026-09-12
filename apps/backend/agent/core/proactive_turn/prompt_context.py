@@ -120,7 +120,7 @@ def build_system_prompt(role_prompt: str) -> str:
         "- 链接要紧跟相关内容，不要把所有链接集中堆到整条消息末尾，也不要做成生硬的参考文献区\n"
         "- 如果一段内容对应多个来源，可以在该段后连续附上多个链接；没有可靠链接时不要强行补链接\n"
         "- 链接直接使用原始 url，不要杜撰、不要改写、不要省略协议头\n"
-        "- evidence 格式：\"{ack_server}:{event_id}\"，如 \"feed:fmcp_abc123\"\n"
+        '- evidence 格式："{ack_server}:{event_id}"，如 "feed:fmcp_abc123"\n'
         "- 当本轮 content 和 alerts 均为空时，evidence 必须为 []；任何 'feed:xxx' 格式的 id 只能来自本轮真实提供的候选列表，不能自行捏造\n"
         "- 没有实质内容时 finish_turn(decision=skip, reason=no_content) 是正确选择\n\n"
         "【finish_turn.reason】no_content | user_busy | already_sent_similar | scene_changed | other"
@@ -148,7 +148,10 @@ def read_workspace_context_for_prompt(
         return ""
     if not raw:
         return ""
-    return "【Workspace 主动上下文（主/被动 loop 共享规则面板，不是内容源）】\n" + raw[:3000]
+    return (
+        "【Workspace 主动上下文（主/被动 loop 共享规则面板，不是内容源）】\n"
+        + raw[:3000]
+    )
 
 
 def render_alert_block(alerts: list[dict]) -> str:
@@ -163,7 +166,9 @@ def render_alert_block(alerts: list[dict]) -> str:
     return "【Alerts（时效性高，优先处理）】\n" + "\n".join(lines) + "\n\n"
 
 
-def render_content_block(content_meta: list[dict], content_store: dict[str, str]) -> str:
+def render_content_block(
+    content_meta: list[dict], content_store: dict[str, str]
+) -> str:
     """将 content 元数据渲染为按需取正文的 prompt 区块。"""
 
     if not content_meta:
@@ -173,7 +178,11 @@ def render_content_block(content_meta: list[dict], content_store: dict[str, str]
         contract = normalize_content(raw)
         has_content = bool(content_store.get(contract.item_id))
         lines.append(contract.to_prompt_line(index=index, has_content=has_content))
-    return "【Content 列表（正文通过 get_content 按需获取）】\n" + "\n".join(lines) + "\n\n"
+    return (
+        "【Content 列表（正文通过 get_content 按需获取）】\n"
+        + "\n".join(lines)
+        + "\n\n"
+    )
 
 
 def render_context_block(context: list[dict], cfg: Any) -> str:
@@ -183,8 +192,7 @@ def render_context_block(context: list[dict], cfg: Any) -> str:
         return ""
     local_tz = getattr(cfg, "anyaction_timezone", None)
     annotated_context = [
-        normalize_context(item, local_tz=local_tz).to_prompt_item()
-        for item in context
+        normalize_context(item, local_tz=local_tz).to_prompt_item() for item in context
     ]
     return (
         "【背景上下文】\n"
@@ -236,7 +244,9 @@ def build_runtime_context_message(
     if tool_deps.memory is not None:
         profile_memory = cast(MemoryProfileApi, tool_deps.memory)
         bind_session_metadata = getattr(profile_memory, "bind_session_metadata", None)
-        role_id = session_key.split(":", 1)[1] if session_key.startswith("role:") else ""
+        role_id = (
+            session_key.split(":", 1)[1] if session_key.startswith("role:") else ""
+        )
         if callable(bind_session_metadata):
             bind_session_metadata({"role_id": role_id} if role_id else None)
         try:
@@ -248,7 +258,9 @@ def build_runtime_context_message(
         except Exception:
             memory_block = ""
         try:
-            recent_context_block = str(profile_memory.read_recent_context() or "").strip()
+            recent_context_block = str(
+                profile_memory.read_recent_context() or ""
+            ).strip()
         except Exception:
             recent_context_block = ""
 
@@ -264,8 +276,14 @@ def build_runtime_context_message(
                 gateway_result.content_store,
             ).strip(),
         ),
-        ("proactive_context", render_context_block(gateway_result.context, cfg).strip()),
-        ("workspace_proactive_context", read_workspace_context_for_prompt(workspace_context_fn)),
+        (
+            "proactive_context",
+            render_context_block(gateway_result.context, cfg).strip(),
+        ),
+        (
+            "workspace_proactive_context",
+            read_workspace_context_for_prompt(workspace_context_fn),
+        ),
     ):
         if content:
             sections.append(

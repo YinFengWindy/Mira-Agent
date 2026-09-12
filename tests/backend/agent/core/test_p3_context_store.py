@@ -79,7 +79,9 @@ async def test_default_context_store_prepare_returns_bundle_with_legacy_metadata
         timestamp=datetime(2026, 4, 4, 20, 0, 0),
     )
 
-    bundle = await store.prepare(msg=msg, session_key="cli:1", session=cast(Any, session))
+    bundle = await store.prepare(
+        msg=msg, session_key="cli:1", session=cast(Any, session)
+    )
 
     assert [item.content for item in bundle.history] == ["hello", "world"]
     assert bundle.memory_blocks == ["remembered"]
@@ -107,7 +109,9 @@ async def test_default_context_store_prepare_uses_explicit_session_key_for_retri
     context = SimpleNamespace(
         skills=SimpleNamespace(list_skills=MagicMock(return_value=[]))
     )
-    store = DefaultContextStore(retrieval=cast(Any, retrieval), context=cast(Any, context))
+    store = DefaultContextStore(
+        retrieval=cast(Any, retrieval), context=cast(Any, context)
+    )
     session = _DummySession()
     msg = InboundMessage(
         channel="telegram",
@@ -116,7 +120,9 @@ async def test_default_context_store_prepare_uses_explicit_session_key_for_retri
         content="定时任务执行一下",
     )
 
-    await store.prepare(msg=msg, session_key="scheduler:job-123", session=cast(Any, session))
+    await store.prepare(
+        msg=msg, session_key="scheduler:job-123", session=cast(Any, session)
+    )
 
     request = retrieval.retrieve.await_args.args[0]
     assert request.session_key == "scheduler:job-123"
@@ -136,7 +142,9 @@ async def test_default_context_store_prepare_skips_retrieval_when_requested():
     context = SimpleNamespace(
         skills=SimpleNamespace(list_skills=MagicMock(return_value=[]))
     )
-    store = DefaultContextStore(retrieval=cast(Any, retrieval), context=cast(Any, context))
+    store = DefaultContextStore(
+        retrieval=cast(Any, retrieval), context=cast(Any, context)
+    )
     session = _DummySession()
     msg = InboundMessage(
         channel="telegram",
@@ -171,7 +179,9 @@ async def test_default_context_store_uses_cli_context_override_for_retrieval():
     context = SimpleNamespace(
         skills=SimpleNamespace(list_skills=MagicMock(return_value=[]))
     )
-    store = DefaultContextStore(retrieval=cast(Any, retrieval), context=cast(Any, context))
+    store = DefaultContextStore(
+        retrieval=cast(Any, retrieval), context=cast(Any, context)
+    )
     session = _DummySession()
     msg = InboundMessage(
         channel="cli",
@@ -185,7 +195,9 @@ async def test_default_context_store_uses_cli_context_override_for_retrieval():
         },
     )
 
-    await store.prepare(msg=msg, session_key=msg.session_key, session=cast(Any, session))
+    await store.prepare(
+        msg=msg, session_key=msg.session_key, session=cast(Any, session)
+    )
 
     request = retrieval.retrieve.await_args.args[0]
     assert request.session_key == "telegram:7674283004"
@@ -229,6 +241,4 @@ def test_build_post_reply_context_budget_combines_history_and_prompt():
     assert budget["history_chars"] > 0
     assert budget["history_tokens"] == max(1, budget["history_chars"] // 3)
     assert budget["prompt_tokens"] == 350
-    assert budget["next_turn_baseline_tokens"] == (
-        budget["history_tokens"] + 350
-    )
+    assert budget["next_turn_baseline_tokens"] == (budget["history_tokens"] + 350)

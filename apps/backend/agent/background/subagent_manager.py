@@ -124,6 +124,7 @@ class SubagentManager:
         )
 
         try:
+
             async def _run(snapshot_runtime: SubagentRuntime | None) -> tuple[str, str]:
                 if snapshot_runtime is None:
                     subagent = self._build_subagent(
@@ -162,7 +163,9 @@ class SubagentManager:
             exit_reason,
             len(truncated),
         )
-        return f"[子任务「{display_label}」结果]\n退出原因: {exit_reason}\n\n{truncated}"
+        return (
+            f"[子任务「{display_label}」结果]\n退出原因: {exit_reason}\n\n{truncated}"
+        )
 
     async def spawn(
         self,
@@ -246,7 +249,9 @@ class SubagentManager:
     async def drain(self) -> None:
         """Waits for accepted jobs without cancelling their model or tool calls."""
         while self._running_tasks:
-            await asyncio.gather(*tuple(self._running_tasks.values()), return_exceptions=True)
+            await asyncio.gather(
+                *tuple(self._running_tasks.values()), return_exceptions=True
+            )
             await asyncio.sleep(0)
 
     def list_running_jobs(self) -> list[dict[str, object]]:
@@ -286,6 +291,7 @@ class SubagentManager:
     ) -> None:
         """运行后台 subagent，并把统一结果协议回灌给主 agent。"""
         try:
+
             async def _run(snapshot_runtime: SubagentRuntime | None):
                 def _build():
                     if snapshot_runtime is None:
@@ -299,9 +305,7 @@ class SubagentManager:
                         runtime=snapshot_runtime,
                     )
 
-                job_runner = AgentBackgroundJobRunner(
-                    _build
-                )
+                job_runner = AgentBackgroundJobRunner(_build)
                 # 1. 先按统一 background job spec 执行 subagent，本层不直接碰 loop 细节。
                 return await job_runner.run(
                     AgentBackgroundJobSpec(
@@ -437,7 +441,9 @@ class SubagentManager:
             )
             return await operation(runtime)
 
-    def _build_subagent_prompt(self, task_dir: Path, profile: str = PROFILE_RESEARCH) -> str:
+    def _build_subagent_prompt(
+        self, task_dir: Path, profile: str = PROFILE_RESEARCH
+    ) -> str:
         return build_spawn_subagent_prompt(self._workspace, task_dir, profile)
 
     async def _announce_result(

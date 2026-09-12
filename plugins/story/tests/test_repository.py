@@ -10,7 +10,10 @@ from plugins.story.backend.models import (
 )
 from plugins.story.backend.repository import StoryRepository, payload_hash
 
-def test_story_repository_replaces_legacy_english_scene_names_at_the_read_boundary() -> None:
+
+def test_story_repository_replaces_legacy_english_scene_names_at_the_read_boundary() -> (
+    None
+):
     assert StoryRepository._current_scene_dict(
         {
             "current_scene": {
@@ -35,7 +38,9 @@ def _create_story(repository: StoryRepository) -> None:
     )
 
 
-def test_story_repository_freezes_opening_profile_and_replays_same_turn(tmp_path) -> None:
+def test_story_repository_freezes_opening_profile_and_replays_same_turn(
+    tmp_path,
+) -> None:
     repository = StoryRepository(tmp_path / "story.db")
     _create_story(repository)
 
@@ -83,7 +88,9 @@ def test_story_repository_freezes_opening_profile_and_replays_same_turn(tmp_path
     restarted.close()
 
 
-def test_story_repository_advances_the_story_date_when_period_wraps_midnight(tmp_path) -> None:
+def test_story_repository_advances_the_story_date_when_period_wraps_midnight(
+    tmp_path,
+) -> None:
     repository = StoryRepository(tmp_path / "story.db")
     repository.create_story(
         story_id="story-1",
@@ -118,7 +125,11 @@ def test_story_repository_advances_the_story_date_when_period_wraps_midnight(tmp
     assert committed[0][0].story_date == "2026-08-02"
     assert committed[0][0].time_band == "清晨"
     assert story["currentStoryDate"] == "2026-08-02"
-    assert story["currentScene"] == {"key": "dawn-room", "name": "默认场景", "characterIds": ["role-1"]}
+    assert story["currentScene"] == {
+        "key": "dawn-room",
+        "name": "默认场景",
+        "characterIds": ["role-1"],
+    }
     repository.close()
 
 
@@ -138,5 +149,7 @@ def test_story_repository_resets_an_interrupted_generation_to_pending(tmp_path) 
 
     assert recovered["status"] == "pending"
     assert recovered["attemptId"] is None
-    assert repository.story_read_model("story-1")["segment"]["operation"] == "generating"
+    assert (
+        repository.story_read_model("story-1")["segment"]["operation"] == "generating"
+    )
     repository.close()

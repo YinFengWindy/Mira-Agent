@@ -80,13 +80,19 @@ async def test_fetch_alert_events_async_filters_kind_and_sets_ack_server(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_fetch_content_events_async_keeps_default_compat_channel_filter(monkeypatch):
+async def test_fetch_content_events_async_keeps_default_compat_channel_filter(
+    monkeypatch,
+):
     monkeypatch.setattr(
         mcp_sources,
         "_load_sources",
         lambda _w=None: [
             {"channel": "", "server": "s1", "get_tool": "get_proactive_events"},
-            {"channel": "alert", "server": "alert_only", "get_tool": "get_proactive_events"},
+            {
+                "channel": "alert",
+                "server": "alert_only",
+                "get_tool": "get_proactive_events",
+            },
         ],
     )
     pool = _FakePool(
@@ -95,7 +101,9 @@ async def test_fetch_content_events_async_keeps_default_compat_channel_filter(mo
                 {"kind": "content", "event_id": "n1"},
                 {"kind": "alert", "event_id": "a1"},
             ],
-            ("alert_only", "get_proactive_events"): [{"kind": "content", "event_id": "x"}],
+            ("alert_only", "get_proactive_events"): [
+                {"kind": "content", "event_id": "x"}
+            ],
         }
     )
 
@@ -133,7 +141,9 @@ async def test_fetch_context_data_async_accepts_dict_and_list(monkeypatch, caplo
 
 
 @pytest.mark.asyncio
-async def test_fetch_context_data_async_isolates_invalid_top_level_source(monkeypatch, caplog):
+async def test_fetch_context_data_async_isolates_invalid_top_level_source(
+    monkeypatch, caplog
+):
     monkeypatch.setattr(
         mcp_sources,
         "_load_sources",
@@ -182,7 +192,10 @@ async def test_poll_content_feeds_async_raises_when_any_source_failed(monkeypatc
 
     assert "s2" in str(exc.value)
     assert ("a1", "poll", {}) not in pool.calls
-    assert pool.timeouts == [mcp_sources._POLL_TOOL_TIMEOUT, mcp_sources._POLL_TOOL_TIMEOUT]
+    assert pool.timeouts == [
+        mcp_sources._POLL_TOOL_TIMEOUT,
+        mcp_sources._POLL_TOOL_TIMEOUT,
+    ]
     assert pool.retry_flags == [False, False]
 
 
@@ -407,7 +420,9 @@ async def test_acknowledge_content_entries_async_passes_ttl_hours(monkeypatch):
         ("mcp:feed", "evt-2"),
         ("rss:other", "skip"),
     ]
-    await mcp_sources.acknowledge_content_entries_async(cast(Any, pool), entries, ttl_hours=24)
+    await mcp_sources.acknowledge_content_entries_async(
+        cast(Any, pool), entries, ttl_hours=24
+    )
 
     assert (
         "feed",

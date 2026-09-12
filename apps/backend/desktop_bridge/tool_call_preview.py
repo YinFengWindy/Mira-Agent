@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DESKTOP_TOOL_RESULT_PREVIEW_LIMIT = 2000
 
 

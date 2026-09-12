@@ -33,10 +33,10 @@ class ProactiveEvent(ABC):
     直接实例化会抛出 TypeError；请使用 AlertEvent 或 ContentEvent 的具体子类。
     """
 
-    event_id: str       # 去重 & ack 用
-    source_type: str    # "rss" / "web" / "health_event" 等
-    source_name: str    # 人类可读来源名
-    content: str        # 正文摘要 / 告警消息
+    event_id: str  # 去重 & ack 用
+    source_type: str  # "rss" / "web" / "health_event" 等
+    source_name: str  # 人类可读来源名
+    content: str  # 正文摘要 / 告警消息
     title: str | None = None
     url: str | None = None
     published_at: datetime | None = None
@@ -85,6 +85,7 @@ class ProactiveEvent(ABC):
 # 告警通道
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class AlertEvent(ProactiveEvent, ABC):
     """告警类事件的抽象基类。
@@ -93,7 +94,7 @@ class AlertEvent(ProactiveEvent, ABC):
     新告警类型（湿度计、CO₂ 报警、日历提醒等）继承此类，只需实现 kind / ack_id / from_xxx()。
     """
 
-    severity: str | None = None    # "high" / "normal" / "low"
+    severity: str | None = None  # "high" / "normal" / "low"
 
     def is_urgent(self) -> bool:
         return self.severity == "high"
@@ -104,7 +105,6 @@ class AlertEvent(ProactiveEvent, ABC):
             # "message" 保持向后兼容：components.py 和 prompts/proactive.py 读的是这个键
             "message": self.content,
         }
-
 
 
 @dataclass
@@ -165,6 +165,7 @@ class GenericAlertEvent(AlertEvent):
 # 内容流通道
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ContentEvent(ProactiveEvent, ABC):
     """内容流类事件的抽象基类。
@@ -188,6 +189,7 @@ class ContentEvent(ProactiveEvent, ABC):
     @property
     def display_text(self) -> str:
         return ""
+
 
 @dataclass
 class GenericContentEvent(ContentEvent):

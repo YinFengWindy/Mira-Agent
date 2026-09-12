@@ -6,7 +6,10 @@ from plugins.story.backend.story_time import (
     normalize_story_time_band,
 )
 
-def test_next_story_time_band_keeps_the_current_period_without_director_change() -> None:
+
+def test_next_story_time_band_keeps_the_current_period_without_director_change() -> (
+    None
+):
     assert next_story_time_band("上午") == "上午"
 
 
@@ -20,7 +23,9 @@ def test_next_story_clock_keeps_the_selected_date_when_period_moves_forward() ->
     assert next_story_clock("2026-08-01", "上午", "夜晚") == ("2026-08-01", "夜晚")
 
 
-def test_next_story_clock_advances_the_selected_date_when_period_wraps_midnight() -> None:
+def test_next_story_clock_advances_the_selected_date_when_period_wraps_midnight() -> (
+    None
+):
     assert next_story_clock("2026-08-01", "深夜", "清晨") == ("2026-08-02", "清晨")
 
 

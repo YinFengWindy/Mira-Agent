@@ -57,7 +57,11 @@ async def test_core_runner_handles_spawn_completion_via_direct_helper_deps():
         session_manager=SimpleNamespace(get_or_create=MagicMock(return_value=session))
     )
     context = SimpleNamespace(
-        render=MagicMock(return_value=SimpleNamespace(messages=[{"role": "system", "content": "prompt"}]))
+        render=MagicMock(
+            return_value=SimpleNamespace(
+                messages=[{"role": "system", "content": "prompt"}]
+            )
+        )
     )
     pipeline_mock = SimpleNamespace(
         post_reasoning=AsyncMock(
@@ -126,11 +130,11 @@ async def test_core_runner_handles_spawn_completion_via_direct_helper_deps():
         channel="telegram",
         chat_id="123",
         session_key="scheduler:job-1",
-            role_id="mira",
-            current_timestamp=item.timestamp.isoformat(),
-            current_user_source_ref="telegram:123:9",
-            defer_push_session_sync="true",
-        )
+        role_id="mira",
+        current_timestamp=item.timestamp.isoformat(),
+        current_user_source_ref="telegram:123:9",
+        defer_push_session_sync="true",
+    )
     prompt_render_fn.assert_awaited_once()
     render_input = prompt_render_fn.await_args.args[0]
     assert render_input.session_key == "scheduler:job-1"

@@ -8,6 +8,7 @@ import uuid
 from agent.voice_config import VoiceConfig
 from proactive_v2.config import ProactiveConfig, ProactiveStrategiesConfig
 
+
 @dataclass
 class TelegramChannelConfig:
     token: str

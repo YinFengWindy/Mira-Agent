@@ -100,7 +100,9 @@ async def inspect_core_modules(core: "CoreRuntime") -> str:
             "after_turn",
             default_after_turn_modules(
                 core.event_bus,
-                cast(Any, getattr(pipeline, "_outbound_port", BusOutboundPort(core.bus))),
+                cast(
+                    Any, getattr(pipeline, "_outbound_port", BusOutboundPort(core.bus))
+                ),
                 cast(Any, context),
                 cast(int, getattr(pipeline, "_history_window", 500)),
                 plugin_modules=cast(Any, after_turn_modules),

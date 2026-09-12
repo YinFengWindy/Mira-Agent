@@ -24,24 +24,41 @@ async def test_self_seed_uses_the_role_dialogue_model_snapshot(tmp_path) -> None
         system_prompt="用中文回复",
     )
 
-    result = await generator.agenerate(role, RoleModelSnapshot(
-        "selected", selected_provider, "role-model", "none", role_id=role.id,
-    ))
+    result = await generator.agenerate(
+        role,
+        RoleModelSnapshot(
+            "selected",
+            selected_provider,
+            "role-model",
+            "none",
+            role_id=role.id,
+        ),
+    )
 
     assert result == "# 角色自我认知"
     assert selected_provider.chat.await_args.kwargs["model"] == "role-model"
 
 
 @pytest.mark.asyncio
-async def test_self_seed_compiles_stable_profile_without_transient_knowledge(tmp_path) -> None:
-    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁")))
+async def test_self_seed_compiles_stable_profile_without_transient_knowledge(
+    tmp_path,
+) -> None:
+    provider = SimpleNamespace(
+        chat=AsyncMock(return_value=SimpleNamespace(content="# 我是谁"))
+    )
     role = RoleStore(tmp_path).create_role(
-        role_id="mira", name="Mira", system_prompt="旧提示词", background="旧背景",
+        role_id="mira",
+        name="Mira",
+        system_prompt="旧提示词",
+        background="旧背景",
         runtime_config={"mood_catalog": ["平静"]},
         profile={
             "character": {
-                "profile": "{{char}}是{{user}}的向导", "personality": "温柔",
-                "behavior_rules": "诚实", "response_constraints": "简洁", "nickname": "小栞",
+                "profile": "{{char}}是{{user}}的向导",
+                "personality": "温柔",
+                "behavior_rules": "诚实",
+                "response_constraints": "简洁",
+                "nickname": "小栞",
             },
             "knowledge_base": {
                 "enabled": True,
@@ -50,9 +67,16 @@ async def test_self_seed_compiles_stable_profile_without_transient_knowledge(tmp
         },
     )
 
-    await LlmRoleSelfSeedGenerator().agenerate(role, RoleModelSnapshot(
-        "selected", provider, "test", "none", role_id=role.id,
-    ))
+    await LlmRoleSelfSeedGenerator().agenerate(
+        role,
+        RoleModelSnapshot(
+            "selected",
+            provider,
+            "test",
+            "none",
+            role_id=role.id,
+        ),
+    )
 
     prompt = provider.chat.await_args.kwargs["messages"][1]["content"]
     assert "小栞是用户的向导" in prompt
@@ -62,14 +86,29 @@ async def test_self_seed_compiles_stable_profile_without_transient_knowledge(tmp
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("response", ["", "   ", RuntimeError("provider unavailable"), TimeoutError()])
-async def test_self_seed_propagates_failures_and_rejects_empty_content(tmp_path, response):
-    provider = SimpleNamespace(chat=AsyncMock(
-        side_effect=response if isinstance(response, Exception) else None,
-        return_value=SimpleNamespace(content=response),
-    ))
+@pytest.mark.parametrize(
+    "response", ["", "   ", RuntimeError("provider unavailable"), TimeoutError()]
+)
+async def test_self_seed_propagates_failures_and_rejects_empty_content(
+    tmp_path, response
+):
+    provider = SimpleNamespace(
+        chat=AsyncMock(
+            side_effect=response if isinstance(response, Exception) else None,
+            return_value=SimpleNamespace(content=response),
+        )
+    )
     role = RoleStore(tmp_path).create_role(name="Mira", system_prompt="mira")
-    with pytest.raises(type(response) if isinstance(response, Exception) else ValueError):
-        await LlmRoleSelfSeedGenerator().agenerate(role, RoleModelSnapshot(
-            "selected", provider, "test", "none", role_id=role.id,
-        ))
+    with pytest.raises(
+        type(response) if isinstance(response, Exception) else ValueError
+    ):
+        await LlmRoleSelfSeedGenerator().agenerate(
+            role,
+            RoleModelSnapshot(
+                "selected",
+                provider,
+                "test",
+                "none",
+                role_id=role.id,
+            ),
+        )

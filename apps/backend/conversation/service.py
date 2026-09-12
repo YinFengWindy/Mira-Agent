@@ -125,7 +125,9 @@ class ConversationService:
                 return existing
 
         if clean_session_key.startswith("role:") or clean_channel == "desktop":
-            resolved_role_id = clean_role_id or clean_session_key.removeprefix("role:").strip()
+            resolved_role_id = (
+                clean_role_id or clean_session_key.removeprefix("role:").strip()
+            )
             return self._build_desktop_thread(
                 resolved_role_id,
                 session_key=clean_session_key,

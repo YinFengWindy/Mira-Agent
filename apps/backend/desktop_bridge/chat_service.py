@@ -188,7 +188,9 @@ class DesktopChatService:
         )
         if active_turn is not None:
             await self._await_turn_cleanup(normalized_session_key, active_turn)
-        if result.status == "interrupted" and isinstance(interrupt_state, TurnInterruptState):
+        if result.status == "interrupted" and isinstance(
+            interrupt_state, TurnInterruptState
+        ):
             interrupted_message = await self._persist_interrupted_turn(
                 session_key=normalized_session_key,
                 turn_id=normalized_turn_id,
@@ -300,7 +302,11 @@ class DesktopChatService:
                     else "已中止当前回合"
                 ),
             ),
-            interrupt_state if isinstance(interrupt_state, TurnInterruptState) else None,
+            (
+                interrupt_state
+                if isinstance(interrupt_state, TurnInterruptState)
+                else None
+            ),
         )
 
     async def _await_turn_cleanup(
@@ -674,7 +680,9 @@ class DesktopChatService:
             # Completion enables the next send in the renderer. Publish it only
             # after the role turn and persistence have released their ownership.
             if terminal_events or payload.get("method") in {
-                "chat.done", "chat.error", "session.updated"
+                "chat.done",
+                "chat.error",
+                "session.updated",
             }:
                 terminal_events.append(payload)
             else:

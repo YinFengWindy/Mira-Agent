@@ -134,12 +134,11 @@ async def test_desktop_bridge_role_lifecycle_and_chat_send(tmp_path: Path):
     assert "thread" not in response.payload["session"]
     assert response.payload["message"]["role"] == "user"
     assert response.payload["message"]["content"] == "hi"
-    assert response.payload["message"]["media"] == [
-        "D:\\files\\scene.png"
-    ]
-    assert response.payload["message"]["metadata"][
-        "client_message_id"
-    ] == "desktop-message-1"
+    assert response.payload["message"]["media"] == ["D:\\files\\scene.png"]
+    assert (
+        response.payload["message"]["metadata"]["client_message_id"]
+        == "desktop-message-1"
+    )
     await _wait_until(
         lambda: [item["method"] for item in emitted]
         == ["session.updated", "chat.delta", "chat.done", "session.updated"]
@@ -154,7 +153,9 @@ async def test_desktop_bridge_role_lifecycle_and_chat_send(tmp_path: Path):
     assert session_updated_event["payload"]["message"]["content"] == "hello"
     assert delta_event["payload"]["content_delta"] == "hel"
     assert done_event["payload"]["reply"] == "hello"
-    assert session_manager.conversation_store.list_message_thread_ids(f"role:{role_id}") == [
+    assert session_manager.conversation_store.list_message_thread_ids(
+        f"role:{role_id}"
+    ) == [
         f"thread:{role_id}:desktop",
         f"thread:{role_id}:desktop",
     ]
@@ -248,13 +249,17 @@ async def test_desktop_bridge_chat_send_merges_reply_context_for_agent(tmp_path:
 
 
 @pytest.mark.asyncio
-async def test_desktop_bridge_role_create_prepares_default_self(tmp_path: Path, monkeypatch):
+async def test_desktop_bridge_role_create_prepares_default_self(
+    tmp_path: Path, monkeypatch
+):
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
 
     generate = AsyncMock(side_effect=AssertionError("role creation must not seed"))
-    monkeypatch.setattr("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate)
+    monkeypatch.setattr(
+        "core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate
+    )
 
     from core.roles import RoleAggregateService
 
@@ -292,21 +297,29 @@ async def test_desktop_bridge_role_create_prepares_default_self(tmp_path: Path, 
     assert "## 我的性格与形象" in self_text
     assert "## 我对你的理解" in self_text
     assert "## 我们的关系" in self_text
-    assert created.payload["role"]["runtime_config"]["dialogue_model_registration_id"] == ""
-    assert created.payload["role"]["memory_init_state"]["self_seed"]["status"] == "pending"
+    assert (
+        created.payload["role"]["runtime_config"]["dialogue_model_registration_id"]
+        == ""
+    )
+    assert (
+        created.payload["role"]["memory_init_state"]["self_seed"]["status"] == "pending"
+    )
     generate.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_desktop_bridge_bound_role_create_and_open_do_not_seed(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ):
     role_store = RoleStore(tmp_path)
     session_manager = SessionManager(tmp_path)
     event_bus = EventBus()
 
     generate = AsyncMock(side_effect=AssertionError("opening a role must not seed"))
-    monkeypatch.setattr("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate)
+    monkeypatch.setattr(
+        "core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", generate
+    )
 
     from core.roles import RoleAggregateService
 
@@ -338,7 +351,9 @@ async def test_desktop_bridge_bound_role_create_and_open_do_not_seed(
 
     assert created.error is None
     role_id = created.payload["role"]["id"]
-    await service.role_service.update_role_async(role_id, runtime_config={"dialogue_model_registration_id": "selected"})
+    await service.role_service.update_role_async(
+        role_id, runtime_config={"dialogue_model_registration_id": "selected"}
+    )
     await service.role_service.open_role_async(role_id)
     generate.assert_not_called()
     self_path = tmp_path / "roles" / role_id / "memory" / "SELF.md"
@@ -1144,7 +1159,9 @@ async def test_desktop_bridge_role_create_and_update_copy_assets(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_desktop_bridge_updates_role_asset_categories_and_send_permission(tmp_path: Path):
+async def test_desktop_bridge_updates_role_asset_categories_and_send_permission(
+    tmp_path: Path,
+):
     service = DesktopBridgeService(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
@@ -1645,7 +1662,6 @@ async def test_desktop_bridge_role_delete_removes_role_session(tmp_path: Path):
     assert response.payload["deleted"] is True
     assert response.payload["session_deleted"] is True
     assert session_manager._store.get_session_meta("role:mira") is None
-
 
 
 # NOTE(#180): the ``novelai.generate``/``novelai.history`` bridge-level

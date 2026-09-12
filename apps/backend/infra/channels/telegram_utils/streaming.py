@@ -33,7 +33,7 @@ def _ring_tail(text: str, cap: int) -> str:
         return ""
     if len(text) <= cap:
         return text
-    return "…" + text[-(cap - 1):]
+    return "…" + text[-(cap - 1) :]
 
 
 class TelegramStreamMessage:
@@ -144,7 +144,9 @@ class TelegramStreamMessage:
 
     async def _push_reply_text(self, text: str) -> None:
         """finalize 专用：发送纯回复文本（无思考前缀）。"""
-        preview = text if len(text) <= _TELEGRAM_MSG_LIMIT else text[:_TELEGRAM_MSG_LIMIT]
+        preview = (
+            text if len(text) <= _TELEGRAM_MSG_LIMIT else text[:_TELEGRAM_MSG_LIMIT]
+        )
         if preview == self._last_sent_plain:
             return
         html_text = render_telegram_preview_html(preview)
@@ -213,6 +215,7 @@ class TelegramStreamMessage:
             logger.warning("[telegram] edit_message_text(stream) 失败 err=%s", e)
             return False
 
+
 def _iter_stream_chunks(text: str) -> list[str]:
     if len(text) <= _STREAM_CHUNK_STEP:
         return [text]
@@ -229,7 +232,9 @@ def _iter_stream_chunks(text: str) -> list[str]:
     return chunks
 
 
-async def _send_preview_message(bot: Bot, chat_id: int, html_text: str, plain_text: str):
+async def _send_preview_message(
+    bot: Bot, chat_id: int, html_text: str, plain_text: str
+):
     try:
         return await bot.send_message(
             chat_id=chat_id,

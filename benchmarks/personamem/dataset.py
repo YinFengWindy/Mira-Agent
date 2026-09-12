@@ -91,7 +91,9 @@ def _load_shared_contexts(path: Path) -> dict[str, list[dict]]:
                 continue
             payload = json.loads(line)
             if not isinstance(payload, dict):
-                raise ValueError(f"shared context line must be a dict, got {type(payload)}")
+                raise ValueError(
+                    f"shared context line must be a dict, got {type(payload)}"
+                )
             for key, value in payload.items():
                 if not isinstance(value, list):
                     raise ValueError(f"shared context {key!r} must be a list")

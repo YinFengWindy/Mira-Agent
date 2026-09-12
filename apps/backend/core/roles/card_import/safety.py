@@ -18,7 +18,12 @@ def safe_archive_path(value: str) -> str:
     """Return a normalized relative path or reject traversal and absolute paths."""
     normalized = value.replace("\\", "/")
     path = PurePosixPath(normalized)
-    if not normalized or path.is_absolute() or path == PurePosixPath(".") or ".." in path.parts:
+    if (
+        not normalized
+        or path.is_absolute()
+        or path == PurePosixPath(".")
+        or ".." in path.parts
+    ):
         raise ValueError("角色卡压缩包路径不安全")
     if any(not part or part == "." for part in path.parts):
         raise ValueError("角色卡压缩包路径不安全")
@@ -39,4 +44,3 @@ def validate_image(data: bytes, *, name: str = "角色卡素材") -> tuple[str, 
         raise ValueError(f"{name}格式不支持: {image_format}")
     media_type = Image.MIME.get(image_format, "application/octet-stream")
     return image_format, media_type
-

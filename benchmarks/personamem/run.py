@@ -33,8 +33,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run PersonaMem benchmark against the Shiori agent runtime."
     )
-    parser.add_argument("--config", required=True, type=Path, help="Path to config.toml")
-    parser.add_argument("--questions", required=True, type=Path, help="Path to questions_*.csv")
+    parser.add_argument(
+        "--config", required=True, type=Path, help="Path to config.toml"
+    )
+    parser.add_argument(
+        "--questions", required=True, type=Path, help="Path to questions_*.csv"
+    )
     parser.add_argument(
         "--contexts",
         required=True,
@@ -163,15 +167,24 @@ async def _process_instance(
             if cached is not None:
                 results.append(cached)
                 counter.append(1)
-                progress.update(worker_task, description=f"[cyan]{short_id}[/]  cached", completed=1, total=1)
+                progress.update(
+                    worker_task,
+                    description=f"[cyan]{short_id}[/]  cached",
+                    completed=1,
+                    total=1,
+                )
                 progress.update(overall_task, advance=1)
-                progress.update(worker_task, description="[dim]idle[/]", completed=0, total=1)
+                progress.update(
+                    worker_task, description="[dim]idle[/]", completed=0, total=1
+                )
                 return
 
         should_ingest = not args.qa_only
         if args.resume_auto:
             should_ingest = not _has_ingested_session(inst_workspace)
-            if should_ingest and _workspace_has_partial_data(inst_workspace, inst.question_id):
+            if should_ingest and _workspace_has_partial_data(
+                inst_workspace, inst.question_id
+            ):
                 _reset_instance_workspace(inst_workspace)
 
         rt = await create_runtime(args.config, inst_workspace, inst.persona_profile)
@@ -187,19 +200,38 @@ async def _process_instance(
                         total=total,
                     )
 
-                progress.update(worker_task, description=f"[cyan]{short_id}[/]  ingest 0/{n_sessions}", completed=0, total=n_sessions)
-                await ingest_instance(rt, inst, force=not args.resume, on_progress=_on_progress)
+                progress.update(
+                    worker_task,
+                    description=f"[cyan]{short_id}[/]  ingest 0/{n_sessions}",
+                    completed=0,
+                    total=n_sessions,
+                )
+                await ingest_instance(
+                    rt, inst, force=not args.resume, on_progress=_on_progress
+                )
             elif args.resume_auto:
-                progress.update(worker_task, description=f"[cyan]{short_id}[/]  [yellow]qa-only[/]", completed=0, total=1)
+                progress.update(
+                    worker_task,
+                    description=f"[cyan]{short_id}[/]  [yellow]qa-only[/]",
+                    completed=0,
+                    total=1,
+                )
 
             if args.ingest_only:
                 progress.update(overall_task, advance=1)
                 counter.append(1)
                 return
 
-            progress.update(worker_task, description=f"[cyan]{short_id}[/]  [yellow]agent[/]", completed=0, total=1)
+            progress.update(
+                worker_task,
+                description=f"[cyan]{short_id}[/]  [yellow]agent[/]",
+                completed=0,
+                total=1,
+            )
             result = await run_qa_instance(rt, inst, timeout_s=args.timeout)
-            predicted_label = extract_option_label(result["predicted_answer"], result["all_options"])
+            predicted_label = extract_option_label(
+                result["predicted_answer"], result["all_options"]
+            )
             result["predicted_label"] = predicted_label
             result["is_correct"] = bool(
                 not result["error"] and predicted_label == result["gold_answer"]
@@ -250,11 +282,18 @@ async def _process_instance(
             body.append((result["question"] or "")[:120] + "\n")
             body.append("  pred  ", style="dim")
             pred_style = "bold green" if result["is_correct"] else "bold red"
-            body.append((result["predicted_answer"] or "(empty)")[:120] + "\n", style=pred_style)
+            body.append(
+                (result["predicted_answer"] or "(empty)")[:120] + "\n", style=pred_style
+            )
             body.append("  pick  ", style="dim")
-            body.append(f"{result.get('predicted_label') or '(parse-failed)'}\n", style=pred_style)
+            body.append(
+                f"{result.get('predicted_label') or '(parse-failed)'}\n",
+                style=pred_style,
+            )
             body.append("  gold  ", style="dim")
-            body.append(f"{result['gold_answer']}  {result['gold_option'][:90]}", style="green")
+            body.append(
+                f"{result['gold_answer']}  {result['gold_option'][:90]}", style="green"
+            )
             if result["error"]:
                 body.append(f"\n  err   {result['error']}", style="red")
 
@@ -292,20 +331,28 @@ async def _run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     instances = load_dataset(args.questions, args.contexts)
-    instances = [item for item in instances if item.question_type in SUPPORTED_QUESTION_TYPES]
+    instances = [
+        item for item in instances if item.question_type in SUPPORTED_QUESTION_TYPES
+    ]
     if args.question_type:
         if args.question_type not in SUPPORTED_QUESTION_TYPES:
             choices = ", ".join(SUPPORTED_QUESTION_TYPES)
-            print(f"ERROR: unsupported --type {args.question_type!r}; choices: {choices}")
+            print(
+                f"ERROR: unsupported --type {args.question_type!r}; choices: {choices}"
+            )
             sys.exit(1)
-        instances = [item for item in instances if item.question_type == args.question_type]
+        instances = [
+            item for item in instances if item.question_type == args.question_type
+        ]
     if args.limit > 0:
         instances = instances[: args.limit]
     args._n_total = len(instances)
 
     args.workspace.mkdir(parents=True, exist_ok=True)
     console = Console()
-    console.print(Rule(f"[bold]PersonaMem[/]  {len(instances)} instances  workers={args.workers}"))
+    console.print(
+        Rule(f"[bold]PersonaMem[/]  {len(instances)} instances  workers={args.workers}")
+    )
 
     results: list[dict] = []
     counter: list[int] = []
@@ -348,7 +395,12 @@ async def _run(args: argparse.Namespace) -> None:
     scores = score_results(results)
     overall = scores["overall"]
 
-    table = Table(title=f"Results  —  elapsed {elapsed/3600:.1f}h", show_header=True, header_style="bold", min_width=70)
+    table = Table(
+        title=f"Results  —  elapsed {elapsed/3600:.1f}h",
+        show_header=True,
+        header_style="bold",
+        min_width=70,
+    )
     table.add_column("Question Type", style="cyan", min_width=40)
     table.add_column("acc", justify="right")
     table.add_column("parsed", justify="right")
@@ -388,7 +440,9 @@ async def _run(args: argparse.Namespace) -> None:
         "scores": scores,
         "results": results,
     }
-    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    output.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     console.print(f"\n  Saved → [bold]{output}[/]")
 
 
