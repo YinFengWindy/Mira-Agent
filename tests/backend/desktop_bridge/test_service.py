@@ -40,7 +40,7 @@ async def test_registered_committed_push_requires_its_original_message(tmp_path,
     )
     assert "发送失败" in result
     assert "uncommitted delivery" in result
-    assert SessionManager(tmp_path).get_or_create("role:mira").messages == []
+    assert sessions._store.fetch_session_messages("role:mira") == []
     assert emitted == []
     await service.aclose()
 
@@ -68,7 +68,7 @@ async def test_push_tool_blank_media_cannot_create_empty_desktop_messages(
             channel="desktop", chat_id="mira", message=message, **{field: "   "},
         )
 
-        persisted = SessionManager(tmp_path).get_or_create("role:mira").messages
+        persisted = manager._store.fetch_session_messages("role:mira")
         assert [item["content"] for item in persisted] == ([message] if message else [])
         if message:
             assert result == "文本已发送"
