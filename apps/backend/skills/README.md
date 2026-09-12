@@ -19,7 +19,7 @@
   - 文件：`apps/backend/skills/meme-manage/SKILL.md`
 
 - `create-drift-skill`
-  - 在工作区 drift/skills 下创建或更新 drift skill。
+  - 在当前角色的 `roles/<role-id>/drift/skills` 下创建或更新 drift skill。
   - 文件：`apps/backend/skills/create-drift-skill/SKILL.md`
 
 - `codex-delegate`

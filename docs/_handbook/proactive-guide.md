@@ -37,7 +37,7 @@ Drift 跟 proactive 的**根本区别在于控制方式**：
 
 | | Proactive | Drift |
 |---|---|---|
-| **行为由谁定义** | 固定 system prompt（代码里写死的） | `SKILL.md` 文件（你写的，放在 `drift/skills/` 下） |
+| **行为由谁定义** | 固定 system prompt（代码里写死的） | `SKILL.md` 文件（你写的，放在当前角色的 `roles/<role-id>/drift/skills/` 下） |
 | **做什么** | 分类、筛选、决定推不推 | 你定义什么就做什么（审记忆、问问题、自我诊断...） |
 | **工具** | 推送决策专用工具（mark_*, message_push, finish_turn） | 通用工具（read_file, write_file, fetch_messages, shell...）+ 可 message_push 一次 |
 | **收尾** | finish_turn(decision=reply/skip) | finish_drift(message_result=sent/silent) |
@@ -76,9 +76,9 @@ proactive tick
 | `proactive_sources.json` | **你写** | 声明哪个 MCP server 提供哪类数据（alert/content/context） |
 | `PROACTIVE_CONTEXT.md` | **agent 维护** | 主 agent（被动回复时）通过对话帮你写和改。proactive agent 只读不写 |
 | `schedules.json` | **都行** | 你可以手动写，也可以让主 agent 调内置的 `schedule` 工具增删改 |
-| `drift/skills/*/SKILL.md` | **你写** | Drift 的任务定义。也可以用内置 skill `create-drift-skill` 让 agent 帮你生成 |
+| `roles/<role-id>/drift/skills/*/SKILL.md` | **你写** | 当前角色的 Drift 任务定义。也可以用内置 skill `create-drift-skill` 让 agent 帮你生成 |
 | `memory/*.md` | **agent 维护** | 长期记忆、自我认知、近期上下文——全部由主 agent 通过被动对话自动读写 |
-| `drift/drift.json` | **agent 维护** | Drift runner 自动写运行记录，不用管 |
+| `roles/<role-id>/drift/drift.json` | **agent 维护** | 当前角色的 Drift runner 自动写运行记录，不用管 |
 | `proactive_quota.json` | **agent 维护** | AnyAction gate 自动写配额计数，不用管 |
 
 ### 1. 开启 proactive（config.toml）

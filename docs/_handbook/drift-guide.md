@@ -5,7 +5,7 @@
 Drift 是一个**你写模型可以做什么、模型照着执行**的后台任务系统。
 
 - **什么时候跑**：proactive 拉了一圈啥也没有（无 alert、无 content、无 context fallback）
-- **做什么**：你写在 `drift/skills/<skill-name>/SKILL.md` 里的事
+- **做什么**：你写在当前角色 `roles/<role-id>/drift/skills/<skill-name>/SKILL.md` 里的事
 - **怎么做**：SKILL.md 是一份分步操作指南——先读哪个文件、跑什么脚本、怎么判断、什么时候发消息——模型一步步按着走
 - **跟 proactive 的本质区别**：proactive 的行为是代码里写死的 system prompt，drift 的行为是你写的 SKILL.md
 
@@ -19,7 +19,7 @@ Drift 是一个**你写模型可以做什么、模型照着执行**的后台任�
 tick
   └── DataGateway.run() → 无 alert / 无 content / 无 context
        └── DriftTurnPipeline.run()
-            ├── scan_skills()      读取 drift/skills/*/SKILL.md
+            ├── scan_skills()      读取当前角色 roles/<role-id>/drift/skills/*/SKILL.md
             ├── filter_skills()   跳过 requires_mcp 未满足的 skill
             ├── build_context()   注入记忆、近期上下文、skill 列表
             └── tool_loop(max_steps)
@@ -46,18 +46,18 @@ tick
 
 ## Drift Skill 格式
 
-每个 skill 是一个目录，放在 `~/.shiori/workspace/drift/skills/<skill-name>/` 下，核心文件是 `SKILL.md`。
+每个 skill 是一个目录，放在当前角色的 `~/.shiori/workspace/roles/<role-id>/drift/skills/<skill-name>/` 下，核心文件是 `SKILL.md`。不同角色各自维护自己的 Drift skill 和运行状态。
 
 ### 哪些文件你写、哪些 agent 写
 
 | 文件 | 维护方式 | 说明 |
 |------|---------|------|
-| `drift/skills/<name>/SKILL.md` | **你写** | drift 任务定义，agent 每轮当 system prompt 读。也可以让主 agent 用内置 skill `create-drift-skill` 帮你生成 |
-| `drift/skills/<name>/state.json` | **agent 写** | skill 执行时自动更新状态，不用管 |
-| `drift/skills/<name>/*.md` | **agent 写** | 工作文件（audited.md、queue.md、backlog.md 等），skill 执行时自动读写 |
-| `drift/skills/<name>/scripts/*.py` | **你写** | 固定脚本，skill 通过 `shell` 工具调用 |
-| `drift/drift.json` | **agent 写** | DriftTurnPipeline 自动写运行记录（recent_runs），不用管 |
-| `drift/drift_note.md` | **agent 写** | 跨轮次的自由笔记，agent 可读可写 |
+| `roles/<role-id>/drift/skills/<name>/SKILL.md` | **你写** | 当前角色的 drift 任务定义，agent 每轮当 system prompt 读。也可以让主 agent 用内置 skill `create-drift-skill` 帮你生成 |
+| `roles/<role-id>/drift/skills/<name>/state.json` | **agent 写** | 当前角色的 skill 执行时自动更新状态，不用管 |
+| `roles/<role-id>/drift/skills/<name>/*.md` | **agent 写** | 当前角色的工作文件（audited.md、queue.md、backlog.md 等），skill 执行时自动读写 |
+| `roles/<role-id>/drift/skills/<name>/scripts/*.py` | **你写** | 当前角色固定脚本，skill 通过 `shell` 工具调用 |
+| `roles/<role-id>/drift/drift.json` | **agent 写** | 当前角色的 DriftTurnPipeline 自动写运行记录（recent_runs），不用管 |
+| `roles/<role-id>/drift/drift_note.md` | **agent 写** | 当前角色跨轮次的自由笔记，agent 可读可写 |
 
 内置了一个 skill 放仓库里（`apps/backend/skills/`），用来创建新的 drift skill。
 
@@ -183,7 +183,7 @@ description: 每天备份一次 conversation 精华到 notion
 4. 没有新内容 → 静默结束
 
 ## 工作文件
-- `skills/my-skill/last_sync.md`：上次同步时间
+- `roles/<role-id>/drift/skills/my-skill/last_sync.md`：当前角色上次同步时间
 
 ## 要求
 - 不调用 message_push（此 skill 纯后台）

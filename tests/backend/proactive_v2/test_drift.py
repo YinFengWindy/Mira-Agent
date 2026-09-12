@@ -145,15 +145,15 @@ def _make_drift_pipeline(
     )
 
 
-def test_drift_tool_schemas_include_reused_tools():
+def test_drift_tool_schemas_include_reused_tools(tmp_path: Path):
     ctx = AgentTickContext(now_utc=datetime.now(timezone.utc))
     names = {
         schema["function"]["name"]
         for schema in build_drift_tool_registry(
             ctx=ctx,
             deps=DriftToolDeps(
-                drift_dir=Path("."),
-                store=DriftStateStore(Path(".")),
+                drift_dir=tmp_path,
+                store=DriftStateStore(tmp_path),
                 shared_tools=_build_shared_tools(),
             ),
         ).get_schemas()
