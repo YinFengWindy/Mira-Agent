@@ -5,13 +5,13 @@
   "venv": ".venv",
   "extraPaths": [
     "apps/backend",
-    "packages/plugin-testkit/src"
+    "packages/shiori-plugin-testkit/src"
   ],
   "include": [
     "tests/backend",
     "plugins",
     "tests/support",
-    "packages/plugin-testkit/tests"
+    "packages/shiori-plugin-testkit/tests"
   ],
   "exclude": [
     ".venv",

@@ -317,7 +317,7 @@ def main() -> None:
         )
     host = build_wheel(REPOSITORY, wheelhouse, artifact_root / "build-host.log")
     kit = build_wheel(
-        REPOSITORY / "packages/plugin-testkit",
+        REPOSITORY / "packages/shiori-plugin-testkit",
         wheelhouse,
         artifact_root / "build-testkit.log",
     )

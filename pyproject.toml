@@ -37,4 +37,4 @@ dev = [
 
 [tool.uv.sources]
 shiori-plugin-default-memory = { path = "plugins/default_memory", editable = true }
-shiori-plugin-testkit = { path = "packages/plugin-testkit", editable = true }
+shiori-plugin-testkit = { path = "packages/shiori-plugin-testkit", editable = true }

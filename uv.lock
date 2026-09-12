@@ -1555,7 +1555,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0.0" },
     { name = "rich", specifier = ">=15.0.0" },
     { name = "ruff", specifier = ">=0.15" },
-    { name = "shiori-plugin-testkit", editable = "packages/plugin-testkit" },
+    { name = "shiori-plugin-testkit", editable = "packages/shiori-plugin-testkit" },
 ]
 
 [[package]]
@@ -1576,7 +1576,7 @@ provides-extras = ["test"]
 [[package]]
 name = "shiori-plugin-testkit"
 version = "0.1.0"
-source = { editable = "packages/plugin-testkit" }
+source = { editable = "packages/shiori-plugin-testkit" }
 dependencies = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
