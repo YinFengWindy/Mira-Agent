@@ -8,6 +8,7 @@ from typing import Any
 
 from .models import Session
 
+
 class _PersistenceMixin:
     def _load(self, key: str) -> Session | None:
         meta = self._store.get_session_meta(key)

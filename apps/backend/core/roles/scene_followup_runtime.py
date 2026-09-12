@@ -164,7 +164,9 @@ class SceneFollowupRuntime:
         return self._workspace / "roles" / role_id / "state" / _STATE_FILE
 
     def _read(self, role_id: str) -> dict[str, Any] | None:
-        payload = load_json(self._state_path(role_id), default=None, domain="role.scene_followup")
+        payload = load_json(
+            self._state_path(role_id), default=None, domain="role.scene_followup"
+        )
         if not isinstance(payload, dict):
             return None
         return payload

@@ -120,7 +120,11 @@ def append_tool_result(
         }
     )
     if result.content_blocks:
-        prefix = f"以下是工具 {tool_name} 读取到的文件内容，请直接查看。" if tool_name else "以下是工具读取到的文件内容，请直接查看。"
+        prefix = (
+            f"以下是工具 {tool_name} 读取到的文件内容，请直接查看。"
+            if tool_name
+            else "以下是工具读取到的文件内容，请直接查看。"
+        )
         messages.append(
             {
                 "role": "user",

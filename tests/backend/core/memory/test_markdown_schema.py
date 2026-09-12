@@ -47,6 +47,5 @@ def test_replace_memory_section_appends_missing_section_without_rewriting_custom
     replace_memory_section(path, "## 我的性格与形象", "- 新增内容")
 
     assert path.read_text(encoding="utf-8") == (
-        "# 自定义标题\n\n保留用户编辑。\n\n"
-        "## 我的性格与形象\n\n- 新增内容\n"
+        "# 自定义标题\n\n保留用户编辑。\n\n" "## 我的性格与形象\n\n- 新增内容\n"
     )

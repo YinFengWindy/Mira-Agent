@@ -41,7 +41,9 @@ def record_tick_log_finish(
     decision = result.decision if result is not None else ctx.terminal_action
     if ctx.drift_entered and result is None and decision is None:
         decision = "reply" if ctx.drift_message_sent else "skip"
-    trace_extra = result.trace.extra if result is not None and result.trace is not None else {}
+    trace_extra = (
+        result.trace.extra if result is not None and result.trace is not None else {}
+    )
     skip_reason = str(trace_extra.get("skip_reason") or ctx.skip_reason or "")
     final_message = ""
     if result is not None and result.outbound is not None:

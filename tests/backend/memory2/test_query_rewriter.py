@@ -27,12 +27,10 @@ def test_gate_decision_is_dataclass_with_required_fields():
 
 @pytest.mark.asyncio
 async def test_decide_retrieve_when_llm_says_retrieve():
-    rewriter = _make_rewriter(
-        """
+    rewriter = _make_rewriter("""
 <decision>RETRIEVE</decision>
 <history_query>用户的B站下载偏好历史</history_query>
-"""
-    )
+""")
     result = await rewriter.decide(user_msg="把这个B站视频下载下来", recent_history="")
     assert result.needs_episodic is True
     assert result.episodic_query == "用户的B站下载偏好历史"
@@ -40,12 +38,10 @@ async def test_decide_retrieve_when_llm_says_retrieve():
 
 @pytest.mark.asyncio
 async def test_decide_no_retrieve_for_greeting():
-    rewriter = _make_rewriter(
-        """
+    rewriter = _make_rewriter("""
 <decision>NO_RETRIEVE</decision>
 <history_query>你好</history_query>
-"""
-    )
+""")
     result = await rewriter.decide(user_msg="你好", recent_history="")
     assert result.needs_episodic is False
 
@@ -121,12 +117,10 @@ async def test_decide_cleans_empty_procedure_query_sentinels():
 @pytest.mark.asyncio
 async def test_episodic_query_never_empty_on_retrieve():
     """needs_episodic=True 时，episodic_query 不能是空串。"""
-    rewriter = _make_rewriter(
-        """
+    rewriter = _make_rewriter("""
 <decision>RETRIEVE</decision>
 <history_query></history_query>
-"""
-    )
+""")
     result = await rewriter.decide(user_msg="帮我查一下", recent_history="")
     assert result.needs_episodic is True
     assert result.episodic_query
@@ -142,10 +136,7 @@ async def test_recent_history_injected_into_llm_prompt():
         captured_prompt.append(
             "\n".join(str(message.get("content", "")) for message in messages)
         )
-        return (
-            "<decision>RETRIEVE</decision>"
-            "<history_query>q</history_query>"
-        )
+        return "<decision>RETRIEVE</decision>" "<history_query>q</history_query>"
 
     client.chat = AsyncMock(side_effect=_capture)
     rewriter = QueryRewriter(llm_client=client)
@@ -159,12 +150,10 @@ async def test_recent_history_injected_into_llm_prompt():
 
 @pytest.mark.asyncio
 async def test_latency_ms_is_non_negative_int():
-    rewriter = _make_rewriter(
-        """
+    rewriter = _make_rewriter("""
 <decision>RETRIEVE</decision>
 <history_query>q</history_query>
-"""
-    )
+""")
     result = await rewriter.decide(user_msg="test", recent_history="")
     assert isinstance(result.latency_ms, int)
     assert result.latency_ms >= 0

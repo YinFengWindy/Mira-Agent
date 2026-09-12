@@ -95,7 +95,9 @@ class Memorizer:
                 role_id=role_id,
             )
             if memory_type == "procedure":
-                merge_target = self._pick_explicit_merge_target(similar, extra, merge_threshold)
+                merge_target = self._pick_explicit_merge_target(
+                    similar, extra, merge_threshold
+                )
                 if merge_target is not None:
                     merged_summary = self._merge_summary_text(
                         merge_target.get("summary", ""),
@@ -122,7 +124,9 @@ class Memorizer:
                 self._store.mark_superseded_batch(supersede_ids)
                 logger.info(
                     "memorizer save_with_supersede: superseded %d %s items: %s",
-                    len(supersede_ids), memory_type, supersede_ids,
+                    len(supersede_ids),
+                    memory_type,
+                    supersede_ids,
                 )
 
         elif memory_type == "profile":
@@ -136,7 +140,8 @@ class Memorizer:
                     role_id=role_id,
                 )
                 same_cat = [
-                    item for item in similar
+                    item
+                    for item in similar
                     if isinstance(extra_json := item.get("extra_json"), dict)
                     and extra_json.get("category") == category
                     and isinstance(score := item.get("score"), int | float)
@@ -155,7 +160,9 @@ class Memorizer:
                     self._store.mark_superseded_batch(supersede_ids)
                     logger.info(
                         "memorizer save_with_supersede: superseded %d profile/%s items: %s",
-                        len(supersede_ids), category, supersede_ids,
+                        len(supersede_ids),
+                        category,
+                        supersede_ids,
                     )
 
         return self._store.upsert_item(
@@ -328,14 +335,16 @@ class Memorizer:
 
         # 构建更新后的 extra_json
         new_extra = dict(old_extra)
-        new_extra["_merge_note"] = merged_summary   # 溯源：记录 merge 时的摘要
+        new_extra["_merge_note"] = merged_summary  # 溯源：记录 merge 时的摘要
         if extra_patch:
             if extra_patch.get("tool_requirement"):
                 new_extra["tool_requirement"] = extra_patch.get("tool_requirement")
             if extra_patch.get("steps"):
                 merged_steps: list[str] = []
                 seen_steps: set[str] = set()
-                for step in (old_extra.get("steps") or []) + (extra_patch.get("steps") or []):
+                for step in (old_extra.get("steps") or []) + (
+                    extra_patch.get("steps") or []
+                ):
                     text = str(step or "").strip()
                     if not text or text in seen_steps:
                         continue
@@ -344,6 +353,7 @@ class Memorizer:
                 new_extra["steps"] = merged_steps
         if memory_type == "procedure":
             from memory2.rule_schema import build_procedure_rule_schema
+
             new_extra["rule_schema"] = build_procedure_rule_schema(
                 summary=merged_summary,
                 tool_requirement=new_extra.get("tool_requirement"),

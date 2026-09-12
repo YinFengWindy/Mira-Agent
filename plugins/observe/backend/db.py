@@ -98,6 +98,7 @@ CREATE INDEX IF NOT EXISTS ix_gerr_type ON global_errors (error_type, last_ts);
 
 """
 
+
 def open_db(db_path: Path) -> sqlite3.Connection:
     """打开（或新建）observe.db，初始化 schema，返回连接。"""
     db_path.parent.mkdir(parents=True, exist_ok=True)

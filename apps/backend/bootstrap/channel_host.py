@@ -27,12 +27,18 @@ class ChannelHandoverError(RuntimeError):
     def __init__(self, failure: ChannelFailure, degraded: list[ChannelFailure]) -> None:
         self.failure = failure
         self.degraded = degraded
-        super().__init__(f"Channel {failure.channel} {failure.phase} failed: {failure.message}")
+        super().__init__(
+            f"Channel {failure.channel} {failure.phase} failed: {failure.message}"
+        )
 
     def to_details(self):
         """Returns actionable connection status without reporting successful rollback."""
         from dataclasses import asdict
-        return {"failure": asdict(self.failure), "degraded": [asdict(item) for item in self.degraded]}
+
+        return {
+            "failure": asdict(self.failure),
+            "degraded": [asdict(item) for item in self.degraded],
+        }
 
 
 def _failure(name: str, phase: str, error: BaseException) -> ChannelFailure:
@@ -65,7 +71,9 @@ class ChannelHost:
         """Returns an existing connection when its effective configuration is unchanged."""
         if self._configurations.get(name) != configuration:
             return None
-        return next((channel for channel in self._channels if channel.name == name), None)
+        return next(
+            (channel for channel in self._channels if channel.name == name), None
+        )
 
     def requires_exclusive_handover(self, candidate: ChannelHost) -> bool:
         """Requires accepted work to drain before a channel name changes connection."""
@@ -94,13 +102,18 @@ class ChannelHost:
             channel.resume_intake()
 
     async def handover(
-        self, candidate: ChannelHost, *, commit: Callable[[], None] | None = None,
+        self,
+        candidate: ChannelHost,
+        *,
+        commit: Callable[[], None] | None = None,
         retire_after: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """Switches changed connections under the send barrier and rolls back failures."""
         async with self._transport_lock:
             parked = await self.handover_channels(
-                candidate, commit=commit, retain_removed=retire_after is not None,
+                candidate,
+                commit=commit,
+                retain_removed=retire_after is not None,
             )
             if parked and retire_after is not None:
                 for channel in parked:
@@ -112,19 +125,38 @@ class ChannelHost:
                 )
 
     async def handover_channels(
-        self, candidate: ChannelHost, *, commit: Callable[[], None] | None = None,
+        self,
+        candidate: ChannelHost,
+        *,
+        commit: Callable[[], None] | None = None,
         retain_removed: bool = False,
     ) -> list[Channel]:
         """Transfers connection ownership; callers must hold the transport barrier."""
         candidate_names = {channel.name for channel in candidate.channels}
-        retired_replaced = [channel for name, channel in self._retired_transports.items() if name in candidate_names]
-        removed = [channel for channel in self._channels if channel not in candidate.channels]
+        retired_replaced = [
+            channel
+            for name, channel in self._retired_transports.items()
+            if name in candidate_names
+        ]
+        removed = [
+            channel for channel in self._channels if channel not in candidate.channels
+        ]
         removed.extend(retired_replaced)
-        parked = [channel for channel in removed if retain_removed and channel.name not in candidate_names]
+        parked = [
+            channel
+            for channel in removed
+            if retain_removed and channel.name not in candidate_names
+        ]
         for channel in parked:
-            if not callable(getattr(channel, "pause_intake", None)) or not callable(getattr(channel, "resume_intake", None)):
-                raise ValueError(f"Channel {channel.name} does not support draining removal")
-        added = [channel for channel in candidate.channels if channel not in self._channels]
+            if not callable(getattr(channel, "pause_intake", None)) or not callable(
+                getattr(channel, "resume_intake", None)
+            ):
+                raise ValueError(
+                    f"Channel {channel.name} does not support draining removal"
+                )
+        added = [
+            channel for channel in candidate.channels if channel not in self._channels
+        ]
         stopped = []
         attempted = []
         current_name = "configuration"
@@ -141,7 +173,9 @@ class ChannelHost:
             for channel in added:
                 current_name = channel.name
                 attempted.append(channel)
-                await channel.start(replace(candidate._ctx_factory(channel), intake_paused=True))
+                await channel.start(
+                    replace(candidate._ctx_factory(channel), intake_paused=True)
+                )
             phase = "resume"
             for channel in candidate.channels:
                 current_name = channel.name
@@ -160,7 +194,9 @@ class ChannelHost:
                 try:
                     channel.pause_intake()
                 except BaseException as pause_error:
-                    degraded.append(_failure(channel.name, "candidate_pause", pause_error))
+                    degraded.append(
+                        _failure(channel.name, "candidate_pause", pause_error)
+                    )
             # A failed stop has uncertain external state; do not create a duplicate connection.
             if phase == "stop":
                 degraded.append(failure)
@@ -168,7 +204,9 @@ class ChannelHost:
                 try:
                     await channel.stop()
                 except BaseException as cleanup_error:
-                    degraded.append(_failure(channel.name, "candidate_cleanup", cleanup_error))
+                    degraded.append(
+                        _failure(channel.name, "candidate_cleanup", cleanup_error)
+                    )
             unsafe_names = {item.channel for item in degraded}
             for channel in reversed(stopped):
                 if channel.name in unsafe_names:
@@ -177,7 +215,9 @@ class ChannelHost:
                     await channel.start(self._ctx_factory(channel))
                     if channel in retired_replaced:
                         channel.pause_intake()
-                        self._ctx_factory(channel).push_tool.retire_channel(channel.name)
+                        self._ctx_factory(channel).push_tool.retire_channel(
+                            channel.name
+                        )
                 except BaseException as restore_error:
                     degraded.append(_failure(channel.name, "restore", restore_error))
             unsafe_names = {item.channel for item in degraded}
@@ -189,7 +229,9 @@ class ChannelHost:
                 except BaseException as resume_error:
                     degraded.append(_failure(channel.name, "resume", resume_error))
             self._failures.extend(degraded)
-            if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+            if isinstance(
+                error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)
+            ):
                 raise
             if phase == "commit" and not degraded:
                 raise

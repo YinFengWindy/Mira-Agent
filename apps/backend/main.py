@@ -93,10 +93,12 @@ async def inspect_modules(
     finally:
         steps = []
         if runtime is not None:
-            steps.extend([
-                ("core.stop", runtime.stop),
-                ("memory.aclose", runtime.memory_runtime.aclose),
-            ])
+            steps.extend(
+                [
+                    ("core.stop", runtime.stop),
+                    ("memory.aclose", runtime.memory_runtime.aclose),
+                ]
+            )
         steps.append(("http.aclose", http_resources.aclose))
         await run_cleanup_steps(*steps)
 
@@ -108,7 +110,9 @@ async def serve_bridge(
     configure_logging_stream(sys.stderr)
     from desktop_bridge.config_transaction import ConfigTransaction
 
-    ConfigTransaction(Path(config_path), workspace or resolve_default_workspace()).recover()
+    ConfigTransaction(
+        Path(config_path), workspace or resolve_default_workspace()
+    ).recover()
     runtime = build_app_runtime(
         Config.load(config_path),
         workspace=workspace or resolve_default_workspace(),
@@ -119,7 +123,9 @@ async def serve_bridge(
         core_runtime = runtime.core
         if core_runtime is None:
             raise RuntimeError("desktop bridge runtime 未正确初始化 core")
-        server = DesktopBridgeServer(core_runtime, app=runtime, config_path=Path(config_path))
+        server = DesktopBridgeServer(
+            core_runtime, app=runtime, config_path=Path(config_path)
+        )
         await server.serve_stdio()
     finally:
         await runtime.shutdown()

@@ -10,7 +10,9 @@ def test_session_manager_exposes_shared_conversation_store(tmp_path: Path) -> No
     manager = SessionManager(tmp_path)
 
     assert manager.conversation_store.db_path == str(tmp_path / "sessions.db")
-    assert manager.conversation_store.get_thread_by_legacy_session_key("role:mira") is None
+    assert (
+        manager.conversation_store.get_thread_by_legacy_session_key("role:mira") is None
+    )
 
 
 def test_full_message_sync_preserves_conversation_columns(tmp_path: Path) -> None:
@@ -34,7 +36,9 @@ def test_full_message_sync_preserves_conversation_columns(tmp_path: Path) -> Non
     assert persisted[0]["delivery_status"] == "sent"
 
 
-def test_role_session_persistence_refreshes_source_thread_projection(tmp_path: Path) -> None:
+def test_role_session_persistence_refreshes_source_thread_projection(
+    tmp_path: Path,
+) -> None:
     manager = SessionManager(tmp_path)
     thread = ConversationService(manager).ensure_thread_for_session(
         LegacySessionDescriptor(

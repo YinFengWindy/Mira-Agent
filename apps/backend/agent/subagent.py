@@ -45,8 +45,7 @@ _REFLECT_PROMPT_WARN = (
     "禁止把工具调用失败的原因写进最终回复，遇到失败时换个方式或跳过该步骤。"
 )
 _REFLECT_PROMPT_LAST = (
-    "⚠️ 步骤预算将在下一步耗尽。请立即优先完成核心目标，"
-    "下一步将进入强制收尾。"
+    "⚠️ 步骤预算将在下一步耗尽。请立即优先完成核心目标，" "下一步将进入强制收尾。"
 )
 _CLEANUP_PROMPT = (
     "步骤预算已耗尽，进入强制收尾阶段。\n"
@@ -209,10 +208,7 @@ class SubAgent:
                     tool_batch=tool_batch,
                     tool_batch_index=tool_batch_index,
                 )
-                if (
-                    exec_result.status == "success"
-                    and tc.name not in self.tools_called
-                ):
+                if exec_result.status == "success" and tc.name not in self.tools_called:
                     self.tools_called.append(tc.name)
                 normalized = normalize_tool_result(exec_result.output)
                 logger.info(
@@ -244,7 +240,7 @@ class SubAgent:
                         tc.name,
                     )
                     self.last_exit_reason = "tool_loop"
-                    for skipped in response.tool_calls[tool_batch_index + 1:]:
+                    for skipped in response.tool_calls[tool_batch_index + 1 :]:
                         append_tool_result(
                             messages,
                             tool_call_id=skipped.id,

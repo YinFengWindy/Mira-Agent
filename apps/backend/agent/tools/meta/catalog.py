@@ -12,9 +12,7 @@ class MetaToolGroup:
 META_TOOLBOX_GROUPS: tuple[MetaToolGroup, ...] = (
     MetaToolGroup(
         title="Meta",
-        tools=(
-            ("tool_search", "搜索并解锁其他工具"),
-        ),
+        tools=(("tool_search", "搜索并解锁其他工具"),),
     ),
     MetaToolGroup(
         title="Read",

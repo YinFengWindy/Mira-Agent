@@ -66,15 +66,17 @@ def adapt_png_bytes(
         description=preview.description,
         profile=preview.profile,
         assets=(
-            *default_assets,
-            *(
-                candidate
-                for candidate in preview.assets
-                if candidate.path != "ccdefault:"
-            ),
-        )
-        if default_assets
-        else (asset, *preview.assets),
+            (
+                *default_assets,
+                *(
+                    candidate
+                    for candidate in preview.assets
+                    if candidate.path != "ccdefault:"
+                ),
+            )
+            if default_assets
+            else (asset, *preview.assets)
+        ),
         report=preview.report,
         provenance=preview.provenance,
     )

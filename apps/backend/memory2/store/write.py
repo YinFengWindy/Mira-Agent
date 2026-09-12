@@ -347,8 +347,12 @@ class _StoreWriteMixin:
                            reinforcement=reinforcement+1, updated_at=?
                        WHERE id=?""",
                     (
-                        new_summary, new_hash, json.dumps(new_embedding),
-                        json.dumps(new_extra), _now_iso(), item_id,
+                        new_summary,
+                        new_hash,
+                        json.dumps(new_embedding),
+                        json.dumps(new_extra),
+                        _now_iso(),
+                        item_id,
                     ),
                 )
             else:
@@ -357,7 +361,13 @@ class _StoreWriteMixin:
                        SET summary=?, content_hash=?, embedding=?,
                            reinforcement=reinforcement+1, updated_at=?
                        WHERE id=?""",
-                    (new_summary, new_hash, json.dumps(new_embedding), _now_iso(), item_id),
+                    (
+                        new_summary,
+                        new_hash,
+                        json.dumps(new_embedding),
+                        _now_iso(),
+                        item_id,
+                    ),
                 )
             self._db.commit()
 
@@ -400,7 +410,15 @@ class _StoreWriteMixin:
             (memory_type,),
         ).fetchall()
         result = []
-        for row_id, mtype, summary, extra_json, happened_at, reinforcement, emotional_weight in rows:
+        for (
+            row_id,
+            mtype,
+            summary,
+            extra_json,
+            happened_at,
+            reinforcement,
+            emotional_weight,
+        ) in rows:
             result.append(
                 {
                     "id": row_id,

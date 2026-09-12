@@ -117,7 +117,9 @@ class AgentTickFactory:
                 return session_key
         except Exception:
             pass
-        default_role_id = str(getattr(self._deps.cfg, "default_role_id", "") or "").strip()
+        default_role_id = str(
+            getattr(self._deps.cfg, "default_role_id", "") or ""
+        ).strip()
         if default_role_id:
             return f"role:{default_role_id}"
         raise RuntimeError("default_role_id required for proactive session key")
@@ -210,6 +212,7 @@ class AgentTickFactory:
         async def alert_ack_fn(compound_key: str) -> None:
             """Alert 专用通道，走 acknowledge_events（非 content entries）。"""
             import types as _types
+
             parts = compound_key.split(":", 1)
             if len(parts) != 2:
                 return
@@ -294,10 +297,14 @@ class AgentTickFactory:
 
         async def send_message(content: str, media: list[str] | None = None) -> bool:
             media_paths = list(media or [])
-            delivery_key = sha1((content[:500] + "|".join(media_paths[:5])).encode()).hexdigest()[:16]
+            delivery_key = sha1(
+                (content[:500] + "|".join(media_paths[:5])).encode()
+            ).hexdigest()[:16]
             result = TurnResult(
                 decision="reply",
-                outbound=TurnOutbound(session_key=session_key, content=content, media=media_paths),
+                outbound=TurnOutbound(
+                    session_key=session_key, content=content, media=media_paths
+                ),
                 trace=TurnTrace(source="proactive", extra={"source_mode": "drift"}),
                 success_side_effects=[
                     _SideEffect(

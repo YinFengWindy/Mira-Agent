@@ -41,25 +41,36 @@ class ContextSourceFormatError(ValueError):
 # Compatibility tombstones
 # ---------------------------------------------------------------------------
 
+
 def poll_content_feeds() -> None:
-    raise RuntimeError("mcp_sources.sync API 已移除，请使用 poll_content_feeds_async + McpClientPool")
+    raise RuntimeError(
+        "mcp_sources.sync API 已移除，请使用 poll_content_feeds_async + McpClientPool"
+    )
 
 
 def fetch_alert_events() -> list[dict]:
-    raise RuntimeError("mcp_sources.sync API 已移除，请使用 fetch_alert_events_async + McpClientPool")
+    raise RuntimeError(
+        "mcp_sources.sync API 已移除，请使用 fetch_alert_events_async + McpClientPool"
+    )
 
 
 def fetch_content_events() -> list[dict]:
-    raise RuntimeError("mcp_sources.sync API 已移除，请使用 fetch_content_events_async + McpClientPool")
+    raise RuntimeError(
+        "mcp_sources.sync API 已移除，请使用 fetch_content_events_async + McpClientPool"
+    )
 
 
 def fetch_context_data() -> list[dict]:
-    raise RuntimeError("mcp_sources.sync API 已移除，请使用 fetch_context_data_async + McpClientPool")
+    raise RuntimeError(
+        "mcp_sources.sync API 已移除，请使用 fetch_context_data_async + McpClientPool"
+    )
 
 
 def acknowledge_events(events: list[AlertEvent]) -> None:
     _ = events
-    raise RuntimeError("mcp_sources.sync API 已移除，请使用 acknowledge_events_async + McpClientPool")
+    raise RuntimeError(
+        "mcp_sources.sync API 已移除，请使用 acknowledge_events_async + McpClientPool"
+    )
 
 
 def acknowledge_content_entries(
@@ -75,6 +86,7 @@ def acknowledge_content_entries(
 # ---------------------------------------------------------------------------
 # Config loaders
 # ---------------------------------------------------------------------------
+
 
 def _load_sources(workspace: Path) -> list[dict]:
     path = workspace / "proactive_sources.json"
@@ -113,9 +125,11 @@ class McpClientPool:
 
     def __init__(self, workspace: Path | None = None) -> None:
         self._workspace = workspace or resolve_default_workspace()
-        self._clients: dict[str, Any] = {}               # server -> McpClient
+        self._clients: dict[str, Any] = {}  # server -> McpClient
         self._configs: dict[str, tuple[list, dict]] = {}  # server -> (command, env)
-        self._locks: dict[str, asyncio.Lock] = {}         # server -> per-server lock（MCP stdio 不支持并发调用）
+        self._locks: dict[str, asyncio.Lock] = (
+            {}
+        )  # server -> per-server lock（MCP stdio 不支持并发调用）
 
     async def connect_all(self) -> None:
         """按当前配置连接所有 server，连接失败的 server 跳过。"""
@@ -319,13 +333,17 @@ async def _fetch_by_channel_async(pool: McpClientPool, *, channel: str) -> list[
                 # 4a. context 通道不看 kind，直接把返回值规范成 list[dict]。
                 items = _extract_context_items(data, server=server)
                 result.extend(items)
-                logger.debug("[mcp_sources] context 源 %s 返回 %d 条", server, len(items))
+                logger.debug(
+                    "[mcp_sources] context 源 %s 返回 %d 条", server, len(items)
+                )
             else:
                 # 4b. alert/content 通道要求远端返回 proactive event 列表，
                 #     再按 kind 过滤出当前通道的事件。
                 events = _extract_proactive_events(data, server=server, kind=channel)
                 result.extend(events)
-                logger.debug("[mcp_sources] %s 返回 %d 条 %s 事件", server, len(events), channel)
+                logger.debug(
+                    "[mcp_sources] %s 返回 %d 条 %s 事件", server, len(events), channel
+                )
         except Exception as e:
             # 5. 单个源失败只记日志，不阻断其他源。
             logger.warning(
@@ -381,11 +399,16 @@ async def poll_content_feeds_async(pool: McpClientPool) -> None:
             result = await pool.call(server, poll_tool, {}, timeout=_POLL_TOOL_TIMEOUT)
             if isinstance(result, str) and result.startswith("error:"):
                 raise RuntimeError(f"poll_feeds 系统级失败: {result}")
-            logger.info("[mcp_sources] poll_content_feeds: %s.%s 完成", server, poll_tool)
+            logger.info(
+                "[mcp_sources] poll_content_feeds: %s.%s 完成", server, poll_tool
+            )
         except Exception as e:
             logger.warning(
                 "[mcp_sources] poll_content_feeds: %s.%s 失败: %s",
-                server, poll_tool, e, exc_info=True,
+                server,
+                poll_tool,
+                e,
+                exc_info=True,
             )
             failed_servers.append(server)
     if failed_servers:
@@ -406,7 +429,13 @@ async def acknowledge_events_async(pool: McpClientPool, events: list) -> None:
             continue
         try:
             await pool.call(server, ack_tool, {"event_ids": ids})
-            logger.info("[mcp_sources] acked %d 事件 via %s.%s ids=%s", len(ids), server, ack_tool, ids)
+            logger.info(
+                "[mcp_sources] acked %d 事件 via %s.%s ids=%s",
+                len(ids),
+                server,
+                ack_tool,
+                ids,
+            )
         except Exception as e:
             logger.warning("[mcp_sources] ack failed %s.%s: %s", server, ack_tool, e)
 
@@ -436,4 +465,6 @@ async def acknowledge_content_entries_async(
         try:
             await pool.call(server, ack_tool, args)
         except Exception as e:
-            logger.warning("[mcp_sources] content ack failed %s.%s: %s", server, ack_tool, e)
+            logger.warning(
+                "[mcp_sources] content ack failed %s.%s: %s", server, ack_tool, e
+            )

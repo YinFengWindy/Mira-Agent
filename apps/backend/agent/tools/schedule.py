@@ -241,9 +241,7 @@ class CancelScheduleTool(Tool):
 
         if job_id:
             all_ids = [
-                job.id
-                for job in self._service.list_jobs()
-                if job.role_id == role_id
+                job.id for job in self._service.list_jobs() if job.role_id == role_id
             ]
             matches = [
                 jid for jid in all_ids if jid == job_id or jid.startswith(job_id)

@@ -8,6 +8,7 @@ from .models import Session
 
 from .helpers import _ROLE_SESSION_PREFIX
 
+
 class _RoleSessionsMixin:
     def role_session_key(self, role_id: str) -> str:
         clean_role_id = str(role_id).strip()
@@ -33,6 +34,7 @@ class _RoleSessionsMixin:
             session.metadata["role_runtime_config"] = dict(role_runtime_config)
         self.save(session)
         return session
+
     def update_role_session_display_state(
         self,
         role_id: str,

@@ -69,9 +69,7 @@ def normalize_observation_result(
 
     risks = _normalize_risks(value.get("risks"))
     targets = _parse_targets(frame, value.get("targets"))
-    interface_summary = safe_observation_text(
-        value.get("interface_summary"), limit=400
-    )
+    interface_summary = safe_observation_text(value.get("interface_summary"), limit=400)
     activity_key = safe_observation_text(value.get("activity_key"), limit=80)
     return {
         "frame_id": frame.frame_id,
@@ -135,9 +133,7 @@ def _parse_targets(
             or not 0 <= confidence <= 1
         ):
             raise ValueError("观察目标结构无效")
-        targets.append(
-            {"label": label, "x": x, "y": y, "confidence": confidence}
-        )
+        targets.append({"label": label, "x": x, "y": y, "confidence": confidence})
         if len(targets) > 30:
             raise ValueError("观察目标数量超过限制")
     return targets

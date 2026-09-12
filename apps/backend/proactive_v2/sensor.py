@@ -62,7 +62,12 @@ class Sensor:
         default_role_id = str(getattr(self._cfg, "default_role_id", "") or "").strip()
         preferred_channel = str(getattr(self._cfg, "default_channel", "") or "").strip()
         preferred_chat_id = str(getattr(self._cfg, "default_chat_id", "") or "").strip()
-        if default_role_id and not preferred_channel and not preferred_chat_id and len(transports) > 1:
+        if (
+            default_role_id
+            and not preferred_channel
+            and not preferred_chat_id
+            and len(transports) > 1
+        ):
             raise RuntimeError(
                 f"default_role_id 存在多个 transport 绑定，必须显式配置 target.channel/chat_id: {default_role_id}"
             )
@@ -74,8 +79,12 @@ class Sensor:
         """Returns the preferred target followed by every bound role transport."""
         default_role_id = str(getattr(self._cfg, "default_role_id", "") or "").strip()
         if default_role_id:
-            preferred_channel = str(getattr(self._cfg, "default_channel", "") or "").strip()
-            preferred_chat_id = str(getattr(self._cfg, "default_chat_id", "") or "").strip()
+            preferred_channel = str(
+                getattr(self._cfg, "default_channel", "") or ""
+            ).strip()
+            preferred_chat_id = str(
+                getattr(self._cfg, "default_chat_id", "") or ""
+            ).strip()
             role_bindings = (
                 [
                     binding
@@ -86,9 +95,13 @@ class Sensor:
                 else []
             )
             if not role_bindings and preferred_channel == "desktop":
-                return [(preferred_channel, preferred_chat_id or f"role:{default_role_id}")]
+                return [
+                    (preferred_channel, preferred_chat_id or f"role:{default_role_id}")
+                ]
             if self._role_bindings is None:
-                raise RuntimeError(f"default_role_id 缺少 binding 服务: {default_role_id}")
+                raise RuntimeError(
+                    f"default_role_id 缺少 binding 服务: {default_role_id}"
+                )
             if not role_bindings:
                 raise KeyError(f"default_role_id 未绑定 transport: {default_role_id}")
 
@@ -107,9 +120,8 @@ class Sensor:
 
             if preferred_channel and preferred_chat_id:
                 for binding in role_bindings:
-                    if (
-                        binding.channel == preferred_channel
-                        and chat_ids_equal(preferred_channel, binding.chat_id, preferred_chat_id)
+                    if binding.channel == preferred_channel and chat_ids_equal(
+                        preferred_channel, binding.chat_id, preferred_chat_id
                     ):
                         append_unique(binding.channel, binding.chat_id)
                         break
@@ -121,7 +133,9 @@ class Sensor:
                         )
                     append_unique(preferred_channel, preferred_chat_id)
             elif preferred_channel == "desktop":
-                append_unique(preferred_channel, preferred_chat_id or f"role:{default_role_id}")
+                append_unique(
+                    preferred_channel, preferred_chat_id or f"role:{default_role_id}"
+                )
             elif preferred_channel or preferred_chat_id:
                 raise KeyError(
                     "default_role_id 配置的 target 未绑定到该角色: "

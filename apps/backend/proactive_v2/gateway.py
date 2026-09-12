@@ -5,6 +5,7 @@ proactive_v2/gateway.py — DataGateway
 - alerts / context：直接透传给 agent（完整内容）
 - content：并行 web_fetch，结果存 hashmap，agent 按需通过 get_content 取
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -67,7 +68,9 @@ class DataGateway:
         )
         logger.info(
             "[gateway] done: alerts=%d context=%d content=%d (fetched=%d)",
-            len(alerts), len(ctx_data), len(content_meta),
+            len(alerts),
+            len(ctx_data),
+            len(content_meta),
             sum(1 for v in content_store.values() if v),
         )
         return GatewayResult(
@@ -96,7 +99,9 @@ class DataGateway:
     async def _fetch_content(self) -> tuple[list[dict], dict[str, str]]:
         """拉取 content events，并行 web_fetch，返回 (meta列表, content_store)。"""
         try:
-            events = await self._feed_fn(limit=self._content_limit) if self._feed_fn else []
+            events = (
+                await self._feed_fn(limit=self._content_limit) if self._feed_fn else []
+            )
         except Exception as e:
             logger.warning("[gateway] feed fetch failed: %s", e)
             return [], {}
@@ -106,7 +111,9 @@ class DataGateway:
 
         # 1. 对 content 先保留轻量 meta，再提前并行抓正文。
         #    后续 agent loop 默认只看 meta，需要时再 get_content 读取缓存正文。
-        fetch_tasks = [asyncio.create_task(self._fetch_one_url(e.get("url", ""))) for e in events]
+        fetch_tasks = [
+            asyncio.create_task(self._fetch_one_url(e.get("url", ""))) for e in events
+        ]
         fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
         content_meta: list[dict] = []
@@ -117,16 +124,20 @@ class DataGateway:
             ack_server = event.get("ack_server", "")
             compound_key = f"{ack_server}:{item_id}"
 
-            content_meta.append({
-                "id": compound_key,
-                "title": event.get("title") or "",
-                "source": event.get("source_name") or "",
-                "url": event.get("url") or "",
-                "published_at": event.get("published_at") or "",
-            })
+            content_meta.append(
+                {
+                    "id": compound_key,
+                    "title": event.get("title") or "",
+                    "source": event.get("source_name") or "",
+                    "url": event.get("url") or "",
+                    "published_at": event.get("published_at") or "",
+                }
+            )
 
             if isinstance(result, Exception) or not result:
-                logger.debug("[gateway] web_fetch failed for %s: %s", compound_key, result)
+                logger.debug(
+                    "[gateway] web_fetch failed for %s: %s", compound_key, result
+                )
                 content_store[compound_key] = ""
             else:
                 # 2. 正文统一收敛到 hashmap，供 get_content 按 item_id 读取。
@@ -140,12 +151,13 @@ class DataGateway:
             return ""
         try:
             import json
+
             result_json = await self._web_fetch_tool.execute(url=url, format="text")
             result = json.loads(result_json)
             if "error" in result:
                 return ""
             text = result.get("text", "")
-            return text[:self._max_chars]
+            return text[: self._max_chars]
         except Exception as e:
             logger.debug("[gateway] _fetch_one_url(%s) error: %s", url, e)
             return ""

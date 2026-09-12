@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 def resolve_default_workspace(home: Path | None = None) -> Path:
     """Resolve the canonical Shiori workspace path."""
 

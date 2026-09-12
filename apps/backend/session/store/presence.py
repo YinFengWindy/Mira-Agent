@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+
 class _PresenceMixin:
     def update_presence(
         self,

@@ -100,37 +100,55 @@ class RoleModelRuntime:
         if role is None:
             raise KeyError(f"role 不存在: {role_id}")
         if not self._registrations:
-            raise ModelConfigurationError(reason="no_models", role_id=role_id, purpose=purpose)
+            raise ModelConfigurationError(
+                reason="no_models", role_id=role_id, purpose=purpose
+            )
         dialogue_id = str(
             role.runtime_config.get("dialogue_model_registration_id") or ""
         ).strip()
         selected_id = dialogue_id
         if purpose == "vision":
-            selected_id = str(
-                role.runtime_config.get("visual_model_registration_id") or ""
-            ).strip() or dialogue_id
+            selected_id = (
+                str(
+                    role.runtime_config.get("visual_model_registration_id") or ""
+                ).strip()
+                or dialogue_id
+            )
         if not selected_id:
-            raise ModelConfigurationError(reason="role_unbound", role_id=role_id, purpose=purpose)
+            raise ModelConfigurationError(
+                reason="role_unbound", role_id=role_id, purpose=purpose
+            )
         registration = self._registrations.get(selected_id)
         if registration is None:
             raise ModelConfigurationError(
-                reason="registration_missing", role_id=role_id,
-                purpose=purpose, registration_id=selected_id,
+                reason="registration_missing",
+                role_id=role_id,
+                purpose=purpose,
+                registration_id=selected_id,
             )
         fields = incomplete_registration_fields(registration)
         if fields:
             raise ModelConfigurationError(
-                reason="connection_incomplete", role_id=role_id,
-                purpose=purpose, registration_id=selected_id, fields=fields,
+                reason="connection_incomplete",
+                role_id=role_id,
+                purpose=purpose,
+                registration_id=selected_id,
+                fields=fields,
             )
         return registration
 
     @contextmanager
-    def activate(self, role_id: str, purpose: ModelPurpose) -> Generator[RoleModelSnapshot]:
+    def activate(
+        self, role_id: str, purpose: ModelPurpose
+    ) -> Generator[RoleModelSnapshot]:
         """Keeps one resolved selection stable for the complete async turn."""
 
         snapshot = _current_snapshot.get()
-        if snapshot is None or snapshot.role_id != role_id or snapshot.purpose != purpose:
+        if (
+            snapshot is None
+            or snapshot.role_id != role_id
+            or snapshot.purpose != purpose
+        ):
             snapshot = self.resolve(role_id, purpose)
         token = _current_snapshot.set(snapshot)
         try:

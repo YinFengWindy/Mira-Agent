@@ -12,7 +12,12 @@ def _make_checker(llm_response: str) -> SufficiencyChecker:
 
 
 def _item(memory_type: str, score: float, summary: str) -> dict:
-    return {"id": summary[:8], "memory_type": memory_type, "score": score, "summary": summary}
+    return {
+        "id": summary[:8],
+        "memory_type": memory_type,
+        "score": score,
+        "summary": summary,
+    }
 
 
 def test_sufficiency_result_fields():
@@ -81,12 +86,10 @@ def test_should_not_check_when_forced_procedure_present():
 @pytest.mark.asyncio
 async def test_check_returns_sufficient_when_llm_says_so():
     """真实场景：天气查询命中 weather 技能 procedure，LLM 判断相关。"""
-    checker = _make_checker(
-        """
+    checker = _make_checker("""
 <sufficient>yes</sufficient>
 <refined_query></refined_query>
-"""
-    )
+""")
     items = [
         _item(
             "procedure",
@@ -102,12 +105,10 @@ async def test_check_returns_sufficient_when_llm_says_so():
 @pytest.mark.asyncio
 async def test_check_returns_insufficient_with_refined_query():
     """真实场景：问仁王的内容，命中了西历2236读书进度，LLM 判断无关。"""
-    checker = _make_checker(
-        """
+    checker = _make_checker("""
 <sufficient>no</sufficient>
 <refined_query>用户与仁王游戏相关的讨论历史</refined_query>
-"""
-    )
+""")
     items = [
         _item(
             "procedure",
@@ -126,12 +127,10 @@ async def test_check_returns_insufficient_with_refined_query():
 @pytest.mark.asyncio
 async def test_check_returns_partial_keeps_existing_items():
     """partial：有些相关有些不相关，不触发重查，保留现有结果。"""
-    checker = _make_checker(
-        """
+    checker = _make_checker("""
 <sufficient>partial</sufficient>
 <refined_query></refined_query>
-"""
-    )
+""")
     items = [
         _item("event", 0.51, "用户讨论了仁王的机制"),
         _item("procedure", 0.48, "西历2236读书进度规则"),
@@ -144,12 +143,10 @@ async def test_check_returns_partial_keeps_existing_items():
 @pytest.mark.asyncio
 async def test_check_empty_items_returns_insufficient():
     """无结果时，LLM 应判断 no，refined_query 应为改写后的 query。"""
-    checker = _make_checker(
-        """
+    checker = _make_checker("""
 <sufficient>no</sufficient>
 <refined_query>用户过去讨论仁王游戏的相关记忆</refined_query>
-"""
-    )
+""")
     result = await checker.check(query="我之前和你聊过什么有关仁王的内容吗", items=[])
     assert result.is_sufficient is False
     assert result.refined_query
@@ -197,7 +194,9 @@ async def test_item_summaries_appear_in_llm_prompt():
 
 @pytest.mark.asyncio
 async def test_latency_ms_is_non_negative_int():
-    checker = _make_checker("<sufficient>yes</sufficient><refined_query></refined_query>")
+    checker = _make_checker(
+        "<sufficient>yes</sufficient><refined_query></refined_query>"
+    )
     result = await checker.check(query="test", items=[])
     assert isinstance(result.latency_ms, int)
     assert result.latency_ms >= 0

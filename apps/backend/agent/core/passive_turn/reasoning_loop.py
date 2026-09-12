@@ -92,6 +92,7 @@ class _PassiveReasoningLoopMixin:
                 react_total_tokens_seen = True
                 react_total_tokens += summary_tokens
             return summary
+
         disabled = set(disabled_tools or set())
         if self._tool_search_enabled:
             always_on = self._tools.get_always_on_names()
@@ -119,14 +120,16 @@ class _PassiveReasoningLoopMixin:
             ):
                 break
             # 3. BeforeStep 模块链：token 估算、BeforeStep 事件、提示注入。
-            step_ctx = await self._before_step.run(BeforeStepInput(
-                session_key=tool_event_session_key,
-                channel=tool_event_channel,
-                chat_id=tool_event_chat_id,
-                iteration=iteration,
-                messages=messages,
-                visible_names=visible_names,
-            ))
+            step_ctx = await self._before_step.run(
+                BeforeStepInput(
+                    session_key=tool_event_session_key,
+                    channel=tool_event_channel,
+                    chat_id=tool_event_chat_id,
+                    iteration=iteration,
+                    messages=messages,
+                    visible_names=visible_names,
+                )
+            )
             if step_ctx.early_stop:
                 summary = await _summarize(
                     reason="early_stop",
@@ -152,7 +155,11 @@ class _PassiveReasoningLoopMixin:
             logger.info(
                 "[LLM调用] 第%d轮，可见工具=%s input_tokens~=%d",
                 iteration + 1,
-                f"{len(visible_names)}个" if visible_names is not None else "全部（tool_search未开启）",
+                (
+                    f"{len(visible_names)}个"
+                    if visible_names is not None
+                    else "全部（tool_search未开启）"
+                ),
                 step_ctx.input_tokens_estimate,
             )
             schema_names: list[str] | set[str] | None = (
@@ -241,7 +248,10 @@ class _PassiveReasoningLoopMixin:
                         )
                         continue
                     # 6.1 deferred 工具未解锁时，先回填 select: 引导错误。
-                    if visible_names is not None and tool_call.name not in visible_names:
+                    if (
+                        visible_names is not None
+                        and tool_call.name not in visible_names
+                    ):
                         exec_result = await self._tool_executor.preflight(
                             ToolExecutionRequest(
                                 call_id=tool_call.id,
@@ -305,14 +315,16 @@ class _PassiveReasoningLoopMixin:
                                     "result": result,
                                 }
                             )
-                            for skipped in response.tool_calls[tool_batch_index + 1:]:
+                            for skipped in response.tool_calls[tool_batch_index + 1 :]:
                                 append_tool_result(
                                     messages,
                                     tool_call_id=skipped.id,
                                     content="工具调用已因重复循环检测跳过。",
                                     tool_name=skipped.name,
                                 )
-                            tool_chain.append({"text": response.content, "calls": iter_calls})
+                            tool_chain.append(
+                                {"text": response.content, "calls": iter_calls}
+                            )
                             summary = await _summarize(
                                 reason="tool_call_loop",
                                 summary_iteration=iteration + 1,
@@ -338,7 +350,7 @@ class _PassiveReasoningLoopMixin:
                         )
                         result = (
                             f"工具 '{tool_call.name}' 当前未加载（schema 不可见）。"
-                            f"请先调用 tool_search(query=\"select:{tool_call.name}\") 加载，"
+                            f'请先调用 tool_search(query="select:{tool_call.name}") 加载，'
                             "然后再调用该工具。不要放弃当前任务。"
                         )
                         append_tool_result(
@@ -380,7 +392,9 @@ class _PassiveReasoningLoopMixin:
                             visible_names | disabled
                         )
                     _args_preview = support.log_preview(tool_call.arguments, 120)
-                    logger.info("[工具执行→] %s  args=%s", tool_call.name, _args_preview)
+                    logger.info(
+                        "[工具执行→] %s  args=%s", tool_call.name, _args_preview
+                    )
                     await self._observe_tool_call_started(
                         session_key=tool_event_session_key,
                         channel=tool_event_channel,
@@ -392,13 +406,15 @@ class _PassiveReasoningLoopMixin:
                     )
                     # 工具调用统一先过 ToolExecutor：
                     # pre_hook 可改参/拒绝，真实执行后再补 post_hook trace。
-                    await self._bus.fanout(BeforeToolCallCtx(
-                        session_key=tool_event_session_key,
-                        channel=tool_event_channel,
-                        chat_id=tool_event_chat_id,
-                        tool_name=tool_call.name,
-                        arguments=dict(tool_call.arguments),
-                    ))
+                    await self._bus.fanout(
+                        BeforeToolCallCtx(
+                            session_key=tool_event_session_key,
+                            channel=tool_event_channel,
+                            chat_id=tool_event_chat_id,
+                            tool_name=tool_call.name,
+                            arguments=dict(tool_call.arguments),
+                        )
+                    )
                     exec_result = await self._tool_executor.execute(
                         ToolExecutionRequest(
                             call_id=tool_call.id,
@@ -422,15 +438,17 @@ class _PassiveReasoningLoopMixin:
                     if exec_result.status == "success":
                         tools_used.append(tool_call.name)
                     result = exec_result.output
-                    await self._bus.fanout(AfterToolResultCtx(
-                        session_key=tool_event_session_key,
-                        channel=tool_event_channel,
-                        chat_id=tool_event_chat_id,
-                        tool_name=tool_call.name,
-                        arguments=dict(exec_result.final_arguments),
-                        result=str(result),
-                        status=exec_result.status,
-                    ))
+                    await self._bus.fanout(
+                        AfterToolResultCtx(
+                            session_key=tool_event_session_key,
+                            channel=tool_event_channel,
+                            chat_id=tool_event_chat_id,
+                            tool_name=tool_call.name,
+                            arguments=dict(exec_result.final_arguments),
+                            result=str(result),
+                            status=exec_result.status,
+                        )
+                    )
                     normalized = normalize_tool_result(result)
                     _result_preview = support.log_preview(normalized.preview())
                     _result_len = len(normalized.preview() or "")
@@ -467,7 +485,9 @@ class _PassiveReasoningLoopMixin:
                     ):
                         _newly_unlocked = [
                             name
-                            for name in self._discovery.unlock_names_from_result(normalized.text)
+                            for name in self._discovery.unlock_names_from_result(
+                                normalized.text
+                            )
                             if name not in visible_names and name not in disabled
                         ]
                         if _newly_unlocked:
@@ -479,7 +499,10 @@ class _PassiveReasoningLoopMixin:
                                     if name not in seen_visible:
                                         visible_order.append(name)
                                         seen_visible.add(name)
-                            logger.info("[工具解锁] tool_search 新解锁: %s", sorted(_newly_unlocked))
+                            logger.info(
+                                "[工具解锁] tool_search 新解锁: %s",
+                                sorted(_newly_unlocked),
+                            )
                         else:
                             logger.info("[工具解锁] tool_search 未解锁新工具")
                     # tool_chain 持久化的是“执行后的事实”：
@@ -522,14 +545,16 @@ class _PassiveReasoningLoopMixin:
                             iteration + 1,
                             tool_call.name,
                         )
-                        for skipped in response.tool_calls[tool_batch_index + 1:]:
+                        for skipped in response.tool_calls[tool_batch_index + 1 :]:
                             append_tool_result(
                                 messages,
                                 tool_call_id=skipped.id,
                                 content="工具调用已因重复循环检测跳过。",
                                 tool_name=skipped.name,
                             )
-                        tool_chain.append({"text": response.content, "calls": iter_calls})
+                        tool_chain.append(
+                            {"text": response.content, "calls": iter_calls}
+                        )
                         summary = await _summarize(
                             reason="tool_call_loop",
                             summary_iteration=iteration + 1,
@@ -557,19 +582,21 @@ class _PassiveReasoningLoopMixin:
                 tool_chain.append(tool_chain_group)
                 pressure_tokens = support.estimate_messages_tokens(messages)
                 # 7a. AfterStep 模块链（工具分支）：通知观察者本轮工具执行完毕。
-                after_step = await self._after_step.run(AfterStepCtx(
-                    session_key=tool_event_session_key,
-                    channel=tool_event_channel,
-                    chat_id=tool_event_chat_id,
-                    iteration=iteration,
-                    context_tokens_estimate=pressure_tokens,
-                    tools_called=tuple(tc.name for tc in response.tool_calls),
-                    partial_reply=response.content or "",
-                    tools_used_so_far=tuple(tools_used),
-                    tool_chain_partial=tuple(tool_chain),
-                    partial_thinking=response.thinking,
-                    has_more=True,
-                ))
+                after_step = await self._after_step.run(
+                    AfterStepCtx(
+                        session_key=tool_event_session_key,
+                        channel=tool_event_channel,
+                        chat_id=tool_event_chat_id,
+                        iteration=iteration,
+                        context_tokens_estimate=pressure_tokens,
+                        tools_called=tuple(tc.name for tc in response.tool_calls),
+                        partial_reply=response.content or "",
+                        tools_used_so_far=tuple(tools_used),
+                        tool_chain_partial=tuple(tool_chain),
+                        partial_thinking=response.thinking,
+                        has_more=True,
+                    )
+                )
                 if after_step.early_stop:
                     reason = after_step.early_stop_reason or "after_step"
                     logger.warning(
@@ -606,10 +633,12 @@ class _PassiveReasoningLoopMixin:
                     iteration + 1,
                 )
                 messages.append({"role": "assistant", "content": ""})
-                messages.append({
-                    "role": "user",
-                    "content": "你刚才只输出了思考过程，没有给出正式回复。请直接回复用户，不要重复思考。",
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "你刚才只输出了思考过程，没有给出正式回复。请直接回复用户，不要重复思考。",
+                    }
+                )
                 retry_response = await self._llm.provider.chat(
                     messages=messages,
                     tools=[],
@@ -640,19 +669,21 @@ class _PassiveReasoningLoopMixin:
             )
             messages.append({"role": "assistant", "content": response.content})
             # 8b. AfterStep 模块链（最终回复分支）：通知观察者本轮推理结束。
-            _ = await self._after_step.run(AfterStepCtx(
-                session_key=tool_event_session_key,
-                channel=tool_event_channel,
-                chat_id=tool_event_chat_id,
-                iteration=iteration,
-                context_tokens_estimate=support.estimate_messages_tokens(messages),
-                tools_called=(),
-                partial_reply=response.content or "",
-                tools_used_so_far=tuple(tools_used),
-                tool_chain_partial=tuple(tool_chain),
-                partial_thinking=response.thinking,
-                has_more=False,
-            ))
+            _ = await self._after_step.run(
+                AfterStepCtx(
+                    session_key=tool_event_session_key,
+                    channel=tool_event_channel,
+                    chat_id=tool_event_chat_id,
+                    iteration=iteration,
+                    context_tokens_estimate=support.estimate_messages_tokens(messages),
+                    tools_called=(),
+                    partial_reply=response.content or "",
+                    tools_used_so_far=tuple(tools_used),
+                    tool_chain_partial=tuple(tool_chain),
+                    partial_thinking=response.thinking,
+                    has_more=False,
+                )
+            )
             return self._build_result(
                 reply=response.content or "（无响应）",
                 tools_used=tools_used,

@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 from typing import Any
 
+
 class _SessionMixin:
     def session_exists(self, key: str) -> bool:
         with self._lock:

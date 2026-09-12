@@ -1,6 +1,11 @@
 """Role-card import contracts and preview service."""
 
-from .models import ImportProvenance, RoleCardAsset, RoleCardImportPreview, RoleCardImportReport
+from .models import (
+    ImportProvenance,
+    RoleCardAsset,
+    RoleCardImportPreview,
+    RoleCardImportReport,
+)
 from .service import RoleCardImportService
 
 __all__ = [
@@ -10,4 +15,3 @@ __all__ = [
     "RoleCardImportReport",
     "RoleCardImportService",
 ]
-

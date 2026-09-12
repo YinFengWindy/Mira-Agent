@@ -53,6 +53,7 @@ DOCUMENT_SECTIONS = {
     ),
 }
 
+
 def ensure_memory_documents(memory_dir: Path) -> None:
     """Creates missing role-memory documents without rewriting existing content."""
 

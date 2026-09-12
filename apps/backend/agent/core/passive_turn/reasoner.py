@@ -19,7 +19,10 @@ from agent.core.runtime_support import ToolDiscoveryState
 from agent.core.types import ReasonerResult
 from agent.lifecycle.phase import Phase
 from agent.lifecycle.phases.after_step import AfterStepFrame, default_after_step_modules
-from agent.lifecycle.phases.before_step import BeforeStepFrame, default_before_step_modules
+from agent.lifecycle.phases.before_step import (
+    BeforeStepFrame,
+    default_before_step_modules,
+)
 from agent.lifecycle.phases.prompt_render import (
     PromptRenderFrame,
     default_prompt_render_modules,
@@ -162,21 +165,23 @@ class DefaultReasoner(
             _ts if isinstance(_ts, ToolSearchTool) else None
         )
         self._tool_executor = ToolExecutor([])
-        self._stream_sink_factory: Callable[
-            [object], Callable[[dict[str, str] | str], Awaitable[None]] | None
-        ] | None = None
+        self._stream_sink_factory: (
+            Callable[[object], Callable[[dict[str, str] | str], Awaitable[None]] | None]
+            | None
+        ) = None
         bus = event_bus or EventBus()
         self._bus = bus
         self._before_step = self._build_before_step_phase()
         self._after_step = self._build_after_step_phase()
-        self._prompt_render: Phase[
-            PromptRenderInput,
-            PromptRenderResult,
-            PromptRenderFrame,
-        ] | None = (
-            self._build_prompt_render_phase(context)
-            if context is not None
-            else None
+        self._prompt_render: (
+            Phase[
+                PromptRenderInput,
+                PromptRenderResult,
+                PromptRenderFrame,
+            ]
+            | None
+        ) = (
+            self._build_prompt_render_phase(context) if context is not None else None
         )
 
     def add_tool_hooks(self, hooks: list["ToolHook"]) -> None:
@@ -215,7 +220,9 @@ class DefaultReasoner(
             frame_factory=BeforeStepFrame,
         )
 
-    def _build_after_step_phase(self) -> Phase[AfterStepCtx, AfterStepCtx, AfterStepFrame]:
+    def _build_after_step_phase(
+        self,
+    ) -> Phase[AfterStepCtx, AfterStepCtx, AfterStepFrame]:
         return Phase(
             default_after_step_modules(
                 self._bus,
@@ -249,10 +256,10 @@ class DefaultReasoner(
 
     def set_stream_sink_factory(
         self,
-        factory: Callable[
-            [object], Callable[[dict[str, str] | str], Awaitable[None]] | None
-        ]
-        | None,
+        factory: (
+            Callable[[object], Callable[[dict[str, str] | str], Awaitable[None]] | None]
+            | None
+        ),
     ) -> None:
         self._stream_sink_factory = factory
 
@@ -269,7 +276,9 @@ class DefaultReasoner(
         from agent.core.runtime_support import TurnRunResult
 
         if self._context is None or self._session_manager is None:
-            raise RuntimeError("DefaultReasoner.run_turn requires context and session_manager")
+            raise RuntimeError(
+                "DefaultReasoner.run_turn requires context and session_manager"
+            )
         if self._prompt_render is None:
             self._prompt_render = self._build_prompt_render_phase(self._context)
 
@@ -298,10 +307,13 @@ class DefaultReasoner(
                 preloaded_order if preloaded_order else "[]",
             )
         stream_sink = (
-            self._stream_sink_factory(msg) if self._stream_sink_factory is not None else None
+            self._stream_sink_factory(msg)
+            if self._stream_sink_factory is not None
+            else None
         )
         measured_stream_sink = stream_sink
         if stream_sink is not None:
+
             async def _measure_stream_delta(delta: dict[str, str] | str) -> None:
                 nonlocal first_content_at
                 payload = {"content_delta": delta} if isinstance(delta, str) else delta
@@ -395,7 +407,9 @@ class DefaultReasoner(
                     retry_trace["llm_user_content"] = llm_user_content
                 if isinstance(llm_context_frame, str) and llm_context_frame.strip():
                     retry_trace["llm_context_frame"] = llm_context_frame
-                retry_trace["react_stats"] = dict(result.metadata.get("react_stats") or {})
+                retry_trace["react_stats"] = dict(
+                    result.metadata.get("react_stats") or {}
+                )
                 thinking_finished_at = first_content_at or time.perf_counter()
                 turn_metrics: dict[str, int] = {
                     "thinking_duration_ms": max(

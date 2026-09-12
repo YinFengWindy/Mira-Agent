@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from memory2.hyde_enhancer import HyDEAugmentResult, HyDEEnhancer
 
+
 async def retrieve_procedure_items(
     memory: Any,
     query: str = "",
@@ -126,10 +127,13 @@ async def retrieve_history_items(
         )
         if on_hyde_result is not None:
             on_hyde_result(hyde_result)
-        return hyde_result.items, f"{scope_mode}+hyde" if hyde_result.used_hyde else scope_mode
+        return hyde_result.items, (
+            f"{scope_mode}+hyde" if hyde_result.used_hyde else scope_mode
+        )
 
     items = await memory.retrieve_related(query, top_k=top_k, **global_kwargs)
     return items, scope_mode
+
 
 def _normalize_procedure_queries(
     *,

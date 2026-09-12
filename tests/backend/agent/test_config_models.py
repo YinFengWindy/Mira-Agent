@@ -2,7 +2,9 @@ from agent.config_models import Config
 
 
 def test_explicit_empty_registry_is_not_replaced_by_legacy_model():
-    config = Config(provider="openai", model="legacy", api_key="key", model_registrations=[])
+    config = Config(
+        provider="openai", model="legacy", api_key="key", model_registrations=[]
+    )
     assert config.model_registrations == []
 
 

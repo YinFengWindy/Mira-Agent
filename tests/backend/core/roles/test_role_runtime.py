@@ -31,20 +31,42 @@ def _context(role, *, thread_id: str = "thread:mira:desktop"):
 
 
 @pytest.mark.asyncio
-async def test_first_turn_seeds_once_across_channels_and_runtime_generations(tmp_path, monkeypatch):
+async def test_first_turn_seeds_once_across_channels_and_runtime_generations(
+    tmp_path, monkeypatch
+):
     store = RoleStore(tmp_path)
-    role = store.create_role(role_id="mira", name="Mira", system_prompt="test", runtime_config={
-        "dialogue_model_registration_id": "dialogue", "visual_model_registration_id": "visual",
-    })
-    registrations = [ModelRegistration(id=key, provider="openai", model=key, api_key="fake", base_url="") for key in ("dialogue", "visual")]
+    role = store.create_role(
+        role_id="mira",
+        name="Mira",
+        system_prompt="test",
+        runtime_config={
+            "dialogue_model_registration_id": "dialogue",
+            "visual_model_registration_id": "visual",
+        },
+    )
+    registrations = [
+        ModelRegistration(
+            id=key, provider="openai", model=key, api_key="fake", base_url=""
+        )
+        for key in ("dialogue", "visual")
+    ]
     provider = SimpleNamespace(chat=AsyncMock(), aclose=AsyncMock())
-    monkeypatch.setattr("core.roles.model_runtime.LLMProvider", lambda **kwargs: provider)
+    monkeypatch.setattr(
+        "core.roles.model_runtime.LLMProvider", lambda **kwargs: provider
+    )
     models = RoleModelRuntime(role_store=store, registrations=registrations)
     repository = RoleRepository(store)
-    registry = RoleRuntimeRegistry(repository, model_resolver=models,
-        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()))
-    reloaded = RoleRuntimeRegistry(repository, model_resolver=models, shared_execution=registry,
-        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()))
+    registry = RoleRuntimeRegistry(
+        repository,
+        model_resolver=models,
+        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()),
+    )
+    reloaded = RoleRuntimeRegistry(
+        repository,
+        model_resolver=models,
+        shared_execution=registry,
+        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()),
+    )
     entered, release = asyncio.Event(), asyncio.Event()
     order = []
 
@@ -58,16 +80,24 @@ async def test_first_turn_seeds_once_across_channels_and_runtime_generations(tmp
     provider.chat.side_effect = seed
 
     async def reply():
-        assert "已初始化" in (tmp_path / "roles/mira/memory/SELF.md").read_text(encoding="utf-8")
+        assert "已初始化" in (tmp_path / "roles/mira/memory/SELF.md").read_text(
+            encoding="utf-8"
+        )
         order.append("reply")
 
     # An image request may already carry a visual snapshot at the desktop boundary.
     with models.activate(role.id, "vision"):
-        first = asyncio.create_task(registry.dispatch_passive_turn(_context(role), reply))
+        first = asyncio.create_task(
+            registry.dispatch_passive_turn(_context(role), reply)
+        )
         await asyncio.wait_for(entered.wait(), 2)
         other = RoleExecutionContext.create(
-            role=role, thread_id="telegram:42", transport_channel="telegram", transport_chat_id="42",
-            source="test", work_kind="passive_turn",
+            role=role,
+            thread_id="telegram:42",
+            transport_channel="telegram",
+            transport_chat_id="42",
+            source="test",
+            work_kind="passive_turn",
         )
         second = asyncio.create_task(reloaded.dispatch_passive_turn(other, reply))
         await asyncio.sleep(0)
@@ -80,22 +110,42 @@ async def test_first_turn_seeds_once_across_channels_and_runtime_generations(tmp
 
 
 @pytest.mark.asyncio
-async def test_unbound_first_turn_stops_before_seed_and_can_retry_after_binding(tmp_path, monkeypatch):
+async def test_unbound_first_turn_stops_before_seed_and_can_retry_after_binding(
+    tmp_path, monkeypatch
+):
     store = RoleStore(tmp_path)
     role = store.create_role(role_id="mira", name="Mira", system_prompt="test")
-    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="self")), aclose=AsyncMock())
-    monkeypatch.setattr("core.roles.model_runtime.LLMProvider", lambda **kwargs: provider)
-    models = RoleModelRuntime(role_store=store, registrations=[
-        ModelRegistration(id="dialogue", provider="openai", model="selected", api_key="fake", base_url=""),
-    ])
-    registry = RoleRuntimeRegistry(RoleRepository(store), model_resolver=models,
-        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()))
+    provider = SimpleNamespace(
+        chat=AsyncMock(return_value=SimpleNamespace(content="self")), aclose=AsyncMock()
+    )
+    monkeypatch.setattr(
+        "core.roles.model_runtime.LLMProvider", lambda **kwargs: provider
+    )
+    models = RoleModelRuntime(
+        role_store=store,
+        registrations=[
+            ModelRegistration(
+                id="dialogue",
+                provider="openai",
+                model="selected",
+                api_key="fake",
+                base_url="",
+            ),
+        ],
+    )
+    registry = RoleRuntimeRegistry(
+        RoleRepository(store),
+        model_resolver=models,
+        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()),
+    )
     reply = AsyncMock()
     with pytest.raises(ModelConfigurationError, match="请先绑定"):
         await registry.dispatch_passive_turn(_context(role), reply)
     provider.chat.assert_not_called()
     reply.assert_not_called()
-    store.update_role(role.id, runtime_config={"dialogue_model_registration_id": "dialogue"})
+    store.update_role(
+        role.id, runtime_config={"dialogue_model_registration_id": "dialogue"}
+    )
     await registry.dispatch_passive_turn(_context(role), reply)
     provider.chat.assert_awaited_once()
     reply.assert_awaited_once()
@@ -104,21 +154,41 @@ async def test_unbound_first_turn_stops_before_seed_and_can_retry_after_binding(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("accepted_before_seed", [True, False])
-async def test_text_reply_respects_when_its_model_snapshot_is_accepted(tmp_path, monkeypatch, accepted_before_seed):
+async def test_text_reply_respects_when_its_model_snapshot_is_accepted(
+    tmp_path, monkeypatch, accepted_before_seed
+):
     store = RoleStore(tmp_path)
-    role = store.create_role(role_id="mira", name="Mira", system_prompt="test", runtime_config={
-        "dialogue_model_registration_id": "first",
-    })
+    role = store.create_role(
+        role_id="mira",
+        name="Mira",
+        system_prompt="test",
+        runtime_config={
+            "dialogue_model_registration_id": "first",
+        },
+    )
     provider = SimpleNamespace(chat=AsyncMock(), aclose=AsyncMock())
-    monkeypatch.setattr("core.roles.model_runtime.LLMProvider", lambda **kwargs: provider)
-    models = RoleModelRuntime(role_store=store, registrations=[
-        ModelRegistration(id=key, provider="openai", model=key, api_key="fake", base_url="") for key in ("first", "second")
-    ])
-    registry = RoleRuntimeRegistry(RoleRepository(store), model_resolver=models,
-        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()))
+    monkeypatch.setattr(
+        "core.roles.model_runtime.LLMProvider", lambda **kwargs: provider
+    )
+    models = RoleModelRuntime(
+        role_store=store,
+        registrations=[
+            ModelRegistration(
+                id=key, provider="openai", model=key, api_key="fake", base_url=""
+            )
+            for key in ("first", "second")
+        ],
+    )
+    registry = RoleRuntimeRegistry(
+        RoleRepository(store),
+        model_resolver=models,
+        self_initializer=RoleSelfInitializer(store, LlmRoleSelfSeedGenerator()),
+    )
 
     async def seed(**kwargs):
-        store.update_role(role.id, runtime_config={"dialogue_model_registration_id": "second"})
+        store.update_role(
+            role.id, runtime_config={"dialogue_model_registration_id": "second"}
+        )
         return SimpleNamespace(content="self")
 
     provider.chat.side_effect = seed
@@ -141,35 +211,64 @@ async def test_text_reply_respects_when_its_model_snapshot_is_accepted(tmp_path,
 @pytest.mark.parametrize("already_seeded", [False, True])
 @pytest.mark.parametrize("next_visual", ["new-vision", "missing-registration"])
 async def test_image_reply_preserves_accepted_snapshot_after_initialization(
-    tmp_path, monkeypatch, already_seeded, next_visual,
+    tmp_path,
+    monkeypatch,
+    already_seeded,
+    next_visual,
 ):
     store = RoleStore(tmp_path)
-    role = store.create_role(role_id="mira", name="Mira", system_prompt="test", runtime_config={
-        "dialogue_model_registration_id": "dialogue", "visual_model_registration_id": "old-vision",
-    })
-    provider = SimpleNamespace(chat=AsyncMock(return_value=SimpleNamespace(content="self")), aclose=AsyncMock())
-    monkeypatch.setattr("core.roles.model_runtime.LLMProvider", lambda **kwargs: provider)
-    models = RoleModelRuntime(role_store=store, registrations=[
-        ModelRegistration(id=key, provider="openai", model=key, api_key="fake", base_url="")
-        for key in ("dialogue", "old-vision", "new-vision")
-    ])
+    role = store.create_role(
+        role_id="mira",
+        name="Mira",
+        system_prompt="test",
+        runtime_config={
+            "dialogue_model_registration_id": "dialogue",
+            "visual_model_registration_id": "old-vision",
+        },
+    )
+    provider = SimpleNamespace(
+        chat=AsyncMock(return_value=SimpleNamespace(content="self")), aclose=AsyncMock()
+    )
+    monkeypatch.setattr(
+        "core.roles.model_runtime.LLMProvider", lambda **kwargs: provider
+    )
+    models = RoleModelRuntime(
+        role_store=store,
+        registrations=[
+            ModelRegistration(
+                id=key, provider="openai", model=key, api_key="fake", base_url=""
+            )
+            for key in ("dialogue", "old-vision", "new-vision")
+        ],
+    )
     initializer = RoleSelfInitializer(store, LlmRoleSelfSeedGenerator())
-    registry = RoleRuntimeRegistry(RoleRepository(store), model_resolver=models, self_initializer=initializer)
+    registry = RoleRuntimeRegistry(
+        RoleRepository(store), model_resolver=models, self_initializer=initializer
+    )
     if already_seeded:
         await initializer.ensure_seeded(role.id, models.resolve(role.id, "chat"))
 
     async def reply():
-        assert store.get_role(role.id).memory_init_state["self_seed"]["status"] == "generated"
+        assert (
+            store.get_role(role.id).memory_init_state["self_seed"]["status"]
+            == "generated"
+        )
         with (await registry.get(role.id)).activate_model("vision") as snapshot:
             return snapshot
 
     try:
         with models.activate(role.id, "vision") as accepted:
             # The request was accepted before a settings change while waiting for its turn.
-            store.update_role(role.id, runtime_config={
-                "dialogue_model_registration_id": "dialogue", "visual_model_registration_id": next_visual,
-            })
-            assert await registry.dispatch_passive_turn(_context(role), reply) is accepted
+            store.update_role(
+                role.id,
+                runtime_config={
+                    "dialogue_model_registration_id": "dialogue",
+                    "visual_model_registration_id": next_visual,
+                },
+            )
+            assert (
+                await registry.dispatch_passive_turn(_context(role), reply) is accepted
+            )
         provider.chat.assert_awaited_once()
         assert provider.chat.await_args.kwargs["model"] == "dialogue"
     finally:
@@ -307,7 +406,9 @@ async def test_registry_allows_different_roles_to_execute_independently(tmp_path
     shiori_task = asyncio.create_task(
         registry.dispatch_thread(_context(shiori), lambda: wait_for(shiori_started))
     )
-    await asyncio.wait_for(asyncio.gather(mira_started.wait(), shiori_started.wait()), 0.2)
+    await asyncio.wait_for(
+        asyncio.gather(mira_started.wait(), shiori_started.wait()), 0.2
+    )
     release.set()
     await asyncio.gather(mira_task, shiori_task)
 
@@ -334,7 +435,9 @@ async def test_role_runtime_owns_role_model_activation(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_role_runtime_rejects_model_activation_when_capability_is_missing(tmp_path):
+async def test_role_runtime_rejects_model_activation_when_capability_is_missing(
+    tmp_path,
+):
     repository = RoleRepository(RoleStore(tmp_path))
     role = repository.create_role(role_id="mira", name="Mira", system_prompt="test")
     runtime = await RoleRuntimeRegistry(repository).get(role.id)
@@ -371,14 +474,17 @@ async def test_registry_refreshes_configuration_without_replacing_the_runtime(tm
     assert refreshed_runtime is first_runtime
     assert refreshed_runtime.config_version != context.role_config_version
     await registry.dispatch_thread(context, lambda: _return_none())
-    assert refreshed_runtime.config_version == RoleExecutionContext.create(
-        role=updated,
-        thread_id=context.thread_id,
-        transport_channel=context.transport_channel,
-        transport_chat_id=context.transport_chat_id,
-        source=context.source,
-        work_kind=context.work_kind,
-    ).role_config_version
+    assert (
+        refreshed_runtime.config_version
+        == RoleExecutionContext.create(
+            role=updated,
+            thread_id=context.thread_id,
+            transport_channel=context.transport_channel,
+            transport_chat_id=context.transport_chat_id,
+            source=context.source,
+            work_kind=context.work_kind,
+        ).role_config_version
+    )
 
 
 async def _return_none() -> None:

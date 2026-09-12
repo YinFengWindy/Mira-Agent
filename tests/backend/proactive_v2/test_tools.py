@@ -38,8 +38,8 @@ from proactive_v2.tools import (
     _get_recent_chat,
 )
 
-
 # ── TOOL_SCHEMAS 结构 ─────────────────────────────────────────────────────
+
 
 def test_tool_schemas_is_list():
     assert isinstance(TOOL_SCHEMAS, list)
@@ -125,20 +125,25 @@ def test_recall_memory_schema_query_required():
 
 # ── _web_fetch ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_web_fetch_truncates_to_max_chars():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({
-        "url": "https://example.com",
-        "text": "x" * 20_000,
-        "truncated": False,
-    })
-    result = json.loads(await _web_fetch(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"url": "https://example.com"},
-        web_fetch_tool=fake_tool,
-        max_chars=8_000,
-    ))
+    fake_tool.execute.return_value = json.dumps(
+        {
+            "url": "https://example.com",
+            "text": "x" * 20_000,
+            "truncated": False,
+        }
+    )
+    result = json.loads(
+        await _web_fetch(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"url": "https://example.com"},
+            web_fetch_tool=fake_tool,
+            max_chars=8_000,
+        )
+    )
     assert len(result["text"]) == 8_000
     assert result["truncated"] is True
 
@@ -146,17 +151,21 @@ async def test_web_fetch_truncates_to_max_chars():
 @pytest.mark.asyncio
 async def test_web_fetch_short_text_not_truncated():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({
-        "url": "https://example.com",
-        "text": "hello",
-        "truncated": False,
-    })
-    result = json.loads(await _web_fetch(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"url": "https://example.com"},
-        web_fetch_tool=fake_tool,
-        max_chars=8_000,
-    ))
+    fake_tool.execute.return_value = json.dumps(
+        {
+            "url": "https://example.com",
+            "text": "hello",
+            "truncated": False,
+        }
+    )
+    result = json.loads(
+        await _web_fetch(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"url": "https://example.com"},
+            web_fetch_tool=fake_tool,
+            max_chars=8_000,
+        )
+    )
     assert result["text"] == "hello"
     assert result["truncated"] is False
 
@@ -164,17 +173,21 @@ async def test_web_fetch_short_text_not_truncated():
 @pytest.mark.asyncio
 async def test_web_fetch_exact_max_chars_not_truncated():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({
-        "url": "https://example.com",
-        "text": "y" * 8_000,
-        "truncated": False,
-    })
-    result = json.loads(await _web_fetch(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"url": "https://example.com"},
-        web_fetch_tool=fake_tool,
-        max_chars=8_000,
-    ))
+    fake_tool.execute.return_value = json.dumps(
+        {
+            "url": "https://example.com",
+            "text": "y" * 8_000,
+            "truncated": False,
+        }
+    )
+    result = json.loads(
+        await _web_fetch(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"url": "https://example.com"},
+            web_fetch_tool=fake_tool,
+            max_chars=8_000,
+        )
+    )
     assert len(result["text"]) == 8_000
     assert result["truncated"] is False
 
@@ -184,12 +197,14 @@ async def test_web_fetch_error_passthrough():
     fake_tool = AsyncMock()
     error_payload = json.dumps({"error": "timeout", "status": 504})
     fake_tool.execute.return_value = error_payload
-    result = json.loads(await _web_fetch(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"url": "https://example.com"},
-        web_fetch_tool=fake_tool,
-        max_chars=8_000,
-    ))
+    result = json.loads(
+        await _web_fetch(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"url": "https://example.com"},
+            web_fetch_tool=fake_tool,
+            max_chars=8_000,
+        )
+    )
     assert result["error"] == "timeout"
     assert "text" not in result
 
@@ -198,24 +213,30 @@ async def test_web_fetch_error_passthrough():
 async def test_web_fetch_preserves_upstream_truncated_true():
     """上游已截断时，即使本次不截断也保持 truncated=True"""
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({
-        "url": "https://example.com",
-        "text": "short",
-        "truncated": True,   # 上游已截断
-    })
-    result = json.loads(await _web_fetch(
-        ctx=AgentTickContext(),
-        args={"url": "https://example.com"},
-        web_fetch_tool=fake_tool,
-        max_chars=8_000,
-    ))
+    fake_tool.execute.return_value = json.dumps(
+        {
+            "url": "https://example.com",
+            "text": "short",
+            "truncated": True,  # 上游已截断
+        }
+    )
+    result = json.loads(
+        await _web_fetch(
+            ctx=AgentTickContext(),
+            args={"url": "https://example.com"},
+            web_fetch_tool=fake_tool,
+            max_chars=8_000,
+        )
+    )
     assert result["truncated"] is True
 
 
 @pytest.mark.asyncio
 async def test_web_fetch_calls_execute_with_text_format():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({"url": "x", "text": "ok", "truncated": False})
+    fake_tool.execute.return_value = json.dumps(
+        {"url": "x", "text": "ok", "truncated": False}
+    )
     await _web_fetch(
         ctx=AgentTickContext(),
         args={"url": "https://example.com"},
@@ -229,36 +250,43 @@ async def test_web_fetch_calls_execute_with_text_format():
 async def test_web_search_passthrough():
     fake_tool = AsyncMock()
     fake_tool.execute.return_value = json.dumps({"query": "furia cs2", "result": "..."})
-    result = json.loads(await _web_search(
-        ctx=AgentTickContext(),
-        args={"query": "furia cs2", "num_results": 3},
-        web_search_tool=fake_tool,
-    ))
+    result = json.loads(
+        await _web_search(
+            ctx=AgentTickContext(),
+            args={"query": "furia cs2", "num_results": 3},
+            web_search_tool=fake_tool,
+        )
+    )
     assert result["query"] == "furia cs2"
     fake_tool.execute.assert_called_once_with(query="furia cs2", num_results=3)
 
 
 @pytest.mark.asyncio
 async def test_web_search_without_tool_returns_error():
-    result = json.loads(await _web_search(
-        ctx=AgentTickContext(),
-        args={"query": "hf speed-bench"},
-        web_search_tool=None,
-    ))
+    result = json.loads(
+        await _web_search(
+            ctx=AgentTickContext(),
+            args={"query": "hf speed-bench"},
+            web_search_tool=None,
+        )
+    )
     assert "error" in result
 
 
 # ── _recall_memory ────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_recall_memory_empty_hits():
     fake_memory = MagicMock()
     fake_memory.query = AsyncMock(return_value=SimpleNamespace(records=[]))
-    result = json.loads(await _recall_memory(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"query": "game news"},
-        memory=fake_memory,
-    ))
+    result = json.loads(
+        await _recall_memory(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"query": "game news"},
+            memory=fake_memory,
+        )
+    )
     assert result == {"result": "", "hits": 0}
 
 
@@ -273,11 +301,13 @@ async def test_recall_memory_joins_texts():
             ]
         )
     )
-    result = json.loads(await _recall_memory(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"query": "game"},
-        memory=fake_memory,
-    ))
+    result = json.loads(
+        await _recall_memory(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"query": "game"},
+            memory=fake_memory,
+        )
+    )
     assert result["hits"] == 2
     assert "用户喜欢 RPG" in result["result"]
     assert "不喜欢 PvP" in result["result"]
@@ -294,13 +324,15 @@ async def test_recall_memory_skips_empty_text():
             ]
         )
     )
-    result = json.loads(await _recall_memory(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"query": "test"},
-        memory=fake_memory,
-    ))
+    result = json.loads(
+        await _recall_memory(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"query": "test"},
+            memory=fake_memory,
+        )
+    )
     assert "有效记忆" in result["result"]
-    assert result["hits"] == 2   # hits 按命中数统计，不过滤空 text
+    assert result["hits"] == 2  # hits 按命中数统计，不过滤空 text
 
 
 @pytest.mark.asyncio
@@ -342,11 +374,13 @@ async def test_recall_memory_prefers_facade_interest_block():
         )
     )
 
-    result = json.loads(await _recall_memory(
-        ctx=AgentTickContext(session_key="role:mira"),
-        args={"query": "q"},
-        memory=fake_memory,
-    ))
+    result = json.loads(
+        await _recall_memory(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"query": "q"},
+            memory=fake_memory,
+        )
+    )
 
     assert result["hits"] == 2
     assert "用户偏好中文回复" in result["result"]
@@ -364,18 +398,25 @@ async def test_recall_memory_separator_between_hits():
             ]
         )
     )
-    result = json.loads(await _recall_memory(
-        ctx=AgentTickContext(session_key="role:mira"), args={"query": "q"}, memory=fake_memory
-    ))
+    result = json.loads(
+        await _recall_memory(
+            ctx=AgentTickContext(session_key="role:mira"),
+            args={"query": "q"},
+            memory=fake_memory,
+        )
+    )
     assert "---" in result["result"]
 
 
 # ── _message_push / _finish_turn 终止语义 ────────────────────────────────
 
+
 def test_message_push_writes_draft_not_final():
     ctx = AgentTickContext(session_key="role:mira")
     ctx.fetched_contents = [{"ack_server": "feed-mcp", "event_id": "1"}]
-    result = json.loads(_message_push(ctx, {"message": "hello", "evidence": ["feed-mcp:1"]}))
+    result = json.loads(
+        _message_push(ctx, {"message": "hello", "evidence": ["feed-mcp:1"]})
+    )
     assert result["ok"] is True
     assert ctx.draft_message == "hello"
     assert ctx.draft_evidence == ["feed-mcp:1"]
@@ -443,7 +484,9 @@ def test_finish_turn_reply_promotes_draft_and_clears_it():
 
 def test_finish_turn_skip_sets_reason_and_note():
     ctx = AgentTickContext()
-    result = json.loads(_finish_turn(ctx, {"decision": "skip", "reason": "other", "note": "debug info"}))
+    result = json.loads(
+        _finish_turn(ctx, {"decision": "skip", "reason": "other", "note": "debug info"})
+    )
     assert ctx.terminal_action == "skip"
     assert ctx.skip_reason == "other"
     assert ctx.skip_note == "debug info"
@@ -481,9 +524,12 @@ def test_finish_turn_skip_requires_reason():
 
 # ── _mark_not_interesting ─────────────────────────────────────────────────
 
+
 def test_mark_not_interesting_adds_to_discarded():
     ctx = AgentTickContext()
-    result = json.loads(_mark_not_interesting(ctx, {"item_ids": ["feed-mcp:1", "feed-mcp:2"]}))
+    result = json.loads(
+        _mark_not_interesting(ctx, {"item_ids": ["feed-mcp:1", "feed-mcp:2"]})
+    )
     assert "feed-mcp:1" in ctx.discarded_item_ids
     assert "feed-mcp:2" in ctx.discarded_item_ids
     assert result["ok"] is True
@@ -512,10 +558,18 @@ def test_mark_not_interesting_accumulates():
 
 # ── _get_alert_events (缓存) ──────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_get_alert_events_caches_on_second_call():
     events = [
-        {"id": "a1", "ack_server": "alert-mcp", "title": "CPU", "body": "", "severity": "high", "triggered_at": "2026-01-01T00:00:00Z"}
+        {
+            "id": "a1",
+            "ack_server": "alert-mcp",
+            "title": "CPU",
+            "body": "",
+            "severity": "high",
+            "triggered_at": "2026-01-01T00:00:00Z",
+        }
     ]
     ctx = AgentTickContext()
     ctx.mark_alerts_prefetched(events)
@@ -526,7 +580,14 @@ async def test_get_alert_events_caches_on_second_call():
 
 @pytest.mark.asyncio
 async def test_get_alert_events_stores_in_ctx():
-    event = {"id": "a1", "ack_server": "alert-mcp", "title": "T", "body": "", "severity": "low", "triggered_at": "2026-01-01T00:00:00Z"}
+    event = {
+        "id": "a1",
+        "ack_server": "alert-mcp",
+        "title": "T",
+        "body": "",
+        "severity": "low",
+        "triggered_at": "2026-01-01T00:00:00Z",
+    }
     ctx = AgentTickContext()
     ctx.mark_alerts_prefetched([event])
     await _get_alert_events(ctx, {})
@@ -544,10 +605,18 @@ async def test_get_alert_events_returns_json_list():
 
 # ── _get_content_events (缓存) ────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_get_content_events_caches_on_second_call():
     events = [
-        {"id": "c1", "ack_server": "feed-mcp", "url": "https://x.com", "title": "T", "source_name": "S", "published_at": "2026-01-01T00:00:00Z"}
+        {
+            "id": "c1",
+            "ack_server": "feed-mcp",
+            "url": "https://x.com",
+            "title": "T",
+            "source_name": "S",
+            "published_at": "2026-01-01T00:00:00Z",
+        }
     ]
     ctx = AgentTickContext()
     ctx.mark_contents_prefetched(events, {})
@@ -558,7 +627,14 @@ async def test_get_content_events_caches_on_second_call():
 
 @pytest.mark.asyncio
 async def test_get_content_events_stores_in_ctx():
-    event = {"id": "c1", "ack_server": "feed-mcp", "url": "https://x.com", "title": "T", "source_name": "S", "published_at": "2026-01-01T00:00:00Z"}
+    event = {
+        "id": "c1",
+        "ack_server": "feed-mcp",
+        "url": "https://x.com",
+        "title": "T",
+        "source_name": "S",
+        "published_at": "2026-01-01T00:00:00Z",
+    }
     ctx = AgentTickContext()
     ctx.mark_contents_prefetched([event], {})
     await _get_content_events(ctx, {})
@@ -581,6 +657,7 @@ async def test_get_content_events_returns_json_list():
 
 
 # ── _get_context_data (最多调用一次) ─────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_get_context_data_max_one_call():
@@ -611,6 +688,7 @@ async def test_get_context_data_returns_json():
 
 # ── _get_recent_chat ──────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_get_recent_chat_calls_fn_with_n():
     fake_chat_fn = AsyncMock(return_value=[{"role": "user", "content": "hi"}])
@@ -638,6 +716,7 @@ async def test_get_recent_chat_returns_json():
 
 # ── execute() 分发 ────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_execute_increments_steps_taken():
     ctx = AgentTickContext()
@@ -660,7 +739,9 @@ async def test_execute_dispatches_message_push():
     ctx = AgentTickContext()
     ctx.fetched_contents = [{"ack_server": "feed-mcp", "event_id": "1"}]
     deps = ToolDeps()
-    await execute("message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}, ctx, deps)
+    await execute(
+        "message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}, ctx, deps
+    )
     assert ctx.draft_message == "hi"
 
 
@@ -677,7 +758,9 @@ async def test_execute_dispatches_finish_turn_reply():
 async def test_execute_dispatches_finish_turn_skip():
     ctx = AgentTickContext()
     deps = ToolDeps()
-    await execute("finish_turn", {"decision": "skip", "reason": "no_content"}, ctx, deps)
+    await execute(
+        "finish_turn", {"decision": "skip", "reason": "no_content"}, ctx, deps
+    )
     assert ctx.terminal_action == "skip"
 
 
@@ -700,7 +783,9 @@ async def test_execute_unknown_tool_raises():
 @pytest.mark.asyncio
 async def test_execute_web_fetch_uses_max_chars_from_deps():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({"url": "x", "text": "z" * 5_000, "truncated": False})
+    fake_tool.execute.return_value = json.dumps(
+        {"url": "x", "text": "z" * 5_000, "truncated": False}
+    )
     ctx = AgentTickContext()
     deps = ToolDeps(web_fetch_tool=fake_tool, max_chars=2_000)
     raw = await execute("web_fetch", {"url": "https://x.com"}, ctx, deps)
@@ -711,10 +796,14 @@ async def test_execute_web_fetch_uses_max_chars_from_deps():
 @pytest.mark.asyncio
 async def test_execute_web_search_uses_tool_from_deps():
     fake_tool = AsyncMock()
-    fake_tool.execute.return_value = json.dumps({"query": "aurora furia", "result": "..."})
+    fake_tool.execute.return_value = json.dumps(
+        {"query": "aurora furia", "result": "..."}
+    )
     ctx = AgentTickContext()
     deps = ToolDeps(web_search_tool=fake_tool)
-    raw = await execute("web_search", {"query": "aurora furia", "type": "fast"}, ctx, deps)
+    raw = await execute(
+        "web_search", {"query": "aurora furia", "type": "fast"}, ctx, deps
+    )
     result = json.loads(raw)
     assert result["query"] == "aurora furia"
     fake_tool.execute.assert_called_once_with(query="aurora furia", type="fast")

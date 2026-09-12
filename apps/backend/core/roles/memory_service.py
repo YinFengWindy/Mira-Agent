@@ -60,10 +60,7 @@ class RoleMemoryService:
         changed = False
         background = role.background.strip()
         previous_background = str(state.get("seed_background_value") or "").strip()
-        if (
-            background
-            and background != previous_background
-        ):
+        if background and background != previous_background:
             self._write_stable_background(root / "SELF.md", background)
             if previous_background:
                 self._append_once(

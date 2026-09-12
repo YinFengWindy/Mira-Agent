@@ -52,6 +52,8 @@ def next_story_clock(
     story_date = date.fromisoformat(normalize_story_date(current_date))
     current = normalize_story_time_band(current_band)
     next_band = next_story_time_band(current, requested_band)
-    if next_band != current and STORY_TIME_BANDS.index(next_band) < STORY_TIME_BANDS.index(current):
+    if next_band != current and STORY_TIME_BANDS.index(
+        next_band
+    ) < STORY_TIME_BANDS.index(current):
         story_date += timedelta(days=1)
     return story_date.isoformat(), next_band

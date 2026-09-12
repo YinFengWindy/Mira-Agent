@@ -30,7 +30,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 async def _run(args: argparse.Namespace) -> None:
     instances = load_dataset(args.questions, args.contexts)
-    inst = next((item for item in instances if item.question_id == args.question_id), None)
+    inst = next(
+        (item for item in instances if item.question_id == args.question_id), None
+    )
     if inst is None:
         raise SystemExit(f"question_id not found: {args.question_id}")
 

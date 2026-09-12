@@ -100,7 +100,9 @@ class NovelAIRpcHandlers:
             if source is None:
                 raise ValueError("当前图片不是 NovelAI 生成记录，无法重新生成")
             result = await self._service.regenerate(source, session_key=session_key)
-            new_path = str(result.output_paths[0] if result.output_paths else "").strip()
+            new_path = str(
+                result.output_paths[0] if result.output_paths else ""
+            ).strip()
             if not new_path:
                 raise RuntimeError("NovelAI 重新生成未返回图片路径")
             session = await self._session_manager.replace_message_media(
@@ -132,7 +134,11 @@ class NovelAIRpcHandlers:
     async def prompt_tags_list(self, _payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.novelai.prompt_tags.list``: the editable prompt-tag catalog."""
 
-        return {"entries": [entry.to_dict() for entry in self._prompt_tag_store.list_entries()]}
+        return {
+            "entries": [
+                entry.to_dict() for entry in self._prompt_tag_store.list_entries()
+            ]
+        }
 
     async def prompt_tags_upsert(self, payload: dict[str, Any]) -> dict[str, Any]:
         """``plugin.novelai.prompt_tags.upsert``: validate and save one entry."""

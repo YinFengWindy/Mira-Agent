@@ -41,11 +41,16 @@ def test_baseline_cosine_ranking_basic(tmp_path):
     store = MemoryStore2(tmp_path / "m.db")
 
     store.upsert_item("preference", "高相似条目 A", embedding=[1.0, 0.0, 0.0], extra={})
-    store.upsert_item("procedure", "中等相似条目 B", embedding=[0.8, 0.6, 0.0], extra={})
+    store.upsert_item(
+        "procedure", "中等相似条目 B", embedding=[0.8, 0.6, 0.0], extra={}
+    )
     store.upsert_item("event", "低相似条目 C", embedding=[0.0, 1.0, 0.0], extra={})
 
     # 查询向量与 A 最相似，与 C 正交
-    results = cast(list[dict[str, object]], store.vector_search(query_vec=[1.0, 0.0, 0.0], top_k=3, score_threshold=0.0))
+    results = cast(
+        list[dict[str, object]],
+        store.vector_search(query_vec=[1.0, 0.0, 0.0], top_k=3, score_threshold=0.0),
+    )
 
     assert len(results) == 3
     assert _as_record(results[0])["summary"] == "高相似条目 A"
@@ -97,7 +102,9 @@ def test_baseline_top_k_limits_result_count(tmp_path):
     store = MemoryStore2(tmp_path / "m.db")
 
     for i in range(10):
-        store.upsert_item("event", f"条目 {i}", embedding=[1.0 - i * 0.05, 0.0], extra={})
+        store.upsert_item(
+            "event", f"条目 {i}", embedding=[1.0 - i * 0.05, 0.0], extra={}
+        )
 
     results = store.vector_search(query_vec=[1.0, 0.0], top_k=3, score_threshold=0.0)
     assert len(results) == 3
@@ -149,7 +156,11 @@ def test_boundary_high_reinforcement_not_boosted(tmp_path):
     store.upsert_item(
         "procedure",
         "条目 A（常用且新鲜）",
-        embedding=[0.90, 0.436, 0.0],  # cosine([1,0,0], [0.9,0.436,0]) = 0.9/sqrt(0.81+0.19) = 0.9
+        embedding=[
+            0.90,
+            0.436,
+            0.0,
+        ],  # cosine([1,0,0], [0.9,0.436,0]) = 0.9/sqrt(0.81+0.19) = 0.9
         extra={},
     )
     item_a_id = store.list_by_type("procedure")[0]["id"]
@@ -164,10 +175,16 @@ def test_boundary_high_reinforcement_not_boosted(tmp_path):
     store.upsert_item(
         "procedure",
         "条目 B（一次性，陈旧）",
-        embedding=[0.95, 0.312, 0.0],  # cosine([1,0,0], [0.95,0.312,0]) = 0.95/sqrt(0.9025+0.097) ≈ 0.95
+        embedding=[
+            0.95,
+            0.312,
+            0.0,
+        ],  # cosine([1,0,0], [0.95,0.312,0]) = 0.95/sqrt(0.9025+0.097) ≈ 0.95
         extra={},
     )
-    item_b_id = [r["id"] for r in store.list_by_type("procedure") if r["id"] != item_a_id][0]
+    item_b_id = [
+        r["id"] for r in store.list_by_type("procedure") if r["id"] != item_a_id
+    ][0]
     store._db.execute(
         "UPDATE memory_items SET reinforcement=1, created_at=?, updated_at=? WHERE id=?",
         (_days_ago(30), _days_ago(30), item_b_id),
@@ -232,7 +249,9 @@ def test_boundary_recent_update_not_boosted(tmp_path):
         embedding=[0.92, 0.392, 0.0],
         extra={},
     )
-    item_b_id = [r["id"] for r in store.list_by_type("preference") if r["id"] != item_a_id][0]
+    item_b_id = [
+        r["id"] for r in store.list_by_type("preference") if r["id"] != item_a_id
+    ][0]
     store._db.execute(
         "UPDATE memory_items SET reinforcement=1, created_at=?, updated_at=? WHERE id=?",
         (_days_ago(60), _days_ago(60), item_b_id),
@@ -307,15 +326,22 @@ def test_emotional_weight_extends_hotness_half_life_in_ranking(tmp_path):
     )
 
     assert results[0]["summary"] == "情绪事件"
-    assert cast(dict[str, float], _as_record(results[0]).get("_score_debug", {}))["hotness"] > cast(
-        dict[str, float], _as_record(results[1]).get("_score_debug", {})
-    )["hotness"]
+    assert (
+        cast(dict[str, float], _as_record(results[0]).get("_score_debug", {}))[
+            "hotness"
+        ]
+        > cast(dict[str, float], _as_record(results[1]).get("_score_debug", {}))[
+            "hotness"
+        ]
+    )
 
 
 # ─── C. 热度公式规格预验证（与实现无关的数学验证）──────────────────────────────
 
 
-def _hotness_formula(reinforcement: int, age_days: float, half_life: float = 14.0) -> float:
+def _hotness_formula(
+    reinforcement: int, age_days: float, half_life: float = 14.0
+) -> float:
     """热度公式：sigmoid(log1p(reinforcement)) * exp_decay(age_days)
     直接按设计文档内联，用于验证公式数学正确性，不依赖 store.py 实现。
     """
@@ -340,7 +366,9 @@ def test_hotness_formula_half_life_decay():
     """[SPEC] 在 half_life 天后热度衰减到初始值的一半（时间衰减正确性）。"""
     half_life = 14.0
     score_fresh = _hotness_formula(reinforcement=5, age_days=0, half_life=half_life)
-    score_at_half_life = _hotness_formula(reinforcement=5, age_days=half_life, half_life=half_life)
+    score_at_half_life = _hotness_formula(
+        reinforcement=5, age_days=half_life, half_life=half_life
+    )
     ratio = score_at_half_life / score_fresh
     assert abs(ratio - 0.5) < 0.01, f"half_life 处应衰减到 50%，实际 {ratio:.4f}"
 
@@ -357,7 +385,7 @@ def test_hotness_formula_blended_score_changes_ranking():
     half_life = 14.0
 
     sem_a, reinforcement_a, age_a = 0.90, 10, 1
-    sem_b, reinforcement_b, age_b = 0.95,  1, 30
+    sem_b, reinforcement_b, age_b = 0.95, 1, 30
 
     hot_a = _hotness_formula(reinforcement_a, age_a, half_life)
     hot_b = _hotness_formula(reinforcement_b, age_b, half_life)

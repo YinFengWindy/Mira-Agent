@@ -20,10 +20,14 @@ async def test_subscription_is_idempotent_and_can_be_removed():
 
     bus.subscribe_outbound("chat", receive)
     bus.subscribe_outbound("chat", receive)
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="hello"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="hello")
+    )
     assert received == ["hello"]
     bus.unsubscribe_outbound("chat", receive)
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="removed"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="removed")
+    )
     assert received == ["hello"]
 
 
@@ -43,7 +47,9 @@ async def test_buffered_message_uses_replacement_transport_after_handover():
     bus.subscribe_outbound("chat", old)
     async with bus.transport_lock:
         dispatcher = asyncio.create_task(bus.dispatch_outbound())
-        await bus.publish_outbound(OutboundMessage(channel="chat", chat_id="one", content="buffered"))
+        await bus.publish_outbound(
+            OutboundMessage(channel="chat", chat_id="one", content="buffered")
+        )
         await asyncio.sleep(0)
         assert received == []
         bus.unsubscribe_outbound("chat", old)
@@ -62,11 +68,15 @@ async def test_buffered_message_uses_replacement_transport_after_handover():
 async def test_late_completion_after_intake_closes_releases_its_generation():
     bus = MessageBus()
     await bus.close_inbound()
-    core = SimpleNamespace(stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock()))
+    core = SimpleNamespace(
+        stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock())
+    )
     generation = RuntimeCandidate(1, core, SimpleNamespace())
     retained = generation.acquire()
     await generation.retire()
-    await bus.publish_inbound(SpawnCompletionItem("desktop", "one", object(), runtime_lease=retained))
+    await bus.publish_inbound(
+        SpawnCompletionItem("desktop", "one", object(), runtime_lease=retained)
+    )
     assert generation.drained.is_set()
     assert bus.inbound_size == 0
 

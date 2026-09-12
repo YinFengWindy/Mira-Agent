@@ -39,7 +39,9 @@ class ConfigTransaction:
             if journal["state"] == "committed":
                 self.journal_path.unlink()
             else:
-                raise RuntimeError("runtime configuration requires transaction recovery")
+                raise RuntimeError(
+                    "runtime configuration requires transaction recovery"
+                )
         journal = {
             "state": "prepared",
             "config_before": self._read(self.config_path),
@@ -53,7 +55,11 @@ class ConfigTransaction:
                     self.roles_path,
                     json.dumps(roles_payload, ensure_ascii=False, indent=2),
                 )
-            atomic_save_json(self.journal_path, {**journal, "state": "committed"}, domain="runtime.config")
+            atomic_save_json(
+                self.journal_path,
+                {**journal, "state": "committed"},
+                domain="runtime.config",
+            )
         except BaseException:
             self._restore(self.config_path, journal["config_before"])
             self._restore(self.roles_path, journal["roles_before"])
@@ -64,7 +70,9 @@ class ConfigTransaction:
         try:
             self.journal_path.unlink()
         except OSError as error:
-            logger.warning("Committed configuration journal cleanup deferred: %s", error)
+            logger.warning(
+                "Committed configuration journal cleanup deferred: %s", error
+            )
 
     @staticmethod
     def _read(path: Path) -> str | None:

@@ -195,7 +195,6 @@ class QueryRewriter:
 <history_query>...</history_query>
 """
 
-
     @staticmethod
     def _build_procedure_prompt(user_msg: str) -> str:
         return f"""只输出一行检索 query，不要解释。
@@ -268,6 +267,15 @@ class QueryRewriter:
         # 1. 先压缩所有连续空白为单空格，再剔除首尾句号和空格。
         text = re.sub(r"\s+", " ", str(raw_output or "")).strip("。 .")
         # 2. 若清洗后命中已知哨兵词，返回空，避免把占位符当 query 送入向量检索。
-        if text.lower() in {"", "空", "无", "none", "null", "n/a", "not applicable", "(empty)"}:
+        if text.lower() in {
+            "",
+            "空",
+            "无",
+            "none",
+            "null",
+            "n/a",
+            "not applicable",
+            "(empty)",
+        }:
             return ""
         return text

@@ -24,7 +24,10 @@ async def test_stop_closes_receive_loop_before_sdk_plugin_shutdown():
     def bot_exit():
         assert disconnected.is_set()
 
-    bot = SimpleNamespace(adapter=SimpleNamespace(connect_websocket=receive), bot_exit=Mock(side_effect=bot_exit))
+    bot = SimpleNamespace(
+        adapter=SimpleNamespace(connect_websocket=receive),
+        bot_exit=Mock(side_effect=bot_exit),
+    )
     runtime = QQSdkRuntime(bot)
     task = asyncio.create_task(bot.adapter.connect_websocket())
     await connected.wait()
@@ -38,7 +41,9 @@ async def test_stop_before_connection_start_still_unloads_sdk():
     async def receive():
         raise AssertionError("must not connect")
 
-    bot = SimpleNamespace(adapter=SimpleNamespace(connect_websocket=receive), bot_exit=Mock())
+    bot = SimpleNamespace(
+        adapter=SimpleNamespace(connect_websocket=receive), bot_exit=Mock()
+    )
     runtime = QQSdkRuntime(bot)
     await runtime.stop()
     bot.bot_exit.assert_called_once()
@@ -56,10 +61,14 @@ async def test_stop_waits_for_receive_loop_running_on_sdk_thread():
         finally:
             closed.append("socket")
 
-    bot = SimpleNamespace(adapter=SimpleNamespace(connect_websocket=receive),
-                          bot_exit=Mock(side_effect=lambda: closed.append("plugins")))
+    bot = SimpleNamespace(
+        adapter=SimpleNamespace(connect_websocket=receive),
+        bot_exit=Mock(side_effect=lambda: closed.append("plugins")),
+    )
     runtime = QQSdkRuntime(bot)
-    thread = Thread(target=lambda: asyncio.run(bot.adapter.connect_websocket()), daemon=True)
+    thread = Thread(
+        target=lambda: asyncio.run(bot.adapter.connect_websocket()), daemon=True
+    )
     thread.start()
     await asyncio.wait_for(asyncio.wrap_future(connected), timeout=1)
     await asyncio.wait_for(runtime.stop(), timeout=1)

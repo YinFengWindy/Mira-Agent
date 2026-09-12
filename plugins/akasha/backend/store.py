@@ -10,8 +10,15 @@ from pathlib import Path
 import numpy as np
 
 from plugins.akasha.backend.core import (
-    AkashaNode, ActivationUpdate, EdgeUpdate, ActivationEventRow,
-    SourceMessage, turn_key, serialize_f32, deserialize_f32, parse_ts_unix,
+    AkashaNode,
+    ActivationUpdate,
+    EdgeUpdate,
+    ActivationEventRow,
+    SourceMessage,
+    turn_key,
+    serialize_f32,
+    deserialize_f32,
+    parse_ts_unix,
     advance_salience_state,
     bounded_add,
     causal_salience,
@@ -20,7 +27,6 @@ from plugins.akasha.backend.core import (
     initial_strength,
     normalize as _normalize,
 )
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS akasha_query_log (
@@ -201,8 +207,12 @@ class AkashaStore:
     def ensure_schema(self) -> None:
         # 1. schema 可重复执行，用于启动和迁移前检查。
         with self._lock:
-            if "run_id" not in _table_columns(self._db, "akasha_source_session_snapshot"):
-                _ = self._db.execute("DROP TABLE IF EXISTS akasha_source_session_snapshot")
+            if "run_id" not in _table_columns(
+                self._db, "akasha_source_session_snapshot"
+            ):
+                _ = self._db.execute(
+                    "DROP TABLE IF EXISTS akasha_source_session_snapshot"
+                )
             if "message_count" not in _table_columns(self._db, "akasha_migration_runs"):
                 _ = self._db.execute("DROP TABLE IF EXISTS akasha_migration_runs")
             _ = self._db.executescript(SCHEMA)
@@ -301,7 +311,11 @@ class AkashaStore:
                 """,
                 (
                     message.id,
-                    _role_id_for_session(message.session_key) if role_id is None else role_id,
+                    (
+                        _role_id_for_session(message.session_key)
+                        if role_id is None
+                        else role_id
+                    ),
                     content_hash(message.content),
                     model,
                     serialize_f32(vector),
@@ -325,8 +339,7 @@ class AkashaStore:
                 (model,),
             ).fetchall()
         return [
-            (str(row["message_id"]), deserialize_f32(row["embedding"]))
-            for row in rows
+            (str(row["message_id"]), deserialize_f32(row["embedding"])) for row in rows
         ]
 
     # 删除指定消息的 embedding cache。
@@ -464,7 +477,9 @@ class AkashaStore:
                 if message.salience is None
                 else min(1.0, max(0.0, float(message.salience)))
             )
-            next_sum, next_count = advance_salience_state(prior_sum, prior_count, vector)
+            next_sum, next_count = advance_salience_state(
+                prior_sum, prior_count, vector
+            )
             row = self._db.execute(
                 "SELECT * FROM akasha_nodes WHERE key = ?",
                 (key,),
@@ -533,7 +548,9 @@ class AkashaStore:
             self._db.commit()
         return key
 
-    def _load_salience_state_locked(self, role_id: str) -> tuple[np.ndarray | None, int]:
+    def _load_salience_state_locked(
+        self, role_id: str
+    ) -> tuple[np.ndarray | None, int]:
         state_key = _salience_state_key(role_id)
         row = self._db.execute(
             "SELECT vector_sum, count FROM akasha_salience_state WHERE key = ?",
@@ -644,7 +661,9 @@ class AkashaStore:
             for row in rows
         }
         meta = {
-            (str(row["src_key"]), str(row["dst_key"])): float(row["last_used_ts"] or 0.0)
+            (str(row["src_key"]), str(row["dst_key"])): float(
+                row["last_used_ts"] or 0.0
+            )
             for row in rows
         }
         return edges, meta
@@ -739,7 +758,9 @@ class AkashaStore:
                 ).fetchall()
                 return {str(r["dst_key"]): float(r["weight"] or 0.0) for r in rows}
 
-            for src_key, dst_key, new_w in heterosynaptic_depression(updates, _out_neighbors):
+            for src_key, dst_key, new_w in heterosynaptic_depression(
+                updates, _out_neighbors
+            ):
                 _ = self._db.execute(
                     "UPDATE akasha_edges SET weight = ? WHERE src_key = ? AND dst_key = ?",
                     (new_w, src_key, dst_key),
@@ -792,7 +813,11 @@ class AkashaStore:
             where = "WHERE key LIKE ? OR anchor_id LIKE ?"
             like = f"%{q.strip()}%"
             params.extend([like, like])
-        safe_sort = sort_by if sort_by in {"updated_at", "first_ts_unix", "strength", "resource"} else "updated_at"
+        safe_sort = (
+            sort_by
+            if sort_by in {"updated_at", "first_ts_unix", "strength", "resource"}
+            else "updated_at"
+        )
         safe_order = "ASC" if sort_order.lower() == "asc" else "DESC"
         page = max(1, int(page))
         page_size = max(1, min(int(page_size), 200))
@@ -898,10 +923,24 @@ class AkashaStore:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    query_id, session_key, role_id, seq, query_text, intent, ts,
-                    seed_count, pool_count, activated_count, activation_threshold,
-                    dense_count, ripple_count, inject_chars, source_ref_count,
-                    activation_items_json, dense_items_json, ripple_items_json,
+                    query_id,
+                    session_key,
+                    role_id,
+                    seq,
+                    query_text,
+                    intent,
+                    ts,
+                    seed_count,
+                    pool_count,
+                    activated_count,
+                    activation_threshold,
+                    dense_count,
+                    ripple_count,
+                    inject_chars,
+                    source_ref_count,
+                    activation_items_json,
+                    dense_items_json,
+                    ripple_items_json,
                     text_block_preview,
                 ),
             )

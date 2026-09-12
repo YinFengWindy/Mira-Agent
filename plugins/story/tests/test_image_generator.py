@@ -7,6 +7,7 @@ import pytest
 from plugins.story.backend.image_generator import StoryImageGenerator
 from plugins.story.backend.errors import StoryInvalidOutputError
 
+
 class RecordingImageTool:
     def __init__(self, result: dict) -> None:
         self.calls: list[dict] = []
@@ -53,7 +54,10 @@ async def test_passes_a_model_ready_character_prompt_without_rewriting_it() -> N
         },
     )
 
-    assert tool.calls[0]["prompt"] == "white background, 1girl, solo, girl, holding umbrella, emotional close-up"
+    assert (
+        tool.calls[0]["prompt"]
+        == "white background, 1girl, solo, girl, holding umbrella, emotional close-up"
+    )
     assert tool.calls[0]["negative_prompt"] == ""
     assert tool.calls[0]["model"] == "nai-diffusion-4-5-full"
 
@@ -71,7 +75,10 @@ async def test_passes_a_model_ready_scene_prompt_without_removing_tags() -> None
         },
     )
 
-    assert tool.calls[0]["prompt"] == "white background, warm living room, young woman feeding man, soft lamplight"
+    assert (
+        tool.calls[0]["prompt"]
+        == "white background, warm living room, young woman feeding man, soft lamplight"
+    )
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from bootstrap.runtime.generations import RuntimeLease
 
-_current: ContextVar[RuntimeLease | None] = ContextVar("runtime_task_lease", default=None)
+_current: ContextVar[RuntimeLease | None] = ContextVar(
+    "runtime_task_lease", default=None
+)
 
 
 def current_runtime_lease():

@@ -6,6 +6,7 @@ from typing import Any
 
 from bus.events import InboundMessage
 
+
 @dataclass
 class ChatMessage:
     role: str
@@ -48,7 +49,7 @@ def to_tool_call_groups(raw_chain: list[dict]) -> list[ToolCallGroup]:
     for group in raw_chain:
         text = str(group.get("text", "") or "")
         calls: list[ToolCall] = []
-        for call in (group.get("calls") or []):
+        for call in group.get("calls") or []:
             args = call.get("arguments")
             calls.append(
                 ToolCall(

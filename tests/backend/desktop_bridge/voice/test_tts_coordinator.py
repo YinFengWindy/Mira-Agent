@@ -10,7 +10,10 @@ from desktop_bridge.voice.role_tts_settings import (
     resolve_role_tts_settings,
 )
 from desktop_bridge.voice.tts_coordinator import TtsTurnCoordinator
-from desktop_bridge.voice.voice_service import VoiceOperationMetrics, VoiceSynthesisResult
+from desktop_bridge.voice.voice_service import (
+    VoiceOperationMetrics,
+    VoiceSynthesisResult,
+)
 
 
 class _VoiceService:
@@ -20,9 +23,13 @@ class _VoiceService:
         self.calls: list[dict[str, object]] = []
         self.error = error
 
-    def stream_synthesize_result(self, text: str, *, voice_id: str, speed: float, emotion: str, cancel_event=None) -> VoiceSynthesisResult:
+    def stream_synthesize_result(
+        self, text: str, *, voice_id: str, speed: float, emotion: str, cancel_event=None
+    ) -> VoiceSynthesisResult:
         del cancel_event
-        self.calls.append({"text": text, "voice_id": voice_id, "speed": speed, "emotion": emotion})
+        self.calls.append(
+            {"text": text, "voice_id": voice_id, "speed": speed, "emotion": emotion}
+        )
         if self.error is not None:
             raise self.error
         return VoiceSynthesisResult(
@@ -206,7 +213,9 @@ async def test_disabled_role_voice_does_not_start_provider_work() -> None:
         session_key="role:mira",
         request_id="turn-4",
         turn_id="voice-turn-4",
-        settings=resolve_role_tts_settings({"tts": {"enabled": False, "voice_id": "mira"}}, "平静"),
+        settings=resolve_role_tts_settings(
+            {"tts": {"enabled": False, "voice_id": "mira"}}, "平静"
+        ),
         emit_event=lambda _payload: None,
     )
 

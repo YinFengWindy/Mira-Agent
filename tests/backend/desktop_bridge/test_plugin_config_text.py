@@ -113,13 +113,7 @@ def test_rendered_values_round_trip_through_toml_parsing():
 
 
 def test_a_plugin_id_that_is_a_prefix_of_another_does_not_collide():
-    text = (
-        "[plugins.foo]\n"
-        "value = 1\n"
-        "\n"
-        "[plugins.foobar]\n"
-        "value = 2\n"
-    )
+    text = "[plugins.foo]\n" "value = 1\n" "\n" "[plugins.foobar]\n" "value = 2\n"
 
     result = merge_plugin_table(text, "foo", {"value": 3})
 

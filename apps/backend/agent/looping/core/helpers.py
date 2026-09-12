@@ -59,7 +59,6 @@ def _item_content(item: InboundItem) -> str:
     )
 
 
-
 def _build_resume_content(state: TurnInterruptState, new_message: str) -> str:
     """将中断态 + 用户补充消息拼装为续跑输入。"""
     parts = [

@@ -424,7 +424,9 @@ async def test_resumed_interrupt_state_completes_normally(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_desktop_interrupt_state_is_not_spliced_into_follow_up_message(tmp_path: Path):
+async def test_desktop_interrupt_state_is_not_spliced_into_follow_up_message(
+    tmp_path: Path,
+):
     loop = _make_loop(tmp_path)
     session_key = "role:mira"
     loop._interrupt_states[session_key] = TurnInterruptState(  # type: ignore[attr-defined]

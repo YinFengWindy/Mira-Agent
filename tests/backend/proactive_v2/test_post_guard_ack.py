@@ -5,6 +5,7 @@ TDD — Phase 6: ProactiveTurnPipeline — Post-guard + ACK
   A. 模块级纯函数（build_delivery_key、ack_* helpers）
   B. run() 集成测试 — 验证 flow 分支正确触发 guard 和 ACK
 """
+
 from __future__ import annotations
 from typing import Any, cast
 
@@ -32,12 +33,12 @@ from tests.backend.proactive_v2.conftest import (
     make_proactive_pipeline,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # A. 模块级纯函数测试
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ── build_delivery_key ────────────────────────────────────────────────────
+
 
 def _make_ctx(cited: list[str] = cast(Any, ()), message: str = "") -> AgentTickContext:
     ctx = AgentTickContext()
@@ -85,11 +86,23 @@ def test_delivery_key_is_16_chars():
 def test_delivery_key_prefers_content_url_over_event_id():
     ctx1 = _make_ctx(cited=["feed-mcp:1"])
     ctx1.fetched_contents = [
-        {"id": "1", "event_id": "1", "ack_server": "feed-mcp", "url": "https://example.com/a", "title": "A"}
+        {
+            "id": "1",
+            "event_id": "1",
+            "ack_server": "feed-mcp",
+            "url": "https://example.com/a",
+            "title": "A",
+        }
     ]
     ctx2 = _make_ctx(cited=["feed-mcp:2"])
     ctx2.fetched_contents = [
-        {"id": "2", "event_id": "2", "ack_server": "feed-mcp", "url": "https://example.com/a", "title": "A"}
+        {
+            "id": "2",
+            "event_id": "2",
+            "ack_server": "feed-mcp",
+            "url": "https://example.com/a",
+            "title": "A",
+        }
     ]
     assert build_delivery_key(ctx1) == build_delivery_key(ctx2)
 
@@ -97,16 +110,29 @@ def test_delivery_key_prefers_content_url_over_event_id():
 def test_delivery_key_falls_back_to_source_and_title_when_url_missing():
     ctx1 = _make_ctx(cited=["feed-mcp:1"])
     ctx1.fetched_contents = [
-        {"id": "1", "event_id": "1", "ack_server": "feed-mcp", "source": "HLTV", "title": "Same title"}
+        {
+            "id": "1",
+            "event_id": "1",
+            "ack_server": "feed-mcp",
+            "source": "HLTV",
+            "title": "Same title",
+        }
     ]
     ctx2 = _make_ctx(cited=["feed-mcp:2"])
     ctx2.fetched_contents = [
-        {"id": "2", "event_id": "2", "ack_server": "feed-mcp", "source": "HLTV", "title": "Same title"}
+        {
+            "id": "2",
+            "event_id": "2",
+            "ack_server": "feed-mcp",
+            "source": "HLTV",
+            "title": "Same title",
+        }
     ]
     assert build_delivery_key(ctx1) == build_delivery_key(ctx2)
 
 
 # ── ack_discarded ─────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_ack_discarded_720h():
@@ -144,6 +170,7 @@ async def test_ack_discarded_none_ack_fn_no_error():
 
 
 # ── ack_post_guard_fail ───────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_ack_post_guard_fail_cited_24h():
@@ -183,12 +210,13 @@ async def test_ack_post_guard_fail_all_three_buckets():
     ctx.discarded_item_ids = {"feed-mcp:3"}
     sink = FakeAckSink()
     await ack_post_guard_fail(ctx, sink)
-    assert sink.acked("feed-mcp:1", 24)   # cited
-    assert sink.acked("feed-mcp:2", 24)   # uncited interesting
+    assert sink.acked("feed-mcp:1", 24)  # cited
+    assert sink.acked("feed-mcp:2", 24)  # uncited interesting
     assert sink.acked("feed-mcp:3", 720)  # discarded
 
 
 # ── ack_on_success ────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_ack_on_success_content_cited_168h():
@@ -226,8 +254,8 @@ async def test_ack_on_success_uncited_interesting_24h():
     ctx.interesting_item_ids = {"feed-mcp:c1", "feed-mcp:c2"}  # c2 uncited
     sink = FakeAckSink()
     await ack_on_success(ctx, sink)
-    assert sink.acked("feed-mcp:c1", 168)   # cited → 168h
-    assert sink.acked("feed-mcp:c2", 24)    # uncited interesting → 24h
+    assert sink.acked("feed-mcp:c1", 168)  # cited → 168h
+    assert sink.acked("feed-mcp:c2", 24)  # uncited interesting → 24h
 
 
 @pytest.mark.asyncio
@@ -274,8 +302,10 @@ async def test_ack_on_success_cited_not_in_fetched_not_acked():
 # B. run() 集成测试
 # ═══════════════════════════════════════════════════════════════════════════
 
-def _make_pipeline_with_sink(llm, *, state=None, sender=None, deduper=None,
-                            tool_deps_extra=None, cfg=None):
+
+def _make_pipeline_with_sink(
+    llm, *, state=None, sender=None, deduper=None, tool_deps_extra=None, cfg=None
+):
     sink = FakeAckSink()
     if state is None:
         state = FakeStateStore()
@@ -285,15 +315,19 @@ def _make_pipeline_with_sink(llm, *, state=None, sender=None, deduper=None,
     )
     gateway = GatewayDeps(
         alert_fn=AsyncMock(return_value=[]),
-        feed_fn=AsyncMock(return_value=[{
-            "id": "1",
-            "event_id": "1",
-            "ack_server": "feed-mcp",
-            "title": "candidate",
-            "source_name": "test-feed",
-            "url": "",
-            "published_at": "",
-        }]),
+        feed_fn=AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "event_id": "1",
+                    "ack_server": "feed-mcp",
+                    "title": "candidate",
+                    "source_name": "test-feed",
+                    "url": "",
+                    "published_at": "",
+                }
+            ]
+        ),
         context_fn=AsyncMock(return_value=[]),
     )
     if tool_deps_extra:
@@ -322,6 +356,7 @@ def _make_pipeline_with_sink(llm, *, state=None, sender=None, deduper=None,
 
 # ── delivery_dedupe ────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_delivery_dedupe_hit_prevents_send():
     state = FakeStateStore()
@@ -329,10 +364,12 @@ async def test_delivery_dedupe_hit_prevents_send():
     sender = AsyncMock()
     sender.send.return_value = True
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, state=state, sender=sender)
     await tick.run()
 
@@ -345,10 +382,12 @@ async def test_delivery_dedupe_hit_acks_cited_24h():
     state.set_is_duplicate(True)
     event = {"id": "1", "ack_server": "feed-mcp"}
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, state=state, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -362,10 +401,12 @@ async def test_delivery_dedupe_hit_no_mark_delivery():
     state = FakeStateStore()
     state.set_is_duplicate(True)
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, state=state)
     await tick.run()
 
@@ -374,6 +415,7 @@ async def test_delivery_dedupe_hit_no_mark_delivery():
 
 # ── message_dedupe ────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_message_dedupe_hit_prevents_send():
     deduper = AsyncMock()
@@ -381,10 +423,12 @@ async def test_message_dedupe_hit_prevents_send():
     sender = AsyncMock()
     sender.send.return_value = True
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, sender=sender, deduper=deduper)
     await tick.run()
 
@@ -397,10 +441,12 @@ async def test_message_dedupe_hit_acks_cited_24h():
     deduper.is_duplicate = AsyncMock(return_value=(True, "dup"))
     event = {"id": "1", "ack_server": "feed-mcp"}
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hello", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm,
         deduper=deduper,
@@ -418,12 +464,16 @@ async def test_message_dedupe_disabled_skips_check():
     sender = AsyncMock()
     sender.send.return_value = True
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
-        llm, sender=sender, deduper=deduper,
+        llm,
+        sender=sender,
+        deduper=deduper,
         cfg=cfg_with(message_dedupe_enabled=False),
     )
     await tick.run()
@@ -437,10 +487,12 @@ async def test_message_dedupe_called_with_correct_message():
     deduper = AsyncMock()
     deduper.is_duplicate = AsyncMock(return_value=(False, ""))
 
-    llm = FakeLLM([
-        ("message_push", {"message": "the message", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "the message", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, deduper=deduper)
     await tick.run()
 
@@ -451,14 +503,17 @@ async def test_message_dedupe_called_with_correct_message():
 
 # ── send success ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_send_success_calls_sender():
     sender = AsyncMock()
     sender.send.return_value = True
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, sender=sender)
     await tick.run()
     sender.send.assert_called_once_with("hi")
@@ -467,10 +522,12 @@ async def test_send_success_calls_sender():
 @pytest.mark.asyncio
 async def test_send_success_marks_delivery():
     state = FakeStateStore()
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, state=state)
     await tick.run()
     assert len(state._deliveries) == 1
@@ -479,11 +536,13 @@ async def test_send_success_marks_delivery():
 @pytest.mark.asyncio
 async def test_send_success_acks_content_168h():
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        ("message_push", {"message": "hi", "evidence": ["feed-mcp:c1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            ("message_push", {"message": "hi", "evidence": ["feed-mcp:c1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -493,11 +552,13 @@ async def test_send_success_acks_content_168h():
 
 @pytest.mark.asyncio
 async def test_send_success_acks_discarded_720h():
-    llm = FakeLLM([
-        ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm)
     await tick.run()
     assert sink.acked("feed-mcp:1", 720)
@@ -505,16 +566,19 @@ async def test_send_success_acks_discarded_720h():
 
 # ── send failure ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_send_failure_no_mark_delivery():
     state = FakeStateStore()
     sender = AsyncMock()
     sender.send.return_value = False
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, state=state, sender=sender)
     await tick.run()
 
@@ -526,10 +590,12 @@ async def test_send_failure_no_ack_cited():
     sender = AsyncMock()
     sender.send.return_value = False
 
-    llm = FakeLLM([
-        ("message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "hi", "evidence": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, sender=sender)
     await tick.run()
 
@@ -541,11 +607,13 @@ async def test_send_failure_acks_discarded_720h():
     sender = AsyncMock()
     sender.send.return_value = False
 
-    llm = FakeLLM([
-        ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, sender=sender)
     await tick.run()
 
@@ -554,12 +622,15 @@ async def test_send_failure_acks_discarded_720h():
 
 # ── skip → only discarded ACK ─────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_skip_acks_discarded_720h():
-    llm = FakeLLM([
-        ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
-        ("finish_turn", {"decision": "skip", "reason": "no_content"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("mark_not_interesting", {"item_ids": ["feed-mcp:1"]}),
+            ("finish_turn", {"decision": "skip", "reason": "no_content"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm)
     await tick.run()
 
@@ -588,16 +659,22 @@ async def test_no_terminal_action_no_ack_cited():
 
 # ── cited vs discarded conflict ───────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cited_wins_over_discarded_gets_168h_not_720h():
     """先 mark_not_interesting 再 send_message → cited 优先，168h 而非 720h"""
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        ("mark_not_interesting", {"item_ids": ["feed-mcp:c1"]}),  # discarded
-        ("message_push", {"message": "actually good", "evidence": ["feed-mcp:c1"]}),  # cited wins
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            ("mark_not_interesting", {"item_ids": ["feed-mcp:c1"]}),  # discarded
+            (
+                "message_push",
+                {"message": "actually good", "evidence": ["feed-mcp:c1"]},
+            ),  # cited wins
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -610,6 +687,7 @@ async def test_cited_wins_over_discarded_gets_168h_not_720h():
 
 # ── alert ACK 语义（§20：post-guard 失败时 alert 不 ACK）────────────────────
 
+
 @pytest.mark.asyncio
 async def test_ack_post_guard_fail_alert_cited_uses_alert_ack_fn():
     """post-guard 失败时，alert cited key → alert_ack_fn（独立通道，无 TTL），不走普通 ack_fn。"""
@@ -621,7 +699,7 @@ async def test_ack_post_guard_fail_alert_cited_uses_alert_ack_fn():
     alert_sink = FakeAlertAckSink()
     await ack_post_guard_fail(ctx, sink, alert_ack_fn=alert_sink)
     assert alert_sink.called_with("alert-mcp:a1")  # alert 走独立通道
-    assert sink.not_acked("alert-mcp:a1")           # 不走普通 ack_fn
+    assert sink.not_acked("alert-mcp:a1")  # 不走普通 ack_fn
 
 
 @pytest.mark.asyncio
@@ -647,9 +725,9 @@ async def test_ack_post_guard_fail_content_cited_and_alert_cited_separate_channe
     sink = FakeAckSink()
     alert_sink = FakeAlertAckSink()
     await ack_post_guard_fail(ctx, sink, alert_ack_fn=alert_sink)
-    assert sink.acked("feed-mcp:c1", 24)           # content → 24h
+    assert sink.acked("feed-mcp:c1", 24)  # content → 24h
     assert alert_sink.called_with("alert-mcp:a1")  # alert → 独立通道
-    assert sink.not_acked("alert-mcp:a1")           # alert 不重复走 ack_fn
+    assert sink.not_acked("alert-mcp:a1")  # alert 不重复走 ack_fn
 
 
 @pytest.mark.asyncio
@@ -667,10 +745,13 @@ async def test_ack_post_guard_fail_uncited_fetched_alert_also_acked():
     alert_sink = FakeAlertAckSink()
     await ack_post_guard_fail(ctx, sink, alert_ack_fn=alert_sink)
     assert alert_sink.called_with("alert-mcp:a1")  # cited alert → ack
-    assert alert_sink.called_with("alert-mcp:a2")  # uncited alert → 也 ack，不留给下一 tick
+    assert alert_sink.called_with(
+        "alert-mcp:a2"
+    )  # uncited alert → 也 ack，不留给下一 tick
 
 
 # ── message_dedupe 传真实 recent_proactive（§17）──────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_message_dedupe_receives_recent_proactive_list():
@@ -683,10 +764,12 @@ async def test_message_dedupe_receives_recent_proactive_list():
     def recent_proactive_fn():
         return recent_msgs
 
-    llm = FakeLLM([
-        ("message_push", {"message": "new message", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "new message", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     sink = FakeAckSink()
     deps = ToolDeps(
         recent_chat_fn=AsyncMock(return_value=[]),
@@ -694,15 +777,19 @@ async def test_message_dedupe_receives_recent_proactive_list():
     )
     gateway = GatewayDeps(
         alert_fn=AsyncMock(return_value=[]),
-        feed_fn=AsyncMock(return_value=[{
-            "id": "1",
-            "event_id": "1",
-            "ack_server": "feed-mcp",
-            "title": "candidate",
-            "source_name": "test-feed",
-            "url": "",
-            "published_at": "",
-        }]),
+        feed_fn=AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "event_id": "1",
+                    "ack_server": "feed-mcp",
+                    "title": "candidate",
+                    "source_name": "test-feed",
+                    "url": "",
+                    "published_at": "",
+                }
+            ]
+        ),
         context_fn=AsyncMock(return_value=[]),
     )
     sender = AsyncMock()
@@ -728,10 +815,12 @@ async def test_message_dedupe_empty_list_when_no_fn():
     deduper = AsyncMock()
     deduper.is_duplicate = AsyncMock(return_value=(False, ""))
 
-    llm = FakeLLM([
-        ("message_push", {"message": "msg", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("message_push", {"message": "msg", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(llm, deduper=deduper)
     await tick.run()
 
@@ -741,16 +830,19 @@ async def test_message_dedupe_empty_list_when_no_fn():
 
 # ── Fix 3: interesting_item_ids 语义（fetched content - discarded）─────────
 
+
 @pytest.mark.asyncio
 async def test_discarded_content_not_in_interesting():
     """mark_not_interesting 后未 cite → discarded 720h，不应出现 24h"""
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        ("mark_not_interesting", {"item_ids": ["feed-mcp:c1"]}),
-        ("message_push", {"message": "hi", "evidence": []}),
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            ("mark_not_interesting", {"item_ids": ["feed-mcp:c1"]}),
+            ("message_push", {"message": "hi", "evidence": []}),
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -761,10 +853,12 @@ async def test_discarded_content_not_in_interesting():
 
 # ── Fix 4: alert_ack_fn 独立通道（§20：成功时 alert cited 走独立 ack_fn）──
 
+
 @pytest.mark.asyncio
 async def test_ack_on_success_alert_cited_calls_alert_ack_fn():
     """发送成功：cited alert 调用 alert_ack_fn（独立通道），不调用普通 ack_fn"""
     from agent.core.proactive_turn import ack_on_success
+
     ctx = AgentTickContext()
     ctx.fetched_alerts = [{"id": "a1", "ack_server": "alert-mcp"}]
     ctx.fetched_contents = []
@@ -776,14 +870,15 @@ async def test_ack_on_success_alert_cited_calls_alert_ack_fn():
     alert_sink = FakeAlertAckSink()
     await ack_on_success(ctx, regular_sink, alert_ack_fn=alert_sink)
 
-    assert alert_sink.all_keys() == {"alert-mcp:a1"}   # alert 走独立通道
-    assert regular_sink.not_acked("alert-mcp:a1")       # 普通 ack_fn 不调用
+    assert alert_sink.all_keys() == {"alert-mcp:a1"}  # alert 走独立通道
+    assert regular_sink.not_acked("alert-mcp:a1")  # 普通 ack_fn 不调用
 
 
 @pytest.mark.asyncio
 async def test_ack_on_success_alert_ack_fn_none_falls_back_to_regular():
     """alert_ack_fn=None 时，cited alert 回退到普通 ack_fn（168h）"""
     from agent.core.proactive_turn import ack_on_success
+
     ctx = AgentTickContext()
     ctx.fetched_alerts = [{"id": "a1", "ack_server": "alert-mcp"}]
     ctx.fetched_contents = []
@@ -801,6 +896,7 @@ async def test_ack_on_success_alert_ack_fn_none_falls_back_to_regular():
 async def test_ack_on_success_content_unaffected_by_alert_ack_fn():
     """alert_ack_fn 独立时，content cited 仍走普通 ack_fn（168h）"""
     from agent.core.proactive_turn import ack_on_success
+
     ctx = AgentTickContext()
     ctx.fetched_alerts = []
     ctx.fetched_contents = [{"id": "c1", "ack_server": "feed-mcp"}]
@@ -818,11 +914,15 @@ async def test_ack_on_success_content_unaffected_by_alert_ack_fn():
 
 # ── Fix 1: TOOL_SCHEMAS 应使用 OpenAI 格式 ────────────────────────────────
 
+
 def test_tool_schemas_have_openai_format():
     """每个 schema 必须是 {"type":"function","function":{name,description,parameters}} 格式"""
     from proactive_v2.tools import TOOL_SCHEMAS
+
     for schema in TOOL_SCHEMAS:
-        assert schema.get("type") == "function", f"missing type=function: {schema.get('name', schema)}"
+        assert (
+            schema.get("type") == "function"
+        ), f"missing type=function: {schema.get('name', schema)}"
         fn = schema.get("function", {})
         assert "name" in fn, f"function missing name: {schema}"
         assert "description" in fn, f"function missing description: {schema}"
@@ -832,34 +932,48 @@ def test_tool_schemas_have_openai_format():
 def test_tool_schemas_no_input_schema_key():
     """不应有 Anthropic 风格的 input_schema 顶层 key"""
     from proactive_v2.tools import TOOL_SCHEMAS
+
     for schema in TOOL_SCHEMAS:
-        assert "input_schema" not in schema, f"Anthropic-style input_schema found: {schema}"
-        assert "name" not in schema or schema.get("type") == "function", \
-            f"bare name at top level (Anthropic style): {schema}"
+        assert (
+            "input_schema" not in schema
+        ), f"Anthropic-style input_schema found: {schema}"
+        assert (
+            "name" not in schema or schema.get("type") == "function"
+        ), f"bare name at top level (Anthropic style): {schema}"
 
 
 # ── Fix 1: _run_loop 应追加 OpenAI 格式消息 ───────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_run_loop_appends_openai_format_tool_messages():
     """_run_loop 工具调用消息：assistant.tool_calls + role=tool（非 Anthropic content=[tool_use]）"""
-    llm = FakeLLM([
-        ("get_content_events", {}),      # step 1 → produces messages for step 2
-        ("finish_turn", {"decision": "skip", "reason": "no_content"}),  # step 2 → terminates
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),  # step 1 → produces messages for step 2
+            (
+                "finish_turn",
+                {"decision": "skip", "reason": "no_content"},
+            ),  # step 2 → terminates
+        ]
+    )
     tick = make_proactive_pipeline(
         llm_fn=llm,
         gateway_deps=GatewayDeps(
             alert_fn=AsyncMock(return_value=[]),
-            feed_fn=AsyncMock(return_value=[{
-                "id": "1",
-                "event_id": "1",
-                "ack_server": "feed-mcp",
-                "title": "candidate",
-                "source_name": "test-feed",
-                "url": "",
-                "published_at": "",
-            }]),
+            feed_fn=AsyncMock(
+                return_value=[
+                    {
+                        "id": "1",
+                        "event_id": "1",
+                        "ack_server": "feed-mcp",
+                        "title": "candidate",
+                        "source_name": "test-feed",
+                        "url": "",
+                        "published_at": "",
+                    }
+                ]
+            ),
             context_fn=AsyncMock(return_value=[]),
         ),
     )
@@ -873,38 +987,50 @@ async def test_run_loop_appends_openai_format_tool_messages():
     assistant_msgs = [m for m in msgs if m.get("role") == "assistant"]
     assert len(assistant_msgs) == 1
     asst = assistant_msgs[0]
-    assert "tool_calls" in asst, "assistant message must have tool_calls (OpenAI format)"
+    assert (
+        "tool_calls" in asst
+    ), "assistant message must have tool_calls (OpenAI format)"
     assert asst["tool_calls"][0].get("type") == "function"
     assert "function" in asst["tool_calls"][0]
     # 不应有 Anthropic 风格的 content 列表
     content = asst.get("content")
-    assert not isinstance(content, list), "assistant content must not be list (Anthropic style)"
+    assert not isinstance(
+        content, list
+    ), "assistant content must not be list (Anthropic style)"
 
     # tool result: role=tool，有 tool_call_id（非 Anthropic role=user content=[tool_result]）
     tool_msgs = [m for m in msgs if m.get("role") == "tool"]
     assert len(tool_msgs) == 1
-    assert "tool_call_id" in tool_msgs[0], "tool result must have tool_call_id (OpenAI format)"
+    assert (
+        "tool_call_id" in tool_msgs[0]
+    ), "tool result must have tool_call_id (OpenAI format)"
 
 
 # ── Fix 2: mark_interesting 工具（§10 显式分类）─────────────────────────
 
+
 def test_mark_interesting_tool_in_schema():
     """TOOL_SCHEMAS 必须包含 mark_interesting 工具"""
     from proactive_v2.tools import TOOL_SCHEMAS
+
     names = {s["function"]["name"] for s in TOOL_SCHEMAS if s.get("type") == "function"}
-    assert "mark_interesting" in names, "mark_interesting tool missing from TOOL_SCHEMAS"
+    assert (
+        "mark_interesting" in names
+    ), "mark_interesting tool missing from TOOL_SCHEMAS"
 
 
 @pytest.mark.asyncio
 async def test_mark_interesting_uncited_acks_24h_on_success():
     """mark_interesting 后未引用 → 发送成功后 24h ACK（uncited interesting）"""
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        ("mark_interesting", {"item_ids": ["feed-mcp:c1"]}),  # 显式标记感兴趣
-        ("message_push", {"message": "hi", "evidence": []}),     # 未引用
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            ("mark_interesting", {"item_ids": ["feed-mcp:c1"]}),  # 显式标记感兴趣
+            ("message_push", {"message": "hi", "evidence": []}),  # 未引用
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -916,10 +1042,12 @@ async def test_mark_interesting_uncited_acks_24h_on_success():
 async def test_fetched_but_unclassified_not_acked_on_skip():
     """拉取了 content metadata 但未分类 → skip 时不 ACK（unclassified）"""
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        ("finish_turn", {"decision": "skip", "reason": "no_content"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            ("finish_turn", {"decision": "skip", "reason": "no_content"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )
@@ -931,12 +1059,14 @@ async def test_fetched_but_unclassified_not_acked_on_skip():
 async def test_fetched_but_unclassified_not_acked_on_send():
     """拉取了 content 但未分类 → send_message 时也不 ACK（未经 mark_interesting 的不算 interesting）"""
     event = {"id": "c1", "ack_server": "feed-mcp"}
-    llm = FakeLLM([
-        ("get_content_events", {}),
-        # 未调用 mark_interesting，也未调用 mark_not_interesting
-        ("message_push", {"message": "other topic", "evidence": []}),  # c1 未 cite
-        ("finish_turn", {"decision": "reply"}),
-    ])
+    llm = FakeLLM(
+        [
+            ("get_content_events", {}),
+            # 未调用 mark_interesting，也未调用 mark_not_interesting
+            ("message_push", {"message": "other topic", "evidence": []}),  # c1 未 cite
+            ("finish_turn", {"decision": "reply"}),
+        ]
+    )
     tick, sink = _make_pipeline_with_sink(
         llm, tool_deps_extra={"feed_fn": AsyncMock(return_value=[event])}
     )

@@ -86,7 +86,9 @@ def _context(bus: _Bus, push_tool: _PushTool, hub: _Hub) -> ChannelContext:
 
 
 @pytest.mark.asyncio
-async def test_qqbot_channel_registers_and_stops_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_qqbot_channel_registers_and_stops_cleanly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bus = _Bus()
     push_tool = _PushTool()
     channel = QQBotChannel("app", "secret")
@@ -103,9 +105,7 @@ async def test_qqbot_channel_registers_and_stops_cleanly(monkeypatch: pytest.Mon
     assert bus.outbound == []
     assert context.event_bus._handlers == {}
     assert push_tool.removed == ["qqbot"]
-    assert push_tool.registrations == [
-        ("qqbot", ["image", "stream_text", "text"])
-    ]
+    assert push_tool.registrations == [("qqbot", ["image", "stream_text", "text"])]
 
 
 @pytest.mark.asyncio
@@ -114,9 +114,14 @@ async def test_qqbot_pauses_intake_until_removal_is_rolled_back():
     channel._bus = _Bus()
     channel._send_input_notify = AsyncMock()
     channel.pause_intake()
-    await channel._handle_dispatch("C2C_MESSAGE_CREATE", {
-        "id": "1", "author": {"user_openid": "user"}, "content": "buffered",
-    })
+    await channel._handle_dispatch(
+        "C2C_MESSAGE_CREATE",
+        {
+            "id": "1",
+            "author": {"user_openid": "user"},
+            "content": "buffered",
+        },
+    )
     assert channel._bus.inbound == []
     channel.resume_intake()
     await channel._intake.drain()
@@ -136,7 +141,11 @@ async def test_qqbot_reports_pending_input_before_closing_original_account(monke
     channel = QQBotChannel("old-account", "secret")
     channel._bus = _Bus()
     channel.pause_intake()
-    await channel._publish_inbound(InboundMessage(channel="qqbot", sender="user", chat_id="c2c:user", content="pending"))
+    await channel._publish_inbound(
+        InboundMessage(
+            channel="qqbot", sender="user", chat_id="c2c:user", content="pending"
+        )
+    )
     await channel.stop()
     assert channel._bus.inbound == []
     assert len(notices) == 1
@@ -146,14 +155,18 @@ async def test_qqbot_reports_pending_input_before_closing_original_account(monke
 
 
 @pytest.mark.asyncio
-async def test_qqbot_gateway_sends_identify_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_qqbot_gateway_sends_identify_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _WebSocket:
         def __init__(self) -> None:
             self.sent: list[dict[str, Any]] = []
-            self._messages = iter([
-                json.dumps({"op": 10, "d": {"heartbeat_interval": 60_000}}),
-                json.dumps({"op": 7, "d": {}}),
-            ])
+            self._messages = iter(
+                [
+                    json.dumps({"op": 10, "d": {"heartbeat_interval": 60_000}}),
+                    json.dumps({"op": 7, "d": {}}),
+                ]
+            )
 
         async def __aenter__(self):
             return self
@@ -244,7 +257,11 @@ async def test_qqbot_send_uses_official_markdown_api() -> None:
     assert call.args[:3] == (
         "POST",
         "/v2/users/user-1/messages",
-        {"markdown": {"content": "回复"}, "msg_type": 2, "msg_seq": call.args[2]["msg_seq"]},
+        {
+            "markdown": {"content": "回复"},
+            "msg_type": 2,
+            "msg_seq": call.args[2]["msg_seq"],
+        },
     )
     assert call.args[3] == "access-token"
 
@@ -253,9 +270,7 @@ async def test_qqbot_send_uses_official_markdown_api() -> None:
 async def test_qqbot_send_image_uploads_public_url_then_sends_media() -> None:
     channel = QQBotChannel("app", "secret")
     channel._get_access_token = AsyncMock(return_value="access-token")
-    channel._api_request = AsyncMock(
-        side_effect=[{"file_info": "uploaded-file"}, {}]
-    )
+    channel._api_request = AsyncMock(side_effect=[{"file_info": "uploaded-file"}, {}])
 
     await channel.send_image("c2c:user-1", "https://example.com/sticker.gif")
 
@@ -291,9 +306,7 @@ async def test_qqbot_send_image_uploads_local_gif_without_converting(
     image.write_bytes(raw)
     channel = QQBotChannel("app", "secret")
     channel._get_access_token = AsyncMock(return_value="access-token")
-    channel._api_request = AsyncMock(
-        side_effect=[{"file_info": "gif-file"}, {}]
-    )
+    channel._api_request = AsyncMock(side_effect=[{"file_info": "gif-file"}, {}])
 
     await channel.send_image("c2c:user-1", str(image))
 

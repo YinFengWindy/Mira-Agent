@@ -38,17 +38,17 @@ class McpServerRegistry:
 
     async def load_and_connect_all(self) -> None:
         """启动时读取持久化配置，重连所有 server。"""
+
         async def connect_one(name: str, cfg: dict[str, Any]) -> None:
             try:
-                await self._connect(name, cfg["command"], cfg.get("env"), cfg.get("cwd"))
+                await self._connect(
+                    name, cfg["command"], cfg.get("env"), cfg.get("cwd")
+                )
             except Exception as e:
                 logger.error("[mcp] 重连 %r 失败: %s", name, e)
 
         await asyncio.gather(
-            *(
-                connect_one(name, cfg)
-                for name, cfg in self._load_raw_configs().items()
-            )
+            *(connect_one(name, cfg) for name, cfg in self._load_raw_configs().items())
         )
 
     def start_connect_all_background(self) -> None:

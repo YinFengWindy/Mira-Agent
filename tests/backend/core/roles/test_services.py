@@ -9,15 +9,22 @@ from unittest.mock import AsyncMock, patch
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("binding", ["", "selected"])
-async def test_role_lifecycle_prepares_local_memory_without_model_calls(tmp_path, binding):
+async def test_role_lifecycle_prepares_local_memory_without_model_calls(
+    tmp_path, binding
+):
     service = RoleAggregateService.from_runtime(
         workspace=tmp_path,
         role_store=RoleStore(tmp_path),
         session_manager=SessionManager(tmp_path),
     )
-    with patch("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", new_callable=AsyncMock) as generate:
+    with patch(
+        "core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate",
+        new_callable=AsyncMock,
+    ) as generate:
         created = await service.create_role_async(
-            role_id="mira", name="Mira", system_prompt="mira",
+            role_id="mira",
+            name="Mira",
+            system_prompt="mira",
             runtime_config={"dialogue_model_registration_id": binding},
         )
         await service.open_role_async("mira")
@@ -28,11 +35,18 @@ async def test_role_lifecycle_prepares_local_memory_without_model_calls(tmp_path
     assert created.role.runtime_config["dialogue_model_registration_id"] == binding
 
 
-def test_sync_unavailable_model_initializes_local_memory_without_provider_call(tmp_path):
+def test_sync_unavailable_model_initializes_local_memory_without_provider_call(
+    tmp_path,
+):
     service = RoleAggregateService.from_runtime(
-        workspace=tmp_path, role_store=RoleStore(tmp_path), session_manager=SessionManager(tmp_path),
+        workspace=tmp_path,
+        role_store=RoleStore(tmp_path),
+        session_manager=SessionManager(tmp_path),
     )
-    with patch("core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate", new_callable=AsyncMock) as generate:
+    with patch(
+        "core.roles.self_seed.LlmRoleSelfSeedGenerator.agenerate",
+        new_callable=AsyncMock,
+    ) as generate:
         created = service.create_role(role_id="mira", name="Mira", system_prompt="mira")
         service.open_role("mira")
         service.update_role("mira", description="updated")
@@ -48,8 +62,16 @@ async def test_profile_edits_preserve_user_self_content(tmp_path):
         session_manager=SessionManager(tmp_path),
     )
     aggregate = await service.create_role_async(
-        role_id="mira", name="Mira", system_prompt="旧规则", background="旧背景",
-        profile={"character": {"profile": "{{char}}的新资料", "response_constraints": "回答简洁"}},
+        role_id="mira",
+        name="Mira",
+        system_prompt="旧规则",
+        background="旧背景",
+        profile={
+            "character": {
+                "profile": "{{char}}的新资料",
+                "response_constraints": "回答简洁",
+            }
+        },
     )
     self_path = aggregate.memory_root / "SELF.md"
     self_path.write_text("# 我是谁\n\n自己编辑的内容\n", encoding="utf-8")
@@ -57,7 +79,9 @@ async def test_profile_edits_preserve_user_self_content(tmp_path):
     history_path = aggregate.memory_root / "HISTORY.md"
     saved_history = history_path.read_text(encoding="utf-8")
 
-    await service.update_role_async("mira", profile={"character": {"profile": "再次更新的资料"}})
+    await service.update_role_async(
+        "mira", profile={"character": {"profile": "再次更新的资料"}}
+    )
     await service.open_role_async("mira")
 
     assert self_path.read_text(encoding="utf-8") == saved_self

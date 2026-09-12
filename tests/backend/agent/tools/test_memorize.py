@@ -43,6 +43,7 @@ def _memorize_tool(engine) -> MemorizeTool:
     assert spec is not None
     return MemorizeTool(engine, spec)
 
+
 @pytest.mark.asyncio
 async def test_memorize_tool_cover_branches(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -137,7 +138,6 @@ async def test_memorize_tool_should_not_create_second_active_procedure_when_incr
     assert "区服" in rows[0][1]
 
 
-
 @pytest.mark.asyncio
 async def test_memorize_tool_should_coerce_language_reply_rule_to_preference():
     memorizer = MagicMock()
@@ -159,4 +159,3 @@ async def test_memorize_tool_should_coerce_language_reply_rule_to_preference():
         memorizer.save_item_with_supersede.await_args.kwargs["memory_type"]
         == "preference"
     )
-

@@ -6,6 +6,7 @@ from typing import Any
 
 from .models import Session
 
+
 class _ProjectionMixin:
     def _project_session_threads(self, session: Session) -> None:
         """Refreshes formal thread projections from immutable message source fields."""

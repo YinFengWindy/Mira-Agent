@@ -25,4 +25,3 @@ def test_append_tool_result_supports_multimodal_blocks() -> None:
     assert messages[1]["role"] == "user"
     assert messages[1]["content"][0]["type"] == "text"
     assert messages[1]["content"][1]["type"] == "image_url"
-

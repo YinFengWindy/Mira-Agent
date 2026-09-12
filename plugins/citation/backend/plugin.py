@@ -22,7 +22,9 @@ _TRAILING_PROTOCOL_TAGS_RE = re.compile(
     rf"(?:\s*{_TRAILING_PROTOCOL_TAG}\s*)+$",
     re.IGNORECASE,
 )
-_INLINE_MEMORY_REF_RE = re.compile(r"[ \t]*(?:\[§[A-Za-z0-9:_-]{1,128}\])+", re.IGNORECASE)
+_INLINE_MEMORY_REF_RE = re.compile(
+    r"[ \t]*(?:\[§[A-Za-z0-9:_-]{1,128}\])+", re.IGNORECASE
+)
 
 _CITATION_PROTOCOL = """### 记忆引用协议 - 内部元数据，对用户不可见
 每轮回复若用到了系统注入的记忆条目 [item_id] 前缀标识，或 recall_memory / fetch_messages 工具返回的条目，在回复正文末尾另起一行输出：

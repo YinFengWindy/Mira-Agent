@@ -60,7 +60,12 @@ def test_multi_query_takes_max_score_for_same_item():
 
 def test_multi_query_deduplicates_items():
     """同一个 item 被多个 query 检到时，最终结果里只出现一次。"""
-    item = {"id": "item-X", "memory_type": "procedure", "score": 0.65, "summary": "规则X"}
+    item = {
+        "id": "item-X",
+        "memory_type": "procedure",
+        "score": 0.65,
+        "summary": "规则X",
+    }
     port = _make_memory_port(
         {
             "query-1": [item],
@@ -78,8 +83,18 @@ def test_multi_query_deduplicates_items():
 
 def test_multi_query_merges_unique_items_from_different_queries():
     """不同 query 检到的不同 items，都应该出现在结果里。"""
-    item_1 = {"id": "item-1", "memory_type": "procedure", "score": 0.70, "summary": "规则1"}
-    item_2 = {"id": "item-2", "memory_type": "procedure", "score": 0.68, "summary": "规则2"}
+    item_1 = {
+        "id": "item-1",
+        "memory_type": "procedure",
+        "score": 0.70,
+        "summary": "规则1",
+    }
+    item_2 = {
+        "id": "item-2",
+        "memory_type": "procedure",
+        "score": 0.68,
+        "summary": "规则2",
+    }
     port = _make_memory_port(
         {
             "query-1": [item_1],

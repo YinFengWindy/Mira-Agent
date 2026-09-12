@@ -15,6 +15,7 @@ from proactive_v2.outbound_text import normalize_outbound_text
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class DriftToolDeps:
     drift_dir: Path
@@ -48,7 +49,10 @@ class SendMessageTool(Tool):
             "type": "object",
             "properties": {
                 "message": {"type": "string", "description": "要发送的消息内容"},
-                "image": {"type": "string", "description": "要发送的一张图片本地路径或 URL"},
+                "image": {
+                    "type": "string",
+                    "description": "要发送的一张图片本地路径或 URL",
+                },
                 "media": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -78,7 +82,9 @@ class SendMessageTool(Tool):
         media_paths = self._normalize_media(image=image, media=media)
         if self._send_message_fn is None:
             logger.info("[drift_tools] message_push unavailable")
-            return json.dumps({"error": "message_push not configured"}, ensure_ascii=False)
+            return json.dumps(
+                {"error": "message_push not configured"}, ensure_ascii=False
+            )
         if self._ctx.drift_message_sent:
             logger.info("[drift_tools] message_push rejected: already used")
             return json.dumps(
@@ -87,7 +93,9 @@ class SendMessageTool(Tool):
             )
         if not text and not media_paths:
             logger.info("[drift_tools] message_push rejected: empty message and media")
-            return json.dumps({"error": "message or media is required"}, ensure_ascii=False)
+            return json.dumps(
+                {"error": "message or media is required"}, ensure_ascii=False
+            )
         ok = await self._send_message_fn(text, media_paths)
         if not ok:
             logger.warning("[drift_tools] message_push failed")
@@ -97,7 +105,9 @@ class SendMessageTool(Tool):
         return json.dumps({"ok": True}, ensure_ascii=False)
 
     @staticmethod
-    def _normalize_media(*, image: str = "", media: list[str] | str | None = None) -> list[str]:
+    def _normalize_media(
+        *, image: str = "", media: list[str] | str | None = None
+    ) -> list[str]:
         paths: list[str] = []
         if image:
             paths.append(str(image).strip())
@@ -157,7 +167,9 @@ class FinishDriftTool(Tool):
     ) -> str:
         skill_name = str(skill_used or "").strip()
         if skill_name not in self._store.valid_skill_names():
-            logger.info("[drift_tools] finish_drift rejected unknown skill=%s", skill_name)
+            logger.info(
+                "[drift_tools] finish_drift rejected unknown skill=%s", skill_name
+            )
             return json.dumps(
                 {"error": f"unknown skill: {skill_name}"},
                 ensure_ascii=False,
@@ -181,7 +193,9 @@ class FinishDriftTool(Tool):
             )
         if message_result_value == "silent" and self._ctx.drift_message_sent:
             return json.dumps(
-                {"error": "message_result=silent conflicts with successful message_push"},
+                {
+                    "error": "message_result=silent conflicts with successful message_push"
+                },
                 ensure_ascii=False,
             )
         note_text = str(note).strip() if note is not None else None
@@ -247,11 +261,17 @@ class MountServerTool(Tool):
         new = names - self._mounted
         if not new:
             return json.dumps(
-                {"ok": True, "message": f"'{server}' 已挂载，无新增工具", "tools": sorted(names)},
+                {
+                    "ok": True,
+                    "message": f"'{server}' 已挂载，无新增工具",
+                    "tools": sorted(names),
+                },
                 ensure_ascii=False,
             )
         self._mounted |= new
-        logger.info("[drift_tools] mount_server ok: server=%s new=%s", server, sorted(new))
+        logger.info(
+            "[drift_tools] mount_server ok: server=%s new=%s", server, sorted(new)
+        )
         return json.dumps(
             {"ok": True, "tools": sorted(names), "new": sorted(new)},
             ensure_ascii=False,
@@ -325,7 +345,9 @@ class DriftReadFileTool(Tool):
         if raw.startswith("skills/") and self._builtin_skills_dir is not None:
             builtin_path = self._builtin_skills_dir / raw.removeprefix("skills/")
             if builtin_path.exists():
-                return await self._absolute_reader.execute(path=str(builtin_path), **kwargs)
+                return await self._absolute_reader.execute(
+                    path=str(builtin_path), **kwargs
+                )
         reader = self._relative_reader
         return await reader.execute(path=path, **kwargs)
 

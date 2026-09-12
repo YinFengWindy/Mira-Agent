@@ -22,7 +22,8 @@ class RoleKnowledgeMatcher:
             and (entry.always_active or self._matches(entry, text))
         ]
         return sorted(
-            matched, key=lambda entry: (-entry.priority, entry.insertion_order, entry.id)
+            matched,
+            key=lambda entry: (-entry.priority, entry.insertion_order, entry.id),
         )
 
     @staticmethod

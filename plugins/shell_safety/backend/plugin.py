@@ -56,7 +56,9 @@ class _ShellSafetyGuard:
         if package_manager:
             return f"shell_safety 拦截：{package_manager} 写操作需要加 --noconfirm，避免卡在确认提示。"
         if self._opens_system_editor(tokens):
-            return "shell_safety 拦截：该命令会打开系统编辑器，请改用写文件或非交互参数。"
+            return (
+                "shell_safety 拦截：该命令会打开系统编辑器，请改用写文件或非交互参数。"
+            )
         return ""
 
     def _find_interactive_command(self, tokens: list[str]) -> str:
@@ -82,7 +84,11 @@ class _ShellSafetyGuard:
                 return False
             if not token.startswith("-") or token == "-":
                 return False
-            if token == "-n" or (token.startswith("-") and not token.startswith("--") and "n" in token[1:]):
+            if token == "-n" or (
+                token.startswith("-")
+                and not token.startswith("--")
+                and "n" in token[1:]
+            ):
                 return True
             if token in {"-u", "-g", "-p", "-C", "-D", "-R", "-T", "-h"}:
                 index += 2

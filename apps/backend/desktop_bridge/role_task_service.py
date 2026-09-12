@@ -103,16 +103,18 @@ class RoleTaskService:
         optimizer = self._memory_optimizer
         if optimizer is None or optimizer.active_role_id != role_id:
             return []
-        return [{
-            "id": f"memory-optimizer:{role_id}",
-            "role_id": role_id,
-            "kind": "memory_maintenance",
-            "status": "running",
-            "label": "记忆维护",
-            "detail": "整理角色记忆与自我认知",
-            "created_at": optimizer.active_started_at,
-            "next_run_at": "",
-            "cancellable": False,
-            "editable": False,
-            "schedule": None,
-        }]
+        return [
+            {
+                "id": f"memory-optimizer:{role_id}",
+                "role_id": role_id,
+                "kind": "memory_maintenance",
+                "status": "running",
+                "label": "记忆维护",
+                "detail": "整理角色记忆与自我认知",
+                "created_at": optimizer.active_started_at,
+                "next_run_at": "",
+                "cancellable": False,
+                "editable": False,
+                "schedule": None,
+            }
+        ]

@@ -42,9 +42,11 @@ def adapt_json(
         "knowledge_base": {
             "enabled": False,
             "entries": entries,
-            "raw_source": deepcopy(data["character_book"])
-            if isinstance(data.get("character_book"), dict)
-            else {},
+            "raw_source": (
+                deepcopy(data["character_book"])
+                if isinstance(data.get("character_book"), dict)
+                else {}
+            ),
         },
     }
     adapted = ["name", "description", "personality", "system_prompt"]

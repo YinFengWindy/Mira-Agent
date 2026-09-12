@@ -9,13 +9,16 @@ from core.common.runtime_scope import bind_runtime
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("payload", [
-    {},
-    {"message": " \t\n"},
-    {"file": "   "},
-    {"image": "   "},
-    {"message": " ", "file": "\t", "image": "\n"},
-])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"message": " \t\n"},
+        {"file": "   "},
+        {"image": "   "},
+        {"message": " ", "file": "\t", "image": "\n"},
+    ],
+)
 async def test_blank_payload_is_rejected_before_resolving_or_sending(payload):
     tool = MessagePushTool()
     send = AsyncMock()
@@ -24,7 +27,11 @@ async def test_blank_payload_is_rejected_before_resolving_or_sending(payload):
         raise AssertionError("empty payload must not resolve its target")
 
     tool.register_channel(
-        "desktop", text=send, file=send, image=send, target_resolver=resolve,
+        "desktop",
+        text=send,
+        file=send,
+        image=send,
+        target_resolver=resolve,
     )
 
     result = await tool.execute(channel="desktop", chat_id="mira", **payload)
@@ -34,16 +41,22 @@ async def test_blank_payload_is_rejected_before_resolving_or_sending(payload):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field,value", [
-    ("message", "  hello\n"),
-    ("file", "report with spaces.pdf"),
-    ("image", "https://example.test/image.png"),
-])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("message", "  hello\n"),
+        ("file", "report with spaces.pdf"),
+        ("image", "https://example.test/image.png"),
+    ],
+)
 async def test_only_nonblank_fields_are_sent_without_changing_content(field, value):
     tool = MessagePushTool()
     senders = {name: AsyncMock() for name in ("message", "file", "image")}
     tool.register_channel(
-        "desktop", text=senders["message"], file=senders["file"], image=senders["image"],
+        "desktop",
+        text=senders["message"],
+        file=senders["file"],
+        image=senders["image"],
     )
     payload = dict.fromkeys(senders, " \t\n")
     payload[field] = value
@@ -65,8 +78,18 @@ async def test_retired_transport_only_sends_for_previously_accepted_generation()
     send = AsyncMock()
     tool.register_channel("telegram", text=send)
     tool.retire_channel("telegram")
-    old = SimpleNamespace(config=Config(provider="", model="", api_key="", channels=ChannelsConfig(telegram=TelegramChannelConfig(token="old"))))
-    new = SimpleNamespace(config=Config(provider="", model="", api_key=""), core=SimpleNamespace(plugin_manager=None))
+    old = SimpleNamespace(
+        config=Config(
+            provider="",
+            model="",
+            api_key="",
+            channels=ChannelsConfig(telegram=TelegramChannelConfig(token="old")),
+        )
+    )
+    new = SimpleNamespace(
+        config=Config(provider="", model="", api_key=""),
+        core=SimpleNamespace(plugin_manager=None),
+    )
 
     with bind_runtime(old):
         await tool.execute(channel="telegram", chat_id="one", message="accepted")
@@ -83,8 +106,11 @@ async def test_delivery_metadata_keeps_legacy_senders_compatible(sender_name):
     tool.register_channel("telegram", **{sender_name: sender})
 
     result = await tool.execute(
-        channel="telegram", chat_id="one", message="scheduled",
-        push_delivery_key="occurrence", push_message_already_persisted=True,
+        channel="telegram",
+        chat_id="one",
+        message="scheduled",
+        push_delivery_key="occurrence",
+        push_message_already_persisted=True,
     )
 
     sender.assert_awaited_once_with("one", "scheduled")
@@ -97,19 +123,36 @@ async def test_metadata_sender_uses_push_identity_not_shared_turn_identity():
     tool.register_channel("desktop", text_with_metadata=sender)
 
     await tool.execute(
-        channel="desktop", chat_id="one", message="first", delivery_key="turn",
+        channel="desktop",
+        chat_id="one",
+        message="first",
+        delivery_key="turn",
     )
-    sender.assert_awaited_once_with("one", "first", {
-        "delivery_key": "", "already_persisted": False,
-    })
+    sender.assert_awaited_once_with(
+        "one",
+        "first",
+        {
+            "delivery_key": "",
+            "already_persisted": False,
+        },
+    )
     sender.reset_mock()
     await tool.execute(
-        channel="desktop", chat_id="one", message="second", delivery_key="turn",
-        push_delivery_key="occurrence", push_message_already_persisted=True,
+        channel="desktop",
+        chat_id="one",
+        message="second",
+        delivery_key="turn",
+        push_delivery_key="occurrence",
+        push_message_already_persisted=True,
     )
-    sender.assert_awaited_once_with("one", "second", {
-        "delivery_key": "occurrence", "already_persisted": True,
-    })
+    sender.assert_awaited_once_with(
+        "one",
+        "second",
+        {
+            "delivery_key": "occurrence",
+            "already_persisted": True,
+        },
+    )
 
 
 @pytest.mark.asyncio
@@ -169,4 +212,3 @@ async def test_message_push_tool_covers_success_failure_and_fallbacks():
 
     tool.register_channel("broken", text=broken)
     assert "发送失败" in await tool.execute(channel="broken", chat_id=1, message="x")
-

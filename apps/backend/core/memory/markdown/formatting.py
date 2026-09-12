@@ -59,6 +59,7 @@ def _format_consolidation_error(exc: BaseException) -> str:
         return f"{type(exc).__name__}: {message}"
     return type(exc).__name__
 
+
 def _select_consolidation_window(
     session,
     *,
@@ -315,6 +316,7 @@ def _normalize_history_entries(
         seen.add(summary)
         entries.append((summary, emotional_weight))
     return entries
+
 
 def _message_time(message: dict) -> str:
     return str(message.get("timestamp") or "").strip()

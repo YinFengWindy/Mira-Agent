@@ -90,7 +90,11 @@ def test_undo_marks_consolidation_window_memory_superseded(tmp_path: Path):
         result = engine.undo_by_message_sources(["cli:1:1"])
 
         assert set(_result_list(result, "affected_ids")) == {history_id, profile_id}
-        assert _result_list(result, "rollback_source_ids") == ["cli:1:0", "cli:1:1", "cli:1:2"]
+        assert _result_list(result, "rollback_source_ids") == [
+            "cli:1:0",
+            "cli:1:1",
+            "cli:1:2",
+        ]
         rows = store.get_items_by_ids([history_id, profile_id])
         assert [row["status"] for row in rows] == ["superseded", "superseded"]
     finally:
@@ -120,7 +124,9 @@ def test_undo_restores_old_memory_replaced_by_affected_new_memory(tmp_path: Path
         old_item = store.get_items_by_ids([old_id])[0]
         new_item = store.get_items_by_ids([new_id])[0]
         store.mark_superseded_batch([old_id])
-        store.record_replacements(old_items=[old_item], new_item=new_item, source_ref="cli:1:4")
+        store.record_replacements(
+            old_items=[old_item], new_item=new_item, source_ref="cli:1:4"
+        )
 
         result = engine.undo_by_message_sources(["cli:1:4"])
 

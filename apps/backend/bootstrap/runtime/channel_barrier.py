@@ -33,7 +33,11 @@ async def channel_handover_barrier(
         yield accepted
         return
 
-    groups = [background_groups[generation] for generation in accepted if generation in background_groups]
+    groups = [
+        background_groups[generation]
+        for generation in accepted
+        if generation in background_groups
+    ]
     current_group = background_groups.get(current)
     stopped_current = False
     failure: BaseException | None = None
@@ -46,7 +50,9 @@ async def channel_handover_barrier(
             if group is current_group:
                 stopped_current = True
             group.stop()
-        results = await asyncio.gather(*(group.drain() for group in groups), return_exceptions=True)
+        results = await asyncio.gather(
+            *(group.drain() for group in groups), return_exceptions=True
+        )
         errors = [result for result in results if isinstance(result, BaseException)]
         if errors:
             raise BaseExceptionGroup("Accepted background work failed to drain", errors)
@@ -74,4 +80,6 @@ async def channel_handover_barrier(
         if recovery_errors:
             if failure is not None:
                 recovery_errors.insert(0, failure)
-            raise BaseExceptionGroup("Channel handover recovery failed", recovery_errors)
+            raise BaseExceptionGroup(
+                "Channel handover recovery failed", recovery_errors
+            )

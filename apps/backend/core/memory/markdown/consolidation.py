@@ -38,6 +38,7 @@ _CONSOLIDATION_SYSTEM = (
     "自然语言输出必须使用“我 / 你 / 我们”。"
 )
 
+
 class _MarkdownConsolidationWorker(_RecentContextWorkerMixin):
     def __init__(
         self,
@@ -53,9 +54,7 @@ class _MarkdownConsolidationWorker(_RecentContextWorkerMixin):
         self._provider = provider
         self._model = model
         self._recent_context_provider = recent_context_provider or provider
-        self._recent_context_model = (
-            str(recent_context_model or "").strip() or model
-        )
+        self._recent_context_model = str(recent_context_model or "").strip() or model
         self._keep_count = keep_count
         self._consolidation_min_new_messages = max(5, keep_count // 2)
 

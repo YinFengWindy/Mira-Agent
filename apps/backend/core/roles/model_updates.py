@@ -12,7 +12,9 @@ _EFFORT_KEYS = ("dialogue_model_effort", "visual_model_effort")
 
 
 def prepare_role_model_updates(
-    store: RoleStore, updates: list[dict[str, Any]], registration_ids: set[str],
+    store: RoleStore,
+    updates: list[dict[str, Any]],
+    registration_ids: set[str],
 ) -> dict[str, Any] | None:
     """Merges only model fields into current roles; never replaces unrelated state."""
     if not updates:

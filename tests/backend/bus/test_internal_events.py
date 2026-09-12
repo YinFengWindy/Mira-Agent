@@ -81,7 +81,9 @@ async def test_event_bus_observe_and_intercept_are_ordered():
         )
     )
     dispatch = await event_bus.emit(
-        _FakeLifecycleEvent(session_key="telegram:123", channel="telegram", chat_id="123", content="ok")
+        _FakeLifecycleEvent(
+            session_key="telegram:123", channel="telegram", chat_id="123", content="ok"
+        )
     )
 
     assert observed == ["ok", "ok"]

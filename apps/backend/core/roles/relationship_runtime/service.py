@@ -39,6 +39,7 @@ from .snapshot import (
     RelationshipSnapshotOptimizer,
 )
 
+
 class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
     """Owns role runtime relationship snapshot and loneliness state."""
 
@@ -61,7 +62,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         """Returns the shared role store backing relationship snapshots."""
         return self._role_store
 
-    def current_loneliness_runtime(self, role_id: str, *, now: datetime | None = None) -> dict[str, Any] | None:
+    def current_loneliness_runtime(
+        self, role_id: str, *, now: datetime | None = None
+    ) -> dict[str, Any] | None:
         """Returns the latest loneliness runtime, catching up elapsed time when possible."""
         runtime = self.recompute_loneliness(role_id, now=now)
         if runtime is not None:
@@ -89,7 +92,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         if role is None:
             raise KeyError(f"role 不存在: {role_id}")
         store = resolve_markdown_store(workspace=self._workspace, role_id=role_id)
-        session = self._session_manager.get_or_create(self._session_manager.role_session_key(role_id))
+        session = self._session_manager.get_or_create(
+            self._session_manager.role_session_key(role_id)
+        )
         recent_messages = self._collect_recent_messages(session.messages)
         return {
             "role": role,
@@ -97,7 +102,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
             "memory_text": store.read_long_term().strip(),
             "recent_messages": recent_messages,
             "session_message_count": self._count_session_messages(session.messages),
-            "interaction_summary": self._build_interaction_summary(role_id=role_id, recent_messages=recent_messages),
+            "interaction_summary": self._build_interaction_summary(
+                role_id=role_id, recent_messages=recent_messages
+            ),
         }
 
     async def generate_snapshot_via_llm(
@@ -182,12 +189,16 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
                 session.metadata = next_metadata
         return snapshot
 
-    def recompute_loneliness(self, role_id: str, *, now: datetime | None = None) -> dict[str, Any] | None:
+    def recompute_loneliness(
+        self, role_id: str, *, now: datetime | None = None
+    ) -> dict[str, Any] | None:
         snapshot = self.read_snapshot(role_id)
         if snapshot is None:
             return None
         now_dt = (now or datetime.now().astimezone()).astimezone()
-        current = self.read_loneliness_runtime(role_id) or self._build_initial_runtime(role_id, now=now_dt)
+        current = self.read_loneliness_runtime(role_id) or self._build_initial_runtime(
+            role_id, now=now_dt
+        )
         if not self._is_loneliness_growth_enabled(snapshot):
             self._clear_awaiting_reply_state(current)
             current["last_calculated_at"] = _now_iso(now_dt)
@@ -199,8 +210,12 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         delta = tick_count * float(profile["loneliness_growth_base"])
         if bool(current.get("awaiting_reply_after_proactive")):
             awaiting_since = _parse_iso(current.get("awaiting_reply_since"))
-            if awaiting_since is not None and now_dt - awaiting_since <= timedelta(hours=_UNANSWERED_REPLY_WINDOW_HOURS):
-                delta += tick_count * float(profile["loneliness_growth_when_unanswered"])
+            if awaiting_since is not None and now_dt - awaiting_since <= timedelta(
+                hours=_UNANSWERED_REPLY_WINDOW_HOURS
+            ):
+                delta += tick_count * float(
+                    profile["loneliness_growth_when_unanswered"]
+                )
             else:
                 self._clear_awaiting_reply_state(current)
         current["loneliness_value"] = round(_clamp(value + delta, 0.0, 100.0), 2)
@@ -210,7 +225,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
             )
         return self._write_runtime_with_presence(role_id, current)
 
-    def handle_user_message(self, session_key: str, *, now: datetime | None = None) -> dict[str, Any] | None:
+    def handle_user_message(
+        self, session_key: str, *, now: datetime | None = None
+    ) -> dict[str, Any] | None:
         role_id = self._role_id_from_session_key(session_key)
         if not role_id:
             return None
@@ -218,7 +235,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         if snapshot is None:
             return None
         now_dt = (now or datetime.now().astimezone()).astimezone()
-        current = self.recompute_loneliness(role_id, now=now_dt) or self._build_initial_runtime(role_id, now=now_dt)
+        current = self.recompute_loneliness(
+            role_id, now=now_dt
+        ) or self._build_initial_runtime(role_id, now=now_dt)
         self._scene_followup.handle_user_message(session_key, now=now_dt)
         security = float(self._relation_state(snapshot)["security"])
         if security >= 0.7:
@@ -227,14 +246,19 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
             drop_ratio = 0.45
         else:
             drop_ratio = 0.55
-        current["loneliness_value"] = round(_clamp(float(current["loneliness_value"]) * (1.0 - drop_ratio), 0.0, 100.0), 2)
+        current["loneliness_value"] = round(
+            _clamp(float(current["loneliness_value"]) * (1.0 - drop_ratio), 0.0, 100.0),
+            2,
+        )
         current["awaiting_reply_after_proactive"] = False
         current["awaiting_reply_since"] = ""
         current["last_calculated_at"] = _now_iso(now_dt)
         current["last_user_at"] = _now_iso(now_dt)
         return self.write_loneliness_runtime(role_id, current)
 
-    def handle_proactive_sent(self, session_key: str, *, now: datetime | None = None) -> dict[str, Any] | None:
+    def handle_proactive_sent(
+        self, session_key: str, *, now: datetime | None = None
+    ) -> dict[str, Any] | None:
         role_id = self._role_id_from_session_key(session_key)
         if not role_id:
             return None
@@ -242,13 +266,19 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         if snapshot is None:
             return None
         now_dt = (now or datetime.now().astimezone()).astimezone()
-        current = self.recompute_loneliness(role_id, now=now_dt) or self._build_initial_runtime(role_id, now=now_dt)
-        cooldown_minutes = int(self._behavior_profile(snapshot)["post_trigger_cooldown_minutes"])
+        current = self.recompute_loneliness(
+            role_id, now=now_dt
+        ) or self._build_initial_runtime(role_id, now=now_dt)
+        cooldown_minutes = int(
+            self._behavior_profile(snapshot)["post_trigger_cooldown_minutes"]
+        )
         current["awaiting_reply_after_proactive"] = True
         current["awaiting_reply_since"] = _now_iso(now_dt)
         current["last_triggered_at"] = _now_iso(now_dt)
         current["last_proactive_at"] = _now_iso(now_dt)
-        current["cooldown_until"] = _now_iso(now_dt + timedelta(minutes=cooldown_minutes))
+        current["cooldown_until"] = _now_iso(
+            now_dt + timedelta(minutes=cooldown_minutes)
+        )
         current["last_calculated_at"] = _now_iso(now_dt)
         return self.write_loneliness_runtime(role_id, current)
 
@@ -309,7 +339,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         effective_value = float(runtime["loneliness_value"])
         local_hour = now_dt.hour
         if _NIGHT_SUPPRESSION_START_HOUR <= local_hour < _NIGHT_SUPPRESSION_END_HOUR:
-            effective_value *= float(self._behavior_profile(snapshot)["night_suppression"])
+            effective_value *= float(
+                self._behavior_profile(snapshot)["night_suppression"]
+            )
         threshold = float(self._behavior_profile(snapshot)["trigger_threshold"])
         cooldown_until = _parse_iso(runtime.get("cooldown_until"))
         if cooldown_until is not None and cooldown_until > now_dt:
@@ -321,7 +353,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
                 "cooldown_until": str(runtime.get("cooldown_until") or ""),
             }
         return effective_value >= threshold, {
-            "reason": "threshold" if effective_value >= threshold else "below_threshold",
+            "reason": (
+                "threshold" if effective_value >= threshold else "below_threshold"
+            ),
             "loneliness_value": runtime["loneliness_value"],
             "effective_loneliness_value": round(effective_value, 2),
             "trigger_threshold": threshold,
@@ -341,33 +375,62 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         return next_metadata
 
     def _behavior_profile(self, snapshot: dict[str, Any]) -> dict[str, float | int]:
-        internal = snapshot.get("internal_profile") if isinstance(snapshot, dict) else {}
+        internal = (
+            snapshot.get("internal_profile") if isinstance(snapshot, dict) else {}
+        )
         return _normalize_behavior_profile((internal or {}).get("behavior_profile"))
 
     def _relation_state(self, snapshot: dict[str, Any]) -> dict[str, float]:
-        internal = snapshot.get("internal_profile") if isinstance(snapshot, dict) else {}
+        internal = (
+            snapshot.get("internal_profile") if isinstance(snapshot, dict) else {}
+        )
         return _normalize_relation_state((internal or {}).get("relation_state"))
 
     def _is_loneliness_growth_enabled(self, snapshot: dict[str, Any]) -> bool:
-        return float(self._relation_state(snapshot)["closeness"]) >= _PROACTIVE_CLOSENESS_THRESHOLD
+        return (
+            float(self._relation_state(snapshot)["closeness"])
+            >= _PROACTIVE_CLOSENESS_THRESHOLD
+        )
 
     @staticmethod
     def _clear_awaiting_reply_state(runtime: dict[str, Any]) -> None:
         runtime["awaiting_reply_after_proactive"] = False
         runtime["awaiting_reply_since"] = ""
 
-    def _write_runtime_with_presence(self, role_id: str, runtime: dict[str, Any]) -> dict[str, Any]:
+    def _write_runtime_with_presence(
+        self, role_id: str, runtime: dict[str, Any]
+    ) -> dict[str, Any]:
         presence_key = self._session_manager.role_session_key(role_id)
-        last_user_at = self._presence.get_last_user_at(presence_key) if self._presence else None
-        last_proactive_at = self._presence.get_last_proactive_at(presence_key) if self._presence else None
-        runtime["last_user_at"] = _now_iso(last_user_at) if last_user_at else str(runtime.get("last_user_at") or "")
-        runtime["last_proactive_at"] = _now_iso(last_proactive_at) if last_proactive_at else str(runtime.get("last_proactive_at") or "")
+        last_user_at = (
+            self._presence.get_last_user_at(presence_key) if self._presence else None
+        )
+        last_proactive_at = (
+            self._presence.get_last_proactive_at(presence_key)
+            if self._presence
+            else None
+        )
+        runtime["last_user_at"] = (
+            _now_iso(last_user_at)
+            if last_user_at
+            else str(runtime.get("last_user_at") or "")
+        )
+        runtime["last_proactive_at"] = (
+            _now_iso(last_proactive_at)
+            if last_proactive_at
+            else str(runtime.get("last_proactive_at") or "")
+        )
         return self.write_loneliness_runtime(role_id, runtime)
 
     def _build_initial_runtime(self, role_id: str, *, now: datetime) -> dict[str, Any]:
         session_key = self._session_manager.role_session_key(role_id)
-        last_user_at = self._presence.get_last_user_at(session_key) if self._presence else None
-        last_proactive_at = self._presence.get_last_proactive_at(session_key) if self._presence else None
+        last_user_at = (
+            self._presence.get_last_user_at(session_key) if self._presence else None
+        )
+        last_proactive_at = (
+            self._presence.get_last_proactive_at(session_key)
+            if self._presence
+            else None
+        )
         return self._normalize_runtime_payload(
             role_id=role_id,
             payload={
@@ -375,7 +438,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
                 "loneliness_value": 0.0,
                 "last_calculated_at": _now_iso(now),
                 "last_user_at": _now_iso(last_user_at) if last_user_at else "",
-                "last_proactive_at": _now_iso(last_proactive_at) if last_proactive_at else "",
+                "last_proactive_at": (
+                    _now_iso(last_proactive_at) if last_proactive_at else ""
+                ),
                 "awaiting_reply_after_proactive": False,
                 "awaiting_reply_since": "",
                 "last_triggered_at": "",
@@ -390,7 +455,11 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         payload: dict[str, Any],
         preserve_error: bool,
     ) -> dict[str, Any]:
-        internal = payload.get("internal_profile") if isinstance(payload.get("internal_profile"), dict) else {}
+        internal = (
+            payload.get("internal_profile")
+            if isinstance(payload.get("internal_profile"), dict)
+            else {}
+        )
         role_self_view = str(payload.get("role_self_view") or "").strip()
         if role_self_view and not _is_first_person_self_view(role_self_view):
             raise ValueError("relationship snapshot 必须使用第一人称角色视角")
@@ -399,27 +468,42 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
             "role_self_view": role_self_view,
             "relation_tags": _normalize_tags(payload.get("relation_tags")),
             "internal_profile": {
-                "relation_state": _normalize_relation_state(internal.get("relation_state")),
-                "behavior_profile": _normalize_behavior_profile(internal.get("behavior_profile")),
+                "relation_state": _normalize_relation_state(
+                    internal.get("relation_state")
+                ),
+                "behavior_profile": _normalize_behavior_profile(
+                    internal.get("behavior_profile")
+                ),
             },
             "source_summary": dict(payload.get("source_summary") or {}),
             "generated_at": str(payload.get("generated_at") or ""),
-            "last_attempted_at": str(payload.get("last_attempted_at") or payload.get("generated_at") or ""),
+            "last_attempted_at": str(
+                payload.get("last_attempted_at") or payload.get("generated_at") or ""
+            ),
             "last_source_message_count": self._normalize_message_count(
                 payload.get("last_source_message_count")
             ),
-            "last_error": str(payload.get("last_error") or "") if preserve_error else "",
+            "last_error": (
+                str(payload.get("last_error") or "") if preserve_error else ""
+            ),
         }
         return normalized
 
-    def _normalize_runtime_payload(self, *, role_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _normalize_runtime_payload(
+        self, *, role_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         return {
             "role_id": role_id,
-            "loneliness_value": round(_clamp(float(payload.get("loneliness_value", 0.0) or 0.0), 0.0, 100.0), 2),
+            "loneliness_value": round(
+                _clamp(float(payload.get("loneliness_value", 0.0) or 0.0), 0.0, 100.0),
+                2,
+            ),
             "last_calculated_at": str(payload.get("last_calculated_at") or ""),
             "last_user_at": str(payload.get("last_user_at") or ""),
             "last_proactive_at": str(payload.get("last_proactive_at") or ""),
-            "awaiting_reply_after_proactive": bool(payload.get("awaiting_reply_after_proactive")),
+            "awaiting_reply_after_proactive": bool(
+                payload.get("awaiting_reply_after_proactive")
+            ),
             "awaiting_reply_since": str(payload.get("awaiting_reply_since") or ""),
             "last_triggered_at": str(payload.get("last_triggered_at") or ""),
             "cooldown_until": str(payload.get("cooldown_until") or ""),
@@ -454,7 +538,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         except (TypeError, ValueError):
             return 0
 
-    def _collect_recent_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def _collect_recent_messages(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, str]]:
         pairs: list[dict[str, str]] = []
         total_chars = 0
         for message in reversed(messages):
@@ -480,8 +566,14 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         recent_messages: list[dict[str, str]],
     ) -> str:
         session_key = self._session_manager.role_session_key(role_id)
-        last_user_at = self._presence.get_last_user_at(session_key) if self._presence else None
-        last_proactive_at = self._presence.get_last_proactive_at(session_key) if self._presence else None
+        last_user_at = (
+            self._presence.get_last_user_at(session_key) if self._presence else None
+        )
+        last_proactive_at = (
+            self._presence.get_last_proactive_at(session_key)
+            if self._presence
+            else None
+        )
         summary_lines = [
             f"最近消息条数: {len(recent_messages)}",
             f"最近用户消息时间: {_now_iso(last_user_at) if last_user_at else '（无）'}",
@@ -489,7 +581,9 @@ class RoleRelationshipRuntimeService(_RelationshipPersistenceMixin):
         ]
         runtime = self.read_loneliness_runtime(role_id)
         if runtime is not None:
-            summary_lines.append(f"当前 awaiting_reply_after_proactive: {bool(runtime.get('awaiting_reply_after_proactive'))}")
+            summary_lines.append(
+                f"当前 awaiting_reply_after_proactive: {bool(runtime.get('awaiting_reply_after_proactive'))}"
+            )
         return "\n".join(summary_lines)
 
     def _render_recent_messages(self, recent_messages: list[dict[str, str]]) -> str:

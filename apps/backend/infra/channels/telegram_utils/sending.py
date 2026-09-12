@@ -11,6 +11,7 @@ from .streaming import TelegramStreamMessage, _iter_stream_chunks
 
 logger = logging.getLogger("infra.channels.telegram_utils")
 
+
 def _serialize_entities(entities: list[MessageEntity]) -> list[dict] | None:
     return [entity.to_dict() for entity in entities] if entities else None
 
@@ -148,9 +149,15 @@ async def send_thinking_block(
                 label="send_message(thinking_block)",
             )
         except Exception as e:
-            logger.warning("[telegram] failed to send thinking block chunk %d, skipping: %s", i, e)
+            logger.warning(
+                "[telegram] failed to send thinking block chunk %d, skipping: %s", i, e
+            )
             return
-    logger.info("[telegram] thinking block sent, chunks=%d, length=%d", len(chunks), len(thinking))
+    logger.info(
+        "[telegram] thinking block sent, chunks=%d, length=%d",
+        len(chunks),
+        len(thinking),
+    )
 
 
 def _split_thinking(text: str, max_utf16: int) -> list[str]:

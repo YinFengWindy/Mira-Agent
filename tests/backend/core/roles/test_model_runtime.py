@@ -32,23 +32,49 @@ def test_empty_runtime_keeps_roles_browsable_and_reports_missing_capability(tmp_
     assert store.get_role("mira") is not None
 
 
-@pytest.mark.parametrize("binding,reason", [("", "role_unbound"), ("deleted", "registration_missing")])
+@pytest.mark.parametrize(
+    "binding,reason", [("", "role_unbound"), ("deleted", "registration_missing")]
+)
 def test_runtime_reports_unbound_and_dangling_model_choices(tmp_path, binding, reason):
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={
-        "dialogue_model_registration_id": binding,
-    })
-    runtime = RoleModelRuntime(role_store=store, registrations=[registration("model", "chat")])
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={
+            "dialogue_model_registration_id": binding,
+        },
+    )
+    runtime = RoleModelRuntime(
+        role_store=store, registrations=[registration("model", "chat")]
+    )
     assert runtime.availability("mira")["reason"] == reason
 
 
-def test_availability_does_not_construct_provider_and_reports_incomplete_fields(tmp_path):
+def test_availability_does_not_construct_provider_and_reports_incomplete_fields(
+    tmp_path,
+):
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "model"})
-    runtime = RoleModelRuntime(role_store=store, registrations=[replace(
-        registration("model", "chat"), api_key="${MISSING_KEY}", model="",
-    )])
-    with patch("core.roles.model_runtime.LLMProvider", side_effect=AssertionError("network client")):
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": "model"},
+    )
+    runtime = RoleModelRuntime(
+        role_store=store,
+        registrations=[
+            replace(
+                registration("model", "chat"),
+                api_key="${MISSING_KEY}",
+                model="",
+            )
+        ],
+    )
+    with patch(
+        "core.roles.model_runtime.LLMProvider",
+        side_effect=AssertionError("network client"),
+    ):
         availability = runtime.availability("mira")
     assert availability["reason"] == "connection_incomplete"
     assert availability["fields"] == ["model", "api_key"]
@@ -56,8 +82,15 @@ def test_availability_does_not_construct_provider_and_reports_incomplete_fields(
 
 def test_accepted_snapshot_is_retained_for_nested_activation(tmp_path):
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "first"})
-    runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": "first"},
+    )
+    runtime = RoleModelRuntime(
+        role_store=store, registrations=[registration("first", "chat")]
+    )
     with runtime.activate("mira", "chat") as accepted:
         store.update_role("mira", runtime_config={"dialogue_model_registration_id": ""})
         with runtime.activate("mira", "chat") as nested:
@@ -69,8 +102,15 @@ def test_accepted_snapshot_is_retained_for_nested_activation(tmp_path):
 @pytest.mark.asyncio
 async def test_generation_reuses_provider_and_releases_it_once_on_close(tmp_path):
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": "first"})
-    runtime = RoleModelRuntime(role_store=store, registrations=[registration("first", "chat")])
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": "first"},
+    )
+    runtime = RoleModelRuntime(
+        role_store=store, registrations=[registration("first", "chat")]
+    )
     with patch("core.roles.model_runtime.LLMProvider") as provider_class:
         provider_class.return_value.aclose = AsyncMock()
         first = runtime.resolve("mira", "chat")
@@ -86,7 +126,12 @@ def test_runtime_resolves_dialogue_and_visual_fallback(tmp_path) -> None:
     dialogue = registration("00000000-0000-4000-a000-000000000001", "chat-model")
     visual = registration("00000000-0000-4000-a000-000000000002", "vision-model")
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": dialogue.id})
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": dialogue.id},
+    )
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[dialogue, visual],
@@ -111,7 +156,12 @@ def test_runtime_snapshot_stays_stable_after_role_selection_changes(tmp_path) ->
     first = registration("00000000-0000-4000-a000-000000000001", "first-model")
     second = registration("00000000-0000-4000-a000-000000000002", "second-model")
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": first.id})
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": first.id},
+    )
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[first, second],
@@ -143,7 +193,12 @@ def test_runtime_uses_role_dialogue_effort_override(tmp_path) -> None:
         effort="low",
     )
     store = RoleStore(tmp_path)
-    store.create_role(name="Mira", system_prompt="mira", role_id="mira", runtime_config={"dialogue_model_registration_id": dialogue.id})
+    store.create_role(
+        name="Mira",
+        system_prompt="mira",
+        role_id="mira",
+        runtime_config={"dialogue_model_registration_id": dialogue.id},
+    )
     runtime = RoleModelRuntime(
         role_store=store,
         registrations=[dialogue, visual],

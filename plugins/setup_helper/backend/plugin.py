@@ -27,7 +27,9 @@ class ChatIdCommandModule:
 
 async def setup(ctx: "PluginRuntimeContext") -> None:
     """装配 setup_helper：贡献 before_turn 命令模块与 /chatid bot 命令。"""
-    ctx.lifecycle.contribute("before_turn", cast("list[object]", [ChatIdCommandModule()]))
+    ctx.lifecycle.contribute(
+        "before_turn", cast("list[object]", [ChatIdCommandModule()])
+    )
     ctx.bot_commands.add("chatid", "查看我的 chat_id（配置 proactive 用）")
 
 

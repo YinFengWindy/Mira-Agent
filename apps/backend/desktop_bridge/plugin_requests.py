@@ -19,7 +19,9 @@ class DesktopPluginRequestHandler:
     def __init__(self, registry: "PluginRpcRegistry | None") -> None:
         self._registry = registry
 
-    async def handle(self, method: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    async def handle(
+        self, method: str, payload: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Returns the plugin's result, or None when unresolved (falls through)."""
         if self._registry is None or not method.startswith("plugin."):
             return None

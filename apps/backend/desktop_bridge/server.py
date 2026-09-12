@@ -26,13 +26,19 @@ WritePayload = Callable[[dict[str, Any]], Awaitable[None]]
 class DesktopBridgeServer:
     """Serves the desktop JSON-lines bridge for one application runtime."""
 
-    def __init__(self, runtime: CoreRuntime, *, app: AppRuntime | None = None,
-                 config_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        runtime: CoreRuntime,
+        *,
+        app: AppRuntime | None = None,
+        config_path: Path | None = None,
+    ) -> None:
         self.runtime = runtime
         registry = runtime.role_runtime_registry
         repository = registry.repository if registry is not None else None
         self.role_store = (
-            repository.store if repository is not None
+            repository.store
+            if repository is not None
             else RoleStore(runtime.session_manager.workspace)
         )
         self._event_bus = runtime.event_bus if app is None else app.event_bus

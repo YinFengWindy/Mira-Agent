@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("agent.core.passive_turn")
 
+
 def _turn_log_id(key: str, msg: InboundMessage) -> str:
     raw = f"{key}|{msg.timestamp.isoformat()}|{msg.content[:80]}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
@@ -156,7 +157,9 @@ class PassiveTurnPipeline:
         self._reasoner = deps.reasoner
         self._llm = getattr(deps, "llm", None)
         self._llm_config = getattr(deps, "llm_config", None)
-        add_before_step = getattr(self._reasoner, "add_before_step_plugin_modules", None)
+        add_before_step = getattr(
+            self._reasoner, "add_before_step_plugin_modules", None
+        )
         if add_before_step is not None:
             add_before_step(list(deps.before_step_plugin_modules or []))
         add_after_step = getattr(self._reasoner, "add_after_step_plugin_modules", None)
@@ -209,7 +212,9 @@ class PassiveTurnPipeline:
         self._after_turn_plugin_modules.extend(modules)
         self._after_turn = self._build_after_turn_phase()
 
-    def _build_before_turn_phase(self) -> Phase[TurnState, BeforeTurnCtx, BeforeTurnFrame]:
+    def _build_before_turn_phase(
+        self,
+    ) -> Phase[TurnState, BeforeTurnCtx, BeforeTurnFrame]:
         return Phase(
             default_before_turn_modules(
                 self._bus,

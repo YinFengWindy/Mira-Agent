@@ -86,9 +86,7 @@ async def test_remember_allows_sensitive_observation_content() -> None:
         }
     )
 
-    assert [
-        call.args[0].summary for call in memory.mutate.await_args_list
-    ] == [
+    assert [call.args[0].summary for call in memory.mutate.await_args_list] == [
         "一起查看 https://example.com",
         "一起检查 user@example.com 和 C:\\Users\\name\\report.docx",
     ]

@@ -82,7 +82,9 @@ def test_message_push_schema_distinguishes_official_qqbot_from_napcat_qq() -> No
     assert "qqbot" in tool.description
     assert "qq（NapCat QQ）" in tool.description
     assert "不能写成 qq" in tool.description
-    assert "c2c:<user_openid>" in tool.parameters["properties"]["chat_id"]["description"]
+    assert (
+        "c2c:<user_openid>" in tool.parameters["properties"]["chat_id"]["description"]
+    )
 
 
 @pytest.mark.asyncio
@@ -118,7 +120,9 @@ async def test_message_push_does_not_treat_qq_as_qqbot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_message_push_sends_text_when_channel_only_registers_stream_sender() -> None:
+async def test_message_push_sends_text_when_channel_only_registers_stream_sender() -> (
+    None
+):
     sent: list[tuple[str, str]] = []
     tool = MessagePushTool()
 

@@ -75,7 +75,10 @@ class NovelAIStore:
         clean_role_id = role_id.strip()
         items: list[dict[str, Any]] = []
         for payload in self._read_record_payloads():
-            if clean_role_id and str(payload.get("role_id") or "").strip() != clean_role_id:
+            if (
+                clean_role_id
+                and str(payload.get("role_id") or "").strip() != clean_role_id
+            ):
                 continue
             items.append(payload)
         items.sort(
@@ -103,9 +106,7 @@ class NovelAIStore:
                     continue
                 request_path = Path(resolved_output_path).parent / "request.json"
                 if not request_path.is_file():
-                    raise ValueError(
-                        f"NovelAI 原始请求快照不存在: {request_path}"
-                    )
+                    raise ValueError(f"NovelAI 原始请求快照不存在: {request_path}")
                 request_payload = json.loads(request_path.read_text(encoding="utf-8"))
                 if not isinstance(request_payload, dict):
                     raise ValueError("NovelAI 原始请求快照格式非法")

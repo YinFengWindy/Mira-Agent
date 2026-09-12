@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-
 _PROFILE_EXTRACTOR_SYSTEM = (
     "你是中性的 profile 事实提取器，不扮演角色，也不生成用户可见回复。"
     "USER 是当前角色交流对象“你”，ASSISTANT 是当前角色“我”。"

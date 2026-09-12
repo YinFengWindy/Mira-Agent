@@ -7,8 +7,7 @@ from agent.config import load_config
 
 
 def _base_toml(extra: str) -> str:
-    return (
-        """
+    return ("""
 [[llm.registrations]]
 id = "00000000-0000-4000-a000-000000000001"
 provider = "openai"
@@ -16,9 +15,7 @@ model = "gpt-4.1"
 api_key = "sk-test"
 base_url = "https://api.openai.com/v1"
 effort = "none"
-"""
-        + extra
-    ).strip()
+""" + extra).strip()
 
 
 def test_config_no_longer_carries_a_dedicated_novelai_field(tmp_path: Path) -> None:
@@ -36,8 +33,7 @@ def test_load_config_migrates_legacy_integrations_novelai_into_plugins_table(
 ) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        _base_toml(
-            """
+        _base_toml("""
 [integrations.novelai]
 enabled = true
 token = "novel-token"
@@ -53,8 +49,7 @@ auto_writeback_role_assets = true
 max_pixels = 524288
 max_steps = 20
 default_samples = 1
-"""
-        ),
+"""),
         encoding="utf-8",
     )
 
@@ -87,13 +82,11 @@ def test_migration_is_idempotent_across_repeated_loads(tmp_path: Path) -> None:
     """Running the migration twice must not error, duplicate, or drop data."""
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        _base_toml(
-            """
+        _base_toml("""
 [integrations.novelai]
 enabled = true
 token = "novel-token"
-"""
-        ),
+"""),
         encoding="utf-8",
     )
 
@@ -117,16 +110,14 @@ def test_migration_preserves_a_previously_stored_enabled_flag(tmp_path: Path) ->
     """
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        _base_toml(
-            """
+        _base_toml("""
 [plugins.novelai]
 enabled = false
 
 [integrations.novelai]
 enabled = true
 token = "novel-token"
-"""
-        ),
+"""),
         encoding="utf-8",
     )
 
@@ -139,16 +130,14 @@ token = "novel-token"
 def test_migration_does_not_disturb_unrelated_config_sections(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        _base_toml(
-            """
+        _base_toml("""
 [integrations.novelai]
 enabled = true
 token = "novel-token"
 
 [channels.telegram]
 token = "telegram-token"
-"""
-        ),
+"""),
         encoding="utf-8",
     )
 
@@ -158,7 +147,9 @@ token = "telegram-token"
     assert config.channels.telegram.token == "telegram-token"
 
 
-def test_load_config_preserves_proactive_base_config_without_role_target(tmp_path: Path) -> None:
+def test_load_config_preserves_proactive_base_config_without_role_target(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
         """

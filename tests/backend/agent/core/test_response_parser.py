@@ -5,7 +5,9 @@ import sys
 
 def _load_response_parser_module():
     repository_root = Path(__file__).resolve().parents[4]
-    module_path = repository_root / "apps" / "backend" / "agent" / "core" / "response_parser.py"
+    module_path = (
+        repository_root / "apps" / "backend" / "agent" / "core" / "response_parser.py"
+    )
     spec = spec_from_file_location("test_response_parser_module", module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"failed to load module spec from {module_path}")

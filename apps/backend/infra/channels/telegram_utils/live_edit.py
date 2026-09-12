@@ -24,6 +24,7 @@ _LIVE_MAX_FLOOD_STRIKES = 3
 _LIVE_MAX_INLINE_RETRY_S = 2.0
 _LIVE_MAX_BACKOFF_S = 10.0
 
+
 class TelegramLiveEditQueue:
     def __init__(
         self,
@@ -42,7 +43,9 @@ class TelegramLiveEditQueue:
         async with lock:
             await self._wait_for_slot(chat_id)
             self._mark_used(chat_id)
-            logger.debug("[telegram] live queue reserved: %s chat_id=%s", label, chat_id)
+            logger.debug(
+                "[telegram] live queue reserved: %s chat_id=%s", label, chat_id
+            )
 
     async def run(
         self,
@@ -106,8 +109,13 @@ class TelegramLiveEditQueue:
                     return result
                 except RetryAfter as e:
                     strikes = self._record_flood(chat_id)
-                    delay = max(float(getattr(e, "retry_after", 1.0) or 1.0), self._interval(chat_id))
-                    self._next_allowed_at[chat_id] = asyncio.get_running_loop().time() + delay
+                    delay = max(
+                        float(getattr(e, "retry_after", 1.0) or 1.0),
+                        self._interval(chat_id),
+                    )
+                    self._next_allowed_at[chat_id] = (
+                        asyncio.get_running_loop().time() + delay
+                    )
                     logger.warning(
                         "[telegram] %s 命中限流，延后 live 更新 attempt=%d/3 delay=%.1fs strikes=%d",
                         label,
@@ -116,7 +124,8 @@ class TelegramLiveEditQueue:
                         strikes,
                     )
                     if (
-                        float(getattr(e, "retry_after", 1.0) or 1.0) > _LIVE_MAX_INLINE_RETRY_S
+                        float(getattr(e, "retry_after", 1.0) or 1.0)
+                        > _LIVE_MAX_INLINE_RETRY_S
                         or strikes >= _LIVE_MAX_FLOOD_STRIKES
                     ):
                         return None
@@ -135,7 +144,9 @@ class TelegramLiveEditQueue:
             await asyncio.sleep(next_allowed - now)
 
     def _mark_used(self, chat_id: int) -> None:
-        self._next_allowed_at[chat_id] = asyncio.get_running_loop().time() + self._interval(chat_id)
+        self._next_allowed_at[chat_id] = (
+            asyncio.get_running_loop().time() + self._interval(chat_id)
+        )
 
     def _interval(self, chat_id: int) -> float:
         return self._current_interval_s.get(chat_id, self._min_interval_s)
@@ -245,6 +256,7 @@ def _clip_live_text(text: str) -> str:
     suffix = "\n..."
     cut = _utf16_cut(text, _LIVE_MESSAGE_LIMIT - len(suffix))
     return text[:cut] + suffix
+
 
 async def _send_live_message(
     bot: Bot,

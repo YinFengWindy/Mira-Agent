@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from agent.core.runtime_support import SessionLike
     from agent.tools.registry import ToolRegistry
 
+
 def get_history_since_consolidated(
     session: "SessionLike",
     memory_window: int,
@@ -40,9 +41,7 @@ def extract_model_facing_turn(
     if not messages:
         return None, None
     user_content = (
-        messages[-1].get("content")
-        if messages[-1].get("role") == "user"
-        else None
+        messages[-1].get("content") if messages[-1].get("role") == "user" else None
     )
     if len(messages) < 2:
         return user_content, None
@@ -99,7 +98,7 @@ def build_deferred_tools_hint(
     total = len(builtin) + sum(len(v) for v in mcp.values())
     lines.append(
         f"\n共 {total} 个。加载方式：\n"
-        "- 已知工具名 → tool_search(query=\"select:工具名\")，支持逗号分隔多个\n"
-        "- 描述功能   → tool_search(query=\"关键词\") 搜索匹配"
+        '- 已知工具名 → tool_search(query="select:工具名")，支持逗号分隔多个\n'
+        '- 描述功能   → tool_search(query="关键词") 搜索匹配'
     )
     return "\n".join(lines) + "\n\n"

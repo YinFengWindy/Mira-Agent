@@ -71,6 +71,7 @@
 - 发现乱码先检查文件编码与终端解码设置，必要时重存为 UTF-8。
 - 验证当轮改动的命令（PowerShell 下逐条执行，不要用 `&&` 串联）：
   - 桌面端：`pnpm test`（单测）、`pnpm typecheck`、`pnpm lint`。
+  - Python 格式与静态检查：Windows 使用 `.venv\\Scripts\\black.exe --check .`、`.venv\\Scripts\\ruff.exe check .`；跨平台使用 `uv run black --check .`、`uv run ruff check .`。
   - 后端：`uv run pytest`；testpaths 包括 `tests/backend`、`plugins` 和 `packages/shiori-plugin-testkit/tests`，且开了 `-W error`，任何警告都会判失败。
   - 后端类型检查有两套配置：源码用 `pyrightconfig.json`，测试用 `pyrightconfig.tests.json`（`--project` 指定）。
 - Python 代码风格走 ruff（`select = ["E4", "E7", "E9", "F"]`）+ black，line-length 88。

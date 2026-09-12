@@ -94,6 +94,7 @@ class AgentLoopDeps:
     core_runner: "CoreRunner | None" = None
     role_runtime_registry: "RoleRuntimeRegistry | None" = None
 
+
 @dataclass
 class AgentLoopConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)

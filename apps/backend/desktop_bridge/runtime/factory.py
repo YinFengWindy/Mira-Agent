@@ -7,8 +7,9 @@ from core.roles import RoleStore
 from desktop_bridge.service import DesktopBridgeService
 
 
-def build_desktop_service(runtime: CoreRuntime, role_store: RoleStore, *,
-                          activate_transport: bool = True) -> DesktopBridgeService:
+def build_desktop_service(
+    runtime: CoreRuntime, role_store: RoleStore, *, activate_transport: bool = True
+) -> DesktopBridgeService:
     """Captures generation-owned dependencies without starting background work."""
     spawn = runtime.tools.get_tool("spawn")
     registry = runtime.role_runtime_registry

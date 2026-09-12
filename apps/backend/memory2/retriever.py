@@ -228,7 +228,9 @@ class Retriever:
         vectors: list[list[float]] = []
         for result in results:
             if isinstance(result, BaseException):
-                logger.warning("memory2 retrieve: embed failed, fallback lane skipped: %s", result)
+                logger.warning(
+                    "memory2 retrieve: embed failed, fallback lane skipped: %s", result
+                )
                 continue
             vectors.append(cast(list[float], result))
         return vectors
@@ -308,7 +310,9 @@ class Retriever:
     def _select_injection_sections(
         self,
         items: list[dict],
-    ) -> tuple[list[dict], list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
+    ) -> tuple[
+        list[dict], list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]
+    ]:
         """1. 筛选条目 2. 按段落准备格式化文本。"""
         if not items:
             return [], [], [], []
@@ -347,7 +351,12 @@ class Retriever:
                 selected.append(item)
                 if summary:
                     tool_req = extra.get("tool_requirement")
-                    forced.append((item_id, f"- [{item_id}] {summary}（必须调用工具：{tool_req}）"))
+                    forced.append(
+                        (
+                            item_id,
+                            f"- [{item_id}] {summary}（必须调用工具：{tool_req}）",
+                        )
+                    )
                 continue
             type_th = self._score_thresholds.get(mtype, self._score_threshold)
             if score < type_th:
@@ -502,11 +511,46 @@ def _hit_score(item: dict, fallback_key: str = "score") -> float:
 
 
 _CJK_STOPWORDS = {
-    "用户", "助手", "我们", "他们", "这个", "那个", "什么", "如何", "是否",
-    "有没", "没有", "有过", "做过", "进行", "完成", "包括", "通过", "实现",
-    "行为", "内容", "相关", "情况", "问题", "方式", "时候", "时间", "目前",
-    "当前", "最近", "之前", "以前", "后来", "然后", "因为", "所以", "但是",
-    "用户在", "用户对", "的行为吗", "进行了",
+    "用户",
+    "助手",
+    "我们",
+    "他们",
+    "这个",
+    "那个",
+    "什么",
+    "如何",
+    "是否",
+    "有没",
+    "没有",
+    "有过",
+    "做过",
+    "进行",
+    "完成",
+    "包括",
+    "通过",
+    "实现",
+    "行为",
+    "内容",
+    "相关",
+    "情况",
+    "问题",
+    "方式",
+    "时候",
+    "时间",
+    "目前",
+    "当前",
+    "最近",
+    "之前",
+    "以前",
+    "后来",
+    "然后",
+    "因为",
+    "所以",
+    "但是",
+    "用户在",
+    "用户对",
+    "的行为吗",
+    "进行了",
 }
 
 
@@ -522,7 +566,7 @@ def _extract_terms(query: str) -> list[str]:
                 terms.append(chunk)
             continue
         for i in range(len(chunk) - 1):
-            bigram = chunk[i:i + 2]
+            bigram = chunk[i : i + 2]
             if bigram not in _CJK_STOPWORDS:
                 terms.append(bigram)
 
@@ -561,7 +605,9 @@ def _rrf_merge(
         if item_id:
             merged_item = dict(item)
             if "score" not in merged_item:
-                merged_item["score"] = _hit_score(merged_item, fallback_key="keyword_score")
+                merged_item["score"] = _hit_score(
+                    merged_item, fallback_key="keyword_score"
+                )
             id_to_item[item_id] = merged_item
     for item in vector_items:
         item_id = _hit_id(item)
@@ -632,7 +678,9 @@ def _format_memory_meta(
         parts.append(src_tag.strip())
     else:
         parts.append("证据: 记忆摘要")
-    if memory_type == "preference" and _looks_low_confidence_memory(item.get("summary", "")):
+    if memory_type == "preference" and _looks_low_confidence_memory(
+        item.get("summary", "")
+    ):
         parts.append("低置信线索: 不能单独证明历史细节")
     if not parts:
         return ""

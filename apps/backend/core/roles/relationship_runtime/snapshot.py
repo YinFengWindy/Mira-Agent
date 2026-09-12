@@ -69,7 +69,6 @@ _RELATIONSHIP_PROMPT = """\
 """
 
 
-
 class RelationshipSnapshotOptimizer:
     """Generates role relationship snapshots from current evidence."""
 

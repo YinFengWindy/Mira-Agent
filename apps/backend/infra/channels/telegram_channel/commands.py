@@ -57,6 +57,7 @@ class _CommandMixin:
             result.message,
             self._telegram_outbound_limiter,
         )
+
     async def _on_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:

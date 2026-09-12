@@ -34,58 +34,70 @@ def test_session_presenter_serializes_sanitized_tool_chain(tmp_path) -> None:
     session.add_message(
         "assistant",
         "查到了。",
-        tool_chain=[{
-            "text": "我来查一下",
-            "reasoning_content": "需要搜索",
-            "calls": [{
-                "call_id": "call-1",
-                "name": "web_search",
-                "status": "success",
-                "arguments": {"query": "天气"},
-                "final_arguments": {"query": "上海天气"},
-                "result": "晴，28°C",
-                "pre_hook_trace": [{"reason": "internal"}],
-                "post_hook_trace": [{"reason": "internal"}],
-            }],
-        }],
+        tool_chain=[
+            {
+                "text": "我来查一下",
+                "reasoning_content": "需要搜索",
+                "calls": [
+                    {
+                        "call_id": "call-1",
+                        "name": "web_search",
+                        "status": "success",
+                        "arguments": {"query": "天气"},
+                        "final_arguments": {"query": "上海天气"},
+                        "result": "晴，28°C",
+                        "pre_hook_trace": [{"reason": "internal"}],
+                        "post_hook_trace": [{"reason": "internal"}],
+                    }
+                ],
+            }
+        ],
     )
     conversation = ConversationService(manager)
 
     payload = DesktopSessionPresenter(conversation).serialize(session)
 
-    assert payload["messages"][0]["tool_chain"] == [{
-        "text": "我来查一下",
-        "reasoning_content": "需要搜索",
-        "calls": [{
-            "call_id": "call-1",
-            "name": "web_search",
-            "status": "success",
-            "arguments": {"query": "天气"},
-            "final_arguments": {"query": "上海天气"},
-            "result": "晴，28°C",
-        }],
-    }]
+    assert payload["messages"][0]["tool_chain"] == [
+        {
+            "text": "我来查一下",
+            "reasoning_content": "需要搜索",
+            "calls": [
+                {
+                    "call_id": "call-1",
+                    "name": "web_search",
+                    "status": "success",
+                    "arguments": {"query": "天气"},
+                    "final_arguments": {"query": "上海天气"},
+                    "result": "晴，28°C",
+                }
+            ],
+        }
+    ]
 
 
-def test_session_presenter_truncates_results_and_skips_unidentified_tools(tmp_path) -> None:
+def test_session_presenter_truncates_results_and_skips_unidentified_tools(
+    tmp_path,
+) -> None:
     manager = SessionManager(tmp_path)
     session = manager.get_or_create("role:mira")
     session.add_message(
         "assistant",
         "完成。",
-        tool_chain=[{
-            "text": "执行工具",
-            "calls": [
-                {
-                    "call_id": "call-1",
-                    "name": "read_file",
-                    "status": "success",
-                    "result": "x" * 2500,
-                },
-                {"call_id": "", "name": "shell", "result": "ignored"},
-                {"call_id": "call-3", "name": "", "result": "ignored"},
-            ],
-        }],
+        tool_chain=[
+            {
+                "text": "执行工具",
+                "calls": [
+                    {
+                        "call_id": "call-1",
+                        "name": "read_file",
+                        "status": "success",
+                        "result": "x" * 2500,
+                    },
+                    {"call_id": "", "name": "shell", "result": "ignored"},
+                    {"call_id": "call-3", "name": "", "result": "ignored"},
+                ],
+            }
+        ],
     )
 
     payload = DesktopSessionPresenter(ConversationService(manager)).serialize(session)
@@ -144,10 +156,12 @@ def test_session_presenter_image_history_excludes_chat_content(tmp_path) -> None
 
     assert history == {
         "session_key": "role:mira",
-        "messages": [{
-            "id": "role:mira:0",
-            "seq": 0,
-            "timestamp": session.messages[0]["timestamp"],
-            "media": ["old.png"],
-        }],
+        "messages": [
+            {
+                "id": "role:mira:0",
+                "seq": 0,
+                "timestamp": session.messages[0]["timestamp"],
+                "media": ["old.png"],
+            }
+        ],
     }

@@ -123,16 +123,19 @@ def test_provider_and_json_failures_keep_distinct_reason_codes() -> None:
         async def chat(self, **_: object) -> object:
             return SimpleNamespace(content="not json")
 
-    async def run() -> tuple[tuple[DedupDecision, str, list, tuple[str, ...]], tuple[DedupDecision, str, list, tuple[str, ...]]]:
+    async def run() -> tuple[
+        tuple[DedupDecision, str, list, tuple[str, ...]],
+        tuple[DedupDecision, str, list, tuple[str, ...]],
+    ]:
         first = _decider()
         first._provider = FailingProvider()
         first._model = "test"
         second = _decider()
         second._provider = JsonProvider()
         second._model = "test"
-        return await first._llm_decide("candidate", _similar()), await second._llm_decide(
+        return await first._llm_decide(
             "candidate", _similar()
-        )
+        ), await second._llm_decide("candidate", _similar())
 
     provider_result, json_result = asyncio.run(run())
     assert provider_result[0] is DedupDecision.CREATE

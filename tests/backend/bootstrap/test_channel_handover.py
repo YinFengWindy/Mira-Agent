@@ -13,7 +13,9 @@ from infra.channels.intake import ChannelIntake
 
 
 class Connection:
-    def __init__(self, label, events, *, fail_start=False, fail_stop=False, fail_resume=False):
+    def __init__(
+        self, label, events, *, fail_start=False, fail_stop=False, fail_resume=False
+    ):
         self.name = "chat"
         self.label = label
         self.events = events
@@ -60,9 +62,17 @@ def hosts(events, *, fail_start=False, fail_stop=False):
     bus = MessageBus()
     push = MessagePushTool()
     push.set_transport_lock(bus.transport_lock)
-    ctx = ChannelContext(bus=bus, push_tool=push, session_manager=None, event_bus=None,
-                         attachment_store=None, http_resources=None, interrupt_controller=None,
-                         bot_commands=[], log=logging.getLogger(__name__))
+    ctx = ChannelContext(
+        bus=bus,
+        push_tool=push,
+        session_manager=None,
+        event_bus=None,
+        attachment_store=None,
+        http_resources=None,
+        interrupt_controller=None,
+        bot_commands=[],
+        log=logging.getLogger(__name__),
+    )
     old = Connection("old", events, fail_stop=fail_stop)
     new = Connection("new", events, fail_start=fail_start)
     active = ChannelHost(lambda channel: ctx, transport_lock=bus.transport_lock)
@@ -82,7 +92,9 @@ async def test_start_failure_cleans_candidate_subscriptions_and_restores_old():
     assert caught.value.degraded == []
     assert events == ["start:old", "stop:old", "start:new", "stop:new", "start:old"]
     assert len(bus._subscribers["chat"]) == 1
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="queued"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="queued")
+    )
     assert events[-1] == "send:old:queued"
 
 
@@ -126,14 +138,18 @@ async def test_resume_failure_prevents_commit_and_restores_original_transport():
     candidate.channels[0].fail_resume = True
     commits = []
     with pytest.raises(ChannelHandoverError) as caught:
-        await active.handover_channels(candidate, commit=lambda: commits.append("committed"))
+        await active.handover_channels(
+            candidate, commit=lambda: commits.append("committed")
+        )
     assert caught.value.failure.phase == "resume"
     assert caught.value.degraded == []
     assert commits == []
     assert active.channels == [original]
     assert original.intake
     assert not candidate.channels[0].intake
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="old-credentials"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="old-credentials")
+    )
     assert events[-1] == "send:old:old-credentials"
 
 
@@ -145,8 +161,9 @@ async def test_reused_channel_is_resumed_before_commit():
     await active.start_all()
     active.pause_intake()
     intake_at_commit = []
-    await active.handover_channels(candidate,
-                                   commit=lambda: intake_at_commit.append(active.channels[0].intake))
+    await active.handover_channels(
+        candidate, commit=lambda: intake_at_commit.append(active.channels[0].intake)
+    )
     assert intake_at_commit == [True]
 
 
@@ -164,7 +181,12 @@ async def test_commit_failure_repauses_candidate_before_async_cleanup_can_flush_
         await start(ctx)
         intake.start(paused=ctx.intake_paused)
         from bus.events import InboundMessage
-        await intake.submit(InboundMessage(channel="chat", sender="user", chat_id="one", content="pending"))
+
+        await intake.submit(
+            InboundMessage(
+                channel="chat", sender="user", chat_id="one", content="pending"
+            )
+        )
 
     async def stop_with_async_cleanup():
         await asyncio.sleep(0)
@@ -181,7 +203,9 @@ async def test_commit_failure_repauses_candidate_before_async_cleanup_can_flush_
     with pytest.raises(OSError, match="disk full"):
         await active.handover_channels(candidate, commit=fail_commit)
     accepted.assert_not_awaited()
-    assert any(event.startswith("send:new:") and "重新发送" in event for event in events)
+    assert any(
+        event.startswith("send:new:") and "重新发送" in event for event in events
+    )
 
 
 @pytest.mark.asyncio
@@ -226,7 +250,9 @@ async def test_handover_blocks_direct_sends_until_new_connection_is_ready():
     handover = asyncio.create_task(active.handover(candidate))
     await started.wait()
     assert not new.intake
-    send = asyncio.create_task(push.execute(channel="chat", chat_id="one", message="old-task"))
+    send = asyncio.create_task(
+        push.execute(channel="chat", chat_id="one", message="old-task")
+    )
     await asyncio.sleep(0)
     assert not send.done()
     release.set()
@@ -248,7 +274,9 @@ async def test_removed_channel_keeps_old_replies_until_retirement_signal():
     await active.handover(candidate, retire_after=drained.wait)
     assert not old.intake
     assert active.channels == []
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="last-reply"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="last-reply")
+    )
     assert events[-1] == "send:old:last-reply"
     drained.set()
     await active._retirements.drain()
@@ -268,6 +296,8 @@ async def test_readding_removed_channel_replaces_retained_transport_once():
     assert len(bus._subscribers["chat"]) == 1
     drained.set()
     await active._retirements.drain()
-    await bus._dispatch_message(OutboundMessage(channel="chat", chat_id="one", content="reply"))
+    await bus._dispatch_message(
+        OutboundMessage(channel="chat", chat_id="one", content="reply")
+    )
     assert events[-1] == "send:new:reply"
     assert events.count("stop:old") == 1

@@ -280,9 +280,7 @@ async def test_loneliness_gate_passes_when_threshold_reached():
 @pytest.mark.asyncio
 async def test_due_scene_followup_bypasses_loneliness_and_closes_on_scene_change():
     closed_sessions: list[str] = []
-    llm = FakeLLM(
-        [("finish_turn", {"decision": "skip", "reason": "scene_changed"})]
-    )
+    llm = FakeLLM([("finish_turn", {"decision": "skip", "reason": "scene_changed"})])
     tick = make_proactive_pipeline(
         llm_fn=llm,
         proactive_gates=relationship_gate_chain(
@@ -501,17 +499,19 @@ async def test_drift_interval_allows_after_window():
 
     state = FakeStateStore()
     state.set_last_drift_at(datetime.now(timezone.utc) - timedelta(hours=4))
-    llm = FakeLLM([
-        (
-            "finish_drift",
-            {
-                "skill_used": "explore-curiosity",
-                "one_line": "x",
-                "next": "y",
-                "message_result": "silent",
-            },
-        ),
-    ])
+    llm = FakeLLM(
+        [
+            (
+                "finish_drift",
+                {
+                    "skill_used": "explore-curiosity",
+                    "one_line": "x",
+                    "next": "y",
+                    "message_result": "silent",
+                },
+            ),
+        ]
+    )
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         skill_dir = tmp_path / "skills" / "explore-curiosity"

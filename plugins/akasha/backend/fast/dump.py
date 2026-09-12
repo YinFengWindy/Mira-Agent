@@ -7,6 +7,7 @@
 reset_schema 只清 5 张图表(nodes/edges/salience_state/query_log/activation_events)，
 保留 embedding_cache / migration_runs / source_session_snapshot。复用调用方已开的连接（单连接）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -32,10 +33,22 @@ def dump_to_db(store: AkashaStore, mem) -> dict[str, int]:
 
         node_rows = [
             (
-                n.key, n.anchor_id, n.session_key, n.turn_seq, n.first_ts_unix,
-                n.salience, n.strength, n.resource, n.recall_count,
-                n.last_activated_ts, n.last_strength_ts, n.last_resource_ts,
-                serialize_f32(np.asarray(n.embedding, dtype=np.float32)), n.emb_count, now, now,
+                n.key,
+                n.anchor_id,
+                n.session_key,
+                n.turn_seq,
+                n.first_ts_unix,
+                n.salience,
+                n.strength,
+                n.resource,
+                n.recall_count,
+                n.last_activated_ts,
+                n.last_strength_ts,
+                n.last_resource_ts,
+                serialize_f32(np.asarray(n.embedding, dtype=np.float32)),
+                n.emb_count,
+                now,
+                now,
             )
             for n in mem._nodes.values()  # pyright: ignore[reportPrivateUsage]
         ]
@@ -63,8 +76,11 @@ def dump_to_db(store: AkashaStore, mem) -> dict[str, int]:
             db.execute(
                 "INSERT INTO akasha_salience_state (key, vector_sum, count, updated_at) "
                 "VALUES ('global', ?, ?, ?)",
-                (serialize_f32(np.asarray(csum, dtype=np.float32)),
-                 int(mem._ccount), now),  # pyright: ignore[reportPrivateUsage]
+                (
+                    serialize_f32(np.asarray(csum, dtype=np.float32)),
+                    int(mem._ccount),
+                    now,
+                ),  # pyright: ignore[reportPrivateUsage]
             )
 
         if ql:
@@ -76,11 +92,26 @@ def dump_to_db(store: AkashaStore, mem) -> dict[str, int]:
                        activation_items, dense_items, ripple_items, text_block_preview
                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
-                    (q["query_id"], q["session_key"], q["seq"], q["query_text"], q["intent"], q["ts"],
-                     q["seed_count"], q["pool_count"], q["activated_count"], q["activation_threshold"],
-                     q["dense_count"], q["ripple_count"], q["inject_chars"], q["source_ref_count"],
-                     q["activation_items_json"], q["dense_items_json"], q["ripple_items_json"],
-                     q["text_block_preview"])
+                    (
+                        q["query_id"],
+                        q["session_key"],
+                        q["seq"],
+                        q["query_text"],
+                        q["intent"],
+                        q["ts"],
+                        q["seed_count"],
+                        q["pool_count"],
+                        q["activated_count"],
+                        q["activation_threshold"],
+                        q["dense_count"],
+                        q["ripple_count"],
+                        q["inject_chars"],
+                        q["source_ref_count"],
+                        q["activation_items_json"],
+                        q["dense_items_json"],
+                        q["ripple_items_json"],
+                        q["text_block_preview"],
+                    )
                     for q in ql
                 ],
             )
@@ -89,8 +120,19 @@ def dump_to_db(store: AkashaStore, mem) -> dict[str, int]:
             db.executemany(
                 "INSERT INTO akasha_activation_events VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
-                    (r.seq, r.query_id, r.activated_key, r.source, r.score, r.direct_score,
-                     r.state_score, r.edge_score, r.long_score, r.resource, r.fan)
+                    (
+                        r.seq,
+                        r.query_id,
+                        r.activated_key,
+                        r.source,
+                        r.score,
+                        r.direct_score,
+                        r.state_score,
+                        r.edge_score,
+                        r.long_score,
+                        r.resource,
+                        r.fan,
+                    )
                     for r in ev
                 ],
             )

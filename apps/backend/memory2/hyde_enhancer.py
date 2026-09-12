@@ -34,9 +34,9 @@ async def _retrieve_hits(
 class HyDEAugmentResult:
     """augment() 的返回值，包含 raw/hyde 两路的原始数据，供 trace 使用。"""
 
-    items: list[dict]               # 合并后的最终结果（raw ∪ hyde_added）
-    used_hyde: bool                 # HyDE 是否实际追加了新条目
-    hypothesis: str | None          # LLM 生成的假设文本
+    items: list[dict]  # 合并后的最终结果（raw ∪ hyde_added）
+    used_hyde: bool  # HyDE 是否实际追加了新条目
+    hypothesis: str | None  # LLM 生成的假设文本
     raw_hits: list[dict] = field(default_factory=list)  # raw query 检索到的条目
 
 
@@ -90,7 +90,7 @@ class HyDEEnhancer:
             f"{context_section}"
             "规则：\n"
             "- 始终生成肯定式条目，描述**如果该记忆存在会记录什么事实**，不要否定该事件的存在\n"
-            '- 使用当前角色相对视角“我/你/我们”，写成简洁事实陈述\n'
+            "- 使用当前角色相对视角“我/你/我们”，写成简洁事实陈述\n"
             "- 只输出那一条文本，不要解释，不要回答问题本身\n\n"
             f"当前问题：{query}\n"
             "假想检索线索："
@@ -129,7 +129,10 @@ class HyDEEnhancer:
         except Exception as e:
             logger.debug("hyde retrieve failed: %s", e)
             return HyDEAugmentResult(
-                items=raw_hits, used_hyde=False, hypothesis=hypothesis, raw_hits=raw_hits
+                items=raw_hits,
+                used_hyde=False,
+                hypothesis=hypothesis,
+                raw_hits=raw_hits,
             )
 
         merged = _union_dedup(raw_hits, hyde_hits)

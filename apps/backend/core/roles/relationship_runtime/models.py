@@ -39,6 +39,7 @@ _DEFAULT_BEHAVIOR_PROFILE = {
     "night_suppression": 0.4,
 }
 
+
 @dataclass(frozen=True)
 class RelationshipSnapshot:
     role_id: str
@@ -68,8 +69,10 @@ class RelationshipSnapshot:
             "last_error": self.last_error,
         }
 
+
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(maximum, value))
+
 
 def _normalize_tags(raw: object) -> list[str]:
     if not isinstance(raw, list):
@@ -90,7 +93,14 @@ def _normalize_tags(raw: object) -> list[str]:
 def _normalize_relation_state(raw: object) -> dict[str, float]:
     payload = raw if isinstance(raw, dict) else {}
     return {
-        key: _clamp(float(payload.get(key, _DEFAULT_RELATION_STATE[key]) or _DEFAULT_RELATION_STATE[key]), 0.0, 1.0)
+        key: _clamp(
+            float(
+                payload.get(key, _DEFAULT_RELATION_STATE[key])
+                or _DEFAULT_RELATION_STATE[key]
+            ),
+            0.0,
+            1.0,
+        )
         for key in _RELATION_STATE_KEYS
     }
 
@@ -99,29 +109,57 @@ def _normalize_behavior_profile(raw: object) -> dict[str, float | int]:
     payload = raw if isinstance(raw, dict) else {}
     return {
         "loneliness_growth_base": _clamp(
-            float(payload.get("loneliness_growth_base", _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_base"]) or _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_base"]),
+            float(
+                payload.get(
+                    "loneliness_growth_base",
+                    _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_base"],
+                )
+                or _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_base"]
+            ),
             _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_base"],
             8.0,
         ),
         "loneliness_growth_when_unanswered": _clamp(
-            float(payload.get("loneliness_growth_when_unanswered", _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_when_unanswered"]) or _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_when_unanswered"]),
+            float(
+                payload.get(
+                    "loneliness_growth_when_unanswered",
+                    _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_when_unanswered"],
+                )
+                or _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_when_unanswered"]
+            ),
             _DEFAULT_BEHAVIOR_PROFILE["loneliness_growth_when_unanswered"],
             12.0,
         ),
         "trigger_threshold": _clamp(
-            float(payload.get("trigger_threshold", _DEFAULT_BEHAVIOR_PROFILE["trigger_threshold"]) or _DEFAULT_BEHAVIOR_PROFILE["trigger_threshold"]),
+            float(
+                payload.get(
+                    "trigger_threshold", _DEFAULT_BEHAVIOR_PROFILE["trigger_threshold"]
+                )
+                or _DEFAULT_BEHAVIOR_PROFILE["trigger_threshold"]
+            ),
             0.0,
             100.0,
         ),
         "post_trigger_cooldown_minutes": int(
             _clamp(
-                float(payload.get("post_trigger_cooldown_minutes", _DEFAULT_BEHAVIOR_PROFILE["post_trigger_cooldown_minutes"]) or _DEFAULT_BEHAVIOR_PROFILE["post_trigger_cooldown_minutes"]),
+                float(
+                    payload.get(
+                        "post_trigger_cooldown_minutes",
+                        _DEFAULT_BEHAVIOR_PROFILE["post_trigger_cooldown_minutes"],
+                    )
+                    or _DEFAULT_BEHAVIOR_PROFILE["post_trigger_cooldown_minutes"]
+                ),
                 1.0,
                 24 * 60,
             )
         ),
         "night_suppression": _clamp(
-            float(payload.get("night_suppression", _DEFAULT_BEHAVIOR_PROFILE["night_suppression"]) or _DEFAULT_BEHAVIOR_PROFILE["night_suppression"]),
+            float(
+                payload.get(
+                    "night_suppression", _DEFAULT_BEHAVIOR_PROFILE["night_suppression"]
+                )
+                or _DEFAULT_BEHAVIOR_PROFILE["night_suppression"]
+            ),
             0.0,
             1.0,
         ),

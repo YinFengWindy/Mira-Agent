@@ -5,7 +5,11 @@ from typing import Any, cast
 from unittest.mock import MagicMock
 
 from agent.config_models import Config
-from bootstrap.proactive import build_memory_optimizer_task, build_proactive_runtime, _build_role_prompt_resolver
+from bootstrap.proactive import (
+    build_memory_optimizer_task,
+    build_proactive_runtime,
+    _build_role_prompt_resolver,
+)
 from core.roles import RoleStore
 from agent.core.proactive_turn.gates import (
     ProactiveGateAdapter,
@@ -15,18 +19,30 @@ from agent.core.proactive_turn.gates import (
 from proactive_v2.config import ProactiveConfig
 
 
-def test_proactive_role_prompt_compiles_current_profile_and_always_active_knowledge(tmp_path):
+def test_proactive_role_prompt_compiles_current_profile_and_always_active_knowledge(
+    tmp_path,
+):
     store = RoleStore(tmp_path)
     store.create_role(
-        name="Mira", role_id="mira", system_prompt="过时的规则",
+        name="Mira",
+        role_id="mira",
+        system_prompt="过时的规则",
         runtime_config={"mood_catalog": ["平静"]},
         profile={
-            "character": {"profile": "{{char}}的资料", "nickname": "小栞", "personality": "温柔", "response_constraints": "简洁回应{{user}}"},
-            "knowledge_base": {"enabled": True, "entries": [
-                {"content": "常驻知识", "always_active": True},
-                {"content": "消息关键词知识", "primary_keys": ["Mira"]},
-                {"content": "已停用知识", "enabled": False, "always_active": True},
-            ]},
+            "character": {
+                "profile": "{{char}}的资料",
+                "nickname": "小栞",
+                "personality": "温柔",
+                "response_constraints": "简洁回应{{user}}",
+            },
+            "knowledge_base": {
+                "enabled": True,
+                "entries": [
+                    {"content": "常驻知识", "always_active": True},
+                    {"content": "消息关键词知识", "primary_keys": ["Mira"]},
+                    {"content": "已停用知识", "enabled": False, "always_active": True},
+                ],
+            },
         },
     )
     resolve = _build_role_prompt_resolver(tmp_path, "mira")
@@ -35,12 +51,18 @@ def test_proactive_role_prompt_compiles_current_profile_and_always_active_knowle
     assert prompt.startswith("[role_identity]\nMira")
     assert "小栞的资料" in prompt and "温柔" in prompt and "简洁回应用户" in prompt
     assert "常驻知识" in prompt
-    assert prompt.index("[role_knowledge]") < prompt.index("[role_response_constraints]")
+    assert prompt.index("[role_knowledge]") < prompt.index(
+        "[role_response_constraints]"
+    )
     assert "过时的规则" not in prompt
     assert "消息关键词知识" not in prompt and "已停用知识" not in prompt
     assert "Mood Output Contract" not in prompt
 
-    store.update_role("mira", name="Shiori", profile={"character": {"response_constraints": "只回复一句"}})
+    store.update_role(
+        "mira",
+        name="Shiori",
+        profile={"character": {"response_constraints": "只回复一句"}},
+    )
     updated = resolve()
     assert updated.startswith("[role_identity]\nShiori")
     assert "只回复一句" in updated
@@ -102,6 +124,7 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
         api_key="",
     )
     event_bus = object()
+
     class _PassGate(ProactiveGateAdapter):
         name = "test.gate"
 
@@ -142,8 +165,14 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
     assert loops["luna"].config.tick_interval_s0 == 1800
     assert loops["luna"].config.drift_enabled is True
     assert loops["luna"].config.drift_min_interval_hours == 7
-    assert created[0]["state_store"].db_path == tmp_path / "roles" / "mira" / "proactive.db"
-    assert created[1]["state_store"].db_path == tmp_path / "roles" / "luna" / "proactive.db"
+    assert (
+        created[0]["state_store"].db_path
+        == tmp_path / "roles" / "mira" / "proactive.db"
+    )
+    assert (
+        created[1]["state_store"].db_path
+        == tmp_path / "roles" / "luna" / "proactive.db"
+    )
     assert created[0]["event_bus"] is event_bus
     assert created[1]["event_bus"] is event_bus
     assert created[0]["proactive_gates"] == [proactive_gate]
@@ -152,16 +181,27 @@ def test_build_proactive_runtime_isolates_role_policy_and_state(tmp_path, monkey
     assert created[1]["proactive_motives"] == [motive]
 
 
-def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypatch, tmp_path):
+def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(
+    monkeypatch, tmp_path
+):
     config = Config(
-        provider="openai", model="m", api_key="", base_url="http://localhost:11434/v1",
-        proactive=ProactiveConfig(enabled=True), memory_optimizer_enabled=False,
-        memory_optimizer_interval_seconds=7200, max_tokens=128,
+        provider="openai",
+        model="m",
+        api_key="",
+        base_url="http://localhost:11434/v1",
+        proactive=ProactiveConfig(enabled=True),
+        memory_optimizer_enabled=False,
+        memory_optimizer_interval_seconds=7200,
+        max_tokens=128,
     )
     agent_loop = MagicMock(processing_state=None)
     dependencies = {
-        "session_manager": MagicMock(), "provider": MagicMock(), "light_provider": None,
-        "push_tool": MagicMock(), "memory_store": None, "presence": MagicMock(),
+        "session_manager": MagicMock(),
+        "provider": MagicMock(),
+        "light_provider": None,
+        "push_tool": MagicMock(),
+        "memory_store": None,
+        "presence": MagicMock(),
         "agent_loop": agent_loop,
     }
     tasks, loops = build_proactive_runtime(config, tmp_path, **dependencies)
@@ -169,23 +209,36 @@ def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypat
 
     memory_store = MagicMock(memory_dir=tmp_path / "memory")
     mem_tasks, optimizer = build_memory_optimizer_task(
-        config, provider=dependencies["provider"], memory_store=memory_store,
+        config,
+        provider=dependencies["provider"],
+        memory_store=memory_store,
     )
     assert mem_tasks == [] and optimizer is None
 
     store = RoleStore(tmp_path)
     store.create_role(name="Mira", role_id="mira", system_prompt="Role prompt")
     store.update_role(
-        "mira", channel_bindings=[{"channel": "telegram", "chat_id": "42", "allow_from": ["42"]}],
-        proactive={"enabled": True, "target_channel": "telegram", "target_chat_id": "42"},
+        "mira",
+        channel_bindings=[
+            {"channel": "telegram", "chat_id": "42", "allow_from": ["42"]}
+        ],
+        proactive={
+            "enabled": True,
+            "target_channel": "telegram",
+            "target_chat_id": "42",
+        },
     )
     proactive_loop = MagicMock()
     proactive_loop.run.return_value = "loop-task"
-    monkeypatch.setattr("bootstrap.proactive.ProactiveLoop", MagicMock(return_value=proactive_loop))
+    monkeypatch.setattr(
+        "bootstrap.proactive.ProactiveLoop", MagicMock(return_value=proactive_loop)
+    )
     optimizer_loop = MagicMock()
     optimizer_loop.run.return_value = "mem-task"
     create_optimizer_loop = MagicMock(return_value=optimizer_loop)
-    monkeypatch.setattr("bootstrap.proactive.MemoryOptimizerLoop", create_optimizer_loop)
+    monkeypatch.setattr(
+        "bootstrap.proactive.MemoryOptimizerLoop", create_optimizer_loop
+    )
     create_optimizer = MagicMock()
     monkeypatch.setattr("bootstrap.proactive.MemoryOptimizer", create_optimizer)
 
@@ -196,7 +249,9 @@ def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypat
     tasks, loops = build_proactive_runtime(config, tmp_path, **dependencies)
     assert tasks == ["loop-task"] and loops == {"mira": proactive_loop}
     mem_tasks, optimizer = build_memory_optimizer_task(
-        config, provider=dependencies["provider"], memory_store=memory_store,
+        config,
+        provider=dependencies["provider"],
+        memory_store=memory_store,
     )
     assert mem_tasks == ["mem-task"]
     assert optimizer is create_optimizer.return_value
@@ -205,7 +260,9 @@ def test_bootstrap_proactive_builders_cover_enabled_and_disabled_paths(monkeypat
 
     config.model_registrations = []
     mem_tasks, optimizer = build_memory_optimizer_task(
-        config, provider=dependencies["provider"], memory_store=memory_store,
+        config,
+        provider=dependencies["provider"],
+        memory_store=memory_store,
     )
     assert mem_tasks == [] and optimizer is None
     create_optimizer.assert_called_once()

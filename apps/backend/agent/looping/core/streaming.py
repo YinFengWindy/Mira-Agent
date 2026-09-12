@@ -14,6 +14,7 @@ from .helpers import (
     _supports_stream_events,
 )
 
+
 class _StreamingMixin:
     def set_stream_sink_factory(self, factory: StreamSinkFactory | None) -> None:
         setter = getattr(self._reasoner, "set_stream_sink_factory", None)

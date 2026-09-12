@@ -24,7 +24,9 @@ from core.error_context import current_session_key as current_session_key
 from core.common.global_hook_stack import install_global_hooks, uninstall_global_hooks
 from .events import GlobalErrorTrace
 
-_SysExceptHook = Callable[[type[BaseException], BaseException, "types.TracebackType | None"], object]
+_SysExceptHook = Callable[
+    [type[BaseException], BaseException, "types.TracebackType | None"], object
+]
 _ThreadExceptHook = Callable[["threading.ExceptHookArgs"], object]
 _LoopExceptHandler = Callable[[asyncio.AbstractEventLoop, "dict[str, Any]"], object]
 
@@ -100,9 +102,18 @@ class GlobalErrorCollector:
             loop = None
         if loop is not None:
             self._loop = loop
-            self._flush_task = loop.create_task(self._flush_loop(), name="observe_error_flush")
-        self._prev_excepthook, self._prev_threadhook, self._prev_loop_handler = install_global_hooks(
-            self, handler, self._on_sys_except, self._on_thread_except, loop, self._on_loop_except,
+            self._flush_task = loop.create_task(
+                self._flush_loop(), name="observe_error_flush"
+            )
+        self._prev_excepthook, self._prev_threadhook, self._prev_loop_handler = (
+            install_global_hooks(
+                self,
+                handler,
+                self._on_sys_except,
+                self._on_thread_except,
+                loop,
+                self._on_loop_except,
+            )
         )
         logger.info("global error collector installed")
 

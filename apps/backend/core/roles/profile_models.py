@@ -46,7 +46,11 @@ class RoleKnowledgeEntry:
             value = payload.get(name, [])
             if isinstance(value, str):
                 value = [value]
-            return [_text(item) for item in value if _text(item)] if isinstance(value, list) else []
+            return (
+                [_text(item) for item in value if _text(item)]
+                if isinstance(value, list)
+                else []
+            )
 
         return cls(
             id=_text(payload.get("id")),

@@ -225,7 +225,9 @@ class MemoryStore:
             self._snapshot_path.unlink()
         # 保持 PENDING.md 常驻，避免“已归档后文件消失”带来的状态歧义
         if not self.pending_file.exists():
-            self.pending_file.write_text(DOCUMENT_DEFAULTS["PENDING.md"], encoding="utf-8")
+            self.pending_file.write_text(
+                DOCUMENT_DEFAULTS["PENDING.md"], encoding="utf-8"
+            )
 
     def rollback_pending_snapshot(self) -> None:
         """Phase-2 失败：将快照内容合并回 PENDING.md，不丢失任何数据。

@@ -184,7 +184,10 @@ def _validate_restricted_absolute_path(token: str, restricted_dir: Path) -> str 
             restricted_resolved = restricted_dir.resolve()
         except OSError:
             restricted_resolved = restricted_dir
-        if resolved != restricted_resolved and restricted_resolved not in resolved.parents:
+        if (
+            resolved != restricted_resolved
+            and restricted_resolved not in resolved.parents
+        ):
             return f"受限 shell 禁止访问任务目录外路径：{token}"
     return None
 

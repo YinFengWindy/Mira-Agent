@@ -36,7 +36,9 @@ class _DummyTool(Tool):
 def test_validate_params_reports_all_schema_violations():
     tool = _DummyTool()
 
-    errors = tool.validate_params({"name": "x", "count": 5, "mode": "c", "items": ["a"]})
+    errors = tool.validate_params(
+        {"name": "x", "count": 5, "mode": "c", "items": ["a"]}
+    )
 
     assert "name 最短 2 个字符" in errors
     assert "count 须 <= 3" in errors

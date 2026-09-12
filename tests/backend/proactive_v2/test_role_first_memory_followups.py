@@ -63,7 +63,9 @@ def test_agent_tick_factory_requires_default_role_id() -> None:
                 "collect_recent_proactive": staticmethod(lambda n: []),
             },
         )(),
-        presence=type("Presence", (), {"get_last_user_at": staticmethod(lambda _: None)})(),
+        presence=type(
+            "Presence", (), {"get_last_user_at": staticmethod(lambda _: None)}
+        )(),
         provider=type("Provider", (), {})(),
         model="m",
         max_tokens=128,
@@ -73,10 +75,12 @@ def test_agent_tick_factory_requires_default_role_id() -> None:
         passive_busy_fn=None,
         deduper=None,
         rng=type("Rng", (), {})(),
-            workspace_context_fn=lambda: "",
-            role_prompt_fn=lambda: "测试角色提示词",
-            pool=McpClientPool(),
+        workspace_context_fn=lambda: "",
+        role_prompt_fn=lambda: "测试角色提示词",
+        pool=McpClientPool(),
     )
 
-    with pytest.raises(RuntimeError, match="default_role_id required for proactive session key"):
+    with pytest.raises(
+        RuntimeError, match="default_role_id required for proactive session key"
+    ):
         AgentTickFactory(deps).build()

@@ -8,7 +8,10 @@ def test_deferred_initialization_preserves_existing_self_document(tmp_path):
     root = memory.ensure_initialized(role)
     self_path = root / "SELF.md"
     self_path.write_text("# 我是谁\n\n自定义角色记忆", encoding="utf-8")
-    role.memory_init_state = {"seed_self_ready": True, "seed_first_impression_ready": True}
+    role.memory_init_state = {
+        "seed_self_ready": True,
+        "seed_first_impression_ready": True,
+    }
 
     state = memory.prepare_memory(role)
 

@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agent.looping.core import AgentLoop
-from agent.looping.ports import AgentLoopConfig, AgentLoopDeps, LLMConfig, MemoryServices
+from agent.looping.ports import (
+    AgentLoopConfig,
+    AgentLoopDeps,
+    LLMConfig,
+    MemoryServices,
+)
 from agent.provider import LLMResponse, ToolCall
 from agent.tools.filesystem import ReadFileTool
 from agent.tools.registry import ToolRegistry
@@ -51,7 +56,9 @@ def _make_loop(
 async def test_baseline_multistep_research_prefers_spawn(tmp_path: Path):
     manager = AsyncMock()
     manager.spawn = AsyncMock(return_value="已创建后台任务")
-    manager.spawn_sync = AsyncMock(return_value="[子任务结果]\n结论：三个文件差异已整理")
+    manager.spawn_sync = AsyncMock(
+        return_value="[子任务结果]\n结论：三个文件差异已整理"
+    )
     manager.get_running_count = MagicMock(return_value=0)
     provider = _FakeProvider(
         [

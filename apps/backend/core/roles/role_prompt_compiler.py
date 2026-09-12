@@ -51,7 +51,9 @@ class RolePromptCompiler:
                 + "\n\n".join(entry.content.strip() for entry in entries)
             )
         if definition.response_constraints:
-            blocks.append(f"[role_response_constraints]\n{definition.response_constraints}")
+            blocks.append(
+                f"[role_response_constraints]\n{definition.response_constraints}"
+            )
         content = expand_role_macros(
             "\n\n".join(blocks),
             role_name=role_name,
@@ -59,7 +61,11 @@ class RolePromptCompiler:
             user_name=user_name,
         )
         if role_name.strip():
-            content = "\n\n".join(part for part in (f"[role_identity]\n{role_name.strip()}", content) if part)
+            content = "\n\n".join(
+                part
+                for part in (f"[role_identity]\n{role_name.strip()}", content)
+                if part
+            )
         mood_contract = _build_mood_contract(runtime_context or {})
         if mood_contract:
             content = "\n\n".join(part for part in (content, mood_contract) if part)

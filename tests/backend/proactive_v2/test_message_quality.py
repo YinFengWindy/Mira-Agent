@@ -5,6 +5,7 @@ tests/proactive_v2/test_message_quality.py
 1. get_recent_chat 只返回 role=user 消息，不含 bot 自身历史推送（role=assistant）
 2. 系统提示【发送要求】包含禁止脑补具体数字/比分/排名等事实的硬规则
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,6 @@ import pytest
 from proactive_v2.context import AgentTickContext
 from proactive_v2.tools import _get_recent_chat
 from tests.backend.proactive_v2.conftest import make_proactive_pipeline
-
 
 # ── Fix 1: get_recent_chat 过滤 role=assistant ────────────────────────────
 
@@ -47,7 +47,10 @@ async def test_get_recent_chat_keeps_passive_assistant_replies():
     """被动回复（role=assistant, proactive 为假）应该保留，代表用户主动发起的对话上下文。"""
     mixed = [
         {"role": "user", "content": "G2 最近状态怎样"},
-        {"role": "assistant", "content": "G2 最近手感不错，jks 发挥稳定"},  # 被动回复，无 proactive 字段
+        {
+            "role": "assistant",
+            "content": "G2 最近手感不错，jks 发挥稳定",
+        },  # 被动回复，无 proactive 字段
         {"role": "user", "content": "了解"},
         {"role": "assistant", "content": "CS2 比赛结果", "proactive": True},  # 主动推送
     ]
@@ -65,7 +68,10 @@ async def test_get_recent_chat_keeps_passive_assistant_replies():
 @pytest.mark.asyncio
 async def test_get_recent_chat_filters_context_frames():
     mixed = [
-        {"role": "user", "content": '<system-reminder data-system-context-frame="true">内部</system-reminder>'},
+        {
+            "role": "user",
+            "content": '<system-reminder data-system-context-frame="true">内部</system-reminder>',
+        },
         {"role": "user", "content": "真实用户消息"},
     ]
     fake_chat_fn = AsyncMock(return_value=mixed)
@@ -111,13 +117,15 @@ async def test_get_recent_chat_all_user_messages_pass_through():
 
 @pytest.mark.asyncio
 async def test_get_recent_chat_adds_beijing_timestamp_for_prompt_context():
-    fake_chat_fn = AsyncMock(return_value=[
-        {
-            "role": "user",
-            "content": "刚跑完步",
-            "timestamp": "2026-07-14T21:28:54+08:00",
-        }
-    ])
+    fake_chat_fn = AsyncMock(
+        return_value=[
+            {
+                "role": "user",
+                "content": "刚跑完步",
+                "timestamp": "2026-07-14T21:28:54+08:00",
+            }
+        ]
+    )
     ctx = AgentTickContext()
 
     raw = await _get_recent_chat(ctx, {}, recent_chat_fn=fake_chat_fn)
@@ -132,9 +140,12 @@ async def test_get_recent_chat_mixed_passive_and_proactive():
     """被动回复和主动推送混合时，只过滤主动推送，被动回复完整保留。"""
     mixed = [
         {"role": "user", "content": "最近睡眠怎样"},
-        {"role": "assistant", "content": "昨晚深睡时间偏少，可能跟熬夜有关"},  # 被动回复
+        {
+            "role": "assistant",
+            "content": "昨晚深睡时间偏少，可能跟熬夜有关",
+        },  # 被动回复
         {"role": "user", "content": "嗯"},
-        {"role": "assistant", "content": "心率偏高预警", "proactive": True},   # 主动推送
+        {"role": "assistant", "content": "心率偏高预警", "proactive": True},  # 主动推送
         {"role": "user", "content": "看到了"},
     ]
     fake_chat_fn = AsyncMock(return_value=mixed)
@@ -188,6 +199,6 @@ def test_system_prompt_no_hallucination_requires_data_source():
     idx = prompt.find("【发送要求】")
     send_section = prompt[idx:]
 
-    assert "本轮" in send_section or "Alerts" in send_section or "Content" in send_section, (
-        "脑补禁止规则应说明事实必须来自本轮 Alerts/Content 数据"
-    )
+    assert (
+        "本轮" in send_section or "Alerts" in send_section or "Content" in send_section
+    ), "脑补禁止规则应说明事实必须来自本轮 Alerts/Content 数据"

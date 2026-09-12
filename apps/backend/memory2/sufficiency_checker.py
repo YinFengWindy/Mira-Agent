@@ -89,7 +89,9 @@ class SufficiencyChecker:
         return self._result(started=started, **parsed)
 
     def _build_prompt(self, *, query: str, items: list[dict], context: str) -> str:
-        context_block = f"\n补充上下文：\n{context.strip()}\n" if context.strip() else ""
+        context_block = (
+            f"\n补充上下文：\n{context.strip()}\n" if context.strip() else ""
+        )
         items_block = self._format_items(items)
         return f"""你是检索结果质检器。请判断当前 query 与已检索到的记忆条目是否相关且足够支持回答。
 

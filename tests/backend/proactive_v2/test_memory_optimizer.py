@@ -69,7 +69,9 @@ def test_optimize_uses_the_role_dialogue_model_snapshot(tmp_path):
         "## 用户画像\n- 新版本\n",
         "# 角色自我认知\n\n## 人格与形象\n- 稳定\n\n## 我对当前用户的理解\n- 克制\n\n## 我们关系的定义\n- 初识\n",
     )
-    fallback_provider = types.SimpleNamespace(chat=AsyncMock(side_effect=AssertionError("fallback")))
+    fallback_provider = types.SimpleNamespace(
+        chat=AsyncMock(side_effect=AssertionError("fallback"))
+    )
     activations: list[tuple[str, str]] = []
 
     class _RoleRuntimeRegistry:
@@ -94,7 +96,9 @@ def test_optimize_uses_the_role_dialogue_model_snapshot(tmp_path):
     asyncio.run(optimizer.optimize(role_id="mira"))
 
     assert activations == [("mira", "chat")]
-    assert [call.kwargs["model"] for call in selected_provider.chat.await_args_list] == [
+    assert [
+        call.kwargs["model"] for call in selected_provider.chat.await_args_list
+    ] == [
         "role-model",
         "role-model",
     ]
@@ -168,7 +172,9 @@ def test_merge_memory_ignores_history_and_only_uses_pending(tmp_path):
 def test_update_self_does_not_copy_user_preference_facts_verbatim(tmp_path):
     memory = MarkdownMemoryStore(tmp_path)
     role_memory = MarkdownMemoryStore(tmp_path / "roles" / "mira")
-    role_memory.write_self("# 角色自我认知\n\n## 人格与形象\n- 旧人格\n\n## 我对当前用户的理解\n- 旧理解\n\n## 我们关系的定义\n- 旧关系\n")
+    role_memory.write_self(
+        "# 角色自我认知\n\n## 人格与形象\n- 旧人格\n\n## 我对当前用户的理解\n- 旧理解\n\n## 我们关系的定义\n- 旧关系\n"
+    )
 
     provider = _provider_with_responses(
         "# 我是谁\n\n## 我的性格与形象\n- 角色依旧保持自己的审美与语气\n\n## 我对你的理解\n- 我知道你对视觉表达有稳定要求，但不会把具体偏好清单写进自我认知\n\n## 我们的关系\n- 我会根据这些长期信号调整相处方式\n",
@@ -319,7 +325,9 @@ def test_memory_optimizer_loop_runs_global_and_role_optimizations(tmp_path):
 
     optimizer.optimize = _optimize
     optimizer._workspace = tmp_path
-    loop = MemoryOptimizerLoop(optimizer, interval_seconds=60, _now_fn=lambda: datetime(2026, 2, 23, 12, 0, 0))
+    loop = MemoryOptimizerLoop(
+        optimizer, interval_seconds=60, _now_fn=lambda: datetime(2026, 2, 23, 12, 0, 0)
+    )
 
     original_sleep = asyncio.sleep
 

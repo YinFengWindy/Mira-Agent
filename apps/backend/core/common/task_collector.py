@@ -46,4 +46,6 @@ class TaskCollector:
         error = task.exception()
         if isinstance(error, Exception):
             self._errors.append(error)
-            logger.error("%s failed: %s", self._description, task.get_name(), exc_info=error)
+            logger.error(
+                "%s failed: %s", self._description, task.get_name(), exc_info=error
+            )

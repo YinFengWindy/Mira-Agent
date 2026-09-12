@@ -10,7 +10,6 @@ from typing import Any
 from .errors import StoryNotFoundError
 from .models import utc_now
 
-
 _SCHEMA = """
 PRAGMA journal_mode = WAL;
 
@@ -104,9 +103,7 @@ class StoryCatalog:
             raise StoryNotFoundError(f"story not found: {story_id}")
         return dict(row)
 
-    def story_id_for_request(
-        self, request_id: str, *, payload_hash: str
-    ) -> str | None:
+    def story_id_for_request(self, request_id: str, *, payload_hash: str) -> str | None:
         """Resolve a previous create request without generating a second Story."""
 
         with self._lock:
@@ -147,7 +144,11 @@ class StoryCatalog:
 
         query = "SELECT * FROM story_entries"
         params: tuple[Any, ...] = ()
-        query += " WHERE status IN ('active', 'archived')" if include_archived else " WHERE status = 'active'"
+        query += (
+            " WHERE status IN ('active', 'archived')"
+            if include_archived
+            else " WHERE status = 'active'"
+        )
         query += " ORDER BY created_at, story_id"
         with self._lock:
             rows = self._connection.execute(query, params).fetchall()
@@ -177,7 +178,9 @@ class StoryCatalog:
             connection.execute(
                 "DELETE FROM catalog_idempotency WHERE story_id = ?", (story_id,)
             )
-            connection.execute("DELETE FROM story_entries WHERE story_id = ?", (story_id,))
+            connection.execute(
+                "DELETE FROM story_entries WHERE story_id = ?", (story_id,)
+            )
 
     def database_path(self, story_id: str) -> Path:
         """Resolve a registered Story database below the catalog root."""

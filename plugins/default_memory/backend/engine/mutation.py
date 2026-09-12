@@ -54,6 +54,7 @@ def _item_matches_forget_scope(
         return True
     return item_scope_channel == scope_channel and item_scope_chat_id == scope_chat_id
 
+
 def _coerce_memory_type(
     memory_type: str,
     tool_requirement: str | None,

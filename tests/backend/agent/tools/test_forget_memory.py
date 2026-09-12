@@ -22,7 +22,9 @@ class _MemoryWriter:
         return MemoryMutationResult(
             accepted=bool(found_ids),
             affected_ids=found_ids,
-            missing_ids=[item_id for item_id in request.ids if item_id not in found_ids],
+            missing_ids=[
+                item_id for item_id in request.ids if item_id not in found_ids
+            ],
             items=list(items),
         )
 
@@ -37,9 +39,7 @@ def _forget_tool(writer: _MemoryWriter) -> ForgetMemoryTool:
             description="test",
             parameters={
                 "type": "object",
-                "properties": {
-                    "ids": {"type": "array", "items": {"type": "string"}}
-                },
+                "properties": {"ids": {"type": "array", "items": {"type": "string"}}},
                 "required": ["ids"],
             },
             risk="write",
@@ -115,9 +115,7 @@ async def test_forget_memory_ignores_duplicates_and_reports_missing(tmp_path: Pa
         item_id = result.split(":", 1)[1]
         tool = _forget_tool(_MemoryWriter(store))
 
-        raw = await tool.execute(
-            ids=[item_id, "missing", item_id], role_id="mira"
-        )
+        raw = await tool.execute(ids=[item_id, "missing", item_id], role_id="mira")
         payload = json.loads(raw)
 
         assert payload["requested_ids"] == [item_id, "missing"]

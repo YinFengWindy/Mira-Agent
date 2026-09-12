@@ -17,6 +17,7 @@ async def _call_send_markdown(*args: Any, **kwargs: Any):
     hook = getattr(facade, "send_markdown", _send_markdown_impl)
     return await hook(*args, **kwargs)
 
+
 async def _call_send_stream_markdown(*args: Any, **kwargs: Any):
     facade = import_module("infra.channels.telegram_channel")
     hook = getattr(facade, "send_stream_markdown", _send_stream_markdown_impl)

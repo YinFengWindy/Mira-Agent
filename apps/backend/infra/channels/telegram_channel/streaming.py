@@ -58,7 +58,11 @@ class _StreamingMixin:
         task.add_done_callback(_done)
 
     async def _cancel_live_tasks(self, session_key: str) -> None:
-        tasks = [task for task in self._live_tasks_by_session.get(session_key, set()) if not task.done()]
+        tasks = [
+            task
+            for task in self._live_tasks_by_session.get(session_key, set())
+            if not task.done()
+        ]
         if not tasks:
             return
         for task in tasks:
@@ -99,7 +103,9 @@ class _StreamingMixin:
         next_at = self._thinking_live_next_at.get(event.session_key, 0.0)
         if now < next_at and live_len - last_len < _LIVE_STREAM_MIN_CHARS:
             return
-        self._thinking_live_next_at[event.session_key] = now + _LIVE_STREAM_MIN_INTERVAL_S
+        self._thinking_live_next_at[event.session_key] = (
+            now + _LIVE_STREAM_MIN_INTERVAL_S
+        )
         self._live_last_lengths[event.session_key] = live_len
         self._start_live_task(
             event.session_key,

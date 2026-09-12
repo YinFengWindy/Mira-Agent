@@ -50,6 +50,7 @@ class _PassiveReasoningResultMixin:
                 arguments=dict(arguments),
             )
         )
+
     async def _observe_tool_call_completed(
         self,
         *,
@@ -160,7 +161,9 @@ class _PassiveReasoningResultMixin:
             "iteration_count": len(react_input_samples),
             "turn_input_sum_tokens": sum(react_input_samples),
             "turn_input_peak_tokens": max(react_input_samples, default=0),
-            "final_call_input_tokens": react_input_samples[-1] if react_input_samples else 0,
+            "final_call_input_tokens": (
+                react_input_samples[-1] if react_input_samples else 0
+            ),
         }
         if cache_seen:
             react_stats["cache_prompt_tokens"] = cache_prompt_tokens

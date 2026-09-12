@@ -57,7 +57,9 @@ class DesktopSessionTaskRequestHandler:
             )
         if method == "session.messagesPage":
             session_key = self._desktop_session_key(payload, required=True)
-            meta = self._app_service.session_manager._store.get_session_meta(session_key)
+            meta = self._app_service.session_manager._store.get_session_meta(
+                session_key
+            )
             if meta is None:
                 session = Session(key=session_key)
             else:
@@ -223,12 +225,16 @@ class DesktopSessionTaskRequestHandler:
             return None
         if role_id:
             self._role_service.repository.get_required(role_id)
-            expected_session_key = self._role_service.sessions.derive_session_key(role_id)
+            expected_session_key = self._role_service.sessions.derive_session_key(
+                role_id
+            )
             if session_key and session_key != expected_session_key:
                 raise ValueError("role_id 与 session_key 不匹配")
             return expected_session_key
 
-        derived_role_id = self._app_service.role_id_from_desktop_session_key(session_key)
+        derived_role_id = self._app_service.role_id_from_desktop_session_key(
+            session_key
+        )
         if not derived_role_id:
             raise ValueError("session_key 不是桌面角色会话")
         self._role_service.repository.get_required(derived_role_id)

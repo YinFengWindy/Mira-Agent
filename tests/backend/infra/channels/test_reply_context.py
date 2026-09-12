@@ -20,4 +20,6 @@ def test_build_inbound_text_with_reply_context_adds_sender_label():
 
 
 def test_build_inbound_text_with_reply_context_returns_user_text_without_reply():
-    assert build_inbound_text_with_reply_context(user_text="  hi  ", reply_text="") == "hi"
+    assert (
+        build_inbound_text_with_reply_context(user_text="  hi  ", reply_text="") == "hi"
+    )

@@ -39,6 +39,7 @@ class RuntimeEventBus(EventBus):
     async def fanout(self, event) -> None:
         """Drains queued generation work before publishing externally."""
         if isinstance(event, _QueuedEvent):
+
             async def deliver():
                 if event.lease is None:
                     await self._fanout_event(event.event)
@@ -50,7 +51,9 @@ class RuntimeEventBus(EventBus):
             if event.lease is not None:
                 # A separate release task lets the queue mark its item complete
                 # before generation cleanup waits for that queue to drain.
-                task.add_done_callback(lambda _: release_lease_in_background(event.lease))
+                task.add_done_callback(
+                    lambda _: release_lease_in_background(event.lease)
+                )
             await task
             return
         await self._fanout_event(event)

@@ -22,7 +22,9 @@ from plugins.qqbot.backend.channel import QQBotChannel
 
 
 @pytest.mark.asyncio
-async def test_preparation_reuses_unchanged_connection_without_starting_traffic(tmp_path, monkeypatch):
+async def test_preparation_reuses_unchanged_connection_without_starting_traffic(
+    tmp_path, monkeypatch
+):
     created = []
 
     class Telegram:
@@ -36,13 +38,26 @@ async def test_preparation_reuses_unchanged_connection_without_starting_traffic(
     module = ModuleType("infra.channels.telegram_channel")
     module.TelegramChannel = Telegram
     monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", module)
-    config = Config(provider="", model="", api_key="", channels=ChannelsConfig(telegram=TelegramChannelConfig(token="token")))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        channels=ChannelsConfig(telegram=TelegramChannelConfig(token="token")),
+    )
     resources = SharedHttpResources()
-    context = dict(bus=MessageBus(), session_manager=SessionManager(tmp_path), push_tool=MessagePushTool(), http_resources=resources, event_bus=EventBus())
+    context = dict(
+        bus=MessageBus(),
+        session_manager=SessionManager(tmp_path),
+        push_tool=MessagePushTool(),
+        http_resources=resources,
+        event_bus=EventBus(),
+    )
     try:
         active = await start_channels(config, **context)
         await active.start_all()
-        candidate = await start_channels(config, previous_host=active, strict=True, **context)
+        candidate = await start_channels(
+            config, previous_host=active, strict=True, **context
+        )
         assert len(created) == 1
         assert candidate.channels == active.channels
         await active.handover(candidate)
@@ -61,11 +76,24 @@ async def test_strict_preparation_surfaces_constructor_failure(tmp_path, monkeyp
     module = ModuleType("infra.channels.telegram_channel")
     module.TelegramChannel = Telegram
     monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", module)
-    config = Config(provider="", model="", api_key="", channels=ChannelsConfig(telegram=TelegramChannelConfig(token="bad")))
+    config = Config(
+        provider="",
+        model="",
+        api_key="",
+        channels=ChannelsConfig(telegram=TelegramChannelConfig(token="bad")),
+    )
     resources = SharedHttpResources()
     try:
         with pytest.raises(ValueError, match="bad token format"):
-            await start_channels(config, bus=MessageBus(), session_manager=SessionManager(tmp_path), push_tool=MessagePushTool(), http_resources=resources, event_bus=EventBus(), strict=True)
+            await start_channels(
+                config,
+                bus=MessageBus(),
+                session_manager=SessionManager(tmp_path),
+                push_tool=MessagePushTool(),
+                http_resources=resources,
+                event_bus=EventBus(),
+                strict=True,
+            )
     finally:
         await resources.aclose()
 
@@ -79,16 +107,27 @@ async def test_model_only_change_reuses_independently_owned_qqbot_connection(tmp
     old = QQBotChannel("account-A", "secret-A")
     new = QQBotChannel("account-A", "secret-A")
     changed = QQBotChannel("account-B", "secret-B")
-    context = dict(bus=MessageBus(), session_manager=SessionManager(tmp_path),
-                   push_tool=MessagePushTool(), http_resources=resources, event_bus=EventBus())
+    context = dict(
+        bus=MessageBus(),
+        session_manager=SessionManager(tmp_path),
+        push_tool=MessagePushTool(),
+        http_resources=resources,
+        event_bus=EventBus(),
+    )
     try:
         active = await start_channels(config, plugin_channels=[old], **context)
-        candidate = await start_channels(replace(config, max_tokens=2048), plugin_channels=[new],
-                                         previous_host=active, **context)
+        candidate = await start_channels(
+            replace(config, max_tokens=2048),
+            plugin_channels=[new],
+            previous_host=active,
+            **context,
+        )
         assert candidate.channels == [old]
         assert not active.requires_exclusive_handover(candidate)
         assert new._client.is_closed
-        replacement = await start_channels(config, plugin_channels=[changed], previous_host=active, **context)
+        replacement = await start_channels(
+            config, plugin_channels=[changed], previous_host=active, **context
+        )
         assert replacement.channels == [changed]
         assert active.requires_exclusive_handover(replacement)
     finally:
@@ -190,7 +229,9 @@ async def test_start_channels_wires_telegram_and_qq(monkeypatch, tmp_path):
 
     fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
     fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(
+        sys.modules, "infra.channels.telegram_channel", fake_telegram_channel
+    )
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
     class _PushTool(MessagePushTool):
@@ -259,7 +300,9 @@ async def test_start_channels_skips_unfilled_optional_channels(monkeypatch, tmp_
 
     fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
     fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(
+        sys.modules, "infra.channels.telegram_channel", fake_telegram_channel
+    )
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
     class _PushTool(MessagePushTool):
@@ -309,7 +352,9 @@ async def test_start_channels_skips_channel_constructor_failures(monkeypatch):
 
     fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
     fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(
+        sys.modules, "infra.channels.telegram_channel", fake_telegram_channel
+    )
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
     config = Config(
@@ -357,7 +402,9 @@ async def test_start_channels_desktop_mode_skips_message_channels(
 
     fake_telegram_channel.TelegramChannel = _TelegramChannel  # type: ignore[attr-defined]
     fake_qq_channel.QQChannel = _QQChannel  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "infra.channels.telegram_channel", fake_telegram_channel)
+    monkeypatch.setitem(
+        sys.modules, "infra.channels.telegram_channel", fake_telegram_channel
+    )
     monkeypatch.setitem(sys.modules, "infra.channels.qq_channel", fake_qq_channel)
 
     config = Config(

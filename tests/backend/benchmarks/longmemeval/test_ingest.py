@@ -57,7 +57,9 @@ def _runtime(tmp_path: Path, engine: _FakeEngine):
 
 
 @pytest.mark.asyncio
-async def test_ingest_turns_records_timeout_and_continues_to_later_pairs(tmp_path: Path):
+async def test_ingest_turns_records_timeout_and_continues_to_later_pairs(
+    tmp_path: Path,
+):
     engine = _FakeEngine(
         [
             MemoryIngestResult(accepted=True),

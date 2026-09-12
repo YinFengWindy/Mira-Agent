@@ -62,7 +62,10 @@ class QQBotChannel(
         self._intake = ChannelIntake(self._accept_inbound, self.send)
         self._event_bus = None
         self._push_tool = None
-        self._event_bindings = [(TurnStarted, self._on_turn_started), (StreamDeltaReady, self._on_stream_delta)]
+        self._event_bindings = [
+            (TurnStarted, self._on_turn_started),
+            (StreamDeltaReady, self._on_stream_delta),
+        ]
         self._outbound_bound = False
         self._events_bound = False
         self._last_c2c_msg_id: dict[str, str] = {}
@@ -80,7 +83,9 @@ class QQBotChannel(
     def configuration_key(self):
         """Identifies independently owned connections reusable across plugin versions."""
         return (
-            "official-qqbot", self._app_id, self._client_secret,
+            "official-qqbot",
+            self._app_id,
+            self._client_secret,
             tuple(sorted(self._allow_from)),
             {key: group.model_dump() for key, group in self._groups.items()},
         )

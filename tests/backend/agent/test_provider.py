@@ -111,7 +111,6 @@ async def _collect_delta(bucket: list, chunk) -> None:
     bucket.append(chunk)
 
 
-
 @pytest.mark.asyncio
 async def test_provider_chat_and_retry_paths(monkeypatch: pytest.MonkeyPatch):
     fake = _FakeClient(
@@ -607,4 +606,3 @@ async def test_deepseek_thinking_request_patches_dirty_history(
     )
 
     assert fake.calls[-1]["messages"][1]["reasoning_content"] == ""
-

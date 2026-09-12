@@ -124,6 +124,7 @@ class ProactiveLoop:
 
     def _init_runtime_state(self, config: ProactiveConfig) -> None:
         from proactive_v2.mcp_sources import McpClientPool
+
         self._running = False
         self._stop_requested = asyncio.Event()
         self._poll_task: asyncio.Task[None] | None = None
@@ -315,7 +316,11 @@ class ProactiveLoop:
                 trace_type: StrategyTraceType = (
                     "proactive_config" if "config" in filename else "proactive_rate"
                 )
-                source = "proactive.config" if trace_type == "proactive_config" else "proactive.rate"
+                source = (
+                    "proactive.config"
+                    if trace_type == "proactive_config"
+                    else "proactive.rate"
+                )
                 role_id = str(getattr(self._cfg, "default_role_id", "") or "").strip()
                 payload = {
                     **build_strategy_trace_envelope(
@@ -344,6 +349,7 @@ class ProactiveLoop:
         async with self._feed_poll_lock:
             try:
                 from proactive_v2 import mcp_sources
+
                 await mcp_sources.poll_content_feeds_async(self._mcp_pool)
                 logger.info("[proactive] feed poll 完成")
             except Exception as e:
@@ -352,7 +358,9 @@ class ProactiveLoop:
     async def _poll_loop(self) -> None:
         """每配置间隔秒周期性触发 feed 轮询。"""
         while self._running:
-            await self._wait_interval(max(1, int(self._cfg.feed_poller_interval_seconds)))
+            await self._wait_interval(
+                max(1, int(self._cfg.feed_poller_interval_seconds))
+            )
             if not self._running:
                 break
             await self._poll_feeds_once()
@@ -367,6 +375,7 @@ class ProactiveLoop:
         )
         if not hasattr(self, "_mcp_pool"):
             from proactive_v2.mcp_sources import McpClientPool
+
             workspace = getattr(self._sessions, "workspace", None)
             self._mcp_pool = McpClientPool(Path(workspace) if workspace else None)
         await self._mcp_pool.connect_all()

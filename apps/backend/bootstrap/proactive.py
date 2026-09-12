@@ -64,7 +64,9 @@ def build_proactive_runtime(
     provider_consumer: Callable[[LLMProvider], None] | None = None,
 ) -> tuple[list, dict[str, ProactiveLoop]]:
     tasks: list = []
-    roles = [role for role in RoleStore(workspace).list_roles() if role.proactive.enabled]
+    roles = [
+        role for role in RoleStore(workspace).list_roles() if role.proactive.enabled
+    ]
     if not roles:
         return tasks, {}
 
@@ -121,10 +123,16 @@ def _build_role_prompt_resolver(workspace: Path, role_id: str):
         role = RoleStore(workspace).get_role(role_id)
         if role is None:
             raise ValueError(f"role not found for proactive generation: {role_id}")
-        prompt = RolePromptCompiler().compile(
-            role,
-            matched_knowledge_entries=RoleKnowledgeMatcher().match(role.profile.knowledge_base),
-        ).content.strip()
+        prompt = (
+            RolePromptCompiler()
+            .compile(
+                role,
+                matched_knowledge_entries=RoleKnowledgeMatcher().match(
+                    role.profile.knowledge_base
+                ),
+            )
+            .content.strip()
+        )
         if not prompt:
             raise ValueError(f"role.system_prompt required: {role_id}")
         return prompt
@@ -172,6 +180,7 @@ def _build_role_tick_dispatcher(
             source="proactive",
             work_kind="proactive_tick",
         )
+
         async def run_with_model_snapshot():
             runtime = await registry.get(role_id)
             with runtime.activate_model("chat"):
@@ -205,7 +214,9 @@ def build_memory_optimizer_task(
         role_runtime_registry=role_runtime_registry,
     )
     interval = config.memory_optimizer_interval_seconds
-    logger.info("MemoryOptimizerLoop 已启动，间隔=%ss (%.1fh)", interval, interval / 3600)
+    logger.info(
+        "MemoryOptimizerLoop 已启动，间隔=%ss (%.1fh)", interval, interval / 3600
+    )
     loop = MemoryOptimizerLoop(mem_optimizer, interval_seconds=interval)
     if loop_consumer is not None:
         loop_consumer(loop)

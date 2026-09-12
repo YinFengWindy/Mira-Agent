@@ -34,7 +34,9 @@ def extract_structured_mood(raw_text: str) -> tuple[str, str | None]:
     stripped = raw_text.strip()
     if not stripped:
         return raw_text, None
-    payload = parse_response_json_payload(stripped) or find_response_json_payload(stripped)
+    payload = parse_response_json_payload(stripped) or find_response_json_payload(
+        stripped
+    )
     if not payload:
         return raw_text, None
     content = str(payload.get("content") or "").strip()
@@ -92,7 +94,7 @@ def extract_first_json_object(raw_text: str) -> str | None:
         if char == "}":
             depth -= 1
             if depth == 0:
-                return raw_text[start:index + 1]
+                return raw_text[start : index + 1]
     return None
 
 

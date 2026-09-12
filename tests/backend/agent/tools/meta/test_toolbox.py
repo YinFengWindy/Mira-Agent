@@ -19,18 +19,32 @@ class _MemoryEngineStub:
         return MemoryToolProfile(
             recall=MemoryToolSpec(
                 description="test",
-                parameters={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+                parameters={
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
             ),
             forget=MemoryToolSpec(
                 description="test",
-                parameters={"type": "object", "properties": {"ids": {"type": "array", "items": {"type": "string"}}}, "required": ["ids"]},
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "ids": {"type": "array", "items": {"type": "string"}}
+                    },
+                    "required": ["ids"],
+                },
                 risk="write",
             ),
             tools=(
                 MemoryToolSpec(
                     name="reinforce_memory",
                     description="test",
-                    parameters={"type": "object", "properties": {"note": {"type": "string"}}, "required": []},
+                    parameters={
+                        "type": "object",
+                        "properties": {"note": {"type": "string"}},
+                        "required": [],
+                    },
                     risk="write",
                 ),
             ),

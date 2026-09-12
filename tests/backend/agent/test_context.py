@@ -42,9 +42,7 @@ def test_context_builder_injects_interrupted_turn_as_separate_frame(
     monkeypatch.setattr(
         "agent.context.build_agent_static_identity_prompt", lambda **_: "identity"
     )
-    monkeypatch.setattr(
-        "agent.context.build_skills_catalog_prompt", lambda text: text
-    )
+    monkeypatch.setattr("agent.context.build_skills_catalog_prompt", lambda text: text)
     RoleStore(tmp_path).create_role(
         role_id="mira",
         name="Mira",
@@ -321,8 +319,12 @@ def test_context_builder_builds_prompt_messages_and_assistant_blocks(
 
     role_memory_root = tmp_path / "roles" / "mira" / "memory"
     role_memory_root.mkdir(parents=True, exist_ok=True)
-    (role_memory_root / "SELF.md").write_text("# 角色背景\n\n来自深海城的向导。\n", encoding="utf-8")
-    (role_memory_root / "MEMORY.md").write_text("# 关系基线\n\n来源: seed:first_impression\n", encoding="utf-8")
+    (role_memory_root / "SELF.md").write_text(
+        "# 角色背景\n\n来自深海城的向导。\n", encoding="utf-8"
+    )
+    (role_memory_root / "MEMORY.md").write_text(
+        "# 关系基线\n\n来源: seed:first_impression\n", encoding="utf-8"
+    )
     role_messages = builder.render(
         ContextRequest(
             history=[],
@@ -355,7 +357,9 @@ def test_context_builder_builds_prompt_messages_and_assistant_blocks(
     assert "role_id=mira" in role_prompt_cross_channel
     assert "[role_background]" in role_prompt_cross_channel
     role_prefix = role_prompt.split("## Active Role: Mira", 1)[0]
-    role_prefix_cross_channel = role_prompt_cross_channel.split("## Active Role: Mira", 1)[0]
+    role_prefix_cross_channel = role_prompt_cross_channel.split(
+        "## Active Role: Mira", 1
+    )[0]
     assert role_prefix == role_prefix_cross_channel
 
 
@@ -452,4 +456,3 @@ def test_context_builder_reproduces_temporal_conflict_baseline(
     assert "weekday=Wednesday" in user_message
     assert "相对时间以此为准" in user_message
     assert user_message.endswith("你还记得明天什么时候面试吗")
-

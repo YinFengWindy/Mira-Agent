@@ -68,8 +68,7 @@ class PhaseFrame(Generic[InputT, OutputT]):
 class PhaseModule(Protocol[FrameT]):
     """模块约定：可选 requires / produces 类属性由 Phase 启动校验读取。"""
 
-    async def run(self, frame: FrameT) -> FrameT:
-        ...
+    async def run(self, frame: FrameT) -> FrameT: ...
 
 
 class SlotModule(Protocol):
@@ -88,7 +87,9 @@ def topo_sort_modules(modules: Sequence[object]) -> list[object]:
         slot_map[slot] = cast(SlotModule, module)
         slot_order[slot] = index
     active_slots = _active_module_slots(slot_map)
-    slot_map = {slot: module for slot, module in slot_map.items() if slot in active_slots}
+    slot_map = {
+        slot: module for slot, module in slot_map.items() if slot in active_slots
+    }
 
     in_degree = {slot: 0 for slot in slot_map}
     dependents: dict[str, list[str]] = {slot: [] for slot in slot_map}
@@ -144,8 +145,7 @@ def render_dependency_tree(modules: Sequence[object]) -> str:
 def inspect_phase(modules: Sequence[object]) -> str:
     sorted_modules = cast(list[SlotModule], topo_sort_modules(modules))
     chain = "\n".join(
-        f"  {index:2d}. {module.slot}"
-        for index, module in enumerate(sorted_modules)
+        f"  {index:2d}. {module.slot}" for index, module in enumerate(sorted_modules)
     )
     tree = render_dependency_tree(sorted_modules)
     return f"执行顺序:\n{chain}\n\n依赖树:\n{tree}"
@@ -210,9 +210,7 @@ def _disable_modules_with_missing_module_dependencies(
         disabled |= current
         active -= current
     return [
-        module
-        for module in modules
-        if getattr(module, "slot", None) not in disabled
+        module for module in modules if getattr(module, "slot", None) not in disabled
     ]
 
 

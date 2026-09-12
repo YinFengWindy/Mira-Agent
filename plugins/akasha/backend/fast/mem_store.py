@@ -10,6 +10,7 @@ MemoryStore —— 纯内存版 AkashaStore，duck-type 出 AkashaReplayRuntime 
     → graph_expand 的 O(E) 全边遍历降为 O(候选)。
 mutating 公式逐行照搬 store.py，保证与落库版等价（差分 parity 验证）。
 """
+
 from __future__ import annotations
 
 import math
@@ -18,9 +19,17 @@ from dataclasses import replace
 import numpy as np
 
 from plugins.akasha.backend.core import (
-    AkashaNode, EDGE_DECAY_TAU, advance_salience_state, causal_salience,
-    effective_edge_weight, bounded_add, heterosynaptic_depression, initial_strength,
-    normalize, parse_ts_unix, turn_key,
+    AkashaNode,
+    EDGE_DECAY_TAU,
+    advance_salience_state,
+    causal_salience,
+    effective_edge_weight,
+    bounded_add,
+    heterosynaptic_depression,
+    initial_strength,
+    normalize,
+    parse_ts_unix,
+    turn_key,
 )
 
 
@@ -34,11 +43,11 @@ class MemoryStore:
         self._ccount: int = 0
         self._frozen = False
         # 增量结构
-        self._ebs: dict[str, dict[str, float]] = {}      # edges_by_src
-        self._fan: dict[str, int] = {}                   # fan 计数
-        self._A_dec: dict[str, float] = {}               # Σ w·e^{(lu-t0)/τ}  (lu>0)
-        self._A_const: dict[str, float] = {}             # Σ w               (lu<=0)
-        self._t0: float | None = None                    # 参考纪元（数学上约掉，仅防溢出）
+        self._ebs: dict[str, dict[str, float]] = {}  # edges_by_src
+        self._fan: dict[str, int] = {}  # fan 计数
+        self._A_dec: dict[str, float] = {}  # Σ w·e^{(lu-t0)/τ}  (lu>0)
+        self._A_const: dict[str, float] = {}  # Σ w               (lu<=0)
+        self._t0: float | None = None  # 参考纪元（数学上约掉，仅防溢出）
 
     # ── 读路径 ───────────────────────────────────────────────────────
     def list_nodes(self):
@@ -78,7 +87,9 @@ class MemoryStore:
 
     # ── 写路径：逐行照搬 store.py ────────────────────────────────────
     def upsert_message_node(self, message, embedding) -> str:
-        session_key, turn_seq, key = turn_key(message.session_key, message.seq, message.role)
+        session_key, turn_seq, key = turn_key(
+            message.session_key, message.seq, message.role
+        )
         vector = normalize(np.array(embedding, dtype=np.float32))
         ts_unix = parse_ts_unix(message.ts)
         prior_sum, prior_count = self._csum, self._ccount
@@ -87,21 +98,38 @@ class MemoryStore:
             if getattr(message, "salience", None) is None
             else min(1.0, max(0.0, float(message.salience)))
         )
-        self._csum, self._ccount = advance_salience_state(prior_sum, prior_count, vector)
+        self._csum, self._ccount = advance_salience_state(
+            prior_sum, prior_count, vector
+        )
         node = self._nodes.get(key)
         if node is None:
             self._nodes[key] = AkashaNode(
-                key=key, anchor_id=message.id, session_key=session_key, turn_seq=turn_seq,
-                first_ts_unix=ts_unix, salience=salience, strength=initial_strength(salience),
-                resource=1.0, recall_count=0, last_activated_ts=ts_unix,
-                last_strength_ts=ts_unix, last_resource_ts=ts_unix, embedding=vector, emb_count=1)
+                key=key,
+                anchor_id=message.id,
+                session_key=session_key,
+                turn_seq=turn_seq,
+                first_ts_unix=ts_unix,
+                salience=salience,
+                strength=initial_strength(salience),
+                resource=1.0,
+                recall_count=0,
+                last_activated_ts=ts_unix,
+                last_strength_ts=ts_unix,
+                last_resource_ts=ts_unix,
+                embedding=vector,
+                emb_count=1,
+            )
         else:
             old_count = max(1, node.emb_count)
             merged = normalize(node.embedding * old_count + vector)
             anchor = message.id if message.role == "user" else node.anchor_id
-            self._nodes[key] = replace(node, anchor_id=anchor,
-                                       salience=max(node.salience, salience),
-                                       embedding=merged, emb_count=old_count + 1)
+            self._nodes[key] = replace(
+                node,
+                anchor_id=anchor,
+                salience=max(node.salience, salience),
+                embedding=merged,
+                emb_count=old_count + 1,
+            )
         return key
 
     def update_activation_batch(self, updates) -> None:
@@ -112,8 +140,14 @@ class MemoryStore:
             if n is None:
                 continue
             self._nodes[u.key] = replace(
-                n, strength=u.strength, resource=u.resource, recall_count=u.recall_count,
-                last_activated_ts=u.ts, last_strength_ts=u.ts, last_resource_ts=u.ts)
+                n,
+                strength=u.strength,
+                resource=u.resource,
+                recall_count=u.recall_count,
+                last_activated_ts=u.ts,
+                last_strength_ts=u.ts,
+                last_resource_ts=u.ts,
+            )
 
     def upsert_edges(self, updates) -> None:
         if self._frozen:
@@ -133,9 +167,11 @@ class MemoryStore:
                 self._contrib_add(u.dst_key, neww, u.ts, +1)
             else:
                 oldw, oldlu = self._edges[ek], self._meta[ek]
-                neww = bounded_add(effective_edge_weight(oldw, oldlu, u.ts), 0.12 * u.strength, 2.0)
-                self._contrib_add(u.dst_key, oldw, oldlu, -1)   # 撤旧
-                self._contrib_add(u.dst_key, neww, u.ts, +1)    # 加新
+                neww = bounded_add(
+                    effective_edge_weight(oldw, oldlu, u.ts), 0.12 * u.strength, 2.0
+                )
+                self._contrib_add(u.dst_key, oldw, oldlu, -1)  # 撤旧
+                self._contrib_add(u.dst_key, neww, u.ts, +1)  # 加新
                 self._edges[ek] = neww
                 self._meta[ek] = u.ts
                 self._cocount[ek] = self._cocount.get(ek, 0) + 1
@@ -147,7 +183,7 @@ class MemoryStore:
             ek = (src_key, dst_key)
             oldw, oldlu = self._edges[ek], self._meta[ek]
             self._contrib_add(dst_key, oldw, oldlu, -1)
-            self._contrib_add(dst_key, new_w, oldlu, +1)        # last_used_ts 不变：非"使用"
+            self._contrib_add(dst_key, new_w, oldlu, +1)  # last_used_ts 不变：非"使用"
             self._edges[ek] = new_w
             self._ebs[src_key][dst_key] = new_w
 

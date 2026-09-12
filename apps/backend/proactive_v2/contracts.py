@@ -105,7 +105,9 @@ class AlertContract:
 
     def to_prompt_line(self, index: int) -> str:
         severity_part = f"  severity={self.severity}" if self.severity else ""
-        line = f"  [{index}] id={self.item_id}{severity_part}\n       title={self.title}"
+        line = (
+            f"  [{index}] id={self.item_id}{severity_part}\n       title={self.title}"
+        )
         if self.content:
             line += f"\n       内容：{self.content}"
         if self.metrics:

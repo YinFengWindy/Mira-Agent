@@ -69,7 +69,10 @@ class DesktopVoiceHandler:
                 cancel_event = self._synthesis_cancel_events.get(voice_request_id)
             if cancel_event is not None:
                 cancel_event.set()
-            return {"cancelled": cancel_event is not None, "voice_request_id": voice_request_id}
+            return {
+                "cancelled": cancel_event is not None,
+                "voice_request_id": voice_request_id,
+            }
         if method == "voice.transcribe":
             audio = _decode_audio(payload)
             result = await asyncio.to_thread(

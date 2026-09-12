@@ -265,4 +265,6 @@ def resolve_target_transport(
 def _is_role_scoped(pipeline: ProactiveDeliveryHost) -> bool:
     session_key = str(pipeline._session_key or "").strip()
     role_id = str(getattr(pipeline._cfg, "default_role_id", "") or "").strip()
-    return bool(role_id or (session_key.startswith("role:") and session_key[5:].strip()))
+    return bool(
+        role_id or (session_key.startswith("role:") and session_key[5:].strip())
+    )

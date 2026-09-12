@@ -60,9 +60,12 @@ def test_prompt_tag_store_filters_adult_entries_without_nsfw_mode(
         )
     )
 
-    assert store.expand(
-        "1girl", "", match_text="adult scene", allow_adult=False
-    ).matched_entry_ids == []
+    assert (
+        store.expand(
+            "1girl", "", match_text="adult scene", allow_adult=False
+        ).matched_entry_ids
+        == []
+    )
     assert store.expand(
         "1girl", "", match_text="adult scene", allow_adult=True
     ).matched_entry_ids == ["adult"]

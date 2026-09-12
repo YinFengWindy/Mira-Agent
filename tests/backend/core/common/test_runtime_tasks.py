@@ -10,7 +10,13 @@ from core.common.runtime_tasks import create_runtime_task
 
 
 def version():
-    return RuntimeCandidate(7, SimpleNamespace(stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock())), SimpleNamespace())
+    return RuntimeCandidate(
+        7,
+        SimpleNamespace(
+            stop=AsyncMock(), memory_runtime=SimpleNamespace(aclose=AsyncMock())
+        ),
+        SimpleNamespace(),
+    )
 
 
 @pytest.mark.asyncio

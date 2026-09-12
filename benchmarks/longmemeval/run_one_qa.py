@@ -46,7 +46,9 @@ async def _run(args: argparse.Namespace) -> None:
     print(f"question_id: {result['question_id']}")
     print(f"predicted : {result['predicted_answer']}")
     print(f"gold      : {result['gold_answer']}")
-    print(f"f1        : {token_f1(result['predicted_answer'], result['gold_answer']):.4f}")
+    print(
+        f"f1        : {token_f1(result['predicted_answer'], result['gold_answer']):.4f}"
+    )
     print(f"judge     : {result['judge_correct']}")
     print(f"error     : {result['error']}")
     print("--- TRACE ---")

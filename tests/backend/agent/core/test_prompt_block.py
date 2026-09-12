@@ -59,7 +59,10 @@ def test_system_prompt_builder_uses_prompt_blocks_and_static_cache(tmp_path: Pat
     second = builder.build(ctx)
 
     assert first.system_prompt == "identity\n\n---\n\nretrieved"
-    assert [item.name for item in first.system_sections] == ["identity", "retrieved_memory"]
+    assert [item.name for item in first.system_sections] == [
+        "identity",
+        "retrieved_memory",
+    ]
     assert second.debug_breakdown[0].cache_hit is True
 
 

@@ -76,7 +76,9 @@ async def test_outbound_limiter_retries_after_cooling_down(monkeypatch):
             raise mod.RetryAfter(cast(Any, 3.0))
         return "ok"
 
-    result = await limiter.run(123, kind="send", label="send_message(test)", action=action)
+    result = await limiter.run(
+        123, kind="send", label="send_message(test)", action=action
+    )
 
     assert result == "ok"
     assert calls == 2
@@ -93,8 +95,12 @@ async def test_outbound_limiter_typing_does_not_delay_send(monkeypatch):
     sleep_mock = AsyncMock()
     monkeypatch.setattr("infra.channels.telegram_utils.asyncio.sleep", sleep_mock)
 
-    await limiter.run(123, kind="typing", label="typing", action=AsyncMock(return_value=True))
-    await limiter.run(123, kind="send", label="send", action=AsyncMock(return_value=True))
+    await limiter.run(
+        123, kind="typing", label="typing", action=AsyncMock(return_value=True)
+    )
+    await limiter.run(
+        123, kind="send", label="send", action=AsyncMock(return_value=True)
+    )
 
     sleep_mock.assert_not_awaited()
 
@@ -151,7 +157,9 @@ async def test_outbound_limiter_typing_retry_after_sets_cooldown(monkeypatch):
             label="typing",
             action=AsyncMock(side_effect=mod.RetryAfter(cast(Any, 3.0))),
         )
-    await limiter.run(123, kind="typing", label="typing", action=AsyncMock(return_value=True))
+    await limiter.run(
+        123, kind="typing", label="typing", action=AsyncMock(return_value=True)
+    )
 
     assert sleep_mock.await_args_list[0].args[0] >= 3.9
 
@@ -177,7 +185,8 @@ async def test_send_markdown_falls_back_to_plain_text(monkeypatch):
         raise TypeError("boom")
 
     monkeypatch.setattr(
-        "infra.channels.telegram_utils.convert_with_segments", fake_convert_with_segments
+        "infra.channels.telegram_utils.convert_with_segments",
+        fake_convert_with_segments,
     )
 
     await send_markdown(cast(Any, bot), 456, "line1\nline2")
@@ -194,7 +203,9 @@ def test_render_telegram_preview_html_renders_markdown():
 
 
 def test_render_telegram_preview_html_supports_links_strike_and_spoiler():
-    html = render_telegram_preview_html("[官网](https://example.com) 和 ~~删除~~ 以及 ||隐藏||")
+    html = render_telegram_preview_html(
+        "[官网](https://example.com) 和 ~~删除~~ 以及 ||隐藏||"
+    )
     assert '<a href="https://example.com">' in html
     assert "<s>删除</s>" in html
     assert "<tg-spoiler>隐藏</tg-spoiler>" in html

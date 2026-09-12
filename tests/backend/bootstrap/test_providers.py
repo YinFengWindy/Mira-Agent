@@ -9,11 +9,15 @@ def test_bootstrap_providers_set_a_shared_request_budget(monkeypatch):
     create_provider = MagicMock(return_value=provider)
     monkeypatch.setattr("bootstrap.providers.LLMProvider", create_provider)
     config = Config(
-        provider="openai", model="main", api_key="main-key",
+        provider="openai",
+        model="main",
+        api_key="main-key",
         base_url="https://example.com/v1",
-        light_model="light", light_api_key="light-key",
+        light_model="light",
+        light_api_key="light-key",
         light_base_url="https://light.example.com/v1",
-        agent_model="agent", agent_api_key="agent-key",
+        agent_model="agent",
+        agent_api_key="agent-key",
         agent_base_url="https://agent.example.com/v1",
         multimodal=False,
     )

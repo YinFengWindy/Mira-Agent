@@ -22,7 +22,9 @@ from session.manager import Session
 
 
 @pytest.mark.asyncio
-async def test_before_reasoning_syncs_session_key_and_role_id_into_tool_context() -> None:
+async def test_before_reasoning_syncs_session_key_and_role_id_into_tool_context() -> (
+    None
+):
     bus = EventBus()
     tools = Mock(spec=ToolRegistry)
     session_manager = SimpleNamespace(

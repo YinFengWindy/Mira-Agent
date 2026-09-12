@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from PIL import Image, ImageGrab
 
+
 class PrimaryScreenCapture:
     """Captures one primary display without coupling capture to a desktop pet."""
 

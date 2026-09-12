@@ -181,8 +181,13 @@ _now = datetime.now()
 
 def _before_turn_ctx(**kwargs: object) -> BeforeTurnCtx:
     return BeforeTurnCtx(
-        session_key="k", channel="c", chat_id="ch", content="hello",
-        timestamp=_now, retrieved_memory_block="", retrieval_trace_raw=None,
+        session_key="k",
+        channel="c",
+        chat_id="ch",
+        content="hello",
+        timestamp=_now,
+        retrieved_memory_block="",
+        retrieval_trace_raw=None,
         history_messages=(),
     )
 
@@ -203,10 +208,17 @@ async def test_lifecycle_on_before_reasoning():
     lifecycle = TurnLifecycle(bus)
     handler = AsyncMock(return_value=None)
     lifecycle.on_before_reasoning(handler)
-    await bus.emit(BeforeReasoningCtx(
-        session_key="k", channel="c", chat_id="ch", content="hello",
-        timestamp=_now, skill_names=[], retrieved_memory_block="",
-    ))
+    await bus.emit(
+        BeforeReasoningCtx(
+            session_key="k",
+            channel="c",
+            chat_id="ch",
+            content="hello",
+            timestamp=_now,
+            skill_names=[],
+            retrieved_memory_block="",
+        )
+    )
     handler.assert_awaited_once()
 
 
@@ -216,10 +228,16 @@ async def test_lifecycle_on_before_step():
     lifecycle = TurnLifecycle(bus)
     handler = AsyncMock(return_value=None)
     lifecycle.on_before_step(handler)
-    await bus.emit(BeforeStepCtx(
-        session_key="k", channel="c", chat_id="ch", iteration=0,
-        input_tokens_estimate=100, visible_tool_names=None,
-    ))
+    await bus.emit(
+        BeforeStepCtx(
+            session_key="k",
+            channel="c",
+            chat_id="ch",
+            iteration=0,
+            input_tokens_estimate=100,
+            visible_tool_names=None,
+        )
+    )
     handler.assert_awaited_once()
 
 
@@ -229,12 +247,20 @@ async def test_lifecycle_on_after_reasoning():
     lifecycle = TurnLifecycle(bus)
     handler = AsyncMock(return_value=None)
     lifecycle.on_after_reasoning(handler)
-    await bus.emit(AfterReasoningCtx(
-        session_key="k", channel="c", chat_id="ch",
-        tools_used=(), thinking=None,
-        response_metadata=ResponseMetadata(raw_text=""),
-        streamed=False, tool_chain=(), context_retry={}, reply="hi",
-    ))
+    await bus.emit(
+        AfterReasoningCtx(
+            session_key="k",
+            channel="c",
+            chat_id="ch",
+            tools_used=(),
+            thinking=None,
+            response_metadata=ResponseMetadata(raw_text=""),
+            streamed=False,
+            tool_chain=(),
+            context_retry={},
+            reply="hi",
+        )
+    )
     handler.assert_awaited_once()
 
 
@@ -244,13 +270,21 @@ async def test_lifecycle_on_after_step():
     lifecycle = TurnLifecycle(bus)
     handler = AsyncMock(return_value=None)
     lifecycle.on_after_step(handler)
-    await bus.fanout(AfterStepCtx(
-        session_key="k", channel="c", chat_id="ch", iteration=0,
-        context_tokens_estimate=0,
-        tools_called=(), partial_reply="",
-        tools_used_so_far=(), tool_chain_partial=(),
-        partial_thinking=None, has_more=True,
-    ))
+    await bus.fanout(
+        AfterStepCtx(
+            session_key="k",
+            channel="c",
+            chat_id="ch",
+            iteration=0,
+            context_tokens_estimate=0,
+            tools_called=(),
+            partial_reply="",
+            tools_used_so_far=(),
+            tool_chain_partial=(),
+            partial_thinking=None,
+            has_more=True,
+        )
+    )
     handler.assert_awaited_once()
 
 
@@ -260,8 +294,15 @@ async def test_lifecycle_on_after_turn():
     lifecycle = TurnLifecycle(bus)
     handler = AsyncMock(return_value=None)
     lifecycle.on_after_turn(handler)
-    await bus.fanout(AfterTurnCtx(
-        session_key="k", channel="c", chat_id="ch", reply="hi",
-        tools_used=(), thinking=None, will_dispatch=True,
-    ))
+    await bus.fanout(
+        AfterTurnCtx(
+            session_key="k",
+            channel="c",
+            chat_id="ch",
+            reply="hi",
+            tools_used=(),
+            thinking=None,
+            will_dispatch=True,
+        )
+    )
     handler.assert_awaited_once()

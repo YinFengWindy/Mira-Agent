@@ -48,7 +48,9 @@ class ObservationModelAdapter:
     async def analyze(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Analyzes one frame without retaining it or enabling desktop actions."""
 
-        if self._role_runtime_registry is None and (self._provider is None or not self._model):
+        if self._role_runtime_registry is None and (
+            self._provider is None or not self._model
+        ):
             raise RuntimeError("屏幕识别视觉模型未配置")
         frame = parse_observation_frame(payload)
         self._roles.get_required(frame.role_id)

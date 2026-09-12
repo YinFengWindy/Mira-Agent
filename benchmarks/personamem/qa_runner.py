@@ -78,7 +78,9 @@ def format_tool_trace(tool_chain: list[dict]) -> str:
                 f"\n{json.dumps(call.get('arguments') or {}, ensure_ascii=False, indent=2)}"
             )
             final_arguments = call.get("final_arguments")
-            if isinstance(final_arguments, dict) and final_arguments != call.get("arguments"):
+            if isinstance(final_arguments, dict) and final_arguments != call.get(
+                "arguments"
+            ):
                 lines.append(
                     "final_arguments:"
                     f"\n{json.dumps(final_arguments, ensure_ascii=False, indent=2)}"

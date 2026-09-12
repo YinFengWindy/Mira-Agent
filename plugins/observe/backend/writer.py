@@ -45,9 +45,7 @@ class TraceWriter:
         self._db_path = db_path
         self._queue: asyncio.Queue[
             TurnTrace | RagQueryLog | MemoryWriteTrace | GlobalErrorTrace
-        ] = asyncio.Queue(
-            maxsize=_QUEUE_MAX
-        )
+        ] = asyncio.Queue(maxsize=_QUEUE_MAX)
         self._dropped = 0
 
     # ── 公共接口 ─────────────────────────────────
@@ -77,7 +75,9 @@ class TraceWriter:
                 try:
                     self._write_one(conn, event)
                 except Exception:
-                    logger.exception("observe write failed for %s", type(event).__name__)
+                    logger.exception(
+                        "observe write failed for %s", type(event).__name__
+                    )
                 finally:
                     self._queue.task_done()
         finally:
@@ -194,7 +194,11 @@ def _write_rag(conn, e: RagQueryLog, ts: str) -> None:
                 e.session_key,
                 e.query,
                 e.orig_query,
-                json.dumps(e.aux_queries, ensure_ascii=False) if e.aux_queries else None,
+                (
+                    json.dumps(e.aux_queries, ensure_ascii=False)
+                    if e.aux_queries
+                    else None
+                ),
                 hits_json,
                 e.injected_count,
                 e.route_decision,
@@ -274,11 +278,14 @@ def _merge_session_keys(prev: list[str], new: list[str]) -> str | None:
             merged.append(key)
         if len(merged) >= _SESSION_KEYS_CAP:
             break
-    return json.dumps(merged[:_SESSION_KEYS_CAP], ensure_ascii=False) if merged else None
+    return (
+        json.dumps(merged[:_SESSION_KEYS_CAP], ensure_ascii=False) if merged else None
+    )
 
 
 def _write_memory_write(conn, e: MemoryWriteTrace, ts: str) -> None:
     import json as _json
+
     with conn:
         conn.execute(
             """
@@ -293,7 +300,11 @@ def _write_memory_write(conn, e: MemoryWriteTrace, ts: str) -> None:
                 e.memory_type,
                 e.item_id,
                 e.summary,
-                _json.dumps(e.superseded_ids, ensure_ascii=False) if e.superseded_ids else None,
+                (
+                    _json.dumps(e.superseded_ids, ensure_ascii=False)
+                    if e.superseded_ids
+                    else None
+                ),
                 e.error,
             ),
         )

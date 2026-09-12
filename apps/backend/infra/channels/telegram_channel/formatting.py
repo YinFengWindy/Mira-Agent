@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from infra.channels.reply_context import build_inbound_text_with_reply_context
 
-
 _CHANNEL = "telegram"
 _SEEN_MSG_MAXSIZE = 500  # 滑动窗口大小，防止内存无限增长
 _THINKING_LIVE_TAIL = 1400
@@ -103,7 +102,9 @@ def _format_tool_target(arguments: dict[str, object]) -> str:
     for key in primary_keys:
         value = arguments.get(key)
         if value is not None and value != "":
-            return f"\"{_clip_inline(_stringify_tool_value(value), _TOOL_PREVIEW_LIMIT)}\""
+            return (
+                f'"{_clip_inline(_stringify_tool_value(value), _TOOL_PREVIEW_LIMIT)}"'
+            )
     return ""
 
 
@@ -128,7 +129,7 @@ def _clip_inline(text: str, limit: int) -> str:
 def _tail_text(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
-    return "..." + text[-(limit - 3):]
+    return "..." + text[-(limit - 3) :]
 
 
 def _live_buffer_len(reply: str, thinking: str) -> int:

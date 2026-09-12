@@ -25,9 +25,7 @@ VisualResourceScheduler = Callable[
 class StoryImageGenerator(Protocol):
     """Generate one Story-owned image through the configured image boundary."""
 
-    async def generate(
-        self, *, story: dict[str, Any], resource: dict[str, Any]
-    ) -> str:
+    async def generate(self, *, story: dict[str, Any], resource: dict[str, Any]) -> str:
         """Return the absolute path of the first generated image."""
 
         ...
@@ -74,9 +72,7 @@ class StorySimulationService:
             opening_context=opening_context,
         )
 
-    def create_opening_turn(
-        self, *, story_id: str, request_id: str
-    ) -> dict[str, Any]:
+    def create_opening_turn(self, *, story_id: str, request_id: str) -> dict[str, Any]:
         """Persist the non-player opening Turn before generation starts."""
 
         story = self.repository.story_read_model(story_id)
@@ -233,7 +229,10 @@ class StorySimulationService:
         role_id = str(role_snapshot.get("id") or "").strip()
         if not role_id or not role_name:
             raise StoryInvalidOutputError("Story 角色快照缺少身份")
-        unknown_character_ids = set(draft.current_scene.character_ids) - {role_id, "player"}
+        unknown_character_ids = set(draft.current_scene.character_ids) - {
+            role_id,
+            "player",
+        }
         if unknown_character_ids:
             raise StoryInvalidOutputError("current_scene 包含不属于 Story 的角色")
         return DirectorDraft(
@@ -379,9 +378,9 @@ class StorySimulationService:
 
     @staticmethod
     def _is_retryable(error: Exception) -> bool:
-        return isinstance(error, (asyncio.TimeoutError, StoryInvalidOutputError)) or not isinstance(
-            error, StorySimulationError
-        )
+        return isinstance(
+            error, (asyncio.TimeoutError, StoryInvalidOutputError)
+        ) or not isinstance(error, StorySimulationError)
 
     @staticmethod
     async def _emit(

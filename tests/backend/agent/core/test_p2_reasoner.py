@@ -120,7 +120,12 @@ def test_default_reasoner_runs_tool_loop_and_returns_reasoner_result():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -137,12 +142,16 @@ def test_default_reasoner_runs_tool_loop_and_returns_reasoner_result():
     react_stats = result.metadata["react_stats"]
     assert react_stats["iteration_count"] == 2
     assert react_stats["turn_input_sum_tokens"] >= react_stats["turn_input_peak_tokens"]
-    assert react_stats["final_call_input_tokens"] == react_stats["turn_input_peak_tokens"]
+    assert (
+        react_stats["final_call_input_tokens"] == react_stats["turn_input_peak_tokens"]
+    )
     assert react_stats["cache_prompt_tokens"] == 220
     assert react_stats["cache_hit_tokens"] == 100
     assert react_stats["total_tokens"] == 400
     first_messages = provider.calls[0]["messages"]
-    assert not any("未加载工具目录" in str(m.get("content", "")) for m in first_messages)
+    assert not any(
+        "未加载工具目录" in str(m.get("content", "")) for m in first_messages
+    )
 
 
 def test_default_reasoner_run_turn_uses_tool_context_snapshot():
@@ -156,7 +165,12 @@ def test_default_reasoner_run_turn_uses_tool_context_snapshot():
     probe = _ContextProbeTool()
     tools.register(probe, always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -224,7 +238,12 @@ def test_default_reasoner_blocks_disabled_tool_even_if_model_calls_it():
     tools = ToolRegistry()
     tools.register(push, always_on=True, risk="external-side-effect")
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -268,7 +287,12 @@ def test_default_reasoner_tool_search_cannot_reunlock_disabled_tool():
     tools.register(ToolSearchTool(tools), always_on=True, risk="read-only")
     tools.register(push, always_on=True, risk="external-side-effect")
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -330,7 +354,9 @@ def test_default_reasoner_zero_max_iterations_is_unlimited():
 
 
 def test_default_reasoner_stops_on_context_pressure_after_tool_batch(monkeypatch):
-    monkeypatch.setattr(context_pressure_plugin, "_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS", 1)
+    monkeypatch.setattr(
+        context_pressure_plugin, "_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS", 1
+    )
     provider = _Provider(
         [
             LLMResponse(
@@ -378,11 +404,17 @@ def test_default_reasoner_stops_on_context_pressure_after_tool_batch(monkeypatch
     assert result.metadata["react_stats"]["total_tokens"] == 270
 
 
-def test_default_reasoner_context_pressure_policy_lives_in_after_step_plugin(monkeypatch):
-    monkeypatch.setattr(context_pressure_plugin, "_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS", 1)
+def test_default_reasoner_context_pressure_policy_lives_in_after_step_plugin(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        context_pressure_plugin, "_CONTEXT_PRESSURE_STOP_THRESHOLD_TOKENS", 1
+    )
     provider = _Provider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("c1", "inflate_probe", {"value": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("c1", "inflate_probe", {"value": 1})]
+            ),
             LLMResponse(content="final", tool_calls=[]),
         ]
     )
@@ -437,17 +469,25 @@ def test_default_reasoner_observes_tool_lifecycle_events():
         lambda event: order.append("completed") or completed_events.append(event),
     )
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
         tool_search_enabled=False,
         memory_window=40,
-        context=cast(Any, SimpleNamespace(
+        context=cast(
+            Any,
+            SimpleNamespace(
                 render=lambda request, **_: SimpleNamespace(
-                messages=[{"role": "user", "content": request.current_message}],
+                    messages=[{"role": "user", "content": request.current_message}],
+                ),
             ),
-        )),
+        ),
         session_manager=cast(Any, SimpleNamespace()),
         event_bus=event_bus,
     )
@@ -488,7 +528,9 @@ def test_default_reasoner_observes_tool_lifecycle_events():
 def test_default_reasoner_observes_blocked_tool_lifecycle_events():
     provider = _Provider(
         [
-            LLMResponse(content="", tool_calls=[ToolCall("c1", "hidden_tool", {"x": 1})]),
+            LLMResponse(
+                content="", tool_calls=[ToolCall("c1", "hidden_tool", {"x": 1})]
+            ),
             LLMResponse(content="final", tool_calls=[]),
         ]
     )
@@ -509,7 +551,12 @@ def test_default_reasoner_observes_blocked_tool_lifecycle_events():
         lambda event: order.append("completed") or completed_events.append(event),
     )
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -555,7 +602,12 @@ def test_default_reasoner_unlocks_tool_search_visibility():
     hidden = _DummyTool("hidden_tool")
     tools.register(hidden)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -591,7 +643,12 @@ def test_default_reasoner_preflight_includes_deferred_tool_names():
         source_name="github",
     )
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -636,7 +693,12 @@ def test_default_reasoner_deferred_tool_direct_call_requires_select():
     tools.register(_DummyTool(), always_on=True)
     tools.register(_DummyTool("schedule"))
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -650,7 +712,9 @@ def test_default_reasoner_deferred_tool_direct_call_requires_select():
     assert result.reply == "final"
     tool_chain = list(result.metadata["tool_chain"])
     assert len(tool_chain) >= 1
-    schedule_call = next((c for c in tool_chain[0]["calls"] if c["name"] == "schedule"), None)
+    schedule_call = next(
+        (c for c in tool_chain[0]["calls"] if c["name"] == "schedule"), None
+    )
     assert schedule_call is not None
     assert "select:" in schedule_call["result"]
     assert "tool_search" in schedule_call["result"]
@@ -662,7 +726,12 @@ def test_default_reasoner_preloaded_tool_not_in_deferred_list():
     tools.register(_DummyTool(), always_on=True)
     tools.register(_DummyTool("schedule"))
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -678,7 +747,9 @@ def test_default_reasoner_preloaded_tool_not_in_deferred_list():
     )
 
     first_messages = provider.calls[0]["messages"]
-    assert not any("未加载工具目录" in str(m.get("content", "")) for m in first_messages)
+    assert not any(
+        "未加载工具目录" in str(m.get("content", "")) for m in first_messages
+    )
 
 
 def test_default_reasoner_run_turn_uses_context_render():
@@ -686,20 +757,34 @@ def test_default_reasoner_run_turn_uses_context_render():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
         tool_search_enabled=False,
         memory_window=40,
-        context=cast(Any, SimpleNamespace(
+        context=cast(
+            Any,
+            SimpleNamespace(
                 render=lambda request, **_: SimpleNamespace(
-                messages=[{"role": "user", "content": request.current_message}],
+                    messages=[{"role": "user", "content": request.current_message}],
+                ),
+                build_messages=lambda **_: (_ for _ in ()).throw(
+                    AssertionError("legacy build_messages should not be used")
+                ),
+                build_turn_injection_context=lambda **_: (_ for _ in ()).throw(
+                    AssertionError("legacy turn_injection should not be used")
+                ),
             ),
-            build_messages=lambda **_: (_ for _ in ()).throw(AssertionError("legacy build_messages should not be used")),
-            build_turn_injection_context=lambda **_: (_ for _ in ()).throw(AssertionError("legacy turn_injection should not be used")),
-        )),
-        session_manager=cast(Any, SimpleNamespace(save_async=lambda *_args, **_kwargs: None)),
+        ),
+        session_manager=cast(
+            Any, SimpleNamespace(save_async=lambda *_args, **_kwargs: None)
+        ),
     )
 
     session = SimpleNamespace(
@@ -726,18 +811,28 @@ def test_default_reasoner_run_turn_reports_llm_timeout():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
         tool_search_enabled=False,
         memory_window=40,
-        context=cast(Any, SimpleNamespace(
+        context=cast(
+            Any,
+            SimpleNamespace(
                 render=lambda request, **_: SimpleNamespace(
-                messages=[{"role": "user", "content": request.current_message}],
+                    messages=[{"role": "user", "content": request.current_message}],
+                ),
             ),
-        )),
-        session_manager=cast(Any, SimpleNamespace(save_async=lambda *_args, **_kwargs: None)),
+        ),
+        session_manager=cast(
+            Any, SimpleNamespace(save_async=lambda *_args, **_kwargs: None)
+        ),
     )
     session = SimpleNamespace(
         key="cli:1",
@@ -769,7 +864,12 @@ def test_empty_content_with_thinking_triggers_retry_and_succeeds():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -796,7 +896,12 @@ def test_empty_content_with_thinking_retry_still_empty_falls_back():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),
@@ -820,7 +925,12 @@ def test_empty_content_without_thinking_no_retry():
     tools = ToolRegistry()
     tools.register(_DummyTool(), always_on=True)
     reasoner = DefaultReasoner(
-        llm=cast(Any, LLMServices(provider=cast(Any, provider), light_provider=cast(Any, provider))),
+        llm=cast(
+            Any,
+            LLMServices(
+                provider=cast(Any, provider), light_provider=cast(Any, provider)
+            ),
+        ),
         llm_config=LLMConfig(model="m", max_iterations=4, max_tokens=512),
         tools=tools,
         discovery=ToolDiscoveryState(),

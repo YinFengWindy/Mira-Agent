@@ -148,7 +148,9 @@ class _KVCachePluginModule:
         return frame
 
 
-def _format_memory_status_reply(messages: list[dict[str, object]], last_consolidated: int) -> str:
+def _format_memory_status_reply(
+    messages: list[dict[str, object]], last_consolidated: int
+) -> str:
     consolidated_user = _count_real_user_messages(messages[:last_consolidated])
     total_user = _count_real_user_messages(messages)
     pending_user = max(0, total_user - consolidated_user)
@@ -162,7 +164,9 @@ def _format_memory_status_reply(messages: list[dict[str, object]], last_consolid
     else:
         lines.append(f"上次整理到 {pending_user} 条用户消息之前。")
     if last_user_message:
-        lines.extend(["", "最后已整理的用户消息：", f"“{_preview_text(last_user_message)}”"])
+        lines.extend(
+            ["", "最后已整理的用户消息：", f"“{_preview_text(last_user_message)}”"]
+        )
     lines.extend(
         [
             "",
@@ -219,7 +223,11 @@ def _latest_real_user_content(messages: list[dict[str, object]]) -> str:
 
 def _is_real_user_message(item: dict[str, object]) -> bool:
     content = str(item.get("content", "")).strip()
-    return item.get("role") == "user" and bool(content) and "data-system-context-frame" not in content
+    return (
+        item.get("role") == "user"
+        and bool(content)
+        and "data-system-context-frame" not in content
+    )
 
 
 def _preview_text(text: str, limit: int = 80) -> str:
@@ -236,13 +244,18 @@ def _format_ts(ts: str) -> str:
 
 def _inbound() -> InboundMessage:
     return InboundMessage(
-        channel="telegram", sender="user", chat_id="123",
-        content="hello", timestamp=_now,
+        channel="telegram",
+        sender="user",
+        chat_id="123",
+        content="hello",
+        timestamp=_now,
     )
 
 
 @pytest.mark.asyncio
-async def test_after_reasoning_resolves_mood_when_reply_lacks_structured_mood(monkeypatch: pytest.MonkeyPatch):
+async def test_after_reasoning_resolves_mood_when_reply_lacks_structured_mood(
+    monkeypatch: pytest.MonkeyPatch,
+):
     async def _fake_resolve_role_mood(*args, **kwargs):  # type: ignore[no-untyped-def]
         return "鄙视"
 
@@ -305,10 +318,14 @@ class _DummySession:
         self.metadata: dict[str, object] = {}
         self.last_consolidated = 0
 
-    def get_history(self, max_messages: int = 500, *, start_index: int | None = None) -> list[dict[str, object]]:
+    def get_history(
+        self, max_messages: int = 500, *, start_index: int | None = None
+    ) -> list[dict[str, object]]:
         return list(self.messages)
 
-    def add_message(self, role: str, content: str, media=None, **kwargs: object) -> None:
+    def add_message(
+        self, role: str, content: str, media=None, **kwargs: object
+    ) -> None:
         msg: dict[str, object] = {"role": role, "content": content}
         if media:
             msg["media"] = list(media)
@@ -512,10 +529,7 @@ async def test_before_turn_memory_status_command_aborts_without_context_prepare(
 async def test_before_turn_memory_context_guard_blocks_unconsolidated_tail():
     bus = EventBus()
     session = _DummySession("telegram:123")
-    session.messages = [
-        {"role": "user", "content": f"u{i}"}
-        for i in range(30)
-    ]
+    session.messages = [{"role": "user", "content": f"u{i}"} for i in range(30)]
     session.last_consolidated = 0
     session_mgr = SimpleNamespace(get_or_create=lambda key: session)
     ctx_store = SimpleNamespace(prepare=AsyncMock())
@@ -555,10 +569,7 @@ async def test_before_turn_memory_context_guard_blocks_unconsolidated_tail():
 async def test_before_turn_memory_context_guard_schedules_consolidation_without_blocking():
     bus = EventBus()
     session = _DummySession("telegram:123")
-    session.messages = [
-        {"role": "user", "content": f"u{i}"}
-        for i in range(30)
-    ]
+    session.messages = [{"role": "user", "content": f"u{i}"} for i in range(30)]
     session.last_consolidated = 0
     session_mgr = SimpleNamespace(get_or_create=lambda key: session)
     ctx_store = SimpleNamespace(
@@ -604,10 +615,7 @@ async def test_before_turn_memory_context_guard_schedules_consolidation_without_
 async def test_before_turn_memory_context_guard_blocks_after_consolidation_failure():
     bus = EventBus()
     session = _DummySession("telegram:123")
-    session.messages = [
-        {"role": "user", "content": f"u{i}"}
-        for i in range(30)
-    ]
+    session.messages = [{"role": "user", "content": f"u{i}"} for i in range(30)]
     session.last_consolidated = 0
     session_mgr = SimpleNamespace(get_or_create=lambda key: session)
     ctx_store = SimpleNamespace(prepare=AsyncMock())
@@ -644,10 +652,7 @@ async def test_before_turn_memory_context_guard_blocks_after_consolidation_failu
 async def test_before_turn_memory_context_guard_reports_failure_for_nsfw_role():
     bus = EventBus()
     session = _DummySession("telegram:123")
-    session.messages = [
-        {"role": "user", "content": f"u{i}"}
-        for i in range(30)
-    ]
+    session.messages = [{"role": "user", "content": f"u{i}"} for i in range(30)]
     session.last_consolidated = 0
     session.metadata["role_runtime_config"] = {"nsfw_memory_enabled": True}
     session_mgr = SimpleNamespace(get_or_create=lambda key: session)
@@ -926,9 +931,13 @@ async def test_before_reasoning_setup_calls_tools_set_context():
     msg = _inbound()
 
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="block", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="block",
+        retrieval_trace_raw=None,
         history_messages=(),
         skill_names=["search"],
     )
@@ -969,16 +978,22 @@ async def test_before_reasoning_requires_session():
     msg = _inbound()
 
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="",
+        retrieval_trace_raw=None,
         history_messages=(),
     )
 
     state = TurnState(msg=msg, session_key="telegram:123", dispatch_outbound=True)
     # session is None
 
-    with pytest.raises(RuntimeError, match="BeforeReasoning requires TurnState.session"):
+    with pytest.raises(
+        RuntimeError, match="BeforeReasoning requires TurnState.session"
+    ):
         await phase.run(BeforeReasoningInput(state=state, before_turn=before_turn))
 
 
@@ -1008,9 +1023,13 @@ async def test_before_reasoning_finalize_calls_render():
     msg = _inbound()
 
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="block", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="block",
+        retrieval_trace_raw=None,
         history_messages=(),
         skill_names=["search"],
     )
@@ -1058,9 +1077,13 @@ async def test_before_reasoning_chain_can_add_extra_hints():
     msg = _inbound()
 
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="",
+        retrieval_trace_raw=None,
         history_messages=(),
         extra_hints=["hint from before turn"],
     )
@@ -1103,9 +1126,13 @@ async def test_before_reasoning_collects_export_slots():
     )
     msg = _inbound()
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="",
+        retrieval_trace_raw=None,
         history_messages=(),
     )
     state = TurnState(msg=msg, session_key="telegram:123", dispatch_outbound=True)
@@ -1150,9 +1177,13 @@ async def test_before_reasoning_chain_modify_skill_names_used_in_finalize_render
     msg = _inbound()
 
     before_turn = BeforeTurnCtx(
-        session_key="telegram:123", channel=msg.channel, chat_id=msg.chat_id,
-        content=msg.content, timestamp=msg.timestamp,
-        retrieved_memory_block="original_block", retrieval_trace_raw=None,
+        session_key="telegram:123",
+        channel=msg.channel,
+        chat_id=msg.chat_id,
+        content=msg.content,
+        timestamp=msg.timestamp,
+        retrieved_memory_block="original_block",
+        retrieval_trace_raw=None,
         history_messages=(),
         skill_names=["base_skill"],
     )
@@ -1239,6 +1270,7 @@ async def test_prompt_render_chain_appends_bottom_section(tmp_path):
 @pytest.mark.asyncio
 async def test_prompt_render_chain_respects_disabled_sections(tmp_path):
     RoleStore(tmp_path).create_role(role_id="mira", name="Mira", system_prompt="test")
+
     class BottomModule:
         slot = "test.prompt.bottom"
         requires = ("prompt_render.emit", "prompt:ctx")
@@ -1294,6 +1326,7 @@ async def test_prompt_render_chain_respects_disabled_sections(tmp_path):
 @pytest.mark.asyncio
 async def test_prompt_render_collects_export_slots(tmp_path):
     RoleStore(tmp_path).create_role(role_id="mira", name="Mira", system_prompt="test")
+
     class SlotModule:
         slot = "test.prompt.slot"
         requires = ("prompt_render.emit", "prompt:ctx")
@@ -1700,7 +1733,10 @@ async def test_after_reasoning_enriches_session_metadata_with_relationship_runti
     state.session = session
     relationship_runtime = Mock()
     relationship_runtime.enrich_session_metadata = Mock(
-        return_value={"role_id": "mira", "relationship_snapshot": {"role_self_view": "我在想你。"}},
+        return_value={
+            "role_id": "mira",
+            "relationship_snapshot": {"role_self_view": "我在想你。"},
+        },
     )
     services = SimpleNamespace(
         presence=Mock(),
@@ -1792,7 +1828,9 @@ async def test_after_turn_collects_extra_and_telemetry_slots():
     await phase.run(
         TurnSnapshot(
             state=state,
-            outbound=OutboundMessage(channel=msg.channel, chat_id=msg.chat_id, content="reply"),
+            outbound=OutboundMessage(
+                channel=msg.channel, chat_id=msg.chat_id, content="reply"
+            ),
             ctx=ctx,
         )
     )

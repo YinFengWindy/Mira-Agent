@@ -14,7 +14,10 @@ from bus.events_lifecycle import (
     TurnCommitted,
 )
 from desktop_bridge.chat_service import ChatTurnBusyError, DesktopChatService
-from desktop_bridge.voice.voice_service import VoiceOperationMetrics, VoiceSynthesisResult
+from desktop_bridge.voice.voice_service import (
+    VoiceOperationMetrics,
+    VoiceSynthesisResult,
+)
 from agent.looping.interrupt import TurnInterruptState
 from session.manager import Session
 from session.manager.models import INTERRUPTED_TURN_METADATA_KEY
@@ -56,36 +59,42 @@ async def test_chat_service_bridges_tool_call_lifecycle_for_current_session() ->
     emitted: list[dict] = []
 
     async def _process_direct(*_args, **_kwargs) -> None:
-        await event_bus.observe(ToolCallStarted(
-            session_key="role:role-1",
-            channel="desktop",
-            chat_id="role:role-1",
-            iteration=1,
-            call_id="call-1",
-            tool_name="web_search",
-            arguments={"query": "天气"},
-        ))
-        await event_bus.observe(ToolCallStarted(
-            session_key="role:other",
-            channel="desktop",
-            chat_id="role:other",
-            iteration=1,
-            call_id="other",
-            tool_name="shell",
-            arguments={},
-        ))
-        await event_bus.observe(ToolCallCompleted(
-            session_key="role:role-1",
-            channel="desktop",
-            chat_id="role:role-1",
-            iteration=1,
-            call_id="call-1",
-            tool_name="web_search",
-            arguments={"query": "天气"},
-            final_arguments={"query": "上海天气"},
-            status="success",
-            result_preview="晴，28°C",
-        ))
+        await event_bus.observe(
+            ToolCallStarted(
+                session_key="role:role-1",
+                channel="desktop",
+                chat_id="role:role-1",
+                iteration=1,
+                call_id="call-1",
+                tool_name="web_search",
+                arguments={"query": "天气"},
+            )
+        )
+        await event_bus.observe(
+            ToolCallStarted(
+                session_key="role:other",
+                channel="desktop",
+                chat_id="role:other",
+                iteration=1,
+                call_id="other",
+                tool_name="shell",
+                arguments={},
+            )
+        )
+        await event_bus.observe(
+            ToolCallCompleted(
+                session_key="role:role-1",
+                channel="desktop",
+                chat_id="role:role-1",
+                iteration=1,
+                call_id="call-1",
+                tool_name="web_search",
+                arguments={"query": "天气"},
+                final_arguments={"query": "上海天气"},
+                status="success",
+                result_preview="晴，28°C",
+            )
+        )
 
     async def _emit_payload(_emit_event, payload: dict) -> None:
         emitted.append(payload)
@@ -113,7 +122,9 @@ async def test_chat_service_bridges_tool_call_lifecycle_for_current_session() ->
         emit_event=AsyncMock(),
     )
 
-    tool_events = [event for event in emitted if event["method"].startswith("chat.tool.")]
+    tool_events = [
+        event for event in emitted if event["method"].startswith("chat.tool.")
+    ]
     assert [event["method"] for event in tool_events] == [
         "chat.tool.started",
         "chat.tool.completed",
@@ -137,18 +148,20 @@ async def test_chat_service_truncates_tool_result_preview_for_desktop() -> None:
     emitted: list[dict] = []
 
     async def _process_direct(*_args, **_kwargs) -> None:
-        await event_bus.observe(ToolCallCompleted(
-            session_key="role:role-1",
-            channel="desktop",
-            chat_id="role:role-1",
-            iteration=1,
-            call_id="call-1",
-            tool_name="read_file",
-            arguments={},
-            final_arguments={},
-            status="success",
-            result_preview="x" * 2500,
-        ))
+        await event_bus.observe(
+            ToolCallCompleted(
+                session_key="role:role-1",
+                channel="desktop",
+                chat_id="role:role-1",
+                iteration=1,
+                call_id="call-1",
+                tool_name="read_file",
+                arguments={},
+                final_arguments={},
+                status="success",
+                result_preview="x" * 2500,
+            )
+        )
 
     async def _emit_payload(_emit_event, payload: dict) -> None:
         emitted.append(payload)
@@ -185,20 +198,24 @@ async def test_chat_service_truncates_tool_result_preview_for_desktop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_service_does_not_bridge_live_tool_events_when_streaming_disabled() -> None:
+async def test_chat_service_does_not_bridge_live_tool_events_when_streaming_disabled() -> (
+    None
+):
     event_bus = EventBus()
     emitted: list[dict] = []
 
     async def _process_direct(*_args, **_kwargs) -> None:
-        await event_bus.observe(ToolCallStarted(
-            session_key="role:role-1",
-            channel="desktop",
-            chat_id="role:role-1",
-            iteration=1,
-            call_id="call-1",
-            tool_name="web_search",
-            arguments={"query": "天气"},
-        ))
+        await event_bus.observe(
+            ToolCallStarted(
+                session_key="role:role-1",
+                channel="desktop",
+                chat_id="role:role-1",
+                iteration=1,
+                call_id="call-1",
+                tool_name="web_search",
+                arguments={"query": "天气"},
+            )
+        )
 
     async def _emit_payload(_emit_event, payload: dict) -> None:
         emitted.append(payload)
@@ -326,7 +343,9 @@ async def test_cancel_chat_turn_interrupts_only_the_matching_session_and_turn() 
 
 
 @pytest.mark.asyncio
-async def test_cancel_chat_turn_waits_for_old_listener_cleanup_before_follow_up() -> None:
+async def test_cancel_chat_turn_waits_for_old_listener_cleanup_before_follow_up() -> (
+    None
+):
     started = asyncio.Event()
     cleanup_started = asyncio.Event()
     release_cleanup = asyncio.Event()
@@ -376,30 +395,36 @@ async def test_cancel_chat_turn_waits_for_old_listener_cleanup_before_follow_up(
     await cleanup_started.wait()
 
     with pytest.raises(ChatTurnBusyError):
-        service.start_chat_turn(**{
-            **arguments,
-            "request_id": "request-2",
-            "turn_id": "turn-2",
-            "content": "follow up",
-        })
+        service.start_chat_turn(
+            **{
+                **arguments,
+                "request_id": "request-2",
+                "turn_id": "turn-2",
+                "content": "follow up",
+            }
+        )
 
     release_cleanup.set()
     result = await cancel_task
 
     assert result.status == "interrupted"
-    service.start_chat_turn(**{
-        **arguments,
-        "request_id": "request-2",
-        "turn_id": "turn-2",
-        "content": "follow up",
-    })
+    service.start_chat_turn(
+        **{
+            **arguments,
+            "request_id": "request-2",
+            "turn_id": "turn-2",
+            "content": "follow up",
+        }
+    )
     await asyncio.sleep(0)
     assert calls == 2
     await service.aclose()
 
 
 @pytest.mark.asyncio
-async def test_cancel_chat_turn_keeps_naturally_completed_turn_when_interrupt_is_idle() -> None:
+async def test_cancel_chat_turn_keeps_naturally_completed_turn_when_interrupt_is_idle() -> (
+    None
+):
     process_completed = asyncio.Event()
     session_update_started = asyncio.Event()
     session_update_completed = asyncio.Event()
@@ -981,15 +1006,17 @@ async def test_chat_terminal_waits_for_turn_and_session_work(failure_stage):
     service = None
 
     async def process_direct(*_args, **_kwargs):
-        await event_bus.fanout(TurnCommitted(
-            session_key="role:mira",
-            channel="desktop",
-            chat_id="role:mira",
-            input_message="hello",
-            persisted_user_message=None,
-            assistant_response="answer",
-            tools_used=[],
-        ))
+        await event_bus.fanout(
+            TurnCommitted(
+                session_key="role:mira",
+                channel="desktop",
+                chat_id="role:mira",
+                input_message="hello",
+                persisted_user_message=None,
+                assistant_response="answer",
+                tools_used=[],
+            )
+        )
         assert emitted == []
         if failure_stage == "after_commit":
             raise RuntimeError("after_commit failed")
@@ -999,7 +1026,9 @@ async def test_chat_terminal_waits_for_turn_and_session_work(failure_stage):
         assert emitted == []
         if failure_stage == "session_update":
             raise RuntimeError("session_update failed")
-        emit_event({"method": "session.updated", "payload": {"session_key": session.key}})
+        emit_event(
+            {"method": "session.updated", "payload": {"session_key": session.key}}
+        )
 
     def collect(payload):
         assert not service.is_busy("role:mira")
@@ -1013,7 +1042,9 @@ async def test_chat_terminal_waits_for_turn_and_session_work(failure_stage):
     service = DesktopChatService(
         agent_loop=SimpleNamespace(process_direct=process_direct),
         event_bus=event_bus,
-        session_manager=SimpleNamespace(get_or_create=Mock(return_value=Session(key="role:mira"))),
+        session_manager=SimpleNamespace(
+            get_or_create=Mock(return_value=Session(key="role:mira"))
+        ),
         role_id_from_session_key=lambda _key: "mira",
         sync_desktop_session_thread=Mock(),
         emit_payload=emit_payload,
@@ -1062,7 +1093,9 @@ async def test_failure_snapshot_cannot_replace_original_error(failure_stage, cap
         emit_event(payload)
 
     service = DesktopChatService(
-        agent_loop=SimpleNamespace(process_direct=AsyncMock(side_effect=original_error)),
+        agent_loop=SimpleNamespace(
+            process_direct=AsyncMock(side_effect=original_error)
+        ),
         event_bus=event_bus,
         session_manager=SimpleNamespace(get_or_create=lookup),
         role_id_from_session_key=lambda _key: "mira",

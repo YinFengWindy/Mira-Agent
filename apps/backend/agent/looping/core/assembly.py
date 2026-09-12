@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from core.memory.engine import MemoryEngine
     from core.memory.markdown import MemoryProfileApi
 
+
 class _AssemblyMixin:
     def __init__(
         self,

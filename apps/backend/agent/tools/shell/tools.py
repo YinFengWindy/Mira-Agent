@@ -74,6 +74,7 @@ class ShellTool(Tool):
             "- 如果决定放弃后台任务并准备最终回复，必须先调用 task_stop 终止它\n"
             "禁止用途：不得用 shell 替代专用工具（read_file 读文件、web_fetch 抓网页、list_dir 列目录）。"
         )
+
     @property
     def parameters(self) -> dict[str, Any]:
         return {
@@ -349,7 +350,9 @@ class ShellTool(Tool):
             content = content + f"\nExit code {exit_code}"
 
         output_meta = _truncate(content)
-        full_output_path = _write_full_output(content) if output_meta["truncated"] else None
+        full_output_path = (
+            _write_full_output(content) if output_meta["truncated"] else None
+        )
         truncation = None
         if output_meta["truncated"]:
             truncation = {
@@ -406,7 +409,9 @@ class ShellTool(Tool):
             content = "（无输出）"
         content = content + "\nCommand timed out"
         output_meta = _truncate(content)
-        full_output_path = _write_full_output(content) if output_meta["truncated"] else None
+        full_output_path = (
+            _write_full_output(content) if output_meta["truncated"] else None
+        )
         truncation = None
         if output_meta["truncated"]:
             truncation = {

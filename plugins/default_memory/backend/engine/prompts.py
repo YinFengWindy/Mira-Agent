@@ -325,6 +325,7 @@ def _default_memory_tool_profile() -> MemoryToolProfile:
         ),
     )
 
+
 def _explicit_hypothesis_prompt(query: str, style: str) -> str:
     if style == "event":
         return (

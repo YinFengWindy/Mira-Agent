@@ -115,7 +115,9 @@ async def test_unregistering_a_method_makes_it_immediately_uncallable(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_plugin_config_methods_are_never_routed_to_the_generic_rpc_handler(tmp_path):
+async def test_plugin_config_methods_are_never_routed_to_the_generic_rpc_handler(
+    tmp_path,
+):
     # plugin.config.* 由 ReloadableDesktopService 专用分支处理；裸 DesktopBridgeService
     # （没有 AppRuntime/settings 事务）必须像 runtime.* 一样退化为 unknown_method
     registry = PluginRpcRegistry()
@@ -127,7 +129,11 @@ async def test_plugin_config_methods_are_never_routed_to_the_generic_rpc_handler
     service = _service(tmp_path, registry)
     try:
         response = await service.handle(
-            {"id": "r6", "method": "plugin.config.get", "payload": {"plugin_id": "demo"}},
+            {
+                "id": "r6",
+                "method": "plugin.config.get",
+                "payload": {"plugin_id": "demo"},
+            },
             emit_event=lambda event: None,
         )
         assert response.error is not None
@@ -160,7 +166,10 @@ async def test_router_stops_at_the_plugin_handler_without_reaching_domain_handle
     router = _router(registry=registry)
 
     result = await router.dispatch(
-        "plugin.demo.run", {}, request_id="req", emit_event=lambda event: None,
+        "plugin.demo.run",
+        {},
+        request_id="req",
+        emit_event=lambda event: None,
     )
 
     assert result == {"result": "from-plugin"}
@@ -173,7 +182,10 @@ async def test_router_falls_through_for_unregistered_plugin_methods():
     router = _router(registry=PluginRpcRegistry())
 
     result = await router.dispatch(
-        "plugin.demo.missing", {}, request_id="req", emit_event=lambda event: None,
+        "plugin.demo.missing",
+        {},
+        request_id="req",
+        emit_event=lambda event: None,
     )
 
     assert result is None

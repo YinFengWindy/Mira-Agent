@@ -92,9 +92,7 @@ async def test_recall_memory_passes_memory_domain_to_engine() -> None:
         MemoryToolSpec(description="", parameters={"type": "object", "properties": {}}),
     )
 
-    _ = await tool.execute(
-        query="Akasha", memory_domain="role_self", role_id="mira"
-    )
+    _ = await tool.execute(query="Akasha", memory_domain="role_self", role_id="mira")
 
     assert memory.request.filters.domains == ("role_self",)
 

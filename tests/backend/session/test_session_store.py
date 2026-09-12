@@ -27,7 +27,9 @@ def test_fetch_session_messages_preserves_media_path(tmp_path: Path) -> None:
     store.close()
 
 
-def test_fetch_messages_page_uses_seq_cursor_and_preserves_order(tmp_path: Path) -> None:
+def test_fetch_messages_page_uses_seq_cursor_and_preserves_order(
+    tmp_path: Path,
+) -> None:
     store = SessionStore(tmp_path / "sessions.db")
     store.create_session(key="role:mira", metadata={})
     for seq in (0, 2, 5, 8):
@@ -57,7 +59,9 @@ def test_fetch_messages_page_uses_seq_cursor_and_preserves_order(tmp_path: Path)
     store.close()
 
 
-def test_fetch_image_history_omits_message_content_and_non_media_rows(tmp_path: Path) -> None:
+def test_fetch_image_history_omits_message_content_and_non_media_rows(
+    tmp_path: Path,
+) -> None:
     store = SessionStore(tmp_path / "sessions.db")
     store.create_session(key="role:mira", metadata={})
     store.insert_message(
@@ -76,12 +80,14 @@ def test_fetch_image_history_omits_message_content_and_non_media_rows(tmp_path: 
         media=["old.png", "attachment.txt"],
     )
 
-    assert store.fetch_image_history("role:mira") == [{
-        "id": "role:mira:2",
-        "seq": 2,
-        "timestamp": "2026-07-13T12:01:00+08:00",
-        "media": ["old.png", "attachment.txt"],
-    }]
+    assert store.fetch_image_history("role:mira") == [
+        {
+            "id": "role:mira:2",
+            "seq": 2,
+            "timestamp": "2026-07-13T12:01:00+08:00",
+            "media": ["old.png", "attachment.txt"],
+        }
+    ]
     store.close()
 
 
@@ -99,9 +105,9 @@ def test_fetch_message_around_locates_by_id_with_seq_holes(tmp_path: Path) -> No
 
     around = store.fetch_message_around("role:mira:4", context=1)
     assert [message["seq"] for message in around["messages"]] == [1, 4, 9]
-    assert [message["id"] for message in around["messages"] if message["is_target"]] == [
-        "role:mira:4"
-    ]
+    assert [
+        message["id"] for message in around["messages"] if message["is_target"]
+    ] == ["role:mira:4"]
     assert around["has_more_before"] is False
     assert around["has_more_after"] is False
     store.close()

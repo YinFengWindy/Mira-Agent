@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Protocol
 
-
 _DEFAULT_TTL_S = 1800  # 30 分钟
 
 

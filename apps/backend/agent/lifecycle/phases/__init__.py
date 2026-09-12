@@ -8,8 +8,14 @@ from agent.lifecycle.phases.before_reasoning import (
     BeforeReasoningFrame,
     default_before_reasoning_modules,
 )
-from agent.lifecycle.phases.before_step import BeforeStepFrame, default_before_step_modules
-from agent.lifecycle.phases.before_turn import BeforeTurnFrame, default_before_turn_modules
+from agent.lifecycle.phases.before_step import (
+    BeforeStepFrame,
+    default_before_step_modules,
+)
+from agent.lifecycle.phases.before_turn import (
+    BeforeTurnFrame,
+    default_before_turn_modules,
+)
 from agent.lifecycle.phases.prompt_render import (
     PromptRenderFrame,
     default_prompt_render_modules,

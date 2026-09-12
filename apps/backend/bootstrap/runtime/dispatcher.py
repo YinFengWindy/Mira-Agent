@@ -44,7 +44,9 @@ class RuntimeDispatcher:
             with bind_runtime(lease):
                 return await lease.core.loop.run_role_operation(metadata, operation)
 
-    def request_interrupt(self, session_key: str, sender: str = "", command: str = "/stop"):
+    def request_interrupt(
+        self, session_key: str, sender: str = "", command: str = "/stop"
+    ):
         """Cancels the original task through the shared interrupt registry."""
         return self._app.agent_loop.request_interrupt(session_key, sender, command)
 

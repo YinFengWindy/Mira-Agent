@@ -447,7 +447,9 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
     monkeypatch.setattr(mod, "send_thinking_block", AsyncMock())
     await channel.start()
     assert len(channel._app.handlers) == 5
-    assert [cmd.command for cmd in channel._app.bot.set_my_commands.await_args.args[0]] == [
+    assert [
+        cmd.command for cmd in channel._app.bot.set_my_commands.await_args.args[0]
+    ] == [
         "memorystatus",
         "kvcache",
         "stop",
@@ -462,7 +464,13 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
             Path(path).write_text("x", encoding="utf-8")
 
     channel._app.bot.get_file = AsyncMock(
-        side_effect=[_File(".jpg"), _File(".txt"), _File(".jpg"), _File(".txt"), _File(".md")]
+        side_effect=[
+            _File(".jpg"),
+            _File(".txt"),
+            _File(".jpg"),
+            _File(".txt"),
+            _File(".md"),
+        ]
     )
     context = SimpleNamespace(bot=channel._app.bot)
     reply_photo = [SimpleNamespace(file_id="p1")]
@@ -545,7 +553,9 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
     doc_update = SimpleNamespace(
         effective_message=SimpleNamespace(
-            document=SimpleNamespace(file_id="doc1", file_name="a.md", mime_type="text/plain"),
+            document=SimpleNamespace(
+                file_id="doc1", file_name="a.md", mime_type="text/plain"
+            ),
             caption="",
             reply_to_message=None,
         ),
@@ -587,7 +597,9 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert sender is not None
     await sender({"thinking_delta": "先想一点"})
     await sender("流式片段")
-    await sender("继续补充一大段内容继续补充一大段内容继续补充一大段内容继续补充一大段内容")
+    await sender(
+        "继续补充一大段内容继续补充一大段内容继续补充一大段内容继续补充一大段内容"
+    )
     assert channel._app.bot.send_message.await_count >= 1
     before_send = channel._app.bot.send_message.await_count
     before_edit = channel._app.bot.edit_message_text.await_count
@@ -632,7 +644,10 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
         )
     ]
     assert any(
-        "临时回复" in text and "事件片段" in text and "思考过程" in text and "事件思考" in text
+        "临时回复" in text
+        and "事件片段" in text
+        and "思考过程" in text
+        and "事件思考" in text
         for text in live_texts
     )
     assert any(
@@ -774,7 +789,9 @@ async def test_telegram_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path:
     last_edit = channel._app.bot.edit_message_text.await_args_list[-1].kwargs["text"]
     assert last_edit == "final"
 
-    channel._app.bot.send_chat_action = AsyncMock(side_effect=[mod.TimedOut("x"), mod.NetworkError("x"), None])
+    channel._app.bot.send_chat_action = AsyncMock(
+        side_effect=[mod.TimedOut("x"), mod.NetworkError("x"), None]
+    )
     monkeypatch.setattr(mod.asyncio, "sleep", AsyncMock(return_value=None))
     await channel._safe_send_typing(context, 123)
     channel._app.bot.send_chat_action = AsyncMock(side_effect=RuntimeError("boom"))
@@ -839,6 +856,7 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
             {"channel": "qq", "chat_id": "gqq:100", "allow_from": ["1"]},
         ],
     )
+
     async def _request_get(url, **kwargs):
         if url.endswith("a.jpg") or url.endswith("a.png"):
             return SimpleNamespace(
@@ -884,7 +902,10 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
         local_to_base64,
     )
 
-    assert extract_cq_images("hello [CQ:image,url=http://x/a.jpg]") == ("hello", ["http://x/a.jpg"])
+    assert extract_cq_images("hello [CQ:image,url=http://x/a.jpg]") == (
+        "hello",
+        ["http://x/a.jpg"],
+    )
 
     scheduled = []
     real_create_task = asyncio.create_task
@@ -921,10 +942,18 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     channel._run_on_bot_loop = AsyncMock(side_effect=_drain)
 
     await channel._bot.startup_handler(SimpleNamespace())
-    await channel._bot.private_handler(SimpleNamespace(user_id="1", raw_message="hi [CQ:image,url=http://x/a.jpg]"))
-    await channel._bot.group_handler(SimpleNamespace(group_id="100", user_id="1", raw_message="hello"))
-    await channel._bot.private_handler(SimpleNamespace(user_id="1", raw_message="/stop"))
-    await channel._bot.group_handler(SimpleNamespace(group_id="100", user_id="1", raw_message="/stop"))
+    await channel._bot.private_handler(
+        SimpleNamespace(user_id="1", raw_message="hi [CQ:image,url=http://x/a.jpg]")
+    )
+    await channel._bot.group_handler(
+        SimpleNamespace(group_id="100", user_id="1", raw_message="hello")
+    )
+    await channel._bot.private_handler(
+        SimpleNamespace(user_id="1", raw_message="/stop")
+    )
+    await channel._bot.group_handler(
+        SimpleNamespace(group_id="100", user_id="1", raw_message="/stop")
+    )
     if scheduled:
         await asyncio.gather(*scheduled)
     assert len(bus.inbound) == 2
@@ -990,15 +1019,26 @@ async def test_qq_channel_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["telegram", "qq"])
-async def test_builtin_channel_buffers_received_input_during_pause(monkeypatch, tmp_path, kind):
-    mod = _import_telegram_channel(monkeypatch) if kind == "telegram" else _import_qq_channel(monkeypatch)
+async def test_builtin_channel_buffers_received_input_during_pause(
+    monkeypatch, tmp_path, kind
+):
+    mod = (
+        _import_telegram_channel(monkeypatch)
+        if kind == "telegram"
+        else _import_qq_channel(monkeypatch)
+    )
     bus = _Bus()
     sessions = _SessionManager(tmp_path)
-    channel = (mod.TelegramChannel("token", bus, sessions) if kind == "telegram"
-               else mod.QQChannel("42", bus, sessions, http_requester=SimpleNamespace()))
+    channel = (
+        mod.TelegramChannel("token", bus, sessions)
+        if kind == "telegram"
+        else mod.QQChannel("42", bus, sessions, http_requester=SimpleNamespace())
+    )
     channel._channel_hub = None
     channel.pause_intake()
-    message = InboundMessage(channel=kind, sender="1", chat_id="1", content="during save")
+    message = InboundMessage(
+        channel=kind, sender="1", chat_id="1", content="during save"
+    )
     await channel._publish_inbound(message)
     assert bus.inbound == []
     channel.resume_intake()
@@ -1009,18 +1049,29 @@ async def test_builtin_channel_buffers_received_input_during_pause(monkeypatch, 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["telegram", "qq"])
-async def test_builtin_channel_notifies_pending_input_before_disconnect(monkeypatch, tmp_path, kind):
-    mod = _import_telegram_channel(monkeypatch) if kind == "telegram" else _import_qq_channel(monkeypatch)
+async def test_builtin_channel_notifies_pending_input_before_disconnect(
+    monkeypatch, tmp_path, kind
+):
+    mod = (
+        _import_telegram_channel(monkeypatch)
+        if kind == "telegram"
+        else _import_qq_channel(monkeypatch)
+    )
     channel_type = mod.TelegramChannel if kind == "telegram" else mod.QQChannel
     send = AsyncMock()
     monkeypatch.setattr(channel_type, "send", send)
     bus = _Bus()
     sessions = _SessionManager(tmp_path)
-    channel = (channel_type("token", bus, sessions) if kind == "telegram"
-               else channel_type("42", bus, sessions, http_requester=SimpleNamespace()))
+    channel = (
+        channel_type("token", bus, sessions)
+        if kind == "telegram"
+        else channel_type("42", bus, sessions, http_requester=SimpleNamespace())
+    )
     channel._channel_hub = None
     channel.pause_intake()
-    await channel._publish_inbound(InboundMessage(channel=kind, sender="1", chat_id="1", content="pending"))
+    await channel._publish_inbound(
+        InboundMessage(channel=kind, sender="1", chat_id="1", content="pending")
+    )
     await channel.stop()
     assert bus.inbound == []
     send.assert_awaited_once()
@@ -1301,5 +1352,3 @@ async def test_qq_channel_records_failed_delivery_status(
         "external_message_id": "",
     }
     await channel.stop()
-
-
