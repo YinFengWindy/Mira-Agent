@@ -27,6 +27,11 @@ jobs:
           .venv/bin/python -m pip install -r apps/backend/requirements/production.txt
           .venv/bin/python -m pip install -r apps/backend/requirements/development.txt
 
+      - name: Check Python formatting
+        run: .venv/bin/black --check .
+      - name: Run Ruff
+        run: .venv/bin/ruff check .
+
       - name: Run pyright
         run: |
           .venv/bin/pyright --level error
