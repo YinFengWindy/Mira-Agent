@@ -10,7 +10,7 @@ from shiori_plugin_testkit.packages import stage_plugin_package
 def _write(root: Path, relative: str) -> None:
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(relative, encoding="utf-8")
+    _ = path.write_text(relative, encoding="utf-8")
 
 
 @pytest.mark.parametrize("environment", [".venv", "custom-python", "nested/runtime"])
@@ -62,7 +62,7 @@ def test_stage_omits_generated_state_but_preserves_resources(tmp_path: Path) -> 
     for name in excluded + preserved:
         _write(source, name)
 
-    stage_plugin_package(source, target)
+    _ = stage_plugin_package(source, target)
 
     assert all(not (target / name).exists() for name in excluded)
     assert all(

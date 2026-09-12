@@ -1,37 +1,49 @@
 """Real runtime fixture registered by the explicitly installed testkit distribution."""
 
+from collections.abc import AsyncGenerator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from pathlib import Path
+
 import pytest
+from shiori_plugin_testkit.bridge import PluginBridgeService
 from shiori_plugin_testkit.packages import plugin_directory, stage_plugin_package
+
+PluginRuntime = Callable[
+    [tuple[str, ...], str],
+    AbstractAsyncContextManager[tuple[PluginBridgeService, Path]],
+]
 
 
 @pytest.fixture
-def plugin_runtime(tmp_path, monkeypatch):
+def plugin_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> PluginRuntime:
     """Starts an isolated reloadable host for a plugin package's integration tests."""
-    from contextlib import asynccontextmanager
-
     from agent.config import load_config_text
     from bootstrap.app import AppRuntime, RuntimeFeatures
     from core.roles import RoleStore
     from desktop_bridge.runtime.service import ReloadableDesktopService
 
     @asynccontextmanager
-    async def start(plugin_ids: tuple[str, ...], config_text: str = ""):
+    async def start(
+        plugin_ids: tuple[str, ...], config_text: str = ""
+    ) -> AsyncGenerator[tuple[PluginBridgeService, Path], None]:
         plugin_root = tmp_path / "plugin_dirs"
         for plugin_id in plugin_ids:
-            stage_plugin_package(
+            _ = stage_plugin_package(
                 plugin_directory(plugin_id),
                 plugin_root / plugin_id,
             )
-        monkeypatch.setattr(
-            "bootstrap.tools._resolve_plugin_dirs", lambda workspace: [plugin_root]
-        )
+
+        def resolve_plugin_dirs(_workspace: Path) -> list[Path]:
+            return [plugin_root]
+
+        monkeypatch.setattr("bootstrap.tools._resolve_plugin_dirs", resolve_plugin_dirs)
         text = (
             "[llm]\nregistrations = []\n"
             "\n[agent.maintenance]\nmemory_optimizer_enabled = false\n"
             '\n[proactive]\nenabled = false\nprofile = "quiet"\n' + config_text
         )
         path = tmp_path / "config.toml"
-        path.write_text(text, encoding="utf-8")
+        _ = path.write_text(text, encoding="utf-8")
         app = AppRuntime(
             load_config_text(text),
             tmp_path,

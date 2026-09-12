@@ -13,4 +13,4 @@ pyinstaller>=6.18.0
 # Local host/testkit distributions are private and resolved together from this checkout.
 -e .
 -e ./plugins/default_memory
--e ./packages/plugin-testkit
+-e ./packages/shiori-plugin-testkit

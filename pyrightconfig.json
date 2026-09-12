@@ -5,7 +5,7 @@
   "venv": ".venv",
   "extraPaths": [
     "apps/backend",
-    "packages/plugin-testkit/src"
+    "packages/shiori-plugin-testkit/src"
   ],
   "include": [
     "apps/backend/main.py",
@@ -22,7 +22,7 @@
     "apps/backend/prompts",
     "apps/backend/session",
     "apps/backend/utils",
-    "packages/plugin-testkit/src",
+    "packages/shiori-plugin-testkit/src",
     "scripts/verify_plugin_tests.py"
   ],
   "exclude": [
